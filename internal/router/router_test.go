@@ -952,3 +952,97 @@ func TestServerChatStreamFromSkipBeyondContent(t *testing.T) {
 		t.Fatalf("response content = %q, want %q", resp.Content, "short")
 	}
 }
+
+// chunkFakeClient is a provider.Client that streams chunk-aware
+// (tool-call deltas + finish reason), like the Anthropic client.
+type chunkFakeClient struct {
+	fakeClient
+	chunks []provider.StreamChunk
+	fail   error
+}
+
+func (f *chunkFakeClient) ChatStreamChunks(ctx context.Context, req provider.ChatRequest, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+	if f.fail != nil {
+		return nil, f.fail
+	}
+	var full strings.Builder
+	var toolCalls []provider.ToolCall
+	finish := ""
+	for _, c := range f.chunks {
+		full.WriteString(c.Content)
+		toolCalls = provider.MergeToolCallDeltas(toolCalls, c.ToolCalls)
+		if c.FinishReason != "" {
+			finish = c.FinishReason
+		}
+		if err := onChunk(c); err != nil {
+			return nil, err
+		}
+	}
+	return &provider.ChatResponse{Content: full.String(), ToolCalls: toolCalls, FinishReason: finish}, nil
+}
+
+func TestEngineCrossWireFailoverAnthropicToOpenAI(t *testing.T) {
+	// The Anthropic client maps a 429 to *provider.RateLimitError;
+	// the engine must fail over on it to an OpenAI provider, and
+	// vice versa — the wire format of the failing attempt must not
+	// matter, only the error type.
+	for _, tc := range []struct {
+		name  string
+		first string
+	}{
+		{"anthropic-429-then-openai", "anth"},
+		{"openai-429-then-anthropic", "oai"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			failing := errClient(&provider.RateLimitError{})
+			winning := okClient("from-winner")
+			clients := map[string]provider.Client{tc.first: failing, "other": winning}
+			eng := NewEngine(clients, nil, testConfig())
+			resp, trace, err := eng.ChatWithChain(context.Background(), []Attempt{
+				{ProviderID: tc.first, Model: "m"},
+				{ProviderID: "other", Model: "m"},
+			}, provider.ChatRequest{Model: "m", Messages: []provider.Message{{Role: RoleUser, Content: "hi"}}})
+			if err != nil {
+				t.Fatalf("ChatWithChain: %v", err)
+			}
+			if resp.Content != "from-winner" {
+				t.Fatalf("Content = %q, want from-winner", resp.Content)
+			}
+			if len(trace.Attempts) != 2 || trace.Attempts[0].Outcome != "rate_limited" || trace.Attempts[1].Outcome != "success" {
+				t.Errorf("trace = %+v, want rate_limited then success", trace.Attempts)
+			}
+		})
+	}
+}
+
+func TestEngineChatStreamChunksToolCalls(t *testing.T) {
+	client := &chunkFakeClient{chunks: []provider.StreamChunk{
+		{Content: "hi "},
+		{ToolCalls: []provider.ChunkToolCall{{Index: 0, ID: "call_1", Name: "get_weather"}}},
+		{ToolCalls: []provider.ChunkToolCall{{Index: 0, Arguments: `{"city":"Pune"}`}}},
+		{FinishReason: "tool_calls"},
+	}}
+	eng := NewEngine(map[string]provider.Client{"a": client}, nil, testConfig())
+	var got []provider.StreamChunk
+	resp, err := eng.ChatStreamChunks(context.Background(), provider.ChatRequest{
+		Model: "m", Messages: []provider.Message{{Role: RoleUser, Content: "hi"}},
+	}, func(chunk provider.StreamChunk) error {
+		got = append(got, chunk)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ChatStreamChunks: %v", err)
+	}
+	if resp.Content != "hi " {
+		t.Errorf("Content = %q", resp.Content)
+	}
+	if resp.FinishReason != "tool_calls" {
+		t.Errorf("FinishReason = %q, want tool_calls", resp.FinishReason)
+	}
+	if len(resp.ToolCalls) != 1 || resp.ToolCalls[0].Function.Arguments != `{"city":"Pune"}` {
+		t.Errorf("ToolCalls = %+v", resp.ToolCalls)
+	}
+	if len(got) != 4 {
+		t.Errorf("got %d chunks, want 4 (text, tool-call head, args, finish)", len(got))
+	}
+}

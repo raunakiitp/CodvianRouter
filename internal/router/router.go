@@ -54,11 +54,17 @@ const (
 
 // StreamEvent is one event from a streaming chat response. Exactly one
 // of Delta / Done / Err is meaningful per event: Delta carries text,
-// Done marks clean completion, Err marks failure.
+// Done marks clean completion, Err marks failure. ToolCalls carries
+// the tool-call deltas of this event (streaming tool calls) and
+// FinishReason the upstream finish reason when this event is the last
+// one ("stop", "length", "tool_calls", ...); both are empty on
+// plain-text events.
 type StreamEvent struct {
-	Delta string
-	Done  bool
-	Err   error
+	Delta        string
+	ToolCalls    []provider.ChunkToolCall
+	FinishReason string
+	Done         bool
+	Err          error
 }
 
 // Ledger records one provider attempt for usage accounting. It is
@@ -791,36 +797,52 @@ func (e *Engine) ChatStreamWithChain(ctx context.Context, chain []Attempt, req p
 
 // bridgeStream adapts a provider.Client's callback-based ChatStream to
 // the channel of StreamEvents the engine's streaming core consumes.
-// The channel yields deltas in order, then a Done event on clean
-// completion or an Err event on failure, and is then closed. If ctx is
-// cancelled (e.g. a hedged loser is abandoned) the bridge stops
-// forwarding and the underlying client call unwinds via ctx.
+// When the client implements provider.ChunkStreamer (both built-in
+// clients do), ChatStreamChunks is used so tool-call deltas and the
+// finish reason survive the bridge; otherwise it falls back to the
+// text-only ChatStream. The channel yields events in order, then a
+// Done event on clean completion or an Err event on failure, and is
+// then closed. If ctx is cancelled (e.g. a hedged loser is abandoned)
+// the bridge stops forwarding and the underlying client call unwinds
+// via ctx.
 func bridgeStream(ctx context.Context, client provider.Client, req provider.ChatRequest) <-chan StreamEvent {
 	ch := make(chan StreamEvent, 16)
 	go func() {
 		defer close(ch)
-		_, err := client.ChatStream(ctx, req, func(delta string) error {
-			if delta == "" {
-				return nil
-			}
+		send := func(ev StreamEvent) error {
 			select {
-			case ch <- StreamEvent{Delta: delta}:
+			case ch <- ev:
 				return nil
 			case <-ctx.Done():
 				return ctx.Err()
 			}
-		})
-		if err != nil {
-			select {
-			case ch <- StreamEvent{Err: err}:
-			case <-ctx.Done():
+		}
+		if cs, ok := client.(provider.ChunkStreamer); ok {
+			_, err := cs.ChatStreamChunks(ctx, req, func(chunk provider.StreamChunk) error {
+				return send(StreamEvent{
+					Delta:        chunk.Content,
+					ToolCalls:    chunk.ToolCalls,
+					FinishReason: chunk.FinishReason,
+				})
+			})
+			if err != nil {
+				_ = send(StreamEvent{Err: err})
+				return
 			}
+			_ = send(StreamEvent{Done: true})
 			return
 		}
-		select {
-		case ch <- StreamEvent{Done: true}:
-		case <-ctx.Done():
+		_, err := client.ChatStream(ctx, req, func(delta string) error {
+			if delta == "" {
+				return nil
+			}
+			return send(StreamEvent{Delta: delta})
+		})
+		if err != nil {
+			_ = send(StreamEvent{Err: err})
+			return
 		}
+		_ = send(StreamEvent{Done: true})
 	}()
 	return ch
 }
@@ -843,11 +865,18 @@ const (
 	streamCtxDone
 )
 
-// forwardStream forwards events from ch to out, appending deltas to
-// partial. first, when non-nil, is an already-consumed first event
+// forwardStream forwards events from ch to out, appending text deltas
+// to partial. first, when non-nil, is an already-consumed first event
 // (hedge path) that is emitted before reading ch. It returns when the
 // stream ends cleanly (Done), fails (Err event or unexpected close),
-// or ctx ends.
+// or ctx ends. Tool-call deltas and the finish reason ride along on
+// the events untouched; the caller that drains the channel
+// (chatStreamDrainChunks) reassembles them.
+//
+// Tool-call deltas are NOT replayed across a mid-stream resume:
+// runStream continues only the text prefix (an assistant message), so
+// a tool call that was mid-stream when its provider failed is lost to
+// the resuming provider.
 func (e *Engine) forwardStream(ctx context.Context, out chan<- StreamEvent, ch <-chan StreamEvent, first *StreamEvent, partial *strings.Builder) (streamOutcome, error) {
 	if first != nil {
 		if first.Err != nil {
@@ -1235,12 +1264,33 @@ func (e *Engine) ChatStreamFrom(ctx context.Context, req provider.ChatRequest, s
 	return e.chatStreamDrain(ctx, e.chainFor(req.Model), req, skipChars, onDelta)
 }
 
-// chatStreamDrain drives a chain-based stream and forwards its deltas to
-// onDelta, skipping the first skipChars runes when resuming. It returns
-// the reassembled response (full content, even when resuming).
-func (e *Engine) chatStreamDrain(ctx context.Context, chain []Attempt, req provider.ChatRequest, skipChars int, onDelta func(string) error) (*provider.ChatResponse, error) {
-	if onDelta == nil {
-		onDelta = func(string) error { return nil }
+// ChatStreamChunks implements the chunk-aware streaming contract: it
+// routes a streaming request through the fallback chain resolved for
+// req.Model, calls onChunk once per chunk in order (text delta,
+// tool-call deltas, finish reason), and returns the reassembled
+// response (content, completed tool calls, finish reason). Failover
+// and mid-stream resume happen inside the engine, so chunks already
+// delivered are never re-emitted.
+func (e *Engine) ChatStreamChunks(ctx context.Context, req provider.ChatRequest, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+	return e.chatStreamDrainChunks(ctx, e.chainFor(req.Model), req, 0, onChunk)
+}
+
+// ChatStreamFromChunks is ChatStreamChunks with resume: like
+// ChatStreamFrom, but chunk-aware. skipChars counts text runes only;
+// tool-call deltas are never replayed across a resume (see
+// forwardStream), so a resumed stream may lose a tool call that was
+// mid-flight when the previous attempt failed.
+func (e *Engine) ChatStreamFromChunks(ctx context.Context, req provider.ChatRequest, skipChars int, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+	return e.chatStreamDrainChunks(ctx, e.chainFor(req.Model), req, skipChars, onChunk)
+}
+
+// chatStreamDrain drives a chain-based stream and forwards its chunks
+// to onChunk, skipping the first skipChars text runes when resuming.
+// It returns the reassembled response (full content, completed tool
+// calls, finish reason — even when resuming).
+func (e *Engine) chatStreamDrainChunks(ctx context.Context, chain []Attempt, req provider.ChatRequest, skipChars int, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+	if onChunk == nil {
+		onChunk = func(provider.StreamChunk) error { return nil }
 	}
 	if skipChars < 0 {
 		skipChars = 0
@@ -1251,7 +1301,11 @@ func (e *Engine) chatStreamDrain(ctx context.Context, chain []Attempt, req provi
 	if err != nil {
 		return nil, err
 	}
-	var full strings.Builder
+	var (
+		full         strings.Builder
+		toolCalls    []provider.ToolCall
+		finishReason string
+	)
 	skipped := 0
 	for {
 		select {
@@ -1266,25 +1320,63 @@ func (e *Engine) chatStreamDrain(ctx context.Context, chain []Attempt, req provi
 			}
 			if ev.Delta != "" {
 				full.WriteString(ev.Delta)
-				delta := ev.Delta
-				if skipped < skipChars {
-					runes := []rune(delta)
-					drop := skipChars - skipped
-					if drop > len(runes) {
-						drop = len(runes)
-					}
-					skipped += drop
-					delta = string(runes[drop:])
-				}
-				if delta != "" {
-					if err := onDelta(delta); err != nil {
-						return nil, err
-					}
-				}
+			}
+			if len(ev.ToolCalls) > 0 {
+				toolCalls = provider.MergeToolCallDeltas(toolCalls, ev.ToolCalls)
+			}
+			if ev.FinishReason != "" {
+				finishReason = ev.FinishReason
 			}
 			if ev.Done {
-				return &provider.ChatResponse{Content: full.String(), Model: req.Model}, nil
+				return &provider.ChatResponse{Content: full.String(), Model: req.Model, ToolCalls: toolCalls, FinishReason: finishReason}, nil
+			}
+			if ev.Delta == "" && len(ev.ToolCalls) == 0 && ev.FinishReason == "" {
+				continue
+			}
+			chunk := provider.StreamChunk{
+				Content:      ev.Delta,
+				ToolCalls:    ev.ToolCalls,
+				FinishReason: ev.FinishReason,
+			}
+			if skipped < skipChars {
+				runes := []rune(chunk.Content)
+				drop := skipChars - skipped
+				if drop > len(runes) {
+					drop = len(runes)
+				}
+				skipped += drop
+				chunk.Content = string(runes[drop:])
+				if chunk.Content == "" {
+					// Still skipping: suppress tool-call deltas
+					// too, so a replayed prefix cannot duplicate
+					// an argument fragment on the wire. The
+					// reassembled response above still holds them.
+					chunk.ToolCalls = nil
+					chunk.FinishReason = ""
+				}
+				if chunk.Content == "" && len(chunk.ToolCalls) == 0 {
+					continue
+				}
+			}
+			if err := onChunk(chunk); err != nil {
+				return nil, err
 			}
 		}
 	}
+}
+
+// chatStreamDrain drives a chain-based stream and forwards its text
+// deltas to onDelta, skipping the first skipChars runes when resuming.
+// It returns the reassembled response (full content, completed tool
+// calls, finish reason — even when resuming).
+func (e *Engine) chatStreamDrain(ctx context.Context, chain []Attempt, req provider.ChatRequest, skipChars int, onDelta func(string) error) (*provider.ChatResponse, error) {
+	if onDelta == nil {
+		onDelta = func(string) error { return nil }
+	}
+	return e.chatStreamDrainChunks(ctx, chain, req, skipChars, func(chunk provider.StreamChunk) error {
+		if chunk.Content == "" {
+			return nil
+		}
+		return onDelta(chunk.Content)
+	})
 }
