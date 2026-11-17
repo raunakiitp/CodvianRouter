@@ -42,6 +42,7 @@ import (
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/provider"
+	"github.com/raunakiitp/codvian-router/internal/routetrace"
 )
 
 // Message roles.
@@ -63,8 +64,15 @@ type StreamEvent struct {
 // Ledger records one provider attempt for usage accounting. It is
 // defined here (not imported) so the engine depends only on this small
 // interface; the concrete SQLite ledger lives in another package.
+//
+// Usage is the full token split reported by the upstream (see
+// provider.Usage). The engine passes it through verbatim and never
+// invents a split: failed attempts and streaming attempts record
+// Usage{} (all zeros), because their token usage is unknown to the
+// engine — the ledger must record that as unknown, not as a guessed
+// prompt/completion split or a made-up cost.
 type Ledger interface {
-	RecordAttempt(provider, model string, ok bool, latencyMs int64, tokens int)
+	RecordAttempt(provider, model string, ok bool, latencyMs int64, usage provider.Usage)
 }
 
 // ---------------------------------------------------------------------------
@@ -75,31 +83,6 @@ type Ledger interface {
 type Attempt struct {
 	ProviderID string
 	Model      string
-}
-
-// AttemptTrace records what happened to a single attempt.
-type AttemptTrace struct {
-	Provider  string
-	Model     string
-	LatencyMs int64
-	Outcome   string // success, error, rate_limited, stream_error,
-	// skipped_breaker, skipped_cooldown, skipped_zero_quota, hedged_cancelled
-	Error string
-}
-
-// RouteTrace records every attempt made for one request, in order.
-// It is returned by ChatWithChain and available via Engine.LastTrace
-// after a ChatStreamWithChain finishes.
-type RouteTrace struct {
-	Attempts []AttemptTrace
-}
-
-func (t *RouteTrace) add(att Attempt, latencyMs int64, outcome string, err error) {
-	a := AttemptTrace{Provider: att.ProviderID, Model: att.Model, LatencyMs: latencyMs, Outcome: outcome}
-	if err != nil {
-		a.Error = err.Error()
-	}
-	t.Attempts = append(t.Attempts, a)
 }
 
 // ErrNoAvailableAttempt is returned when a chain has no attempt the
@@ -143,6 +126,15 @@ type Config struct {
 	// the registry) should set this so providers that do not offer the
 	// model are never tried.
 	ChainFor func(model string) []Attempt
+	// OrderHook, if set, is applied as the FINAL reordering step of
+	// orderAttempts, after zero-quota filtering and quota-hint sorting.
+	// It receives the quota-ordered chain and returns the order to try.
+	// This is the frozen extension point for cost/latency/quality
+	// scoring (internal/scoring): scorers live in their own package
+	// and never edit this file. The hook must be deterministic for a
+	// given input, must not drop or duplicate attempts, and must not
+	// block. If nil, quota order stands.
+	OrderHook func(chain []Attempt) []Attempt
 }
 
 func (c Config) withDefaults() Config {
@@ -190,7 +182,7 @@ type Engine struct {
 	breakers   map[string]*breakerState
 	cooldowns  map[string]time.Time
 	quotaHints map[string]int
-	lastTrace  *RouteTrace
+	lastTrace  *routetrace.RouteTrace
 
 	randMu sync.Mutex
 	rand   *rand.Rand
@@ -224,15 +216,23 @@ func (e *Engine) SetQuotaHint(providerID string, hint int) {
 	e.quotaHints[providerID] = hint
 }
 
+// addTraceAttempt appends one attempt to a trace. It exists because
+// RouteTrace.Add takes plain provider/model strings (the trace package
+// cannot import router.Attempt), while call sites here already have the
+// Attempt in hand.
+func addTraceAttempt(t *routetrace.RouteTrace, att Attempt, latencyMs int64, outcome string, err error) {
+	t.Add(att.ProviderID, att.Model, latencyMs, outcome, err)
+}
+
 // LastTrace returns the RouteTrace of the most recently finished
 // request (Chat or ChatStream). It is nil before any request.
-func (e *Engine) LastTrace() *RouteTrace {
+func (e *Engine) LastTrace() *routetrace.RouteTrace {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.lastTrace
 }
 
-func (e *Engine) setLastTrace(t *RouteTrace) {
+func (e *Engine) setLastTrace(t *routetrace.RouteTrace) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.lastTrace = t
@@ -250,6 +250,33 @@ func (e *Engine) quotaHint(providerID string) int {
 		return e.cfg.QuotaHint(providerID)
 	}
 	return 100
+}
+
+// QuotaHintFunc adapts a provider registry to Config.QuotaHint, so the
+// engine reads live quota hints on every request: a
+// Registry.SetQuotaHint update takes effect without restarting the
+// engine (or the process). Mapping: an unknown provider ID, or a
+// provider whose hint is QuotaUnknown (-1), reports 100 (ample quota);
+// a hint f in [0, 1] reports int(f*100), so 0 means "no quota left"
+// and the engine skips that provider. A nil registry reports 100 for
+// every provider.
+func QuotaHintFunc(reg *provider.Registry) func(string) int {
+	return func(providerID string) int {
+		if reg == nil {
+			return 100
+		}
+		p, ok := reg.Get(providerID)
+		if !ok {
+			return 100
+		}
+		if p.QuotaHint == provider.QuotaUnknown {
+			return 100
+		}
+		if p.QuotaHint < 0 || p.QuotaHint > 1 {
+			return 100
+		}
+		return int(p.QuotaHint * 100)
+	}
 }
 
 // orderAttempts filters out zero-quota attempts and stably sorts the
@@ -272,6 +299,9 @@ func (e *Engine) orderAttempts(chain []Attempt) (ordered, zeroSkipped []Attempt)
 	sort.SliceStable(items, func(i, j int) bool { return items[i].hint > items[j].hint })
 	for _, it := range items {
 		ordered = append(ordered, it.att)
+	}
+	if e.cfg.OrderHook != nil {
+		ordered = e.cfg.OrderHook(ordered)
 	}
 	return ordered, zeroSkipped
 }
@@ -472,14 +502,14 @@ func (e *Engine) callChat(ctx context.Context, att Attempt, req provider.ChatReq
 
 // noteSuccess records a successful attempt in the trace, ledger and
 // circuit breaker.
-func (e *Engine) noteSuccess(trace *RouteTrace, res attemptResult) {
-	trace.add(res.att, res.latencyMs, "success", nil)
+func (e *Engine) noteSuccess(trace *routetrace.RouteTrace, res attemptResult) {
+	addTraceAttempt(trace, res.att, res.latencyMs, "success", nil)
 	if e.ledger != nil && res.called {
-		tokens := 0
+		usage := provider.Usage{}
 		if res.resp != nil {
-			tokens = res.resp.Usage.TotalTokens
+			usage = res.resp.Usage
 		}
-		e.ledger.RecordAttempt(res.att.ProviderID, res.att.Model, true, res.latencyMs, tokens)
+		e.ledger.RecordAttempt(res.att.ProviderID, res.att.Model, true, res.latencyMs, usage)
 	}
 	e.breakerSuccess(res.att.ProviderID)
 }
@@ -490,16 +520,18 @@ func (e *Engine) noteSuccess(trace *RouteTrace, res attemptResult) {
 // provider being down); they set a per-provider cooldown instead.
 // Context cancellation and unknown providers likewise never touch the
 // breaker.
-func (e *Engine) noteFailure(trace *RouteTrace, res attemptResult, consecutive429 *int) (rateLimited bool, wait time.Duration) {
+func (e *Engine) noteFailure(trace *routetrace.RouteTrace, res attemptResult, consecutive429 *int) (rateLimited bool, wait time.Duration) {
 	if e.ledger != nil && res.called {
-		e.ledger.RecordAttempt(res.att.ProviderID, res.att.Model, false, res.latencyMs, 0)
+		// Failed attempt: no usage was reported, so record Usage{}
+		// (unknown), never a guessed split.
+		e.ledger.RecordAttempt(res.att.ProviderID, res.att.Model, false, res.latencyMs, provider.Usage{})
 	}
 	if errors.Is(res.err, context.Canceled) || errors.Is(res.err, context.DeadlineExceeded) {
-		trace.add(res.att, res.latencyMs, "error", res.err)
+		addTraceAttempt(trace, res.att, res.latencyMs, "error", res.err)
 		return false, 0
 	}
 	if !e.hasClient(res.att.ProviderID) {
-		trace.add(res.att, res.latencyMs, "error", res.err)
+		addTraceAttempt(trace, res.att, res.latencyMs, "error", res.err)
 		return false, 0
 	}
 	if ra, ok := asRateLimit(res.err); ok {
@@ -507,21 +539,23 @@ func (e *Engine) noteFailure(trace *RouteTrace, res attemptResult, consecutive42
 		wait = e.rateLimitWait(ra, *consecutive429)
 		e.setCooldown(res.att.ProviderID, wait)
 		e.breakerNeutral(res.att.ProviderID)
-		trace.add(res.att, res.latencyMs, "rate_limited", res.err)
+		addTraceAttempt(trace, res.att, res.latencyMs, "rate_limited", res.err)
 		return true, wait
 	}
 	*consecutive429 = 0
 	e.breakerFailure(res.att.ProviderID)
-	trace.add(res.att, res.latencyMs, "error", res.err)
+	addTraceAttempt(trace, res.att, res.latencyMs, "error", res.err)
 	return false, 0
 }
 
 // noteHedgedLoser records an attempt that was started as a hedge and
 // then cancelled because the other attempt won.
-func (e *Engine) noteHedgedLoser(trace *RouteTrace, res attemptResult) {
-	trace.add(res.att, res.latencyMs, "hedged_cancelled", context.Canceled)
+func (e *Engine) noteHedgedLoser(trace *routetrace.RouteTrace, res attemptResult) {
+	addTraceAttempt(trace, res.att, res.latencyMs, "hedged_cancelled", context.Canceled)
 	if e.ledger != nil && res.called {
-		e.ledger.RecordAttempt(res.att.ProviderID, res.att.Model, false, res.latencyMs, 0)
+		// Cancelled hedge loser: no usage was reported, so record
+		// Usage{} (unknown), never a guessed split.
+		e.ledger.RecordAttempt(res.att.ProviderID, res.att.Model, false, res.latencyMs, provider.Usage{})
 	}
 	e.breakerNeutral(res.att.ProviderID)
 }
@@ -539,8 +573,8 @@ func (e *Engine) noteHedgedLoser(trace *RouteTrace, res attemptResult) {
 //
 // The server-facing Chat (no chain argument) delegates here after
 // resolving the chain for req.Model; see chainFor.
-func (e *Engine) ChatWithChain(ctx context.Context, chain []Attempt, req provider.ChatRequest) (*provider.ChatResponse, *RouteTrace, error) {
-	trace := &RouteTrace{}
+func (e *Engine) ChatWithChain(ctx context.Context, chain []Attempt, req provider.ChatRequest) (*provider.ChatResponse, *routetrace.RouteTrace, error) {
+	trace := &routetrace.RouteTrace{}
 	if len(chain) == 0 {
 		return nil, trace, errors.New("router: empty fallback chain")
 	}
@@ -549,7 +583,7 @@ func (e *Engine) ChatWithChain(ctx context.Context, chain []Attempt, req provide
 	}
 	ordered, zeroSkipped := e.orderAttempts(chain)
 	for _, att := range zeroSkipped {
-		trace.add(att, 0, "skipped_zero_quota", nil)
+		addTraceAttempt(trace, att, 0, "skipped_zero_quota", nil)
 	}
 	if len(ordered) == 0 {
 		return nil, trace, ErrNoAvailableAttempt
@@ -567,12 +601,12 @@ func (e *Engine) ChatWithChain(ctx context.Context, chain []Attempt, req provide
 		}
 		att := ordered[idx]
 		if e.onCooldown(att.ProviderID) {
-			trace.add(att, 0, "skipped_cooldown", nil)
+			addTraceAttempt(trace, att, 0, "skipped_cooldown", nil)
 			idx++
 			continue
 		}
 		if !e.breakerAllow(att.ProviderID) {
-			trace.add(att, 0, "skipped_breaker", nil)
+			addTraceAttempt(trace, att, 0, "skipped_breaker", nil)
 			idx++
 			continue
 		}
@@ -860,40 +894,42 @@ func (e *Engine) forwardStream(ctx context.Context, out chan<- StreamEvent, ch <
 // noteStreamStartFailure records an attempt whose ChatStream call
 // itself failed. It returns the 429 wait (0 when not rate-limited) so
 // the caller can honour it before retrying the same provider.
-func (e *Engine) noteStreamStartFailure(trace *RouteTrace, res attemptResult, start time.Time) time.Duration {
+func (e *Engine) noteStreamStartFailure(trace *routetrace.RouteTrace, res attemptResult, start time.Time) time.Duration {
 	lat := time.Since(start).Milliseconds()
 	if !e.hasClient(res.att.ProviderID) {
-		trace.add(res.att, lat, "error", res.err)
+		addTraceAttempt(trace, res.att, lat, "error", res.err)
 		return 0
 	}
 	if e.ledger != nil {
-		e.ledger.RecordAttempt(res.att.ProviderID, res.att.Model, false, lat, 0)
+		// Stream start failure: no usage was reported, so record
+		// Usage{} (unknown), never a guessed split.
+		e.ledger.RecordAttempt(res.att.ProviderID, res.att.Model, false, lat, provider.Usage{})
 	}
 	if errors.Is(res.err, context.Canceled) || errors.Is(res.err, context.DeadlineExceeded) {
-		trace.add(res.att, lat, "error", res.err)
+		addTraceAttempt(trace, res.att, lat, "error", res.err)
 		return 0
 	}
 	if ra, ok := asRateLimit(res.err); ok {
 		wait := e.rateLimitWait(ra, 1)
 		e.setCooldown(res.att.ProviderID, wait)
 		e.breakerNeutral(res.att.ProviderID)
-		trace.add(res.att, lat, "rate_limited", res.err)
+		addTraceAttempt(trace, res.att, lat, "rate_limited", res.err)
 		return wait
 	}
 	e.breakerFailure(res.att.ProviderID)
-	trace.add(res.att, lat, "error", res.err)
+	addTraceAttempt(trace, res.att, lat, "error", res.err)
 	return 0
 }
 
 // runStream is the ChatStreamWithChain worker goroutine.
 func (e *Engine) runStream(ctx context.Context, chain []Attempt, req provider.ChatRequest, out chan<- StreamEvent) {
 	defer close(out)
-	trace := &RouteTrace{}
+	trace := &routetrace.RouteTrace{}
 	defer e.setLastTrace(trace)
 
 	ordered, zeroSkipped := e.orderAttempts(chain)
 	for _, att := range zeroSkipped {
-		trace.add(att, 0, "skipped_zero_quota", nil)
+		addTraceAttempt(trace, att, 0, "skipped_zero_quota", nil)
 	}
 	if len(ordered) == 0 {
 		e.sendTerminal(out, ErrNoAvailableAttempt)
@@ -913,12 +949,12 @@ attemptLoop:
 		}
 		att := ordered[idx]
 		if e.onCooldown(att.ProviderID) {
-			trace.add(att, 0, "skipped_cooldown", nil)
+			addTraceAttempt(trace, att, 0, "skipped_cooldown", nil)
 			idx++
 			continue attemptLoop
 		}
 		if !e.breakerAllow(att.ProviderID) {
-			trace.add(att, 0, "skipped_breaker", nil)
+			addTraceAttempt(trace, att, 0, "skipped_breaker", nil)
 			idx++
 			continue attemptLoop
 		}
@@ -955,9 +991,10 @@ attemptLoop:
 			}
 			if hs.loser != nil {
 				lat := time.Since(start).Milliseconds()
-				trace.add(*hs.loser, lat, "hedged_cancelled", context.Canceled)
+				addTraceAttempt(trace, *hs.loser, lat, "hedged_cancelled", context.Canceled)
 				if e.ledger != nil {
-					e.ledger.RecordAttempt(hs.loser.ProviderID, hs.loser.Model, false, lat, 0)
+					// Cancelled hedge loser: usage unknown.
+					e.ledger.RecordAttempt(hs.loser.ProviderID, hs.loser.Model, false, lat, provider.Usage{})
 				}
 				e.breakerNeutral(hs.loser.ProviderID)
 			}
@@ -991,16 +1028,21 @@ attemptLoop:
 		lat := time.Since(start).Milliseconds()
 		switch outcome {
 		case streamDone:
-			trace.add(streamAtt, lat, "success", nil)
+			addTraceAttempt(trace, streamAtt, lat, "success", nil)
 			if e.ledger != nil {
-				e.ledger.RecordAttempt(streamAtt.ProviderID, streamAtt.Model, true, lat, 0)
+				// Streaming usage is unknown to the engine:
+				// bridgeStream discards the upstream ChatResponse
+				// (which may carry usage), so record Usage{}
+				// (zeros) and never invent a split or a cost.
+				e.ledger.RecordAttempt(streamAtt.ProviderID, streamAtt.Model, true, lat, provider.Usage{})
 			}
 			e.breakerSuccess(streamAtt.ProviderID)
 			return
 		case streamCtxDone:
-			trace.add(streamAtt, lat, "error", serr)
+			addTraceAttempt(trace, streamAtt, lat, "error", serr)
 			if e.ledger != nil {
-				e.ledger.RecordAttempt(streamAtt.ProviderID, streamAtt.Model, false, lat, 0)
+				// Cancelled stream: usage unknown.
+				e.ledger.RecordAttempt(streamAtt.ProviderID, streamAtt.Model, false, lat, provider.Usage{})
 			}
 			lastErr = serr
 			break attemptLoop
@@ -1014,7 +1056,7 @@ attemptLoop:
 				if partial.Len() > 0 {
 					oc = "stream_error"
 				}
-				trace.add(streamAtt, lat, oc, serr)
+				addTraceAttempt(trace, streamAtt, lat, oc, serr)
 			} else {
 				if !errors.Is(serr, context.Canceled) && !errors.Is(serr, context.DeadlineExceeded) {
 					e.breakerFailure(streamAtt.ProviderID)
@@ -1023,10 +1065,11 @@ attemptLoop:
 				if partial.Len() > 0 {
 					oc = "stream_error"
 				}
-				trace.add(streamAtt, lat, oc, serr)
+				addTraceAttempt(trace, streamAtt, lat, oc, serr)
 			}
 			if e.ledger != nil {
-				e.ledger.RecordAttempt(streamAtt.ProviderID, streamAtt.Model, false, lat, 0)
+				// Failed stream: usage unknown to the engine.
+				e.ledger.RecordAttempt(streamAtt.ProviderID, streamAtt.Model, false, lat, provider.Usage{})
 			}
 			lastErr = serr
 			// Retry the same provider after a 429 only when

@@ -2,13 +2,17 @@ package router
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/provider"
+	"github.com/raunakiitp/codvian-router/internal/routetrace"
 	"github.com/raunakiitp/codvian-router/internal/server"
 )
 
@@ -32,13 +36,13 @@ type ledgerCall struct {
 	model     string
 	ok        bool
 	latencyMs int64
-	tokens    int
+	usage     provider.Usage
 }
 
-func (l *fakeLedger) RecordAttempt(provider, model string, ok bool, latencyMs int64, tokens int) {
+func (l *fakeLedger) RecordAttempt(provider, model string, ok bool, latencyMs int64, usage provider.Usage) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.calls = append(l.calls, ledgerCall{provider: provider, model: model, ok: ok, latencyMs: latencyMs, tokens: tokens})
+	l.calls = append(l.calls, ledgerCall{provider: provider, model: model, ok: ok, latencyMs: latencyMs, usage: usage})
 }
 
 func (l *fakeLedger) count() int {
@@ -197,7 +201,7 @@ func testConfig() Config {
 	}
 }
 
-func outcome(trace *RouteTrace, i int) string {
+func outcome(trace *routetrace.RouteTrace, i int) string {
 	if trace == nil || i >= len(trace.Attempts) {
 		return "<missing>"
 	}
@@ -284,10 +288,121 @@ func TestChatAllZeroQuotaReturnsError(t *testing.T) {
 	}
 }
 
+// registryWithHints builds a registry backed by a temp JSON file
+// holding providers with the given quota hints (fraction 0..1, or
+// provider.QuotaUnknown). No network is involved: the file is written
+// directly and loaded through the registry's Store.
+func registryWithHints(t *testing.T, hints map[string]float64) *provider.Registry {
+	t.Helper()
+	cfgs := make([]provider.ProviderConfig, 0, len(hints))
+	for id, hint := range hints {
+		cfgs = append(cfgs, provider.ProviderConfig{
+			ID: id, Name: id, BaseURL: "https://" + id + ".example.com",
+			WireFormat: provider.WireFormatOpenAI, Enabled: true, QuotaHint: hint,
+		})
+	}
+	data, err := json.Marshal(cfgs)
+	if err != nil {
+		t.Fatalf("marshal provider configs: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "providers.json")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("write provider store: %v", err)
+	}
+	reg := provider.NewRegistry(provider.NewJSONFileStore(path))
+	if err := reg.Load(); err != nil {
+		t.Fatalf("registry Load: %v", err)
+	}
+	return reg
+}
+
+func TestQuotaHintFuncMapping(t *testing.T) {
+	reg := registryWithHints(t, map[string]float64{
+		"prov-high": 0.9, "prov-half": 0.5, "prov-zero": 0,
+		"prov-unknown": provider.QuotaUnknown, "prov-full": 1,
+	})
+	fn := QuotaHintFunc(reg)
+	cases := []struct {
+		id   string
+		want int
+	}{
+		{"prov-high", 90},
+		{"prov-half", 50},
+		{"prov-zero", 0},
+		{"prov-unknown", 100},
+		{"prov-full", 100},
+		{"no-such-provider", 100},
+	}
+	for _, c := range cases {
+		if got := fn(c.id); got != c.want {
+			t.Errorf("QuotaHintFunc(%q) = %d, want %d", c.id, got, c.want)
+		}
+	}
+	if got := QuotaHintFunc(nil)("anything"); got != 100 {
+		t.Errorf("QuotaHintFunc(nil) = %d, want 100", got)
+	}
+}
+
+func TestChatQuotaHintFuncFromRegistry(t *testing.T) {
+	reg := registryWithHints(t, map[string]float64{
+		"prov-low": 0.1, "prov-high": 0.9, "prov-zero": 0,
+	})
+	low := okClient("low")
+	high := okClient("high")
+	zero := okClient("zero")
+	cfg := testConfig()
+	cfg.QuotaHint = QuotaHintFunc(reg)
+	eng := NewEngine(map[string]provider.Client{"prov-low": low, "prov-high": high, "prov-zero": zero}, nil, cfg)
+	chain := []Attempt{{ProviderID: "prov-low", Model: "m"}, {ProviderID: "prov-zero", Model: "m"}, {ProviderID: "prov-high", Model: "m"}}
+
+	resp, trace, err := eng.ChatWithChain(context.Background(), chain, testReq())
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if resp.Content != "high" {
+		t.Fatalf("content = %q, want high first (highest hint)", resp.Content)
+	}
+	if low.chatCalls() != 0 || zero.chatCalls() != 0 {
+		t.Fatalf("low calls = %d, zero calls = %d, want 0/0", low.chatCalls(), zero.chatCalls())
+	}
+	if len(trace.Attempts) != 2 { // 1 skipped_zero_quota + 1 success
+		t.Fatalf("trace attempts = %d, want 2", len(trace.Attempts))
+	}
+	if outcome(trace, 0) != "skipped_zero_quota" || outcome(trace, 1) != "success" {
+		t.Fatalf("outcomes = %q, %q", outcome(trace, 0), outcome(trace, 1))
+	}
+
+	// Live update: drain the high provider's hint to 0 — no restart,
+	// no new engine — and the next request must skip it.
+	if err := reg.SetQuotaHint("prov-high", 0); err != nil {
+		t.Fatalf("SetQuotaHint: %v", err)
+	}
+	resp, trace, err = eng.ChatWithChain(context.Background(), chain, testReq())
+	if err != nil {
+		t.Fatalf("second Chat: %v", err)
+	}
+	if resp.Content != "low" {
+		t.Fatalf("second content = %q, want low (high now zero-quota)", resp.Content)
+	}
+	if high.chatCalls() != 1 {
+		t.Fatalf("high calls = %d, want 1 (skipped after live update)", high.chatCalls())
+	}
+	if low.chatCalls() != 1 {
+		t.Fatalf("low calls = %d, want 1", low.chatCalls())
+	}
+	if len(trace.Attempts) != 3 { // 2 skipped_zero_quota + 1 success
+		t.Fatalf("second trace attempts = %d, want 3", len(trace.Attempts))
+	}
+	last := trace.Attempts[len(trace.Attempts)-1]
+	if last.Outcome != "success" || last.Provider != "prov-low" {
+		t.Fatalf("second trace = %+v, want low to serve", trace.Attempts)
+	}
+}
+
 func TestChatLedgerAndTokens(t *testing.T) {
 	a := errClient(errors.New("down"))
 	b := &fakeClient{chatFn: func(ctx context.Context, req provider.ChatRequest) (*provider.ChatResponse, error) {
-		return &provider.ChatResponse{Content: "ok", Usage: provider.Usage{TotalTokens: 42}}, nil
+		return &provider.ChatResponse{Content: "ok", Usage: provider.Usage{PromptTokens: 10, CompletionTokens: 32, TotalTokens: 42}}, nil
 	}}
 	led := &fakeLedger{}
 	eng := NewEngine(map[string]provider.Client{"a": a, "b": b}, led, testConfig())
@@ -301,8 +416,15 @@ func TestChatLedgerAndTokens(t *testing.T) {
 	if led.calls[0].ok || !led.calls[1].ok {
 		t.Fatalf("ledger ok flags = %+v", led.calls)
 	}
-	if led.calls[1].tokens != 42 {
-		t.Fatalf("ledger tokens = %d, want 42", led.calls[1].tokens)
+	// The failed attempt reports no usage: the split is unknown.
+	if led.calls[0].usage != (provider.Usage{}) {
+		t.Fatalf("failed attempt usage = %+v, want zero Usage", led.calls[0].usage)
+	}
+	// The successful attempt passes the upstream's prompt/completion
+	// split through verbatim — never collapsed to a single total.
+	want := provider.Usage{PromptTokens: 10, CompletionTokens: 32, TotalTokens: 42}
+	if led.calls[1].usage != want {
+		t.Fatalf("ledger usage = %+v, want %+v", led.calls[1].usage, want)
 	}
 }
 
