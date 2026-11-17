@@ -254,3 +254,32 @@ func TestSpanDefaultWriterDiscards(t *testing.T) {
 	var nilSpan *Span
 	nilSpan.End() // must not panic on nil receiver
 }
+
+func TestIncCoalescedShared(t *testing.T) {
+	r := NewRecorder()
+	r.IncCoalescedShared()
+	r.IncCoalescedShared()
+	r.IncCoalescedShared()
+	if got := r.Coalesced(); got != 3 {
+		t.Fatalf("Coalesced() = %d, want 3", got)
+	}
+	out := body(t, r)
+	if !strings.Contains(out, "codvian_router_coalesced_total 3\n") {
+		t.Fatalf("exposition missing coalesced counter 3:\n%s", out)
+	}
+}
+
+func TestConcurrencyLimitAndRejected(t *testing.T) {
+	r := NewRecorder()
+	r.SetConcurrencyLimit("prov-slow", 2.5)
+	r.SetConcurrencyLimit("prov-fast", 20)
+	r.IncConcurrencyRejected("prov-slow")
+	r.IncConcurrencyRejected("prov-slow")
+	out := body(t, r)
+	if !strings.Contains(out, "codvian_router_concurrency_limit{provider=\"prov_slow\"} 2.5\n") {
+		t.Fatalf("exposition missing slow limit 2.5:\n%s", out)
+	}
+	if !strings.Contains(out, "codvian_router_concurrency_rejected_total{provider=\"prov_slow\"} 2\n") {
+		t.Fatalf("exposition missing slow rejected 2:\n%s", out)
+	}
+}

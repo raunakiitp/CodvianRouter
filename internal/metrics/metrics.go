@@ -38,6 +38,10 @@ type latencyKey struct {
 	model    string
 }
 
+type concurrencyKey struct {
+	provider string
+}
+
 type histogram struct {
 	buckets []uint64 // one per LatencyBuckets entry, cumulative counts
 	sum     float64
@@ -53,18 +57,26 @@ type Recorder struct {
 	cacheHits     map[string]uint64
 	cacheMisses   map[string]uint64
 	budgetRefused uint64
+	coalesced     uint64
 	inFlight      int64
 	latency       map[latencyKey]*histogram
+	// Adaptive concurrency limiter state, fed by the router (see
+	// SetConcurrencyLimit / IncConcurrencyRejected): the current
+	// cap per provider and how many calls were shed by it.
+	concurrencyLimit    map[concurrencyKey]float64
+	concurrencyRejected map[concurrencyKey]uint64
 }
 
 // NewRecorder returns an initialized Recorder.
 func NewRecorder() *Recorder {
 	return &Recorder{
-		requests:    make(map[requestKey]uint64),
-		failovers:   make(map[failoverKey]uint64),
-		cacheHits:   make(map[string]uint64),
-		cacheMisses: make(map[string]uint64),
-		latency:     make(map[latencyKey]*histogram),
+		requests:            make(map[requestKey]uint64),
+		failovers:           make(map[failoverKey]uint64),
+		cacheHits:           make(map[string]uint64),
+		cacheMisses:         make(map[string]uint64),
+		latency:             make(map[latencyKey]*histogram),
+		concurrencyLimit:    make(map[concurrencyKey]float64),
+		concurrencyRejected: make(map[concurrencyKey]uint64),
 	}
 }
 
@@ -186,6 +198,48 @@ func (r *Recorder) IncBudgetRefused() {
 	r.budgetRefused++
 }
 
+// IncCoalescedShared increments codvian_router_coalesced_total: one
+// per waiter served from a shared single-flight call. Each increment
+// is one upstream call avoided (and one quota hit saved); the
+// leader's own call is counted in the request counters, not here.
+func (r *Recorder) IncCoalescedShared() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.coalesced++
+}
+
+// Coalesced returns the current codvian_router_coalesced_total count.
+func (r *Recorder) Coalesced() uint64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.coalesced
+}
+
+// SetConcurrencyLimit records the adaptive concurrency cap for one
+// provider (codvian_router_concurrency_limit gauge). Called by the
+// router whenever a completed call moves the cap.
+func (r *Recorder) SetConcurrencyLimit(provider string, limit float64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.concurrencyLimit == nil {
+		r.concurrencyLimit = make(map[concurrencyKey]float64)
+	}
+	r.concurrencyLimit[concurrencyKey{normalizeProviderModel(provider)}] = limit
+}
+
+// IncConcurrencyRejected increments
+// codvian_router_concurrency_rejected_total for one provider: one
+// call the adaptive limiter shed to another provider instead of
+// admitting.
+func (r *Recorder) IncConcurrencyRejected(provider string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.concurrencyRejected == nil {
+		r.concurrencyRejected = make(map[concurrencyKey]uint64)
+	}
+	r.concurrencyRejected[concurrencyKey{normalizeProviderModel(provider)}]++
+}
+
 // SetInFlight sets the codvian_router_in_flight gauge to n.
 // Negative values are clamped to 0.
 func (r *Recorder) SetInFlight(n int) {
@@ -303,10 +357,39 @@ func (r *Recorder) WriteTo(b *strings.Builder) {
 	b.WriteString("# TYPE codvian_router_budget_refused_total counter\n")
 	fmt.Fprintf(b, "codvian_router_budget_refused_total %d\n", r.budgetRefused)
 
+	// Coalesced (single-flight) waiters served from a shared call.
+	b.WriteString("# HELP codvian_router_coalesced_total Total requests served from a shared single-flight call (one upstream call avoided per shared request).\n")
+	b.WriteString("# TYPE codvian_router_coalesced_total counter\n")
+	fmt.Fprintf(b, "codvian_router_coalesced_total %d\n", r.coalesced)
+
 	// In-flight gauge.
 	b.WriteString("# HELP codvian_router_in_flight Current in-flight requests.\n")
 	b.WriteString("# TYPE codvian_router_in_flight gauge\n")
 	fmt.Fprintf(b, "codvian_router_in_flight %d\n", r.inFlight)
+
+	// Adaptive concurrency limits (per provider) and rejections.
+	b.WriteString("# HELP codvian_router_concurrency_limit Current adaptive concurrency cap per provider (Gradient2).\n")
+	b.WriteString("# TYPE codvian_router_concurrency_limit gauge\n")
+	concKeys := make([]concurrencyKey, 0, len(r.concurrencyLimit))
+	for k := range r.concurrencyLimit {
+		concKeys = append(concKeys, k)
+	}
+	sort.Slice(concKeys, func(i, j int) bool { return concKeys[i].provider < concKeys[j].provider })
+	for _, k := range concKeys {
+		fmt.Fprintf(b, "codvian_router_concurrency_limit%s %v\n",
+			formatLabels("provider", k.provider), r.concurrencyLimit[k])
+	}
+	b.WriteString("# HELP codvian_router_concurrency_rejected_total Total calls shed by the adaptive concurrency limiter per provider.\n")
+	b.WriteString("# TYPE codvian_router_concurrency_rejected_total counter\n")
+	rejKeys := make([]concurrencyKey, 0, len(r.concurrencyRejected))
+	for k := range r.concurrencyRejected {
+		rejKeys = append(rejKeys, k)
+	}
+	sort.Slice(rejKeys, func(i, j int) bool { return rejKeys[i].provider < rejKeys[j].provider })
+	for _, k := range rejKeys {
+		fmt.Fprintf(b, "codvian_router_concurrency_rejected_total%s %d\n",
+			formatLabels("provider", k.provider), r.concurrencyRejected[k])
+	}
 
 	// Latency histogram.
 	b.WriteString("# HELP codvian_router_request_latency_ms Request latency in milliseconds.\n")
