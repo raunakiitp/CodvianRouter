@@ -1,0 +1,32 @@
+# Build context for the Codvian Router image. Keep the context small and
+# make sure no secrets, local state, or VCS metadata ever lands in the image.
+
+.git
+.github
+docs
+
+# Docs are not needed at runtime; README.md is the one exception because
+# GoReleaser archives it with releases (harmless in the Docker context too).
+*.md
+!README.md
+
+# Packaging/install scripts are for the host, not the image.
+scripts
+
+# Local state: ledger/vault data, sqlite files, editor and tool caches.
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.idea/
+.vscode/
+coverage.out
+coverage.html
+
+# npm wrapper download cache (bin/.cache/) and node modules.
+node_modules/
+bin/.cache/
+
+# Go test files are not needed to build the binary.
+**/*_test.go

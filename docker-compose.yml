@@ -1,0 +1,44 @@
+# Codvian Router — local Docker Compose setup.
+#
+#   docker compose up -d --build
+#
+# First run (creates config + first gateway key; the key is printed ONCE):
+#   docker compose run --rm codvian-router init
+# Then start serving and check health:
+#   docker compose up -d
+#   curl http://127.0.0.1:20128/healthz
+#
+# NETWORKING — known limitation, read before expecting the port to work:
+# the router binds 127.0.0.1 ONLY (config validation enforces loopback).
+# Docker's published-port forwarding delivers traffic to the container's
+# eth0 address, which a loopback-only listener never sees — so the
+# `ports:` mapping below does NOT reach the server as the binary stands
+# today. Workaround until the router gains a container-aware listen
+# option: replace `ports:` with `network_mode: host`, which shares the
+# host's loopback so 127.0.0.1:20128 works exactly as on bare metal.
+# (The healthcheck runs inside the container against 127.0.0.1 and is
+# unaffected.) Do not weaken the router's loopback-only bind to fix this.
+
+services:
+  codvian-router:
+    build: .
+    image: codvian-router:local
+    container_name: codvian-router
+    ports:
+      - "127.0.0.1:20128:20128"
+    volumes:
+      # Ledger + vault master secret. Losing this loses the vault and history.
+      - codvian-router-data:/home/nonroot/.local/share/codvian-router
+      # Config file (providers, gateway keys, listen address).
+      - codvian-router-config:/home/nonroot/.config/codvian-router
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/codvian-router-healthcheck"]
+      interval: 30s
+      timeout: 3s
+      start-period: 10s
+      retries: 3
+
+volumes:
+  codvian-router-data:
+  codvian-router-config:

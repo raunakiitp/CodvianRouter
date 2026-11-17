@@ -25,30 +25,91 @@ Gate run 2026-11-17 by the coordinator (independent re-run, not the builders' ow
 | 17 | No telemetry by default | ✅ | ✅ |
 | 18 | Test gate: unit tests + `go build` + live smoke test (mock upstream, 429 on model A → failover to model B) | ✅ | ✅ |
 | 19 | Failover latency benchmark (measured, not claimed) | ✅ | ✅ |
+| 20 | Crypto hardening: Argon2id KDF (t=1, m=19 MiB, p=1) + passphrase mode, v2 seal format, v1 unseal compat, `ReSeal` migration | ✅ | ✅ |
+| 21 | Registry quota hints wired into the engine (live `QuotaHintFunc`, hint 0 = skipped, higher hint first) | ✅ | ✅ |
+| 22 | Ledger honest accounting: full prompt/completion split recorded; split-unknown attempts record total + `split_known=0`, cost 0 (never invented) | ✅ | ✅ |
+| 23 | Semantic cache: real local implementation (deterministic hashed bag-of-words, 256-dim, cosine ≥ 0.85, LRU + TTL) — explicitly NOT a neural embedding model | ✅ | ✅ |
+| 24 | Scoring: cost/latency/quality routing — 5 modes (Balanced/Fast/Cheap/Quality/Reliable), weights sum to 1, unknown quality never outranks known-good | ✅ | ✅ |
+| 25 | Scoring wired into the engine: `OrderHook` (ModeBalanced) fed by health-probe latency/success + registry quota hints; cost/quality stay unknown (0) until prices/quality signals exist | ✅ | ✅ |
+| 26 | Eval harness: sequential runner, per-case timeout, substring + latency checks only (does NOT judge quality), panic-safe; `eval` subcommand runs smoke cases against the live engine | ✅ | ✅ |
+| 27 | Observability: hand-rolled Prometheus exposition (`/metrics`, gateway-key auth required), request/latency/in-flight/failover counters, JSON trace log (opt-in via `CODVIAN_ROUTER_TRACE=1`, honestly NOT the OTel SDK) | ✅ | ✅ |
+| 28 | Health / quota intelligence: key probe (5 s timeout), never invents quota values, quota-type errors set hint 0; watcher probes all providers at startup + every 60 s | ✅ | ✅ |
+| 29 | Graceful degradation: stale exact-match response served when every provider fails, only when enabled, marked `X-Codvian-Stale` (+ age) on non-streaming responses and logged for streams; never replays after partial delivery | ✅ | ✅ |
+| 30 | Degradation preserves mid-stream resume: `StaleEngine` implements `server.StreamResumer` (delegates when the inner engine resumes, else replays with rune-accurate trimming) and forwards `LastTrace` for metrics | ✅ | ✅ |
+| 31 | Stable versioned config: unknown top-level fields survive Load→Save, `ValidateFile` rejects duplicates/bad values naming the field, `Clone()` deep-copies; `validate` subcommand | ✅ | ✅ |
+| 32 | Headless tray supervisor: child = gateway binary, own process group, one auto-restart after unexpected exit, no zombies; `tray` subcommand (`RunHeadless`). GUI tray icon honestly DEFERRED (systray needs GTK dev headers absent on this VM) | ✅ | ✅ |
+| 33 | Packaging: multi-stage Dockerfile (distroless nonroot), docker-compose, npm wrapper, `.goreleaser.yml`, checksum-verified `install.sh` (refuses pipe-to-shell); `--listen` opt-in for non-loopback bind (127.0.0.1 / ::1 / 0.0.0.0 only, 0.0.0.0 warns) | ✅ | ✅ |
+| 34 | Route trace moved to leaf package `internal/routetrace` (no internal imports) so server metrics + degrade forwarding cannot create an import cycle | ✅ | ✅ |
+| 35 | Phase 4 docs: INSTALL, DEMO, ARCHITECTURE, CHANGELOG, RELEASE-v0.2.0 draft | ✅ | ✅ |
 
-## Test gate results (2026-11-17, Go 1.22.2, measured by coordinator)
+## Test gate results (2026-11-17, Go 1.27.4, measured by coordinator)
 
 - `go build ./...` — exit 0; `go vet ./...` — clean; `gofmt -l .` — clean
-- `go test -count=1 ./...` — **111/111 PASS, 0 fail** (cache 11, config 16, crypto 8, ledger 9, provider 29, router 24, server 14)
-- 4,964 lines non-test Go + 2,983 lines of tests, 21 Go files
+- `go test -count=1 ./...` — **224/224 PASS, 0 fail** (cache 21, config 21, crypto 15, degrade 23, eval 9, health 16, ledger 12, metrics 8, provider 29, router 26, routetrace 2, scoring 11, server 21, tray 7, cmd/codvian-router 3)
+- `go test -race` — clean on all touched/new packages (cmd, degrade, server, metrics, health, scoring, eval)
+- 8,634 lines non-test Go + 6,474 lines of tests, 38 Go files
+- Binary: 17.3 MB single binary
 
-## Live benchmark (real binary, Python mock upstreams, 2026-11-17)
+## Live benchmark — Phase 2–4 integration gate (real binary, Python mock upstreams, 2026-11-17, run by coordinator)
 
-Setup: Mock A (port 21001) + Mock B (port 21002), both serving `bench-model`;
-B answers in 50ms. Router on 127.0.0.1:20199, auth ON.
+Same setup as Phase 1 (Mock A 21001 + Mock B 21002 answering in 50 ms,
+router on 127.0.0.1:20199, auth ON), plus the new wiring checks. Mocks were
+made content-aware in the scratch harness only (capital question → "Paris…",
+greeting → "Hello!…", else "ok") so the eval smoke cases are meaningful.
 
 | Scenario | Result |
 |---|---|
-| Direct to Mock B (no router, 50ms upstream delay) | 51.2 ms (baseline floor) |
-| A returns 429 instantly → failover to B (10 reqs) | **10/10 OK, 52.3–60.0 ms** (median ~53 ms) |
-| Failover switch cost (429 detected in ~6 ms, then B in 51 ms) | **~1–2 ms overhead** vs direct B; A-on-cooldown requests ~52.5 ms, A-retry requests ~59 ms |
-| A slow (2,000 ms) → hedge at 150 ms, B wins (5 reqs) | **5/5 OK, 203–205 ms** (150 ms hedge + 51 ms B) |
-| Streaming with 429 failover | SSE chunks `bench ` + `ok` + `stop` + `[DONE]` — works |
+| A returns 429 instantly → failover to B (5 reqs) | **5/5 OK, 52.4–55.0 ms** |
+| Failover switch cost | **~1–2 ms overhead** vs direct B |
+| A slow (2,000 ms) → hedge at 150 ms, B wins (5 reqs) | **5/5 OK, 203.8–205.9 ms** |
+| A quota hint 0 → A skipped entirely, B serves (5 reqs) | **5/5 OK, 52.4–52.8 ms** |
+| `/metrics` after the failover run (auth required; no key → 401) | `codvian_router_requests_total{provider="prov_mock_b",outcome="ok"} 5`, `codvian_router_failovers_total{from_provider="prov_mock_a",to_provider="prov_mock_b"} 5`, `codvian_router_in_flight 0` |
+| Stale degradation: fresh request, then both mocks killed | Same prompt → **200 with `X-Codvian-Stale: true`, age ~519 ms**; fresh prompt → **502**; fresh requests carry no stale header |
+| `eval --model bench-model` (smoke cases vs live mocks) | **3/3 passed (100%)**, exit 0 |
+| `validate` subcommand | Valid config → exit 0; invalid listen address → exit 1 with the field named |
+| `--listen 192.168.1.5:20199` | Refused, exit 1, names `--listen`; `--listen 0.0.0.0:20198` serves + prints the all-interfaces warning |
+| `tray` subcommand | Child serves healthz; `kill -9` on the child → auto-restarted, healthz OK again; SIGTERM on the supervisor → exit 0, child down |
+
+Ledger verified against the SQLite file after the stale run: 2 successes
+record prompt 10 / completion 5 / total 15 with `split_known=1`, cost $0;
+the 2 post-kill requests each record 2 failed attempts (A then B) with
+0/0/0, `split_known=0`, cost $0 — the stale response itself is served from
+cache and adds no ledger row, which is honest: no provider was billed.
+
+## Test gate results — Phase 1 (2026-11-17, Go 1.27.4, measured by coordinator)
+
+- `go build ./...` — exit 0; `go vet ./...` — clean; `gofmt -l .` — clean
+- `go test -count=1 ./...` — **133/133 PASS, 0 fail** (cache 21, config 16, crypto 15, ledger 12, provider 29, router 26, server 14)
+- 5,629 lines non-test Go + 3,733 lines of tests, 21 Go files
+- Binary: 16.9 MB single binary
+
+## Live benchmark (real binary, Python mock upstreams, 2026-11-17, re-run after hardening)
+
+Setup: Mock A (port 21001) + Mock B (port 21002), both serving `bench-model`;
+B answers in 50ms. Router on 127.0.0.1:20199, auth ON. Config built with the
+real Vault (Argon2id) sealing the mock keys; gateway key issued by the
+router's own config code.
+
+| Scenario | Result |
+|---|---|
+| Direct to Mock B (no router, 50ms upstream delay) | 51.2 ms (baseline floor, previous run) |
+| A returns 429 instantly → failover to B (5 reqs) | **5/5 OK, 52.4–55.8 ms** |
+| Failover switch cost | **~1–2 ms overhead** vs direct B |
+| A slow (2,000 ms) → hedge at 150 ms, B wins (5 reqs) | **5/5 OK, 203.9–204.4 ms** (150 ms hedge + 51 ms B) |
+| A quota hint 0 → A skipped entirely, B serves (5 reqs) | **5/5 OK, 52.2–53.5 ms** (quota wiring proven end-to-end) |
+| Streaming with 429 failover | SSE chunks `bench ` + `ok` + `stop` + `[DONE]` — works (previous run) |
 | No gateway key | 401 as expected |
 | Unknown model | Clean JSON error, no crash |
-| Startup to healthz-ready | **12 ms** (target ~1 s) |
-| Idle memory (RSS) | **~10.6 MB** (target: tens of MB) |
-| Binary size | 14.5 MB single binary |
+| Startup to healthz-ready | **73 ms** (this run, 50 ms poll granularity; previous run 12 ms) |
+| Idle memory (RSS) | **~32 MB** (this run; previous run ~10.6 MB — the rise is the Argon2id 19 MiB arena plus runtime; still tens of MB) |
+| Binary size | 16.9 MB single binary |
+
+Ledger verified against the SQLite file after the run: a failed A attempt
+records prompt 0 / completion 0 / total 0 with `split_known=0`; a successful
+B attempt records prompt 10 / completion 5 / total 15 with `split_known=1`
+and cost $0 (no per-model prices configured — never invented). A hedged
+loser is recorded as a failed attempt with zero tokens; a quota-skipped
+provider is never attempted and leaves no row.
 
 Targets (design goals, now measured against): detect failure 2–3 s, switch
 0.1–0.3 s, route under 1 s — measured switch after a 429 is ~1–2 ms on
@@ -56,11 +117,41 @@ localhost mocks (real-world numbers will depend on upstream latency).
 
 ## Known limitations / follow-ups (not blockers)
 
-- Crypto: SHA-256 of a 32-byte random master secret (no Argon2id, no passphrase)
-  — documented in `internal/crypto/README.md`; rotating `master.key` orphans sealed values.
-- Ledger adapter records attempt tokens as completion tokens (prompt split unknown
-  at router layer); cost is 0 when no per-model prices are configured — never invented.
-- Registry quota hints are not yet wired into the engine (nothing sets hints in Phase 1).
-- Semantic cache is a `NoopSemanticCache` stub; real embeddings come later.
+- Crypto: master secret is still a local 0600 file — Argon2id only slows
+  an attacker who has sealed values but not the secret. Rotation is manual:
+  `Vault.ReSeal` each sealed value before replacing `master.key` (or
+  changing the passphrase); losing `kdf.salt` is equally fatal. No
+  passphrase by default and nothing prompts for one yet; a lost passphrase
+  is unrecoverable by design.
+- Ledger: streaming usage is unknown to the engine (`bridgeStream`
+  discards the upstream `ChatResponse`, which can carry usage from a final
+  SSE chunk), so successful streams record zero tokens with cost 0 —
+  documented at the call site, never invented. Cost is 0 when no
+  per-model prices are configured.
+- Registry quota hints are wired into the engine (live read on every
+  request) and now also auto-derived in one direction: the health watcher
+  sets hint 0 when a key probe fails with a quota-type error (429 /
+  `QuotaError`). Hints are never auto-raised and never invented from a
+  successful probe; a quota reset is not detected until the next probe
+  succeeds and the operator (or a future reset signal) restores the hint.
+- Semantic cache is a deterministic hashed bag-of-words similarity cache,
+  NOT a neural embedding model: paraphrases with different words will
+  generally miss. It is not yet wired into the server/engine request path
+  (still open).
+- Scoring cost/quality signals are unknown (0) until per-model prices are
+  configured and a quality signal exists, so ModeCheap/ModeQuality
+  currently rank mostly on the other signals; cost and quality components
+  score equally for every candidate and cannot distort ordering.
+- Metrics attribution is approximate under concurrency: the server reads
+  the engine's most recent RouteTrace, so a request may occasionally be
+  attributed to a neighbour's trace. The ledger (not metrics) is the
+  billing record. A streaming response served stale carries no
+  `X-Codvian-Stale` header (staleness is known only after the stream
+  ends); it is logged server-side instead.
+- Packaging: the Docker image was NOT built or run in this environment
+  (no Docker in the VM) and no release exists yet, so the npm wrapper and
+  `install.sh` happy paths are untested (error paths only). The Dockerfile
+  binds loopback by default; use `--listen 0.0.0.0` or
+  `network_mode: host` deliberately, on a trusted network only.
 - `go.mod` was concurrently edited by parallel agents mid-build; it has converged
-  (`github.com/raunakiitp/codvian-router`, `go 1.22`, modernc.org/sqlite v1.34.0).
+  (`github.com/raunakiitp/codvian-router`, `go 1.22`, modernc.org/sqlite v1.34.0, golang.org/x/crypto v0.24.0).

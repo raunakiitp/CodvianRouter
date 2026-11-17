@@ -1,0 +1,30 @@
+{
+  "bin": {
+    "codvian-router": "bin/codvian-router.js"
+  },
+  "description": "Codvian Router \u2014 local LLM router with sub-second failover. Single binary, localhost-only, auth always on. This package downloads the matching prebuilt binary from the GitHub releases on first run.",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/"
+  ],
+  "homepage": "https://github.com/raunakiitp/CodvianRouter",
+  "keywords": [
+    "llm",
+    "router",
+    "openai-compatible",
+    "failover",
+    "local"
+  ],
+  "name": "codvian-router",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/raunakiitp/CodvianRouter.git"
+  },
+  "scripts": {
+    "test": "node --check bin/codvian-router.js"
+  },
+  "version": "0.1.0",
+  "license": "MIT"
+}

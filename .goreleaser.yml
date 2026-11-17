@@ -1,0 +1,52 @@
+# GoReleaser v2 configuration for Codvian Router.
+#
+# Produces static, cross-compiled release binaries for every supported
+# platform (linux/darwin/windows, amd64/arm64) plus archives and a
+# checksums file, published as an ordinary GitHub release. No custom
+# publishing, signing, or changelog behaviour is configured here — the
+# GitHub release defaults apply.
+#
+# Run locally (requires a git tag, e.g. v0.1.0):
+#   goreleaser release --clean          # real release (publishes)
+#   goreleaser release --snapshot --clean   # local build only, no publish
+# The npm wrapper (bin/codvian-router.js) and scripts/install.sh download
+# the archives produced here, so their naming must stay in sync:
+#   codvian-router_<version>_<os>_<arch>.tar.gz  (.zip on Windows)
+
+version: 2
+
+project_name: codvian-router
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: codvian-router
+    main: ./cmd/codvian-router
+    binary: codvian-router
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+
+archives:
+  - id: default
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
