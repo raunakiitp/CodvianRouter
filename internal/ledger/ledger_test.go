@@ -29,7 +29,7 @@ func TestRecordUsageAndSpendFor(t *testing.T) {
 
 	cost, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Provider: "p1", Model: "model-a",
-		PromptTokens: 100, CompletionTokens: 50, OK: true, LatencyMS: 120,
+		PromptTokens: 100, CompletionTokens: 50, SplitKnown: true, OK: true, LatencyMS: 120,
 	}, prices)
 	if err != nil {
 		t.Fatalf("RecordUsage: %v", err)
@@ -41,7 +41,7 @@ func TestRecordUsageAndSpendFor(t *testing.T) {
 
 	if _, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Provider: "p1", Model: "model-a",
-		PromptTokens: 10, CompletionTokens: 10, OK: false, LatencyMS: 5,
+		PromptTokens: 10, CompletionTokens: 10, SplitKnown: true, OK: false, LatencyMS: 5,
 	}, prices); err != nil {
 		t.Fatalf("RecordUsage (failed call): %v", err)
 	}
@@ -82,7 +82,7 @@ func TestRecordUsageUnknownModelCostsZero(t *testing.T) {
 	// never an invented price.
 	cost, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Provider: "p1", Model: "mystery-model",
-		PromptTokens: 100000, CompletionTokens: 100000, OK: true,
+		PromptTokens: 100000, CompletionTokens: 100000, SplitKnown: true, OK: true,
 	}, Prices{"other-model": {PromptPerToken: 1, CompletionPerToken: 1}})
 	if err != nil {
 		t.Fatalf("RecordUsage: %v", err)
@@ -124,7 +124,7 @@ func TestCheckBudgetSoftCap(t *testing.T) {
 	// remaining goes <= 0.
 	if _, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Model: "m",
-		PromptTokens: 10, CompletionTokens: 0, OK: true,
+		PromptTokens: 10, CompletionTokens: 0, SplitKnown: true, OK: true,
 	}, Prices{"m": {PromptPerToken: 0.10}}); err != nil {
 		t.Fatalf("RecordUsage: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestCheckBudgetFailClosed(t *testing.T) {
 	}
 	if _, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Model: "m",
-		PromptTokens: 5, CompletionTokens: 0, OK: true,
+		PromptTokens: 5, CompletionTokens: 0, SplitKnown: true, OK: true,
 	}, Prices{"m": {PromptPerToken: 0.10}}); err != nil {
 		t.Fatalf("RecordUsage: %v", err)
 	}
@@ -201,7 +201,7 @@ func TestSoftWarningAtEightyPercent(t *testing.T) {
 	// 0.79 spent: no warning yet.
 	if _, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Model: "m",
-		PromptTokens: 79, CompletionTokens: 0, OK: true,
+		PromptTokens: 79, CompletionTokens: 0, SplitKnown: true, OK: true,
 	}, Prices{"m": {PromptPerToken: 0.01}}); err != nil {
 		t.Fatalf("RecordUsage: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestSoftWarningAtEightyPercent(t *testing.T) {
 	// +0.01 -> 0.80 spent: warning fires.
 	if _, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Model: "m",
-		PromptTokens: 1, CompletionTokens: 0, OK: true,
+		PromptTokens: 1, CompletionTokens: 0, SplitKnown: true, OK: true,
 	}, Prices{"m": {PromptPerToken: 0.01}}); err != nil {
 		t.Fatalf("RecordUsage: %v", err)
 	}
@@ -236,7 +236,7 @@ func TestSetBudgetPreservesSpent(t *testing.T) {
 	}
 	if _, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Model: "m",
-		PromptTokens: 10, CompletionTokens: 0, OK: true,
+		PromptTokens: 10, CompletionTokens: 0, SplitKnown: true, OK: true,
 	}, Prices{"m": {PromptPerToken: 0.10}}); err != nil {
 		t.Fatalf("RecordUsage: %v", err)
 	}
@@ -269,5 +269,185 @@ func TestGetBudgetMissingKey(t *testing.T) {
 	_, err := l.GetBudget(ctx, "nope")
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("GetBudget missing key: err = %v, want sql.ErrNoRows", err)
+	}
+}
+
+// readUsageRow reads one stored usage_events row back for assertions.
+func readUsageRow(t *testing.T, l *Ledger, keyID string) (prompt, completion, total, splitKnown int, cost float64) {
+	t.Helper()
+	err := l.db.QueryRowContext(context.Background(), `
+		SELECT prompt_tokens, completion_tokens, total_tokens,
+		       tokens_split_known, cost_usd
+		FROM usage_events WHERE gateway_key_id = ?`, keyID,
+	).Scan(&prompt, &completion, &total, &splitKnown, &cost)
+	if err != nil {
+		t.Fatalf("read usage row: %v", err)
+	}
+	return prompt, completion, total, splitKnown, cost
+}
+
+func TestRecordUsageSplitKnownCostDifferentPrices(t *testing.T) {
+	ctx := context.Background()
+	l := openTestLedger(t)
+	// Prompt and completion prices deliberately differ, so a cost
+	// computed from a collapsed total would be wrong.
+	prices := Prices{"model-a": {PromptPerToken: 0.001, CompletionPerToken: 0.01}}
+	cost, err := l.RecordUsage(ctx, Usage{
+		GatewayKeyID: "key-1", Provider: "p1", Model: "model-a",
+		PromptTokens: 100, CompletionTokens: 50, SplitKnown: true, OK: true,
+	}, prices)
+	if err != nil {
+		t.Fatalf("RecordUsage: %v", err)
+	}
+	// 100*0.001 + 50*0.01 = 0.60
+	if cost != 0.60 {
+		t.Fatalf("cost = %v, want 0.60", cost)
+	}
+	prompt, completion, total, splitKnown, storedCost := readUsageRow(t, l, "key-1")
+	if prompt != 100 || completion != 50 || total != 150 || splitKnown != 1 || storedCost != 0.60 {
+		t.Fatalf("stored row = prompt %d completion %d total %d split_known %d cost %v, want 100/50/150/1/0.60",
+			prompt, completion, total, splitKnown, storedCost)
+	}
+
+	// An explicitly supplied TotalTokens is stored as given.
+	if _, err := l.RecordUsage(ctx, Usage{
+		GatewayKeyID: "key-2", Provider: "p1", Model: "model-a",
+		PromptTokens: 10, CompletionTokens: 5, TotalTokens: 15, SplitKnown: true, OK: true,
+	}, prices); err != nil {
+		t.Fatalf("RecordUsage (explicit total): %v", err)
+	}
+	if _, _, total, _, _ := readUsageRow(t, l, "key-2"); total != 15 {
+		t.Fatalf("explicit total = %d, want 15", total)
+	}
+}
+
+func TestRecordUsageUnknownSplitCostsZero(t *testing.T) {
+	ctx := context.Background()
+	l := openTestLedger(t)
+	prices := Prices{"model-a": {PromptPerToken: 0.001, CompletionPerToken: 0.01}}
+	// Even with prices configured and split-looking numbers present,
+	// an unknown split must never be priced: the split fields are
+	// ignored, the total is preserved, and cost is 0.
+	cost, err := l.RecordUsage(ctx, Usage{
+		GatewayKeyID: "key-1", Provider: "p1", Model: "model-a",
+		PromptTokens: 100, CompletionTokens: 400, TotalTokens: 500,
+		SplitKnown: false, OK: true,
+	}, prices)
+	if err != nil {
+		t.Fatalf("RecordUsage: %v", err)
+	}
+	if cost != 0 {
+		t.Fatalf("unknown-split cost = %v, want 0", cost)
+	}
+	prompt, completion, total, splitKnown, storedCost := readUsageRow(t, l, "key-1")
+	if prompt != 0 || completion != 0 || total != 500 || splitKnown != 0 || storedCost != 0 {
+		t.Fatalf("stored row = prompt %d completion %d total %d split_known %d cost %v, want 0/0/500/0/0",
+			prompt, completion, total, splitKnown, storedCost)
+	}
+	spent, err := l.SpendFor(ctx, "key-1", time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("SpendFor: %v", err)
+	}
+	if spent != 0 {
+		t.Fatalf("spent = %v, want 0 (unknown split is never billed)", spent)
+	}
+}
+
+// usageColumns returns the column names of usage_events in l's database.
+func usageColumns(t *testing.T, l *Ledger) map[string]bool {
+	t.Helper()
+	rows, err := l.db.Query(`PRAGMA table_info(usage_events)`)
+	if err != nil {
+		t.Fatalf("PRAGMA table_info: %v", err)
+	}
+	defer rows.Close()
+	cols := map[string]bool{}
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notNull int
+		var dflt sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pk); err != nil {
+			t.Fatalf("scan table_info: %v", err)
+		}
+		cols[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("read table_info: %v", err)
+	}
+	return cols
+}
+
+func TestOpenMigratesOldDatabase(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "old-ledger.db")
+	// Build a database with the pre-migration schema (no total_tokens /
+	// tokens_split_known columns), exactly as an older binary left it.
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatalf("sql.Open: %v", err)
+	}
+	oldSchema := `CREATE TABLE usage_events (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts                INTEGER NOT NULL,
+  gateway_key_id    TEXT NOT NULL,
+  provider          TEXT NOT NULL,
+  model             TEXT NOT NULL,
+  prompt_tokens     INTEGER NOT NULL DEFAULT 0,
+  completion_tokens INTEGER NOT NULL DEFAULT 0,
+  cost_usd          REAL NOT NULL DEFAULT 0,
+  ok                INTEGER NOT NULL DEFAULT 1,
+  latency_ms        INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE budgets (
+  key_id   TEXT PRIMARY KEY,
+  cap_usd  REAL NOT NULL,
+  spent_usd REAL NOT NULL DEFAULT 0,
+  period   TEXT NOT NULL DEFAULT ''
+);`
+	if _, err := db.Exec(oldSchema); err != nil {
+		db.Close()
+		t.Fatalf("create old schema: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close old db: %v", err)
+	}
+
+	l, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open old db: %v", err)
+	}
+	cols := usageColumns(t, l)
+	if !cols["total_tokens"] || !cols["tokens_split_known"] {
+		l.Close()
+		t.Fatalf("migrated columns = %v, want total_tokens + tokens_split_known", cols)
+	}
+	// RecordUsage works against the migrated database, both
+	// split-known and unknown-split.
+	if _, err := l.RecordUsage(ctx, Usage{
+		GatewayKeyID: "key-1", Model: "m",
+		PromptTokens: 10, CompletionTokens: 5, SplitKnown: true, OK: true,
+	}, Prices{"m": {PromptPerToken: 0.01, CompletionPerToken: 0.02}}); err != nil {
+		l.Close()
+		t.Fatalf("RecordUsage after migration: %v", err)
+	}
+	if _, _, total, splitKnown, _ := readUsageRow(t, l, "key-1"); total != 15 || splitKnown != 1 {
+		l.Close()
+		t.Fatalf("migrated row total = %d split_known = %d, want 15/1", total, splitKnown)
+	}
+	if err := l.Close(); err != nil {
+		t.Fatalf("close migrated db: %v", err)
+	}
+
+	// Opening again must be a no-op (idempotent migration).
+	l2, err := Open(path)
+	if err != nil {
+		t.Fatalf("re-Open migrated db: %v", err)
+	}
+	defer l2.Close()
+	cols = usageColumns(t, l2)
+	if !cols["total_tokens"] || !cols["tokens_split_known"] {
+		t.Fatalf("columns after re-open = %v", cols)
 	}
 }

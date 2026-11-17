@@ -5,13 +5,19 @@
 // Schema:
 //
 //	usage_events(id, ts, gateway_key_id, provider, model,
-//	             prompt_tokens, completion_tokens, cost_usd, ok, latency_ms)
+//	             prompt_tokens, completion_tokens, total_tokens,
+//	             tokens_split_known, cost_usd, ok, latency_ms)
 //	budgets(key_id, cap_usd, spent_usd, period)
 //
 // Cost is computed from caller-supplied per-model prices: tokens *
 // per-token price. Prices are never invented here — a model with no
 // supplied price records cost 0, explicitly, so an unknown price can
-// never silently turn into a made-up charge.
+// never silently turn into a made-up charge. Likewise a usage split
+// is never invented: when the caller does not know the
+// prompt/completion split (Usage.SplitKnown false), the event records
+// prompt_tokens = completion_tokens = 0, the reported total in
+// total_tokens, tokens_split_known = 0, and cost 0 — a split is needed
+// for honest pricing, so no cost is guessed from a bare total.
 package ledger
 
 import (
@@ -48,12 +54,21 @@ func (p Prices) Cost(model string, promptTokens, completionTokens int) float64 {
 }
 
 // Usage is one recorded request against a gateway key.
+//
+// SplitKnown reports whether PromptTokens / CompletionTokens are the
+// real split reported by the upstream. When false, the split is
+// unknown: PromptTokens and CompletionTokens must be ignored (they
+// are stored as 0) and only TotalTokens is meaningful — and the cost
+// is 0, because a split is needed for honest pricing. Callers must
+// never set SplitKnown true with a guessed split.
 type Usage struct {
 	GatewayKeyID     string
 	Provider         string
 	Model            string
 	PromptTokens     int
 	CompletionTokens int
+	TotalTokens      int
+	SplitKnown       bool
 	OK               bool
 	LatencyMS        int64
 }
@@ -79,6 +94,8 @@ CREATE TABLE IF NOT EXISTS usage_events (
   model             TEXT NOT NULL,
   prompt_tokens     INTEGER NOT NULL DEFAULT 0,
   completion_tokens INTEGER NOT NULL DEFAULT 0,
+  total_tokens      INTEGER NOT NULL DEFAULT 0,
+  tokens_split_known INTEGER NOT NULL DEFAULT 1,
   cost_usd          REAL NOT NULL DEFAULT 0,
   ok                INTEGER NOT NULL DEFAULT 1,
   latency_ms        INTEGER NOT NULL DEFAULT 0
@@ -121,7 +138,56 @@ func Open(path string) (*Ledger, error) {
 		db.Close()
 		return nil, fmt.Errorf("ledger: apply schema: %w", err)
 	}
+	// Migrate databases created before total_tokens /
+	// tokens_split_known existed: fresh databases already have the
+	// columns from the schema above, so this is a no-op for them.
+	if err := ensureUsageColumns(db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Ledger{db: db, path: path}, nil
+}
+
+// ensureUsageColumns adds total_tokens and tokens_split_known to
+// usage_events when they are missing (databases created by an older
+// build). It is idempotent: each column is added only after a PRAGMA
+// table_info check shows it absent, so opening an already-migrated
+// database changes nothing.
+func ensureUsageColumns(db *sql.DB) error {
+	rows, err := db.Query(`PRAGMA table_info(usage_events)`)
+	if err != nil {
+		return fmt.Errorf("ledger: inspect usage_events schema: %w", err)
+	}
+	defer rows.Close()
+	present := map[string]bool{}
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notNull int
+		var dflt sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pk); err != nil {
+			return fmt.Errorf("ledger: inspect usage_events schema: %w", err)
+		}
+		present[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("ledger: inspect usage_events schema: %w", err)
+	}
+	rows.Close()
+	add := map[string]string{
+		"total_tokens":       `ALTER TABLE usage_events ADD COLUMN total_tokens INTEGER NOT NULL DEFAULT 0`,
+		"tokens_split_known": `ALTER TABLE usage_events ADD COLUMN tokens_split_known INTEGER NOT NULL DEFAULT 1`,
+	}
+	for col, stmt := range add {
+		if present[col] {
+			continue
+		}
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("ledger: add column %s: %w", col, err)
+		}
+	}
+	return nil
 }
 
 // Close closes the underlying database.
@@ -139,8 +205,32 @@ func (l *Ledger) Path() string { return l.path }
 // The cost comes from prices; an unknown model costs 0 and is recorded
 // as 0. When a budget row exists for the key, budgets.spent_usd is
 // incremented in the same transaction, so spend and budget stay in sync.
+//
+// Split handling (honest accounting, never a guessed split):
+//   - SplitKnown true: prompt/completion are stored as given;
+//     TotalTokens is stored as given, or prompt+completion when it is 0;
+//     cost comes from the split prices.
+//   - SplitKnown false: prompt and completion are stored as 0, the
+//     reported total is stored in total_tokens, tokens_split_known is
+//     0, and cost is 0 — a split is needed for honest pricing, so no
+//     cost is guessed from a bare total.
 func (l *Ledger) RecordUsage(ctx context.Context, u Usage, prices Prices) (float64, error) {
-	cost := prices.Cost(u.Model, u.PromptTokens, u.CompletionTokens)
+	var promptTokens, completionTokens, totalTokens, splitKnown int
+	var cost float64
+	if u.SplitKnown {
+		promptTokens = u.PromptTokens
+		completionTokens = u.CompletionTokens
+		totalTokens = u.TotalTokens
+		if totalTokens == 0 {
+			totalTokens = promptTokens + completionTokens
+		}
+		splitKnown = 1
+		cost = prices.Cost(u.Model, promptTokens, completionTokens)
+	} else {
+		totalTokens = u.TotalTokens
+		splitKnown = 0
+		cost = 0
+	}
 	ok := 0
 	if u.OK {
 		ok = 1
@@ -153,10 +243,12 @@ func (l *Ledger) RecordUsage(ctx context.Context, u Usage, prices Prices) (float
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO usage_events
 		  (ts, gateway_key_id, provider, model, prompt_tokens,
-		   completion_tokens, cost_usd, ok, latency_ms)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		   completion_tokens, total_tokens, tokens_split_known,
+		   cost_usd, ok, latency_ms)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		time.Now().UnixMilli(), u.GatewayKeyID, u.Provider, u.Model,
-		u.PromptTokens, u.CompletionTokens, cost, ok, u.LatencyMS); err != nil {
+		promptTokens, completionTokens, totalTokens, splitKnown,
+		cost, ok, u.LatencyMS); err != nil {
 		return 0, fmt.Errorf("ledger: insert usage event: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
