@@ -317,6 +317,7 @@ type stack struct {
 	engine   *router.Engine // raw engine: failover, hedging, ledger
 	serving  server.Engine  // degrade-wrapped engine: what serve() serves
 	exact    *cache.ExactCache
+	semantic *cache.LocalSemanticCache
 	checker  *health.Checker
 	recorder *metrics.Recorder
 	led      *ledger.Ledger
@@ -517,16 +518,32 @@ func openStack(opts options) (*stack, error) {
 	// exact-match cache (500 entries, 1h store TTL); when every
 	// provider fails, a cached response is served instead, marked
 	// X-Codvian-Stale by the server. Enabled in serve mode.
+	//
+	// Semantic cache (layer 3): successful responses are also stored
+	// under a deterministic hashed bag-of-words vector of the last
+	// user message (500 entries, 1h TTL, 0.85 cosine threshold).
+	// ServeCache is ON, so cacheable requests are served proactively
+	// from exact first, then semantic, without calling any provider
+	// — marked X-Codvian-Cache by the server and counted in
+	// codvian_router_cache_hits_total{layer="semantic"}, never billed
+	// to a provider. Honest description: this is token-overlap
+	// similarity, NOT a neural embedding model.
 	exact := cache.NewExactCache(500)
+	semantic := cache.NewLocalSemanticCache()
 	degradePolicy := degrade.DefaultPolicy()
 	degradePolicy.Enabled = true
-	serving := degrade.Wrap(engine, exact, degradePolicy)
+	degradePolicy.ServeCache = true
+	recorder := metrics.NewRecorder()
+	serving := degrade.WrapWithSemantic(engine, exact, semantic, degradePolicy)
+	if se, ok := serving.(*degrade.StaleEngine); ok {
+		se.SetCacheMetrics(recorder)
+	}
 
 	return &stack{
 		cfg: cfg, path: path, listen: listen,
 		reg: reg, clients: clients,
-		engine: engine, serving: serving, exact: exact,
-		checker: checker, recorder: metrics.NewRecorder(),
+		engine: engine, serving: serving, exact: exact, semantic: semantic,
+		checker: checker, recorder: recorder,
 		led: led, vault: vault,
 	}, nil
 }
@@ -566,6 +583,7 @@ func runServe(opts options) int {
 	fmt.Printf("config: %s\n", st.path)
 	fmt.Printf("providers: %d configured, %d clients ready\n", len(st.reg.List()), len(st.clients))
 	fmt.Println("degradation: ON (stale responses served with X-Codvian-Stale)")
+	fmt.Println("semantic cache: ON (token-overlap similarity, threshold 0.85, 500 entries, 1h TTL — not neural embeddings; hits marked X-Codvian-Cache)")
 	fmt.Println("metrics: GET /metrics (gateway-key auth required)")
 	fmt.Printf("dashboard: http://%s/dashboard\n", st.listen)
 
