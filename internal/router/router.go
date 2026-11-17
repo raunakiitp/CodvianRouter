@@ -41,6 +41,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/raunakiitp/codvian-router/internal/adaptive"
+	"github.com/raunakiitp/codvian-router/internal/autorouter"
+	"github.com/raunakiitp/codvian-router/internal/coalescing"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/routetrace"
 )
@@ -141,6 +144,18 @@ type Config struct {
 	// given input, must not drop or duplicate attempts, and must not
 	// block. If nil, quota order stands.
 	OrderHook func(chain []Attempt) []Attempt
+	// AutoRoute, if set, resolves virtual "auto/*" model names to a
+	// concrete model before the chain is built (internal/autorouter).
+	// It receives the request model and the routing prompt (the last
+	// user message's text) and returns the concrete model, the
+	// routing decision, and ok=false when the name is unknown or no
+	// concrete model can be resolved. When ok is false the model is
+	// left unchanged and the engine fails honestly with an empty
+	// chain / unknown model, never inventing a model. The decision
+	// of the most recent auto-routed request is kept for
+	// LastAutoDecision. If nil, "auto/*" models are not resolved
+	// and behave like any other (unknown) model name.
+	AutoRoute func(model, prompt string) (resolved string, dec autorouter.Decision, ok bool)
 }
 
 func (c Config) withDefaults() Config {
@@ -168,6 +183,31 @@ func (c Config) withDefaults() Config {
 	return c
 }
 
+// CoalescingMetrics is optionally implemented by a metrics sink that
+// wants one counter per shared waiter (metrics.Recorder satisfies it).
+type CoalescingMetrics interface {
+	IncCoalescedShared()
+}
+
+// ConcurrencyMetrics is optionally implemented by a metrics sink
+// that wants the adaptive limiter's state (metrics.Recorder
+// satisfies it): one counter per call shed by the limiter, and the
+// current cap per provider (a gauge). Wiring is best-effort: a nil
+// sink disables reporting, never routing.
+type ConcurrencyMetrics interface {
+	IncConcurrencyRejected(provider string)
+	SetConcurrencyLimit(provider string, limit float64)
+}
+
+// SharedLedger is optionally implemented by ledgers that can record a
+// coalesced (shared) request. The row must be marked shared, carry
+// zero tokens and zero cost, and never move a budget: the waiter was
+// served from the leader's upstream call, which is the only attempt
+// that was billed.
+type SharedLedger interface {
+	RecordShared(provider, model string, ok bool, latencyMs int64)
+}
+
 // ---------------------------------------------------------------------------
 // Engine.
 // ---------------------------------------------------------------------------
@@ -189,6 +229,33 @@ type Engine struct {
 	cooldowns  map[string]time.Time
 	quotaHints map[string]int
 	lastTrace  *routetrace.RouteTrace
+	// lastAutoDecision is the routing decision of the most recent
+	// auto-routed request (nil before any, or after a non-auto
+	// request). Read via LastAutoDecision.
+	lastAutoDecision *autorouter.Decision
+
+	// flights coalesces concurrent identical non-streaming
+	// requests (internal/coalescing). Streaming never touches it.
+	flights *coalescing.Group
+	// coalescingMetrics, when set, receives one IncCoalescedShared
+	// per waiter served from a shared flight. Nil disables it.
+	coalescingMetrics CoalescingMetrics
+
+	// limiter is the per-(provider, key) adaptive concurrency
+	// limiter (internal/adaptive, Gradient2). It caps in-flight
+	// calls per provider from measured RTT, so a slowing provider
+	// is shed BEFORE its queue grows and before 429s appear. It
+	// FAILS OPEN: a nil limiter admits everything (the adaptive
+	// methods are nil-safe), and admission is only ever refused
+	// for a provider whose RTT has actually degraded. Streaming
+	// attempts hold a slot for the stream's duration but never
+	// feed the RTT estimate (a stream's wall time is not a
+	// serving RTT); hedged streaming attempts are not
+	// limiter-counted (see runStream).
+	limiter *adaptive.Limiter
+	// concurrencyMetrics, when set, receives the limiter's cap
+	// per provider and one increment per shed call. Nil disables it.
+	concurrencyMetrics ConcurrencyMetrics
 
 	randMu sync.Mutex
 	rand   *rand.Rand
@@ -209,8 +276,99 @@ func NewEngine(clients map[string]provider.Client, ledger Ledger, cfg Config) *E
 		breakers:   make(map[string]*breakerState),
 		cooldowns:  make(map[string]time.Time),
 		quotaHints: make(map[string]int),
+		flights:    coalescing.New(),
+		limiter:    adaptive.New(adaptive.Config{}),
 		rand:       rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
+}
+
+// SetCoalescingMetrics wires the metrics sink that counts shared
+// waiters (e.g. *metrics.Recorder). A nil value disables reporting.
+// Safe to call after NewEngine; the engine reads the field on every
+// shared result, so wiring it later still counts later flights.
+func (e *Engine) SetCoalescingMetrics(m CoalescingMetrics) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.coalescingMetrics = m
+}
+
+// SetConcurrencyMetrics wires the metrics sink that counts shed
+// calls and records the adaptive cap per provider (e.g.
+// *metrics.Recorder). A nil value disables reporting. Safe to call
+// after NewEngine.
+func (e *Engine) SetConcurrencyMetrics(m ConcurrencyMetrics) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.concurrencyMetrics = m
+}
+
+// ConcurrencyStats returns a snapshot of the per-(provider, key)
+// adaptive limiter: current cap, in-flight count, smoothed RTT vs
+// long-term baseline, samples, admitted and shed counts. Providers
+// with no traffic have no entry — an empty list before any request
+// is the honest empty state, never invented limits.
+func (e *Engine) ConcurrencyStats() []adaptive.State {
+	return e.limiter.Snapshot()
+}
+
+// reportConcurrencyLimit pushes one provider's current cap to the
+// metrics sink, if any. Best-effort: it never fails a request.
+func (e *Engine) reportConcurrencyLimit(providerID string) {
+	e.mu.Lock()
+	m := e.concurrencyMetrics
+	e.mu.Unlock()
+	if m != nil {
+		m.SetConcurrencyLimit(providerID, e.limiter.Limit(providerID))
+	}
+}
+
+// noteConcurrencyRejected counts one call shed by the adaptive
+// limiter, in the limiter and (when wired) in metrics.
+func (e *Engine) noteConcurrencyRejected(providerID string) {
+	e.mu.Lock()
+	m := e.concurrencyMetrics
+	e.mu.Unlock()
+	if m != nil {
+		m.IncConcurrencyRejected(providerID)
+	}
+}
+
+// CoalescingStats returns a snapshot of the single-flight counters
+// (real counts only — zero until identical requests actually share a
+// flight).
+func (e *Engine) CoalescingStats() coalescing.Stats {
+	if e.flights == nil {
+		return coalescing.Stats{}
+	}
+	return e.flights.Stats()
+}
+
+// noteShared records one waiter served from a shared flight: one
+// metrics increment, and — when the ledger supports it — one shared
+// ledger row (zero tokens, zero cost, marked shared, so usage
+// accounting stays honest: the leader's attempt is the only one
+// billed). It is called only for waiters that actually received the
+// leader's result. The serving provider/model come from the leader's
+// route trace (its last attempt is the winner on success, the last
+// tried on failure); with no attempt in the trace (e.g. an empty
+// chain) there is nothing to attribute and no row is recorded.
+// latency is the waiter's wait time, not provider latency.
+func (e *Engine) noteShared(req provider.ChatRequest, res coalescing.Result, waited time.Duration) {
+	e.mu.Lock()
+	m := e.coalescingMetrics
+	e.mu.Unlock()
+	if m != nil {
+		m.IncCoalescedShared()
+	}
+	sl, ok := e.ledger.(SharedLedger)
+	if !ok || sl == nil {
+		return
+	}
+	if res.Trace == nil || len(res.Trace.Attempts) == 0 {
+		return
+	}
+	last := res.Trace.Attempts[len(res.Trace.Attempts)-1]
+	sl.RecordShared(last.Provider, last.Model, res.Err == nil, waited.Milliseconds())
 }
 
 // SetQuotaHint overrides the remaining-quota hint for one provider.
@@ -236,6 +394,67 @@ func (e *Engine) LastTrace() *routetrace.RouteTrace {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.lastTrace
+}
+
+// LastAutoDecision returns the routing decision of the most recent
+// auto-routed request, and whether there is one. It is nil/false
+// before any auto-routed request, and after a non-auto request (a
+// plain model name clears it, so a stale decision can never be
+// mistaken for the current request's). The returned decision is a
+// copy; mutating it does not affect the engine.
+func (e *Engine) LastAutoDecision() (autorouter.Decision, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.lastAutoDecision == nil {
+		return autorouter.Decision{}, false
+	}
+	return *e.lastAutoDecision, true
+}
+
+func (e *Engine) setLastAutoDecision(dec *autorouter.Decision) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.lastAutoDecision = dec
+}
+
+// lastUserPrompt extracts the routing prompt from a request: the
+// last user message's text (content string, plus text parts when
+// content is empty). It returns "" when there is no user message.
+func lastUserPrompt(req provider.ChatRequest) string {
+	msgs := make([]autorouter.PromptMessage, 0, len(req.Messages))
+	for _, m := range req.Messages {
+		var parts []string
+		for _, p := range m.Parts {
+			if p.Type == "text" {
+				parts = append(parts, p.Text)
+			}
+		}
+		msgs = append(msgs, autorouter.PromptMessage{Role: m.Role, Content: m.Content, TextParts: parts})
+	}
+	return autorouter.ParsePrompt(msgs)
+}
+
+// resolveAuto rewrites an "auto/*" request model to the concrete
+// model the auto-router picks for the request's prompt, and records
+// the decision for LastAutoDecision. Non-auto models pass through
+// unchanged and clear any previous decision. When the hook reports
+// ok=false the model is left as "auto/*" so the chain resolution
+// fails honestly (empty chain / unknown model) instead of routing
+// to an invented model; the decision is still recorded, so the
+// caller can see why.
+func (e *Engine) resolveAuto(req provider.ChatRequest) provider.ChatRequest {
+	if e.cfg.AutoRoute == nil || !autorouter.IsVirtualModel(req.Model) {
+		e.setLastAutoDecision(nil)
+		return req
+	}
+	resolved, dec, ok := e.cfg.AutoRoute(req.Model, lastUserPrompt(req))
+	decCopy := dec
+	e.setLastAutoDecision(&decCopy)
+	if !ok {
+		return req
+	}
+	req.Model = resolved
+	return req
 }
 
 func (e *Engine) setLastTrace(t *routetrace.RouteTrace) {
@@ -308,6 +527,24 @@ func (e *Engine) orderAttempts(chain []Attempt) (ordered, zeroSkipped []Attempt)
 	}
 	if e.cfg.OrderHook != nil {
 		ordered = e.cfg.OrderHook(ordered)
+	}
+	// Adaptive-concurrency deprioritisation (the FINAL step, after
+	// scoring): providers whose in-flight count is already at their
+	// adaptive cap go last, so a slowing provider is shed to healthy
+	// providers before its queue grows — even when scoring still
+	// ranks it first on stale latency signals. This is a stable
+	// partition, never a drop: a saturated provider is still tried
+	// when nothing else is left, and TryAcquire then decides.
+	if e.limiter != nil {
+		var headroom, saturated []Attempt
+		for _, att := range ordered {
+			if e.limiter.HasHeadroom(att.ProviderID) {
+				headroom = append(headroom, att)
+			} else {
+				saturated = append(saturated, att)
+			}
+		}
+		ordered = append(headroom, saturated...)
 	}
 	return ordered, zeroSkipped
 }
@@ -501,13 +738,27 @@ func (e *Engine) callChat(ctx context.Context, att Attempt, req provider.ChatReq
 	if !ok {
 		return attemptResult{att: att, err: fmt.Errorf("router: unknown provider %q", att.ProviderID)}
 	}
+	// Adaptive admission: a provider at its cap sheds this call
+	// (ErrLimited, called=false) instead of queueing behind its
+	// in-flight work. The limiter fails open — a nil limiter
+	// admits — so this can only refuse a provider whose RTT has
+	// actually degraded. The slot is held for the upstream call
+	// only and released the moment it returns.
+	if !e.limiter.TryAcquire(att.ProviderID) {
+		e.noteConcurrencyRejected(att.ProviderID)
+		return attemptResult{att: att, err: adaptive.ErrLimited}
+	}
+	defer e.limiter.Release(att.ProviderID)
 	start := time.Now()
 	resp, err := client.Chat(ctx, reqWithModel(req, att))
 	return attemptResult{att: att, resp: resp, err: err, latencyMs: time.Since(start).Milliseconds(), called: true}
 }
 
 // noteSuccess records a successful attempt in the trace, ledger and
-// circuit breaker.
+// circuit breaker — and feeds its RTT into the adaptive limiter, so
+// a provider that slows down gets its cap shrunk for the next
+// requests. Only successes feed the gradient: a failed call's
+// latency is not a serving RTT.
 func (e *Engine) noteSuccess(trace *routetrace.RouteTrace, res attemptResult) {
 	addTraceAttempt(trace, res.att, res.latencyMs, "success", nil)
 	if e.ledger != nil && res.called {
@@ -518,6 +769,8 @@ func (e *Engine) noteSuccess(trace *routetrace.RouteTrace, res attemptResult) {
 		e.ledger.RecordAttempt(res.att.ProviderID, res.att.Model, true, res.latencyMs, usage)
 	}
 	e.breakerSuccess(res.att.ProviderID)
+	e.limiter.Record(res.att.ProviderID, time.Duration(res.latencyMs)*time.Millisecond, true)
+	e.reportConcurrencyLimit(res.att.ProviderID)
 }
 
 // noteFailure records a failed attempt. It returns whether the error
@@ -527,6 +780,14 @@ func (e *Engine) noteSuccess(trace *routetrace.RouteTrace, res attemptResult) {
 // Context cancellation and unknown providers likewise never touch the
 // breaker.
 func (e *Engine) noteFailure(trace *routetrace.RouteTrace, res attemptResult, consecutive429 *int) (rateLimited bool, wait time.Duration) {
+	// A shed call is not a failure: the provider was never tried
+	// (called=false), so it touches neither the ledger nor the
+	// breaker — it is only recorded in the trace as skipped, so
+	// the operator can see the shed happened.
+	if errors.Is(res.err, adaptive.ErrLimited) {
+		addTraceAttempt(trace, res.att, 0, "skipped_concurrency_limit", res.err)
+		return false, 0
+	}
 	if e.ledger != nil && res.called {
 		// Failed attempt: no usage was reported, so record Usage{}
 		// (unknown), never a guessed split.
@@ -1005,6 +1266,7 @@ attemptLoop:
 		streamAtt := att
 		consumed := 1
 		var cancelWinner context.CancelFunc
+		streamSlot := false // true when this iteration holds a limiter slot
 
 		if idx == 0 && attemptsUsed == 0 && e.cfg.HedgeDelay > 0 && len(ordered) > 1 && e.hedgeSecondAvailable(ordered[1]) {
 			hs := e.hedgedStream(ctx, att, ordered[1], r)
@@ -1040,6 +1302,23 @@ attemptLoop:
 				idx++
 				continue attemptLoop
 			}
+			// Adaptive admission, as in callChat: a provider at
+			// its cap sheds this stream instead of queueing. The
+			// slot is held for the stream's duration (released
+			// after forwardStream returns) but the stream's wall
+			// time is never fed to the RTT estimate — it is not a
+			// serving RTT. Hedged streams (the branch above) are
+			// not limiter-counted: the hedge race owns their
+			// lifetime and its loser is cancelled, not admitted.
+			if !e.limiter.TryAcquire(att.ProviderID) {
+				e.noteConcurrencyRejected(att.ProviderID)
+				addTraceAttempt(trace, att, 0, "skipped_concurrency_limit", adaptive.ErrLimited)
+				attemptsUsed++
+				lastErr = adaptive.ErrLimited
+				idx++
+				continue attemptLoop
+			}
+			streamSlot = true
 			// bridgeStream never fails synchronously: a provider
 			// failure (including a start failure such as a refused
 			// connection) arrives as an Err event on the channel,
@@ -1051,6 +1330,10 @@ attemptLoop:
 		}
 
 		outcome, serr := e.forwardStream(ctx, out, ch, first, &partial)
+		if streamSlot {
+			e.limiter.Release(streamAtt.ProviderID)
+			streamSlot = false
+		}
 		if cancelWinner != nil {
 			cancelWinner()
 		}
@@ -1237,10 +1520,37 @@ func (e *Engine) chainFor(model string) []Attempt {
 
 // Chat implements the server.Engine contract: it routes req through the
 // fallback chain resolved for req.Model and returns the first successful
-// response. Use LastTrace to see every attempt.
+// response. Use LastTrace to see every attempt. An "auto/*" model is
+// resolved to a concrete model first (see resolveAuto).
+//
+// Single-flight: a coalescable non-streaming request (see
+// coalescing.Coalescable) shares one flight with any identical
+// request already in flight — the whole retry loop (ChatWithChain)
+// runs inside that flight, so waiters share one backoff sequence and
+// one upstream call, and a shared failure reaches them all.
+// Streaming requests never reach Chat, and tool-using requests
+// bypass the group.
 func (e *Engine) Chat(ctx context.Context, req provider.ChatRequest) (*provider.ChatResponse, error) {
-	resp, _, err := e.ChatWithChain(ctx, e.chainFor(req.Model), req)
-	return resp, err
+	req = e.resolveAuto(req)
+	if !coalescing.Coalescable(req) {
+		resp, _, err := e.ChatWithChain(ctx, e.chainFor(req.Model), req)
+		return resp, err
+	}
+	key, err := coalescing.RequestKey(req)
+	if err != nil {
+		// Unkeyable request (a NaN/Inf float param cannot be JSON
+		// encoded): run it uncoalesced rather than failing it.
+		resp, _, err := e.ChatWithChain(ctx, e.chainFor(req.Model), req)
+		return resp, err
+	}
+	started := time.Now()
+	res, shared := e.flights.Do(ctx, key, func() (*provider.ChatResponse, *routetrace.RouteTrace, error) {
+		return e.ChatWithChain(ctx, e.chainFor(req.Model), req)
+	})
+	if shared {
+		e.noteShared(req, res, time.Since(started))
+	}
+	return res.Resp, res.Err
 }
 
 // ChatStream implements the server.Engine contract: it routes a streaming
@@ -1249,6 +1559,7 @@ func (e *Engine) Chat(ctx context.Context, req provider.ChatRequest) (*provider.
 // reassembled response. Failover and mid-stream resume happen inside
 // the engine, so fragments already delivered are never re-emitted.
 func (e *Engine) ChatStream(ctx context.Context, req provider.ChatRequest, onDelta func(string) error) (*provider.ChatResponse, error) {
+	req = e.resolveAuto(req)
 	return e.chatStreamDrain(ctx, e.chainFor(req.Model), req, 0, onDelta)
 }
 
@@ -1261,6 +1572,7 @@ func (e *Engine) ChatStream(ctx context.Context, req provider.ChatRequest, onDel
 // replays from the start. skipChars <= 0 behaves like ChatStream. The
 // returned response always holds the full reassembled content.
 func (e *Engine) ChatStreamFrom(ctx context.Context, req provider.ChatRequest, skipChars int, onDelta func(string) error) (*provider.ChatResponse, error) {
+	req = e.resolveAuto(req)
 	return e.chatStreamDrain(ctx, e.chainFor(req.Model), req, skipChars, onDelta)
 }
 
@@ -1272,6 +1584,7 @@ func (e *Engine) ChatStreamFrom(ctx context.Context, req provider.ChatRequest, s
 // and mid-stream resume happen inside the engine, so chunks already
 // delivered are never re-emitted.
 func (e *Engine) ChatStreamChunks(ctx context.Context, req provider.ChatRequest, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+	req = e.resolveAuto(req)
 	return e.chatStreamDrainChunks(ctx, e.chainFor(req.Model), req, 0, onChunk)
 }
 
@@ -1281,6 +1594,7 @@ func (e *Engine) ChatStreamChunks(ctx context.Context, req provider.ChatRequest,
 // forwardStream), so a resumed stream may lose a tool call that was
 // mid-flight when the previous attempt failed.
 func (e *Engine) ChatStreamFromChunks(ctx context.Context, req provider.ChatRequest, skipChars int, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+	req = e.resolveAuto(req)
 	return e.chatStreamDrainChunks(ctx, e.chainFor(req.Model), req, skipChars, onChunk)
 }
 

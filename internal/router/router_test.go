@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/raunakiitp/codvian-router/internal/autorouter"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/routetrace"
 	"github.com/raunakiitp/codvian-router/internal/server"
@@ -1248,5 +1249,180 @@ func TestEngineChatStreamChunksToolCalls(t *testing.T) {
 	}
 	if len(got) != 4 {
 		t.Errorf("got %d chunks, want 4 (text, tool-call head, args, finish)", len(got))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Auto-router ("auto/*" virtual models).
+// ---------------------------------------------------------------------------
+
+func newAutoTestEngine(t *testing.T) (*Engine, *fakeClient, *fakeClient) {
+	t.Helper()
+	ar := autorouter.New(autorouter.Config{
+		DefaultModel: "strong-model",
+		TierModels: map[autorouter.Tier][]string{
+			autorouter.TierCoding:    {"coder-model"},
+			autorouter.TierChat:      {"chat-model"},
+			autorouter.TierReasoning: {"reasoner-model"},
+			autorouter.TierQuickQA:   {"qa-model"},
+		},
+	})
+	coder := &fakeClient{}
+	chatter := &fakeClient{}
+	clients := map[string]provider.Client{"prov_coder": coder, "prov_chat": chatter}
+	// ChainFor serves the requested model from whichever provider
+	// owns it; the auto-router decides the model, the chain decides
+	// the provider.
+	chainFor := func(model string) []Attempt {
+		switch model {
+		case "coder-model":
+			return []Attempt{{ProviderID: "prov_coder", Model: model}}
+		case "chat-model", "qa-model", "reasoner-model", "strong-model":
+			return []Attempt{{ProviderID: "prov_chat", Model: model}}
+		}
+		return nil
+	}
+	eng := NewEngine(clients, nil, Config{
+		ChainFor:  chainFor,
+		AutoRoute: ar.Resolve,
+	})
+	return eng, coder, chatter
+}
+
+func TestEngineAutoRoutesCodingPromptToCoderModel(t *testing.T) {
+	eng, coder, chatter := newAutoTestEngine(t)
+	resp, err := eng.Chat(context.Background(), provider.ChatRequest{
+		Model:    "auto/coding",
+		Messages: []provider.Message{{Role: "user", Content: "Write a Python function to reverse a string"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat(auto/coding) error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("Chat(auto/coding) returned nil response")
+	}
+	if coder.chats != 1 {
+		t.Errorf("coder client chats = %d; want 1 (coding prompt must route to coder-model)", coder.chats)
+	}
+	if chatter.chats != 0 {
+		t.Errorf("chat client chats = %d; want 0", chatter.chats)
+	}
+	if got := coder.reqs[0].Model; got != "coder-model" {
+		t.Errorf("coder request model = %q; want coder-model", got)
+	}
+	dec, ok := eng.LastAutoDecision()
+	if !ok {
+		t.Fatal("LastAutoDecision: no decision after auto-routed request")
+	}
+	if dec.Tier != autorouter.TierCoding {
+		t.Errorf("decision tier = %s; want coding", dec.Tier)
+	}
+	if dec.Model != "coder-model" {
+		t.Errorf("decision model = %q; want coder-model", dec.Model)
+	}
+	if dec.Fallback {
+		t.Errorf("coding prompt unexpectedly fell back: %+v", dec)
+	}
+}
+
+func TestEngineAutoRoutesChatPromptToChatModel(t *testing.T) {
+	eng, coder, chatter := newAutoTestEngine(t)
+	_, err := eng.Chat(context.Background(), provider.ChatRequest{
+		Model:    "auto",
+		Messages: []provider.Message{{Role: "user", Content: "Tell me a funny joke about cats"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat(auto) error: %v", err)
+	}
+	if coder.chats != 0 || chatter.chats != 1 {
+		t.Errorf("chats coder=%d chat=%d; want 0 and 1", coder.chats, chatter.chats)
+	}
+	dec, ok := eng.LastAutoDecision()
+	if !ok || dec.Tier != autorouter.TierChat {
+		t.Errorf("decision = %+v, ok=%v; want tier chat", dec, ok)
+	}
+}
+
+func TestEngineAutoFallbackPromptGoesToStrongModel(t *testing.T) {
+	eng, _, chatter := newAutoTestEngine(t)
+	_, err := eng.Chat(context.Background(), provider.ChatRequest{
+		Model:    "auto",
+		Messages: []provider.Message{{Role: "user", Content: "zxqv blorp wumpus flibberty"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat(auto) error: %v", err)
+	}
+	if chatter.chats != 1 {
+		t.Errorf("chat client chats = %d; want 1 (fallback serves via strong-model)", chatter.chats)
+	}
+	if got := chatter.reqs[0].Model; got != "reasoner-model" {
+		t.Errorf("fallback request model = %q; want reasoner-model", got)
+	}
+	dec, ok := eng.LastAutoDecision()
+	if !ok || !dec.Fallback || dec.Tier != autorouter.TierReasoning {
+		t.Errorf("decision = %+v, ok=%v; want fallback to reasoning", dec, ok)
+	}
+}
+
+func TestEngineAutoStreamRoutesToo(t *testing.T) {
+	eng, coder, _ := newAutoTestEngine(t)
+	_, err := eng.ChatStream(context.Background(), provider.ChatRequest{
+		Model:    "auto/coding",
+		Messages: []provider.Message{{Role: "user", Content: "Write unit tests for this function"}},
+	}, func(string) error { return nil })
+	if err != nil {
+		t.Fatalf("ChatStream(auto/coding) error: %v", err)
+	}
+	if coder.streams != 1 {
+		t.Errorf("coder streams = %d; want 1", coder.streams)
+	}
+}
+
+func TestEngineAutoUnresolvableModelFailsHonestly(t *testing.T) {
+	// No tier models and no default model: Resolve reports ok=false,
+	// so the engine must NOT invent a model — the request fails with
+	// an empty chain error.
+	ar := autorouter.New(autorouter.Config{})
+	eng := NewEngine(map[string]provider.Client{"p": &fakeClient{}}, nil, Config{
+		ChainFor:  func(string) []Attempt { return nil },
+		AutoRoute: ar.Resolve,
+	})
+	_, err := eng.Chat(context.Background(), provider.ChatRequest{
+		Model:    "auto",
+		Messages: []provider.Message{{Role: "user", Content: "Write a Python function"}},
+	})
+	if err == nil {
+		t.Fatal("Chat(auto) with no configured model: got nil error; want an honest failure, never an invented model")
+	}
+	dec, ok := eng.LastAutoDecision()
+	if !ok {
+		t.Fatal("LastAutoDecision: no decision recorded for the failed auto request")
+	}
+	if dec.Model != "" {
+		t.Errorf("failed decision model = %q; want empty", dec.Model)
+	}
+}
+
+func TestEnginePlainModelClearsAutoDecision(t *testing.T) {
+	eng, _, _ := newAutoTestEngine(t)
+	_, err := eng.Chat(context.Background(), provider.ChatRequest{
+		Model:    "auto",
+		Messages: []provider.Message{{Role: "user", Content: "Tell me a joke"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat(auto) error: %v", err)
+	}
+	if _, ok := eng.LastAutoDecision(); !ok {
+		t.Fatal("expected an auto decision after auto request")
+	}
+	_, err = eng.Chat(context.Background(), provider.ChatRequest{
+		Model:    "chat-model",
+		Messages: []provider.Message{{Role: "user", Content: "Tell me a joke"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat(chat-model) error: %v", err)
+	}
+	if dec, ok := eng.LastAutoDecision(); ok {
+		t.Errorf("plain-model request left a stale auto decision: %+v", dec)
 	}
 }
