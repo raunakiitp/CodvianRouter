@@ -329,19 +329,28 @@ func (e *AnthropicError) IsOverloaded() bool {
 	return e != nil && e.Type == "overloaded_error"
 }
 
-// IsRetryable reports whether err is an *AnthropicError marked retryable.
+// IsRetryable reports whether err is a *AnthropicError or
+// *GeminiError marked retryable.
 func IsRetryable(err error) bool {
 	var ae *AnthropicError
-	return errors.As(err, &ae) && ae.Retryable
+	if errors.As(err, &ae) {
+		return ae.Retryable
+	}
+	var ge *GeminiError
+	return errors.As(err, &ge) && ge.Retryable
 }
 
-// HTTPStatus returns the preserved HTTP status of an *AnthropicError,
-// or 0 when err is not one (e.g. a mid-stream error event, where the
-// HTTP status was already 200).
+// HTTPStatus returns the preserved HTTP status of an *AnthropicError
+// or *GeminiError, or 0 when err is neither (e.g. a mid-stream error
+// event, where the HTTP status was already 200).
 func HTTPStatus(err error) int {
 	var ae *AnthropicError
 	if errors.As(err, &ae) {
 		return ae.StatusCode
+	}
+	var ge *GeminiError
+	if errors.As(err, &ge) {
+		return ge.StatusCode
 	}
 	return 0
 }
