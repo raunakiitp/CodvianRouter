@@ -168,6 +168,9 @@ type streamBlock struct {
 //   - text_delta becomes a content delta; input_json_delta fragments
 //     become tool-call argument deltas, validated as JSON when the
 //     block closes (fragments are not valid JSON on their own).
+//     Tool-call indices are renumbered sequentially from 0 in order
+//     of first appearance (Anthropic block indices count text blocks
+//     too, so they are not valid OpenAI tool-call indices).
 //   - message_delta supplies the finish reason and output tokens; the
 //     final emitted chunk carries finish_reason and usage.
 //   - an error event returns the mapped *AnthropicError and never a
@@ -180,6 +183,14 @@ func TranslateStream(r io.Reader, emit func(ChatChunk) error) (StreamResult, err
 	var res StreamResult
 	created := time.Now().Unix()
 	blocks := make(map[int]*streamBlock)
+	// toolIndex maps an Anthropic content-block index to the
+	// sequential OpenAI tool-call index (0, 1, 2, ... in order of
+	// first appearance). Anthropic block indices count text blocks
+	// too, so a tool_use after a text block is block 1 — emitting
+	// that as the OpenAI tool-call index would wrongly claim a
+	// second tool call exists.
+	toolIndex := make(map[int]int)
+	nextTool := 0
 	var (
 		content    strings.Builder
 		sawStart   bool
@@ -241,9 +252,11 @@ func TranslateStream(r io.Reader, emit func(ChatChunk) error) (StreamResult, err
 				if strings.TrimSpace(blk.toolName) == "" {
 					return unrep("streamed tool_use block has no name")
 				}
+				toolIndex[parsed.Index] = nextTool
+				nextTool++
 				// First delta for the call carries id, type, name.
 				if err := emitChunk(ChunkDelta{ToolCalls: []ChunkToolCall{{
-					Index: parsed.Index,
+					Index: toolIndex[parsed.Index],
 					ID:    blk.toolID,
 					Type:  "function",
 					Function: ChunkFunction{
@@ -286,7 +299,7 @@ func TranslateStream(r io.Reader, emit func(ChatChunk) error) (StreamResult, err
 				}
 				blk.jsonBuf.WriteString(parsed.Delta.PartialJSON)
 				return emitChunk(ChunkDelta{ToolCalls: []ChunkToolCall{{
-					Index: parsed.Index,
+					Index: toolIndex[parsed.Index],
 					Function: ChunkFunction{
 						Arguments: parsed.Delta.PartialJSON,
 					},

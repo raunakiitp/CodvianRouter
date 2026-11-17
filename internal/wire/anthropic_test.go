@@ -862,3 +862,21 @@ func TestMapStreamError(t *testing.T) {
 		}
 	}
 }
+
+func TestTranslateStreamToolCallIndexRenumbered(t *testing.T) {
+	// The tool_use block is Anthropic content-block index 1 (after
+	// the text block), but the OpenAI tool-call index must be 0:
+	// block indices count text blocks too and are not valid
+	// OpenAI tool-call indices.
+	chunks, _, err := collectChunks(t, toolStreamSSE)
+	if err != nil {
+		t.Fatalf("TranslateStream: %v", err)
+	}
+	for _, c := range chunks {
+		for _, td := range c.Choices[0].Delta.ToolCalls {
+			if td.Index != 0 {
+				t.Errorf("tool-call delta index = %d, want 0 (renumbered from block 1)", td.Index)
+			}
+		}
+	}
+}
