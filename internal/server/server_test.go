@@ -8,13 +8,18 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/raunakiitp/codvian-router/internal/adaptive"
+	"github.com/raunakiitp/codvian-router/internal/autorouter"
+	"github.com/raunakiitp/codvian-router/internal/coalescing"
 	"github.com/raunakiitp/codvian-router/internal/config"
+	"github.com/raunakiitp/codvian-router/internal/health"
 	"github.com/raunakiitp/codvian-router/internal/metrics"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/routetrace"
@@ -134,7 +139,7 @@ func TestDashboard(t *testing.T) {
 		t.Fatalf("Content-Type = %q, want text/html; charset=utf-8", ct)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"Codvian Router", "Overview", "Providers", "Models"} {
+	for _, want := range []string{"Codvian Router", "Overview", "Providers", "Models", "verif-badge", "/api/providers"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("dashboard missing %q", want)
 		}
@@ -162,6 +167,195 @@ func TestDashboardDoesNotBypassAPIAuth(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Fatalf("GET %s without key: status = %d, want 401", path, rec.Code)
 		}
+	}
+}
+
+// fakeDashboardProviders is a controllable DashboardProviderLister.
+type fakeDashboardProviders struct {
+	providers []provider.DashboardProvider
+}
+
+func (f fakeDashboardProviders) DashboardProviders() []provider.DashboardProvider {
+	return f.providers
+}
+
+// TestDashboardProviders proves the live provider feed: verification
+// status, wire format and auth kind per provider, plus the summary
+// counts — served without a gateway key (like the dashboard page
+// itself) and carrying no secrets.
+func TestDashboardProviders(t *testing.T) {
+	lister := fakeDashboardProviders{providers: []provider.DashboardProvider{
+		{ID: "p1", Name: "Groq", Enabled: true, WireFormat: "openai", Verification: "verified-from-docs", AuthKind: "bearer", AuthEndpoint: "chat", CatalogID: "groq", Models: 2},
+		{ID: "p2", Name: "DeepSeek", Enabled: true, WireFormat: "anthropic", Verification: "verified-from-docs", AuthKind: "x-api-key", AuthEndpoint: "anthropic", CatalogID: "deepseek", Models: 1},
+		{ID: "p3", Name: "My Custom", Enabled: false, WireFormat: "openai", Verification: "unverified", AuthKind: "bearer", Models: 0},
+	}}
+	srv := newTestServer(t, &fakeEngine{}, WithDashboardProviders(lister))
+	rec := doReq(t, srv, http.MethodGet, "/dashboard/providers", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got dashboardProvidersResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Providers) != 3 {
+		t.Fatalf("providers = %d, want 3", len(got.Providers))
+	}
+	if got.Providers[0].Verification != "verified-from-docs" || got.Providers[0].AuthKind != "bearer" || got.Providers[0].WireFormat != "openai" {
+		t.Errorf("groq = %+v", got.Providers[0])
+	}
+	if got.Providers[1].AuthKind != "x-api-key" || got.Providers[1].WireFormat != "anthropic" {
+		t.Errorf("deepseek = %+v", got.Providers[1])
+	}
+	if got.Providers[2].Verification != "unverified" || got.Providers[2].Enabled {
+		t.Errorf("custom = %+v", got.Providers[2])
+	}
+	want := dashboardProviderSummary{Total: 3, Enabled: 2, VerifiedFromDocs: 2, Unverified: 1}
+	if got.Summary != want {
+		t.Errorf("summary = %+v, want %+v", got.Summary, want)
+	}
+	// No secrets anywhere in the raw payload.
+	body := rec.Body.String()
+	for _, secret := range []string{"sk-", "api_key", "base_url"} {
+		if strings.Contains(body, secret) {
+			t.Errorf("payload contains %q — provider feed must never carry secrets", secret)
+		}
+	}
+}
+
+// TestDashboardProvidersEmpty proves a server with no lister answers
+// an honest empty list, not an error — the dashboard renders
+// "no providers" instead of failing.
+func TestDashboardProvidersEmpty(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{})
+	rec := doReq(t, srv, http.MethodGet, "/dashboard/providers", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got dashboardProvidersResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Providers == nil || len(got.Providers) != 0 {
+		t.Fatalf("providers = %+v, want empty list", got.Providers)
+	}
+	if got.Summary.Total != 0 {
+		t.Errorf("summary = %+v, want zero total", got.Summary)
+	}
+}
+
+func TestDashboardProvidersMethodNotAllowed(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{}, WithDashboardProviders(fakeDashboardProviders{}))
+	rec := doReq(t, srv, http.MethodPost, "/dashboard/providers", "", "")
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405", rec.Code)
+	}
+}
+
+// fakeHealthStatuses is a controllable HealthStatusLister.
+type fakeHealthStatuses struct {
+	statuses []health.Status
+}
+
+func (f fakeHealthStatuses) Last() []health.Status { return f.statuses }
+
+// TestAPIProviders proves the dashboard's provider feed: id, name,
+// wire format, verification status and health status per provider,
+// plus the summary counts — served without a gateway key (like the
+// dashboard page itself) and carrying no secrets. Health comes from
+// the checker's last results: ok, down, and unknown for a provider
+// never probed (here the disabled one).
+func TestAPIProviders(t *testing.T) {
+	lister := fakeDashboardProviders{providers: []provider.DashboardProvider{
+		{ID: "p1", Name: "Groq", Enabled: true, WireFormat: "openai", Verification: "verified-from-docs", AuthKind: "bearer", CatalogID: "groq", Models: 2},
+		{ID: "p2", Name: "DeepSeek", Enabled: true, WireFormat: "anthropic", Verification: "from-reference-metadata-only", AuthKind: "x-api-key", CatalogID: "deepseek", Models: 1},
+		{ID: "p3", Name: "My Custom", Enabled: false, WireFormat: "openai", Verification: "unverified", AuthKind: "bearer", Models: 0},
+	}}
+	healthLister := fakeHealthStatuses{statuses: []health.Status{
+		{ProviderID: "p1", ProviderName: "Groq", OK: true},
+		{ProviderID: "p2", ProviderName: "DeepSeek", OK: false, LastError: "boom"},
+	}}
+	srv := newTestServer(t, &fakeEngine{}, WithDashboardProviders(lister), WithHealthChecker(healthLister))
+	rec := doReq(t, srv, http.MethodGet, "/api/providers", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got apiProvidersResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Providers) != 3 {
+		t.Fatalf("providers = %d, want 3", len(got.Providers))
+	}
+	if got.Providers[0].ID != "p1" || got.Providers[0].Name != "Groq" || got.Providers[0].WireFormat != "openai" || got.Providers[0].Verification != "verified-from-docs" || got.Providers[0].HealthStatus != "ok" {
+		t.Errorf("groq = %+v", got.Providers[0])
+	}
+	if got.Providers[1].Verification != "from-reference-metadata-only" || got.Providers[1].HealthStatus != "down" {
+		t.Errorf("deepseek = %+v", got.Providers[1])
+	}
+	if got.Providers[2].Verification != "unverified" || got.Providers[2].HealthStatus != "unknown" || got.Providers[2].Enabled {
+		t.Errorf("custom = %+v", got.Providers[2])
+	}
+	want := dashboardProviderSummary{Total: 3, Enabled: 2, VerifiedFromDocs: 1, FromReferenceMetadataOnly: 1, Unverified: 1}
+	if got.Summary != want {
+		t.Errorf("summary = %+v, want %+v", got.Summary, want)
+	}
+	// No secrets anywhere in the raw payload.
+	body := rec.Body.String()
+	for _, secret := range []string{"sk-", "api_key", "base_url"} {
+		if strings.Contains(body, secret) {
+			t.Errorf("payload contains %q — provider feed must never carry secrets", secret)
+		}
+	}
+}
+
+// TestAPIProvidersNoHealthChecker proves the endpoint still works
+// with no checker wired: every provider reports health "unknown"
+// rather than the endpoint failing.
+func TestAPIProvidersNoHealthChecker(t *testing.T) {
+	lister := fakeDashboardProviders{providers: []provider.DashboardProvider{
+		{ID: "p1", Name: "Groq", Enabled: true, WireFormat: "openai", Verification: "verified-from-docs", Models: 2},
+	}}
+	srv := newTestServer(t, &fakeEngine{}, WithDashboardProviders(lister))
+	rec := doReq(t, srv, http.MethodGet, "/api/providers", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got apiProvidersResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Providers) != 1 || got.Providers[0].HealthStatus != "unknown" {
+		t.Fatalf("providers = %+v, want one provider with health unknown", got.Providers)
+	}
+}
+
+// TestAPIProvidersEmpty proves a server with no lister answers an
+// honest empty list, not an error — the dashboard renders its
+// "no providers connected yet" empty state.
+func TestAPIProvidersEmpty(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{})
+	rec := doReq(t, srv, http.MethodGet, "/api/providers", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got apiProvidersResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Providers == nil || len(got.Providers) != 0 {
+		t.Fatalf("providers = %+v, want empty list", got.Providers)
+	}
+	if got.Summary.Total != 0 {
+		t.Errorf("summary = %+v, want zero total", got.Summary)
+	}
+}
+
+func TestAPIProvidersMethodNotAllowed(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{}, WithDashboardProviders(fakeDashboardProviders{}))
+	rec := doReq(t, srv, http.MethodPost, "/api/providers", "", "")
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405", rec.Code)
 	}
 }
 
@@ -789,5 +983,317 @@ func TestChatCompletionsCacheHitMetricsAttributedToCache(t *testing.T) {
 	// would be double-counted. Assert the server counted no hit.
 	if strings.Contains(body, `codvian_router_cache_hits_total{layer="semantic"}`) {
 		t.Fatalf("server must not count cache hits (wrapper owns them):\n%s", body)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Auto-router endpoints (GET /dashboard/auto-route, /last).
+// ---------------------------------------------------------------------------
+
+func newAutoTestRouter() *autorouter.Router {
+	return autorouter.New(autorouter.Config{
+		DefaultModel: "strong-model",
+		TierModels: map[autorouter.Tier][]string{
+			autorouter.TierCoding:    {"coder-model"},
+			autorouter.TierChat:      {"chat-model"},
+			autorouter.TierReasoning: {"reasoner-model"},
+			autorouter.TierQuickQA:   {"qa-model"},
+		},
+	})
+}
+
+func TestAutoRouteClassify(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{}, WithAutoRouter(newAutoTestRouter()))
+	rec := doReq(t, srv, http.MethodGet, "/dashboard/auto-route?model=auto%2Fcoding&prompt="+url.QueryEscape("Write a Python function to reverse a string"), "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("classify status = %d; want 200 (body %s)", rec.Code, rec.Body.String())
+	}
+	var dec autorouter.Decision
+	if err := json.Unmarshal(rec.Body.Bytes(), &dec); err != nil {
+		t.Fatalf("classify body is not a Decision: %v", err)
+	}
+	if dec.Tier != autorouter.TierCoding {
+		t.Errorf("decision tier = %s; want coding", dec.Tier)
+	}
+	if dec.Model != "coder-model" {
+		t.Errorf("decision model = %q; want coder-model", dec.Model)
+	}
+	if dec.Confidence < 0.5 {
+		t.Errorf("decision confidence = %.3f; want >= 0.5", dec.Confidence)
+	}
+	if dec.LatencyMicros <= 0 {
+		t.Errorf("decision latency_micros = %d; want a measured positive value", dec.LatencyMicros)
+	}
+	if dec.Scores["coding"] == 0 {
+		t.Error("decision carries no per-tier scores")
+	}
+}
+
+func TestAutoRouteClassifyFallback(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{}, WithAutoRouter(newAutoTestRouter()))
+	rec := doReq(t, srv, http.MethodGet, "/dashboard/auto-route?model=auto&prompt="+url.QueryEscape("zxqv blorp wumpus flibberty"), "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("classify status = %d; want 200 (body %s)", rec.Code, rec.Body.String())
+	}
+	var dec autorouter.Decision
+	if err := json.Unmarshal(rec.Body.Bytes(), &dec); err != nil {
+		t.Fatalf("classify body is not a Decision: %v", err)
+	}
+	if !dec.Fallback || dec.Tier != autorouter.TierReasoning {
+		t.Errorf("decision = %+v; want fallback to reasoning", dec)
+	}
+	if dec.Reason == "" {
+		t.Error("fallback decision carries no reason")
+	}
+}
+
+func TestAutoRouteClassifyErrors(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{}, WithAutoRouter(newAutoTestRouter()))
+	// No prompt.
+	if rec := doReq(t, srv, http.MethodGet, "/dashboard/auto-route?model=auto", "", ""); rec.Code != http.StatusBadRequest {
+		t.Errorf("missing prompt: status = %d; want 400", rec.Code)
+	}
+	// Unknown virtual model.
+	if rec := doReq(t, srv, http.MethodGet, "/dashboard/auto-route?model=gpt-4o&prompt=hello", "", ""); rec.Code != http.StatusBadRequest {
+		t.Errorf("unknown model: status = %d; want 400", rec.Code)
+	}
+	// Bad threshold.
+	if rec := doReq(t, srv, http.MethodGet, "/dashboard/auto-route?model=auto&prompt=hello&threshold=2", "", ""); rec.Code != http.StatusBadRequest {
+		t.Errorf("threshold 2: status = %d; want 400", rec.Code)
+	}
+	// Threshold override honoured: 0.99 forces fallback for a partial match.
+	rec := doReq(t, srv, http.MethodGet, "/dashboard/auto-route?model=auto&prompt="+url.QueryEscape("What is the boiling point of water at sea level")+"&threshold=0.99", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("threshold override: status = %d; want 200", rec.Code)
+	}
+	var dec autorouter.Decision
+	if err := json.Unmarshal(rec.Body.Bytes(), &dec); err != nil {
+		t.Fatalf("threshold override body: %v", err)
+	}
+	if !dec.Fallback || dec.Threshold != 0.99 {
+		t.Errorf("threshold override decision = %+v; want fallback at threshold 0.99", dec)
+	}
+	// POST is not allowed.
+	if rec := doReq(t, srv, http.MethodPost, "/dashboard/auto-route?model=auto&prompt=hello", "", ""); rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("POST: status = %d; want 405", rec.Code)
+	}
+}
+
+func TestAutoRouteNoRouterConfigured(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{})
+	if rec := doReq(t, srv, http.MethodGet, "/dashboard/auto-route?model=auto&prompt=hello", "", ""); rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("no router: status = %d; want 503, never an invented decision", rec.Code)
+	}
+	if rec := doReq(t, srv, http.MethodGet, "/dashboard/auto-route/last", "", ""); rec.Code != http.StatusOK {
+		t.Errorf("last with no engine decision: status = %d; want 200 with has_decision=false", rec.Code)
+	} else {
+		var body map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("last body: %v", err)
+		}
+		if body["has_decision"] != false {
+			t.Errorf("last body = %v; want has_decision=false", body)
+		}
+	}
+}
+
+func TestAutoRouteLastHonestEmptyState(t *testing.T) {
+	// An engine that reports no decision: "last" must say so, not
+	// invent one.
+	srv := newTestServer(t, &fakeEngine{}, WithAutoRouter(newAutoTestRouter()))
+	rec := doReq(t, srv, http.MethodGet, "/dashboard/auto-route/last", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("last status = %d; want 200", rec.Code)
+	}
+	var body struct {
+		HasDecision bool                `json:"has_decision"`
+		Decision    autorouter.Decision `json:"decision"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("last body: %v", err)
+	}
+	if body.HasDecision {
+		t.Errorf("last body = %+v; want has_decision=false before any auto request", body)
+	}
+}
+
+func TestModelsListsAutoVirtualModels(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{chatResp: provider.ChatResponse{Content: "ok"}}, WithAutoRouter(newAutoTestRouter()), WithModels("plain-model"))
+	rec := doReq(t, srv, http.MethodGet, "/v1/models", "", "test-key-123")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("models status = %d; want 200", rec.Code)
+	}
+	var body struct {
+		Data []Model `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("models body: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, m := range body.Data {
+		seen[m.ID] = true
+		if m.ID == "auto" && m.OwnedBy != "codvian-router" {
+			t.Errorf("auto model owned_by = %q; want codvian-router", m.OwnedBy)
+		}
+	}
+	for _, name := range autorouter.VirtualModels {
+		if !seen[name] {
+			t.Errorf("GET /v1/models missing virtual model %q", name)
+		}
+	}
+	if !seen["plain-model"] {
+		t.Error("GET /v1/models missing plain-model")
+	}
+	// Without an auto-router configured, no virtual models appear.
+	srv2 := newTestServer(t, &fakeEngine{}, WithModels("plain-model"))
+	rec2 := doReq(t, srv2, http.MethodGet, "/v1/models", "", "test-key-123")
+	var body2 struct {
+		Data []Model `json:"data"`
+	}
+	if err := json.Unmarshal(rec2.Body.Bytes(), &body2); err != nil {
+		t.Fatalf("models body (no router): %v", err)
+	}
+	for _, m := range body2.Data {
+		if m.ID == "auto" {
+			t.Error("GET /v1/models listed auto with no auto-router configured")
+		}
+	}
+}
+
+// coalEngine is a fakeEngine that also reports single-flight counters.
+type coalEngine struct {
+	*fakeEngine
+	stats coalescing.Stats
+}
+
+func (e *coalEngine) CoalescingStats() coalescing.Stats { return e.stats }
+
+func TestDashboardCoalescing(t *testing.T) {
+	srv := newTestServer(t, &coalEngine{fakeEngine: &fakeEngine{}, stats: coalescing.Stats{
+		Requests: 12, Flights: 3, Shared: 9, UpstreamAvoided: 9, QuotaSaved: 9, InFlight: 1,
+	}})
+	rec := doReq(t, srv, http.MethodGet, "/dashboard/coalescing", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got coalescing.Stats
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.Requests != 12 || got.Flights != 3 || got.Shared != 9 || got.UpstreamAvoided != 9 || got.QuotaSaved != 9 || got.InFlight != 1 {
+		t.Fatalf("stats = %+v, want the engine's real counters", got)
+	}
+}
+
+func TestDashboardCoalescingEmpty(t *testing.T) {
+	// An engine that reports nothing answers zero counters — an
+	// honest empty state, never invented figures.
+	srv := newTestServer(t, &fakeEngine{})
+	rec := doReq(t, srv, http.MethodGet, "/dashboard/coalescing", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got coalescing.Stats
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got != (coalescing.Stats{}) {
+		t.Fatalf("stats = %+v, want all zero", got)
+	}
+}
+
+func TestDashboardCoalescingMethodNotAllowed(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{})
+	rec := doReq(t, srv, http.MethodPost, "/dashboard/coalescing", "", "")
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405", rec.Code)
+	}
+}
+
+// concEngine is a fakeEngine that also reports adaptive limiter state.
+type concEngine struct {
+	*fakeEngine
+	states []adaptive.State
+}
+
+func (e *concEngine) ConcurrencyStats() []adaptive.State { return e.states }
+
+func TestDashboardConcurrency(t *testing.T) {
+	srv := newTestServer(t, &concEngine{fakeEngine: &fakeEngine{}, states: []adaptive.State{
+		{Provider: "prov-slow", Limit: 2.5, InFlight: 2, RTTMs: 320, BaselineMs: 5, Samples: 12, Admitted: 20, Rejected: 4},
+	}}, WithDashboardProviders(fakeDashboardProviders{providers: []provider.DashboardProvider{
+		{ID: "prov-slow", Name: "Slow Provider", Enabled: true},
+		{ID: "prov-fast", Name: "Fast Provider", Enabled: true},
+	}}))
+	rec := doReq(t, srv, http.MethodGet, "/dashboard/concurrency", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got struct {
+		Providers []struct {
+			ProviderID string  `json:"provider_id"`
+			Name       string  `json:"name"`
+			Limit      float64 `json:"limit"`
+			InFlight   int     `json:"in_flight"`
+			RTTMs      float64 `json:"rtt_ms"`
+			BaselineMs float64 `json:"baseline_ms"`
+			Samples    uint64  `json:"samples"`
+			Rejected   uint64  `json:"rejected"`
+		} `json:"providers"`
+		TFO provider.TFOState `json:"tfo"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Providers) != 2 {
+		t.Fatalf("providers = %+v, want 2 rows (one per configured provider)", got.Providers)
+	}
+	row := got.Providers[0]
+	if row.ProviderID != "prov-slow" || row.Name != "Slow Provider" || row.Limit != 2.5 || row.InFlight != 2 || row.RTTMs != 320 || row.BaselineMs != 5 || row.Samples != 12 || row.Rejected != 4 {
+		t.Fatalf("slow row = %+v, want the engine's real limiter state", row)
+	}
+	// A provider with no traffic yet: the initial cap, zero samples
+	// — an honest empty state, never an invented RTT.
+	row2 := got.Providers[1]
+	if row2.ProviderID != "prov-fast" || row2.Samples != 0 || row2.RTTMs != 0 || row2.BaselineMs != 0 {
+		t.Fatalf("fast row = %+v, want zero samples and zero RTT", row2)
+	}
+	if row2.Limit != adaptive.DefaultInitialLimit {
+		t.Fatalf("fast row limit = %v, want the initial cap %v", row2.Limit, adaptive.DefaultInitialLimit)
+	}
+	// TFO state is the real probe, with a reason — never empty.
+	if got.TFO.Platform == "" || got.TFO.Reason == "" {
+		t.Fatalf("tfo = %+v, want platform + reason from the probe", got.TFO)
+	}
+}
+
+func TestDashboardConcurrencyEmpty(t *testing.T) {
+	// An engine that reports nothing answers an empty provider list
+	// with the TFO probe — an honest empty state, never invented limits.
+	srv := newTestServer(t, &fakeEngine{})
+	rec := doReq(t, srv, http.MethodGet, "/dashboard/concurrency", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var got struct {
+		Providers []any             `json:"providers"`
+		TFO       provider.TFOState `json:"tfo"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Providers) != 0 {
+		t.Fatalf("providers = %v, want empty", got.Providers)
+	}
+	if got.TFO.Platform == "" {
+		t.Fatal("tfo has no platform")
+	}
+}
+
+func TestDashboardConcurrencyMethodNotAllowed(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{})
+	rec := doReq(t, srv, http.MethodPost, "/dashboard/concurrency", "", "")
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405", rec.Code)
 	}
 }

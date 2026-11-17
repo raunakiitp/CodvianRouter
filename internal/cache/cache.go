@@ -426,6 +426,25 @@ func NewLocalSemanticCacheWithConfig(cfg LocalSemanticCacheConfig) *LocalSemanti
 	}
 }
 
+// EmbedText returns the deterministic hashed bag-of-words vector for
+// text: 256 float32s, L2-normalized, built from token unigrams +
+// bigrams hashed into buckets. Identical text yields the identical
+// vector. This is a token-overlap feature vector, NOT a neural
+// embedding — it carries no meaning beyond which words (and word
+// pairs) the text contains. Exported so other local packages (e.g.
+// the auto-router) can reuse exactly this embedding approach instead
+// of building a second one.
+func EmbedText(text string) []float32 {
+	return embedText(text)
+}
+
+// Cosine returns the cosine similarity of a and b, computed over the
+// shorter of the two. Zero vectors (or empty inputs) score 0.
+// Exported alongside EmbedText for the same reuse reason.
+func Cosine(a, b []float32) float32 {
+	return cosine(a, b)
+}
+
 // tokenize lower-cases text and splits on anything that is not a
 // letter or digit, dropping empties.
 func tokenize(text string) []string {

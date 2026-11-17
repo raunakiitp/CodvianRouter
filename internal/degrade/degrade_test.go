@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/cache"
+	"github.com/raunakiitp/codvian-router/internal/coalescing"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/server"
 )
@@ -1172,5 +1173,29 @@ func TestServeCacheFreshSuccessClearsCacheHit(t *testing.T) {
 	}
 	if se.LastServedStale() {
 		t.Fatal("fresh provider success must not be marked stale")
+	}
+}
+
+// coalescingFakeEngine is a fakeEngine that also reports single-flight
+// counters, so the wrapper's forwarding can be tested.
+type coalescingFakeEngine struct {
+	*fakeEngine
+	stats coalescing.Stats
+}
+
+func (e *coalescingFakeEngine) CoalescingStats() coalescing.Stats { return e.stats }
+
+func TestStaleEngineForwardsCoalescingStats(t *testing.T) {
+	want := coalescing.Stats{Requests: 7, Flights: 2, Shared: 5, UpstreamAvoided: 5, QuotaSaved: 5, InFlight: 0}
+	se, _ := wrapTest(&coalescingFakeEngine{fakeEngine: &fakeEngine{}, stats: want}, DefaultPolicy())
+	if got := se.CoalescingStats(); got != want {
+		t.Fatalf("CoalescingStats = %+v, want %+v", got, want)
+	}
+}
+
+func TestStaleEngineCoalescingStatsEmptyWithoutReporter(t *testing.T) {
+	se, _ := wrapTest(&fakeEngine{}, DefaultPolicy())
+	if got := se.CoalescingStats(); got != (coalescing.Stats{}) {
+		t.Fatalf("CoalescingStats = %+v, want all zero", got)
 	}
 }

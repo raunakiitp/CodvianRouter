@@ -38,7 +38,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/raunakiitp/codvian-router/internal/adaptive"
+	"github.com/raunakiitp/codvian-router/internal/autorouter"
 	"github.com/raunakiitp/codvian-router/internal/cache"
+	"github.com/raunakiitp/codvian-router/internal/coalescing"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/routetrace"
 	"github.com/raunakiitp/codvian-router/internal/server"
@@ -859,6 +862,46 @@ func (e *StaleEngine) LastTrace() *routetrace.RouteTrace {
 		return tp.LastTrace()
 	}
 	return nil
+}
+
+// LastAutoDecision returns the wrapped engine's most recent
+// auto-routing decision when it exposes one (router.Engine does),
+// so callers can show which tier a real "auto/*" request picked,
+// with what confidence and why. It returns ok=false when the
+// wrapped engine has no decision to offer (no auto engine, or the
+// most recent request was not an auto-routed one).
+func (e *StaleEngine) LastAutoDecision() (autorouter.Decision, bool) {
+	if ad, ok := e.engine.(interface {
+		LastAutoDecision() (autorouter.Decision, bool)
+	}); ok {
+		return ad.LastAutoDecision()
+	}
+	return autorouter.Decision{}, false
+}
+
+// CoalescingStats returns the wrapped engine's single-flight
+// counters when it exposes them (router.Engine does), so the
+// dashboard can show real coalescing numbers through this wrapper.
+// It returns zero counters when the wrapped engine has none to
+// offer — an empty state, never invented figures.
+func (e *StaleEngine) CoalescingStats() coalescing.Stats {
+	if cs, ok := e.engine.(interface{ CoalescingStats() coalescing.Stats }); ok {
+		return cs.CoalescingStats()
+	}
+	return coalescing.Stats{}
+}
+
+// ConcurrencyStats returns the wrapped engine's per-(provider, key)
+// adaptive limiter state when it exposes it (router.Engine does),
+// so the dashboard can show live caps, in-flight counts and RTT vs
+// baseline through this wrapper. It returns an empty list when the
+// wrapped engine has none to offer — an empty state, never invented
+// limits.
+func (e *StaleEngine) ConcurrencyStats() []adaptive.State {
+	if cs, ok := e.engine.(interface{ ConcurrencyStats() []adaptive.State }); ok {
+		return cs.ConcurrencyStats()
+	}
+	return []adaptive.State{}
 }
 
 // Ensure StaleEngine satisfies server.Engine at compile time.
