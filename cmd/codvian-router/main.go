@@ -8,6 +8,9 @@
 //	codvian-router [--config PATH] [--model MODEL] eval  # smoke-eval the live engine
 //	codvian-router [--config PATH] validate             # validate the config file
 //	codvian-router [--config PATH] [--port PORT] tray   # supervise the gateway headless
+//	codvian-router [--config PATH] provider list        # list configured providers
+//	codvian-router [--config PATH] provider add <base-url> <api-key> [--name NAME]
+//	codvian-router [--config PATH] provider add-catalog <catalog-id> <api-key> [--endpoint E] [--variant V] [--base-url URL]
 //
 // The router is local-only by default: it binds 127.0.0.1 only, and auth
 // is ON — requests must present a gateway key issued by `init` (or added
@@ -59,6 +62,11 @@ type options struct {
 	port       int // 0 = use the port from the config file
 	listen     string
 	model      string
+	// provider add-catalog flags.
+	endpoint string
+	variant  string
+	baseURL  string
+	name     string
 }
 
 // parseArgs extracts --config, --port, --listen and --model (in "--flag
@@ -111,6 +119,38 @@ func parseArgs(args []string) (options, []string, error) {
 			opts.model = args[i]
 		case strings.HasPrefix(a, "--model="):
 			opts.model = strings.TrimPrefix(a, "--model=")
+		case a == "--endpoint":
+			if i+1 >= len(args) {
+				return opts, nil, fmt.Errorf("--endpoint requires a value")
+			}
+			i++
+			opts.endpoint = args[i]
+		case strings.HasPrefix(a, "--endpoint="):
+			opts.endpoint = strings.TrimPrefix(a, "--endpoint=")
+		case a == "--variant":
+			if i+1 >= len(args) {
+				return opts, nil, fmt.Errorf("--variant requires a value")
+			}
+			i++
+			opts.variant = args[i]
+		case strings.HasPrefix(a, "--variant="):
+			opts.variant = strings.TrimPrefix(a, "--variant=")
+		case a == "--base-url":
+			if i+1 >= len(args) {
+				return opts, nil, fmt.Errorf("--base-url requires a value")
+			}
+			i++
+			opts.baseURL = args[i]
+		case strings.HasPrefix(a, "--base-url="):
+			opts.baseURL = strings.TrimPrefix(a, "--base-url=")
+		case a == "--name":
+			if i+1 >= len(args) {
+				return opts, nil, fmt.Errorf("--name requires a value")
+			}
+			i++
+			opts.name = args[i]
+		case strings.HasPrefix(a, "--name="):
+			opts.name = strings.TrimPrefix(a, "--name=")
 		case a == "-h" || a == "--help" || a == "help":
 			positional = append(positional, "help")
 		case strings.HasPrefix(a, "-"):
@@ -155,6 +195,8 @@ func run(args []string) int {
 		return runValidate(opts)
 	case "tray":
 		return runTray(opts)
+	case "provider":
+		return runProvider(opts, positional[1:])
 	case "help":
 		usage(os.Stdout)
 		return 0
@@ -175,6 +217,9 @@ Usage:
   codvian-router [--config PATH] [--model MODEL] eval  smoke-eval the live engine
   codvian-router [--config PATH] validate             validate the config file
   codvian-router [--config PATH] [--port PORT] tray   supervise the gateway headless
+  codvian-router [--config PATH] provider list        list configured providers
+  codvian-router [--config PATH] provider add <base-url> <api-key> [--name NAME]
+  codvian-router [--config PATH] provider add-catalog <catalog-id> <api-key> [--endpoint E] [--variant V] [--base-url URL]
   codvian-router help                                 show this help
 
 Flags:
@@ -184,6 +229,10 @@ Flags:
                   0.0.0.0). 0.0.0.0 binds all interfaces — trusted networks only.
                   A runtime override; it is never written to the config file.
   --model MODEL   model for eval
+  --endpoint E    catalog surface for provider add-catalog (default: the entry's default)
+  --variant V     catalog surface variant for provider add-catalog (e.g. alt-header, api-key)
+  --base-url URL  base-URL override for provider add-catalog (proxy, mirror, per-resource URL, mock)
+  --name NAME     display name for provider add
 
 The router binds localhost only and auth is always ON: clients must send
 a gateway key as "Authorization: Bearer <key>".
@@ -384,6 +433,19 @@ func openStack(opts options) (*stack, error) {
 			continue
 		}
 		clients[p.ID] = client
+		if p.CatalogID != "" {
+			// Surface the catalog facts to the operator: which
+			// entry this provider came from, how its facts were
+			// established, and which surface the credentials are
+			// for. Verification is never hidden behind a bare
+			// provider count.
+			auth := p.AuthEndpoint
+			if p.AuthVariant != "" {
+				auth += " (variant " + p.AuthVariant + ")"
+			}
+			fmt.Fprintf(os.Stderr, "codvian-router: provider %q catalog %s verification %s wire %s auth %s\n",
+				p.Name, p.CatalogID, p.Verification, p.WireFormat, auth)
+		}
 	}
 
 	// Key health / quota intelligence: probes provider keys and applies
@@ -689,4 +751,117 @@ func runKeygen(_ options) int {
 	fmt.Println(raw)
 	fmt.Fprintln(os.Stderr, "note: this key was not stored anywhere — add it to your config to use it.")
 	return 0
+}
+
+// openRegistry loads the config and opens the provider registry backed
+// by it (Vault-sealed keys), for the provider management subcommands.
+// It builds no engine and starts nothing. The config must already
+// exist — run `init` first.
+func openRegistry(opts options) (*provider.Registry, string, error) {
+	path, err := resolveConfigPath(opts.configPath)
+	if err != nil {
+		return nil, "", err
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		return nil, "", fmt.Errorf("cannot load config %s (run `init` first): %w", path, err)
+	}
+	if err := cfg.EnsureDataDir(); err != nil {
+		return nil, "", err
+	}
+	vault, err := crypto.New(cfg.DataDir)
+	if err != nil {
+		return nil, "", err
+	}
+	reg := provider.NewRegistry(
+		&configProviderStore{cfg: cfg, path: path},
+		provider.WithCipher(provider.NewVaultCipher(vault)),
+	)
+	if err := reg.Load(); err != nil {
+		return nil, "", err
+	}
+	return reg, path, nil
+}
+
+// runProvider manages providers in the config file:
+//
+//	provider list
+//	provider add <base-url> <api-key> [--name NAME]
+//	provider add-catalog <catalog-id> <api-key> [--endpoint E] [--variant V] [--base-url URL]
+//
+// add-catalog resolves the base URL, wire format and auth scheme from
+// the catalog entry, so the operator only supplies the ID and their
+// own key. The key is tested against the upstream before the provider
+// is stored (see Registry.AddCatalog); a bad key or an unreachable
+// upstream rejects the add.
+func runProvider(opts options, args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "codvian-router: provider requires an action: list, add, add-catalog")
+		return 2
+	}
+	ctx := context.Background()
+	switch args[0] {
+	case "list":
+		reg, _, err := openRegistry(opts)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "codvian-router: %v\n", err)
+			return 1
+		}
+		for _, p := range reg.List() {
+			line := fmt.Sprintf("%s  %s  %s  wire=%s  models=%d  enabled=%v", p.ID, p.Name, p.BaseURL, p.WireFormat, len(p.Models), p.Enabled)
+			if p.CatalogID != "" {
+				line += fmt.Sprintf("  catalog=%s verification=%s auth=%s", p.CatalogID, p.Verification, p.AuthEndpoint)
+				if p.AuthVariant != "" {
+					line += " variant=" + p.AuthVariant
+				}
+			}
+			fmt.Println(line)
+		}
+		return 0
+	case "add":
+		if len(args) != 3 {
+			fmt.Fprintln(os.Stderr, "codvian-router: usage: provider add <base-url> <api-key> [--name NAME]")
+			return 2
+		}
+		reg, _, err := openRegistry(opts)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "codvian-router: %v\n", err)
+			return 1
+		}
+		p, err := reg.AddContext(ctx, opts.name, args[1], args[2])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "codvian-router: cannot add provider: %v\n", err)
+			return 1
+		}
+		fmt.Printf("added provider %q (%s)\n  base_url: %s\n  wire: %s\n  models: %d\n", p.Name, p.ID, p.BaseURL, p.WireFormat, len(p.Models))
+		return 0
+	case "add-catalog":
+		if len(args) != 3 {
+			fmt.Fprintln(os.Stderr, "codvian-router: usage: provider add-catalog <catalog-id> <api-key> [--endpoint ENDPOINT] [--variant VARIANT] [--base-url URL]")
+			return 2
+		}
+		reg, _, err := openRegistry(opts)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "codvian-router: %v\n", err)
+			return 1
+		}
+		p, err := reg.AddCatalogWithOptions(ctx, args[1], args[2], provider.CatalogAddOptions{
+			Endpoint: opts.endpoint,
+			Variant:  opts.variant,
+			BaseURL:  opts.baseURL,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "codvian-router: cannot add catalog provider: %v\n", err)
+			return 1
+		}
+		auth := p.AuthEndpoint
+		if p.AuthVariant != "" {
+			auth += " (variant " + p.AuthVariant + ")"
+		}
+		fmt.Printf("added catalog provider %q (%s)\n  catalog: %s (verification: %s)\n  base_url: %s\n  wire: %s\n  auth endpoint: %s\n  models: %d\n", p.Name, p.ID, p.CatalogID, p.Verification, p.BaseURL, p.WireFormat, auth, len(p.Models))
+		return 0
+	default:
+		fmt.Fprintf(os.Stderr, "codvian-router: unknown provider action %q (want list, add, add-catalog)\n", args[0])
+		return 2
+	}
 }
