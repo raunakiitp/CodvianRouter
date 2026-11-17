@@ -38,6 +38,12 @@ const WireFormatAnthropic = "anthropic"
 // NewClient (client.go).
 const WireFormatGemini = "gemini"
 
+// WireFormatCohere is the Cohere Chat API v2 wire format
+// (POST /v2/chat), spoken by internal/wire. A provider whose catalog
+// wire format resolves to this speaks Cohere v2 chat, not OpenAI
+// chat completions; see NewClient (client.go).
+const WireFormatCohere = "cohere"
+
 // WireFormatUnknown means auto-detection could not confirm an
 // OpenAI-compatible endpoint. The provider is still stored, but routing
 // to it should be treated as best-effort.

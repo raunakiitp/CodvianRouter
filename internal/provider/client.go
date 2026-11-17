@@ -341,13 +341,14 @@ func WithAuthHeaders(headers map[string]string) ClientOption {
 
 // WithWireFormat selects the wire format the client speaks.
 // "anthropic" returns a Messages client (internal/wire), "gemini" a
-// generateContent client (internal/wire); "" and "openai" return the
-// OpenAI-compatible client. Any other format (cohere,
-// bedrock-converse, ollama, unknown) also returns the OpenAI client
-// for now — those native transports are not built yet, and the
-// previous behaviour was to speak OpenAI wire to them and fail over
-// on the upstream error, so falling back preserves it instead of
-// breaking ClientFor for providers added before this option existed.
+// generateContent client (internal/wire), "cohere" a Chat API v2
+// client (internal/wire); "" and "openai" return the
+// OpenAI-compatible client. Any other format (bedrock-converse,
+// ollama, unknown) also returns the OpenAI client for now — those
+// native transports are not built yet, and the previous behaviour
+// was to speak OpenAI wire to them and fail over on the upstream
+// error, so falling back preserves it instead of breaking ClientFor
+// for providers added before this option existed.
 func WithWireFormat(format string) ClientOption {
 	return func(c *openAIClient) { c.wireFormat = format }
 }
@@ -362,9 +363,9 @@ type openAIClient struct {
 	// legacy default: Authorization: Bearer <apiKey>.
 	authHeaders map[string]string
 	// wireFormat selects the wire spoken by NewClient: "" / "openai"
-	// stays here, "anthropic" builds an anthropicClient and "gemini"
-	// a geminiClient wrapping this one, anything else falls back to
-	// OpenAI wire (see WithWireFormat).
+	// stays here, "anthropic" builds an anthropicClient, "gemini"
+	// a geminiClient and "cohere" a cohereClient wrapping this one,
+	// anything else falls back to OpenAI wire (see WithWireFormat).
 	wireFormat string
 }
 
@@ -373,8 +374,8 @@ type openAIClient struct {
 // bare host root (e.g. https://api.openai.com); the client appends
 // "/v1/..." only when the path does not already end in "/v1". The wire
 // format comes from WithWireFormat: "anthropic" returns a Messages
-// client, "gemini" a generateContent client, everything else the
-// OpenAI-compatible client.
+// client, "gemini" a generateContent client, "cohere" a Chat API v2
+// client, everything else the OpenAI-compatible client.
 func NewClient(baseURL, apiKey string, opts ...ClientOption) (Client, error) {
 	normalized, err := ValidateBaseURL(baseURL)
 	if err != nil {
@@ -395,6 +396,9 @@ func NewClient(baseURL, apiKey string, opts ...ClientOption) (Client, error) {
 	}
 	if c.wireFormat == WireFormatGemini {
 		return &geminiClient{openAIClient: c}, nil
+	}
+	if c.wireFormat == WireFormatCohere {
+		return &cohereClient{openAIClient: c}, nil
 	}
 	return c, nil
 }

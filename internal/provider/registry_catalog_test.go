@@ -15,10 +15,10 @@ import (
 )
 
 // recordingUpstream serves /v1/models, /v1/chat/completions,
-// /v1/messages, and the Gemini shapes (/models,
-// /models/{model}:generateContent) and records every request's path
-// and headers, so tests can prove which auth the client actually
-// sent and which wire it spoke.
+// /v1/messages, the Gemini shapes (/models,
+// /models/{model}:generateContent), and the Cohere shape (/v2/chat),
+// and records every request's path and headers, so tests can prove
+// which auth the client actually sent and which wire it spoke.
 type recordingUpstream struct {
 	mu           sync.Mutex
 	models       string
@@ -26,6 +26,7 @@ type recordingUpstream struct {
 	messagesBody string
 	geminiModels string
 	geminiBody   string
+	cohereBody   string
 	seen         []recordedRequest
 }
 
@@ -49,6 +50,9 @@ func (m *recordingUpstream) handler() http.HandlerFunc {
 		case "/v1/messages":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(m.messagesBody))
+		case "/v2/chat":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(m.cohereBody))
 		case "/models":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(m.geminiModels))
@@ -91,6 +95,7 @@ func newRecordingServer(t *testing.T) (*httptest.Server, *recordingUpstream) {
 		messagesBody: `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"hi"}],"model":"model-a","stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5}}`,
 		geminiModels: `{"models":[{"name":"models/gemini-2.0-flash"},{"name":"models/gemini-1.5-pro"}]}`,
 		geminiBody:   `{"candidates":[{"content":{"role":"model","parts":[{"text":"hi"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"totalTokenCount":15},"modelVersion":"gemini-2.0-flash"}`,
+		cohereBody:   `{"id":"chat-1","finish_reason":"COMPLETE","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]},"usage":{"input_tokens":10,"output_tokens":5}}`,
 	}
 	return httptest.NewServer(m.handler()), m
 }
@@ -587,6 +592,93 @@ func TestRegistryClientForAnthropicViaStore(t *testing.T) {
 	}
 	if got, ok := mock.lastHeader("/v1/messages", "anthropic-version"); !ok || got != "2026-10-21" {
 		t.Errorf("anthropic-version = %q (present=%v), want 2026-10-21", got, ok)
+	}
+}
+
+func TestRegistryAddCatalogCohereNative(t *testing.T) {
+	srv, _ := newRecordingServer(t)
+	defer srv.Close()
+	reg, _ := newCatalogTestRegistry(t)
+
+	// AddCatalog with --endpoint native: the native base, Cohere v2
+	// wire, Bearer auth, verified-from-docs.
+	p, err := reg.AddCatalogWithOptions(context.Background(), "cohere", "co-test-key",
+		CatalogAddOptions{Endpoint: "native", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("AddCatalog cohere native: %v", err)
+	}
+	if p.CatalogID != "cohere" {
+		t.Errorf("CatalogID = %q, want cohere", p.CatalogID)
+	}
+	if p.WireFormat != WireFormatCohere {
+		t.Errorf("WireFormat = %q, want cohere", p.WireFormat)
+	}
+	if p.AuthEndpoint != "native" {
+		t.Errorf("AuthEndpoint = %q, want native", p.AuthEndpoint)
+	}
+	if p.Verification != "verified-from-docs" {
+		t.Errorf("Verification = %q, want verified-from-docs", p.Verification)
+	}
+	if len(p.Models) != 2 {
+		t.Errorf("Models = %d, want 2", len(p.Models))
+	}
+
+	// The default endpoint (no --endpoint) is the OpenAI shim, not
+	// the native surface: AddCatalog without an endpoint resolves
+	// OpenAI wire on the compatibility base. (A second mock server:
+	// the registry refuses a second provider on the same base URL.)
+	srv2, _ := newRecordingServer(t)
+	defer srv2.Close()
+	p2, err := reg.AddCatalogWithOptions(context.Background(), "cohere", "co-test-key",
+		CatalogAddOptions{BaseURL: srv2.URL})
+	if err != nil {
+		t.Fatalf("AddCatalog cohere default: %v", err)
+	}
+	if p2.WireFormat != WireFormatOpenAI {
+		t.Errorf("default WireFormat = %q, want openai (compatibility shim)", p2.WireFormat)
+	}
+	if p2.AuthEndpoint != "chat" {
+		t.Errorf("default AuthEndpoint = %q, want chat", p2.AuthEndpoint)
+	}
+}
+
+func TestRegistryClientForCohereNative(t *testing.T) {
+	srv, mock := newRecordingServer(t)
+	defer srv.Close()
+	_, dir := newCatalogTestRegistry(t)
+
+	// A stored Cohere provider (base URL overridden to the mock)
+	// resolves Bearer on the native surface and speaks /v2/chat.
+	path := writeStoreFile(t, dir, []ProviderConfig{{
+		ID:              "prov-cohere",
+		Name:            "Cohere",
+		BaseURL:         srv.URL,
+		APIKeyEncrypted: sealTestKey(t, dir, "co-test-key"),
+		CatalogID:       "cohere",
+		AuthEndpoint:    "native",
+		Enabled:         true,
+	}})
+	vault, err := crypto.NewFromSecret([]byte("test-master-secret-for-registry!"), dir)
+	if err != nil {
+		t.Fatalf("test vault: %v", err)
+	}
+	reg, err := NewFileRegistry(path, WithCipher(NewVaultCipher(vault)))
+	if err != nil {
+		t.Fatalf("NewFileRegistry: %v", err)
+	}
+	client, err := reg.ClientFor("prov-cohere")
+	if err != nil {
+		t.Fatalf("ClientFor: %v", err)
+	}
+	resp, err := client.Chat(context.Background(), ChatRequest{Model: "command-a-03-2025", Messages: []Message{{Role: "user", Content: "hi"}}})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if resp.Content != "hi" {
+		t.Errorf("Content = %q, want hi", resp.Content)
+	}
+	if got, ok := mock.lastHeader("/v2/chat", "Authorization"); !ok || got != "Bearer co-test-key" {
+		t.Errorf("Authorization = %q (present=%v), want Bearer co-test-key", got, ok)
 	}
 }
 

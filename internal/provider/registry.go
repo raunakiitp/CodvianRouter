@@ -835,8 +835,8 @@ func (r *Registry) DecryptedKey(id string) (string, error) {
 //
 // The wire format likewise comes from the catalog resolution: a
 // provider whose surface speaks Anthropic gets a Messages client, a
-// Gemini surface a generateContent client, everything else the
-// OpenAI client.
+// Gemini surface a generateContent client, a Cohere surface a Chat
+// API v2 client, everything else the OpenAI client.
 func (r *Registry) ClientFor(id string) (Client, error) {
 	r.mu.RLock()
 	p, ok := r.providers[id]
@@ -861,6 +861,8 @@ func (r *Registry) ClientFor(id string) (Client, error) {
 		wireFormat = WireFormatAnthropic
 	} else if p.WireFormat == WireFormatGemini || wireFormat == WireFormatGemini {
 		wireFormat = WireFormatGemini
+	} else if p.WireFormat == WireFormatCohere || wireFormat == WireFormatCohere {
+		wireFormat = WireFormatCohere
 	} else if wireFormat == "" {
 		wireFormat = p.WireFormat
 	}
@@ -870,9 +872,9 @@ func (r *Registry) ClientFor(id string) (Client, error) {
 // catalogWireForBaseURL derives the wire format for a raw base URL
 // from the catalog (default surface): "anthropic" when the matched
 // surface speaks Messages, "gemini" when it speaks generateContent,
-// "openai" otherwise (unknown base, lookup error, or an OpenAI
-// surface). It never errors — callers treat the OpenAI default as
-// the safe fallback.
+// "cohere" when it speaks Chat API v2, "openai" otherwise (unknown
+// base, lookup error, or an OpenAI surface). It never errors —
+// callers treat the OpenAI default as the safe fallback.
 func catalogWireForBaseURL(baseURL, apiKey string) string {
 	res, found, err := catalog.ResolveAuthForBaseURL(baseURL, "", "", apiKey)
 	if err != nil || !found {
@@ -883,6 +885,9 @@ func catalogWireForBaseURL(baseURL, apiKey string) string {
 	}
 	if res.Wire == catalog.WireGemini {
 		return WireFormatGemini
+	}
+	if res.Wire == catalog.WireCohere {
+		return WireFormatCohere
 	}
 	return WireFormatOpenAI
 }
