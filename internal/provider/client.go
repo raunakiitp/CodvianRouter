@@ -141,11 +141,29 @@ func WithTimeout(d time.Duration) ClientOption {
 	return func(c *openAIClient) { c.httpClient.Timeout = d }
 }
 
+// WithAuthHeaders sets the exact auth headers sent on every upstream
+// request, as resolved by the catalog for one (provider, endpoint)
+// pair (see catalog.ResolveAuth). A nil map means "legacy": send
+// `Authorization: Bearer <key>`. A non-nil map — possibly empty, for
+// no-auth surfaces — replaces the Bearer default entirely, so a
+// provider that needs `x-api-key` (DeepSeek's Anthropic surface),
+// `api-key` (Azure), `X-Fireworks-Api-Key`, or extra headers like
+// `anthropic-version` gets exactly those headers and nothing else.
+// Exchange surfaces never reach this option: the resolver returns an
+// error instead of headers, so no static header is ever faked for them.
+func WithAuthHeaders(headers map[string]string) ClientOption {
+	return func(c *openAIClient) { c.authHeaders = headers }
+}
+
 // openAIClient is the Client implementation for OpenAI-compatible upstreams.
 type openAIClient struct {
 	baseURL    string
 	apiKey     string
 	httpClient *http.Client
+	// authHeaders, when non-nil, are the exact auth headers to send
+	// (resolved per provider + endpoint by the catalog). Nil means the
+	// legacy default: Authorization: Bearer <apiKey>.
+	authHeaders map[string]string
 }
 
 // NewClient builds a Client for an OpenAI-compatible upstream. baseURL is
@@ -203,7 +221,14 @@ func (c *openAIClient) newRequest(ctx context.Context, method, url string, body 
 	if err != nil {
 		return nil, err
 	}
-	if c.apiKey != "" {
+	if c.authHeaders != nil {
+		// Catalog-resolved auth: exactly these headers, no Bearer
+		// default. An empty map means the surface takes no credential
+		// (local runtimes); the stored key is simply not sent.
+		for k, v := range c.authHeaders {
+			req.Header.Set(k, v)
+		}
+	} else if c.apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}
 	if body != nil {

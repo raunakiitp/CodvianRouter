@@ -45,6 +45,19 @@ type Model struct {
 }
 
 // Provider is one upstream LLM backend.
+//
+// CatalogID links the provider to an entry in internal/catalog
+// ("groq", "fireworks", ...). It is empty for fully-custom providers
+// (any base URL + key, added by hand). When set, the base URL, wire
+// format and auth scheme come from the catalog entry (BaseURL may
+// still be an operator override, e.g. a proxy or a mock in tests),
+// and the registry resolves credentials per (provider, endpoint)
+// through catalog.ResolveAuth instead of assuming Bearer.
+// Verification is the catalog entry's verification status
+// ("verified-from-docs", "from-reference-metadata-only",
+// "unverified") — surfaced to the operator, never hidden.
+// AuthEndpoint/AuthVariant name the catalog surface the stored
+// credentials are for ("" = the entry's default surface/variant).
 type Provider struct {
 	ID              string    `json:"id"`
 	Name            string    `json:"name"`
@@ -55,6 +68,10 @@ type Provider struct {
 	Enabled         bool      `json:"enabled"`
 	QuotaHint       float64   `json:"quota_hint"`
 	CreatedAt       time.Time `json:"created_at"`
+	CatalogID       string    `json:"catalog_id,omitempty"`
+	Verification    string    `json:"verification,omitempty"`
+	AuthEndpoint    string    `json:"auth_endpoint,omitempty"`
+	AuthVariant     string    `json:"auth_variant,omitempty"`
 }
 
 // ProviderConfig is the minimal persisted shape of a Provider.
@@ -75,6 +92,10 @@ type ProviderConfig struct {
 	Enabled         bool      `json:"enabled"`
 	QuotaHint       float64   `json:"quota_hint"`
 	CreatedAt       time.Time `json:"created_at"`
+	CatalogID       string    `json:"catalog_id,omitempty"`
+	Verification    string    `json:"verification,omitempty"`
+	AuthEndpoint    string    `json:"auth_endpoint,omitempty"`
+	AuthVariant     string    `json:"auth_variant,omitempty"`
 }
 
 // ToConfig converts a Provider to its persisted form.
@@ -94,6 +115,10 @@ func (p *Provider) ToConfig() ProviderConfig {
 		Enabled:         p.Enabled,
 		QuotaHint:       p.QuotaHint,
 		CreatedAt:       p.CreatedAt,
+		CatalogID:       p.CatalogID,
+		Verification:    p.Verification,
+		AuthEndpoint:    p.AuthEndpoint,
+		AuthVariant:     p.AuthVariant,
 	}
 }
 
@@ -115,6 +140,10 @@ func ProviderFromConfig(c ProviderConfig) *Provider {
 		Enabled:         c.Enabled,
 		QuotaHint:       c.QuotaHint,
 		CreatedAt:       c.CreatedAt,
+		CatalogID:       c.CatalogID,
+		Verification:    c.Verification,
+		AuthEndpoint:    c.AuthEndpoint,
+		AuthVariant:     c.AuthVariant,
 	}
 }
 

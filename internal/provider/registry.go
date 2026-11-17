@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/raunakiitp/codvian-router/internal/catalog"
 	"github.com/raunakiitp/codvian-router/internal/crypto"
 )
 
@@ -180,7 +181,14 @@ func (s *JSONFileStore) Save(configs []ProviderConfig) error {
 
 // ClientFactory builds a Client for a base URL + plaintext API key. The
 // default is NewClient; tests inject fakes through it.
-type ClientFactory func(baseURL, apiKey string) (Client, error)
+//
+// authHeaders carries the exact auth headers resolved for the provider
+// (catalog.ResolveAuth per provider + endpoint); nil means the legacy
+// default (`Authorization: Bearer <key>`), a non-nil map — possibly
+// empty, for no-auth surfaces — replaces it entirely. Factories must
+// honour nil vs non-nil: a no-auth provider must send no credential,
+// not a Bearer header it never asked for.
+type ClientFactory func(baseURL, apiKey string, authHeaders map[string]string) (Client, error)
 
 // Registry is the in-memory provider registry, persisted through a Store.
 // It is safe for concurrent use.
@@ -221,8 +229,8 @@ func NewRegistry(store Store, opts ...RegistryOption) *Registry {
 	r := &Registry{
 		providers: make(map[string]*Provider),
 		store:     store,
-		newClient: func(baseURL, apiKey string) (Client, error) {
-			return NewClient(baseURL, apiKey)
+		newClient: func(baseURL, apiKey string, authHeaders map[string]string) (Client, error) {
+			return NewClient(baseURL, apiKey, WithAuthHeaders(authHeaders))
 		},
 	}
 	for _, opt := range opts {
@@ -270,6 +278,20 @@ func (r *Registry) Load() error {
 			continue
 		}
 		p := ProviderFromConfig(cfg)
+		if p.CatalogID != "" {
+			// A catalog-linked provider resolves its base URL, wire
+			// format and verification status from the catalog entry.
+			// A bad catalog_id is a config error: fail the load
+			// loudly rather than starting with a silently wrong
+			// provider. Exchange auth is NOT refused here — the
+			// client cannot be built for it yet, and ClientFor
+			// fails loudly at startup, where the provider is
+			// skipped with a warning instead of taking the
+			// gateway down.
+			if err := resolveCatalogForLoad(p); err != nil {
+				return err
+			}
+		}
 		providers[p.ID] = p
 		order = append(order, p.ID)
 	}
@@ -320,13 +342,51 @@ func (r *Registry) AddNamed(name, baseURL, apiKey string) (*Provider, error) {
 
 // AddContext is the context-aware form of AddNamed.
 func (r *Registry) AddContext(ctx context.Context, name, baseURL, apiKey string) (*Provider, error) {
-	normalized, err := ValidateBaseURL(baseURL)
+	return r.addProvider(ctx, addInput{
+		name:    name,
+		baseURL: baseURL,
+		apiKey:  apiKey,
+	})
+}
+
+// addInput is the shared input for adding a provider, custom or
+// catalog-resolved. authHeaders nil means the legacy Bearer default;
+// a non-nil map (possibly empty, for no-auth surfaces) is the exact
+// auth resolved for the provider's endpoint. wireFormat "" means the
+// OpenAI default; catalog adds pass the resolved wire. catalogID ""
+// means a fully-custom provider.
+type addInput struct {
+	name          string
+	baseURL       string
+	apiKey        string
+	authHeaders   map[string]string
+	wireFormat    string
+	allowEmptyKey bool
+	catalogID     string
+	verification  string
+	authEndpoint  string
+	authVariant   string
+}
+
+// addProvider validates baseURL, encrypts apiKey, verifies the key
+// (TestKey), auto-fetches the model list (ListModels) and auto-detects
+// the wire format, then stores and persists the provider. The display
+// name is derived from the base URL host; use AddNamed for an explicit
+// name.
+//
+// If the upstream's /v1/models endpoint 404s but its chat endpoint
+// answers, the provider is still added with an empty model list and wire
+// format "openai" (some gateways only expose chat completions). Any other
+// key-test failure (401, 429, 5xx, network error) rejects the add.
+func (r *Registry) addProvider(ctx context.Context, in addInput) (*Provider, error) {
+	normalized, err := ValidateBaseURL(in.baseURL)
 	if err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(apiKey) == "" {
+	if strings.TrimSpace(in.apiKey) == "" && !in.allowEmptyKey {
 		return nil, errors.New("provider API key is empty")
 	}
+	name := in.name
 	if strings.TrimSpace(name) == "" {
 		name = DeriveName(normalized)
 	}
@@ -340,19 +400,22 @@ func (r *Registry) AddContext(ctx context.Context, name, baseURL, apiKey string)
 	}
 	r.mu.RUnlock()
 
-	encrypted, err := r.encryptKey(apiKey)
+	encrypted, err := r.encryptKey(in.apiKey)
 	if err != nil {
 		return nil, err
 	}
 
-	client, err := r.newClient(normalized, apiKey)
+	client, err := r.newClient(normalized, in.apiKey, in.authHeaders)
 	if err != nil {
 		return nil, err
 	}
 
 	// 1. Inline key test.
 	testErr := client.TestKey(ctx)
-	wireFormat := WireFormatOpenAI
+	wireFormat := in.wireFormat
+	if wireFormat == "" {
+		wireFormat = WireFormatOpenAI
+	}
 	var models []Model
 	switch {
 	case testErr == nil:
@@ -365,7 +428,7 @@ func (r *Registry) AddContext(ctx context.Context, name, baseURL, apiKey string)
 		models = modelsFromIDs(ids)
 	case isNotFound(testErr):
 		// /v1/models 404s: maybe the gateway only exposes chat. Probe it.
-		detected, probeErr := DetectWireFormat(ctx, normalized, apiKey, r.newClient)
+		detected, probeErr := DetectWireFormat(ctx, normalized, in.apiKey, in.authHeaders, r.newClient)
 		if probeErr != nil {
 			return nil, fmt.Errorf("key test failed for %s: %w", normalized, testErr)
 		}
@@ -389,6 +452,10 @@ func (r *Registry) AddContext(ctx context.Context, name, baseURL, apiKey string)
 		Enabled:         true,
 		QuotaHint:       QuotaUnknown,
 		CreatedAt:       time.Now().UTC(),
+		CatalogID:       in.catalogID,
+		Verification:    in.verification,
+		AuthEndpoint:    in.authEndpoint,
+		AuthVariant:     in.authVariant,
 	}
 
 	r.mu.Lock()
@@ -407,6 +474,177 @@ func (r *Registry) AddContext(ctx context.Context, name, baseURL, apiKey string)
 		return nil, fmt.Errorf("persisting provider: %w", err)
 	}
 	return provider.Clone(), nil
+}
+
+// CatalogAddOptions selects the catalog surface and base URL for
+// AddCatalogWithOptions. All fields are optional:
+//
+//   - Endpoint: the catalog surface ("chat", "anthropic", "messages",
+//     ...); "" means the entry's default surface.
+//   - Variant: the surface variant ("alt-header", "api-key", "jwt",
+//     ...); "" means the default variant.
+//   - BaseURL: override the catalog base URL — a proxy or mirror, a
+//     per-resource URL substituted into a templated catalog base
+//     (Azure {resource}, Vertex {LOCATION}), or a mock in tests.
+//     "" means the catalog base URL.
+type CatalogAddOptions struct {
+	Endpoint string
+	Variant  string
+	BaseURL  string
+}
+
+// AddCatalog adds a catalog provider by ID: its base URL, wire format
+// and auth scheme come from the catalog entry, so the operator only
+// supplies the ID and their own API key. The catalog ID may also be an
+// alias ("grok" for xAI, "ollama" for local Ollama).
+//
+// Refusals (loud, with the reason named — never a silently broken
+// provider):
+//   - unknown catalog ID;
+//   - ToS-grey entries (web-cookie / subscription-OAuth): they are
+//     catalogued for completeness but are never routing targets;
+//   - surfaces needing a credential exchange (Vertex service-account
+//     JSON, Bedrock SigV4, OpenRouter JWT, Azure Entra): the resolver
+//     never fakes a static header for these — add the static-header
+//     variant instead (e.g. Azure "api-key"), or wait for exchange
+//     support;
+//   - entries with no known base URL (name-only reference entries);
+//   - templated catalog base URLs (Azure {resource}, ...): pass a
+//     concrete BaseURL via AddCatalogWithOptions.
+func (r *Registry) AddCatalog(ctx context.Context, catalogID, apiKey string) (*Provider, error) {
+	return r.AddCatalogWithOptions(ctx, catalogID, apiKey, CatalogAddOptions{})
+}
+
+// AddCatalogWithOptions is AddCatalog with an explicit surface,
+// variant, and/or base-URL override (see CatalogAddOptions).
+func (r *Registry) AddCatalogWithOptions(ctx context.Context, catalogID, apiKey string, opts CatalogAddOptions) (*Provider, error) {
+	entry, err := lookupCatalog(catalogID)
+	if err != nil {
+		return nil, err
+	}
+	if entry.ToSGrey {
+		return nil, fmt.Errorf("catalog provider %q (%s) is ToS-grey (web-cookie / subscription auth) and cannot be added as a routing target", entry.ID, entry.Name)
+	}
+	endpoint := opts.Endpoint
+	if endpoint == "" {
+		endpoint = defaultCatalogEndpoint(entry)
+	}
+	// Resolve auth for this exact (provider, endpoint, variant) pair.
+	// Exchange surfaces fail here with a clear error — never a faked
+	// static header.
+	res, err := catalog.ResolveAuth(entry, endpoint, opts.Variant, apiKey)
+	if err != nil {
+		if errors.Is(err, catalog.ErrExchangeRequired) {
+			return nil, fmt.Errorf("catalog provider %q (%s): %w — credential exchange is not supported yet; use a static-header variant of this provider if one exists", entry.ID, entry.Name, err)
+		}
+		return nil, fmt.Errorf("catalog provider %q (%s): %w", entry.ID, entry.Name, err)
+	}
+	baseURL := opts.BaseURL
+	if baseURL == "" {
+		baseURL = res.BaseURL
+	}
+	if baseURL == "" {
+		return nil, fmt.Errorf("catalog provider %q (%s) has no known base URL; add it as a custom provider with an explicit base URL instead", entry.ID, entry.Name)
+	}
+	if strings.ContainsAny(baseURL, "{}") {
+		return nil, fmt.Errorf("catalog provider %q (%s) has a templated base URL %q; supply a concrete base URL (e.g. your resource URL) via the base-URL override", entry.ID, entry.Name, baseURL)
+	}
+	// The endpoint's auth kind decides whether an empty key is OK
+	// (local / no-auth surfaces take no credential at all).
+	allowEmptyKey := false
+	if ep, ok := entry.Endpoint(endpoint, opts.Variant); ok {
+		allowEmptyKey = ep.AuthKind == catalog.AuthNone
+	} else {
+		allowEmptyKey = entry.DefaultAuthKind() == catalog.AuthNone
+	}
+	return r.addProvider(ctx, addInput{
+		name:          entry.Name,
+		baseURL:       baseURL,
+		apiKey:        apiKey,
+		authHeaders:   res.Headers,
+		wireFormat:    string(res.Wire),
+		allowEmptyKey: allowEmptyKey,
+		catalogID:     entry.ID,
+		verification:  string(entry.Verification),
+		authEndpoint:  endpoint,
+		authVariant:   opts.Variant,
+	})
+}
+
+// lookupCatalog finds a catalog entry by ID, falling back to alias
+// ("grok" → xai, "ollama" → ollama-local).
+func lookupCatalog(idOrAlias string) (catalog.Provider, error) {
+	if entry, ok := catalog.ByID(idOrAlias); ok {
+		return entry, nil
+	}
+	if entry, ok := catalog.ByAlias(idOrAlias); ok {
+		return entry, nil
+	}
+	return catalog.Provider{}, fmt.Errorf("unknown catalog provider %q (see the catalog for known IDs)", idOrAlias)
+}
+
+// defaultCatalogEndpoint returns the surface ResolveAuth uses when no
+// endpoint is named: "chat" when the entry records one, else its first
+// recorded surface, else "chat". It mirrors catalog.ResolveAuth's own
+// defaulting rule.
+func defaultCatalogEndpoint(entry catalog.Provider) string {
+	if _, ok := entry.Endpoint(catalog.EndpointChat, ""); ok {
+		return catalog.EndpointChat
+	}
+	if len(entry.Endpoints) > 0 {
+		return entry.Endpoints[0].Endpoint
+	}
+	return catalog.EndpointChat
+}
+
+// resolveCatalogForLoad fills a config-file provider's catalog-derived
+// fields: base URL (when the file leaves it empty), wire format (when
+// empty), verification status (always — the catalog is authoritative),
+// and the endpoint name (when empty). The base URL may be an operator
+// override in the file; it is validated but never replaced. A bad
+// catalog_id or a ToS-grey entry fails the load loudly. Exchange auth
+// is deliberately NOT refused here: ClientFor fails loudly for it at
+// startup, where the provider is skipped with a warning instead of
+// taking the gateway down.
+//
+// The resolution calls catalog.ResolveAuth with a placeholder
+// credential: only the BaseURL and Wire of the resolution are used
+// here, and the placeholder is never sent anywhere (no request is
+// made). An exchange surface still yields a usable BaseURL/Wire
+// alongside its error, which is tolerated here for that reason.
+func resolveCatalogForLoad(p *Provider) error {
+	entry, err := lookupCatalog(p.CatalogID)
+	if err != nil {
+		return fmt.Errorf("provider %q: %w", p.ID, err)
+	}
+	if entry.ToSGrey {
+		return fmt.Errorf("provider %q: catalog provider %q (%s) is ToS-grey and cannot be a routing target", p.ID, entry.ID, entry.Name)
+	}
+	endpoint := p.AuthEndpoint
+	if endpoint == "" {
+		endpoint = defaultCatalogEndpoint(entry)
+	}
+	res, err := catalog.ResolveAuth(entry, endpoint, p.AuthVariant, "codvian-router-load-probe")
+	if err != nil && !errors.Is(err, catalog.ErrExchangeRequired) {
+		return fmt.Errorf("provider %q: catalog provider %q: %w", p.ID, entry.ID, err)
+	}
+	if p.BaseURL == "" {
+		if res.BaseURL == "" {
+			return fmt.Errorf("provider %q: catalog provider %q has no known base URL; set base_url in the config", p.ID, entry.ID)
+		}
+		if strings.ContainsAny(res.BaseURL, "{}") {
+			return fmt.Errorf("provider %q: catalog provider %q has a templated base URL %q; set a concrete base_url in the config", p.ID, entry.ID, res.BaseURL)
+		}
+		p.BaseURL = NormalizeBaseURL(res.BaseURL)
+	} else if _, err := ValidateBaseURL(p.BaseURL); err != nil {
+		return fmt.Errorf("provider %q: %w", p.ID, err)
+	}
+	if p.WireFormat == "" {
+		p.WireFormat = string(res.Wire)
+	}
+	p.Verification = string(entry.Verification)
+	p.AuthEndpoint = endpoint
+	return nil
 }
 
 // isNotFound reports whether err is an UpstreamError with status 404.
@@ -560,6 +798,18 @@ func (r *Registry) DecryptedKey(id string) (string, error) {
 }
 
 // ClientFor builds an upstream Client for a registered provider.
+//
+// The auth headers come from the catalog, resolved per (provider,
+// endpoint): a catalog-linked provider uses its stored endpoint and
+// variant (Anthropic's messages surface gets Bearer +
+// anthropic-version, DeepSeek's Anthropic surface gets x-api-key,
+// Fireworks' alt-header variant gets X-Fireworks-Api-Key, ...). A
+// provider added by hand with no catalog link is matched against the
+// catalog by base URL when possible (a hand-added DeepSeek or
+// Fireworks base URL gets the right header too); otherwise it keeps
+// the legacy Bearer default. Exchange surfaces (Vertex, Bedrock,
+// OpenRouter JWT, Azure Entra) fail here with a clear error — the
+// client is never built with a faked static header for them.
 func (r *Registry) ClientFor(id string) (Client, error) {
 	r.mu.RLock()
 	p, ok := r.providers[id]
@@ -571,7 +821,45 @@ func (r *Registry) ClientFor(id string) (Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return r.newClient(p.BaseURL, key)
+	headers, err := r.resolveAuthHeaders(p, key)
+	if err != nil {
+		return nil, err
+	}
+	return r.newClient(p.BaseURL, key, headers)
+}
+
+// resolveAuthHeaders resolves the exact auth headers for one provider.
+// It returns (nil, nil) for the legacy Bearer default.
+func (r *Registry) resolveAuthHeaders(p *Provider, key string) (map[string]string, error) {
+	if p.CatalogID != "" {
+		entry, err := lookupCatalog(p.CatalogID)
+		if err != nil {
+			return nil, fmt.Errorf("provider %q: %w", p.ID, err)
+		}
+		if entry.ToSGrey {
+			return nil, fmt.Errorf("provider %q: catalog provider %q is ToS-grey and cannot be a routing target", p.ID, entry.ID)
+		}
+		res, err := catalog.ResolveAuth(entry, p.AuthEndpoint, p.AuthVariant, key)
+		if err != nil {
+			return nil, fmt.Errorf("provider %q (%s): %w", p.ID, entry.ID, err)
+		}
+		return res.Headers, nil
+	}
+	// No catalog link: match by base URL when the catalog knows it.
+	// Exchange matches fail loudly; an unknown endpoint on a known
+	// provider falls back to the legacy Bearer default (the operator
+	// typed this base URL by hand, and Bearer is what Add sent).
+	res, found, err := catalog.ResolveAuthForBaseURL(p.BaseURL, catalog.EndpointChat, "", key)
+	if err != nil {
+		if errors.Is(err, catalog.ErrExchangeRequired) {
+			return nil, fmt.Errorf("provider %q: %w", p.ID, err)
+		}
+		return nil, nil
+	}
+	if !found {
+		return nil, nil
+	}
+	return res.Headers, nil
 }
 
 // DetectWireFormat probes an upstream and reports its wire format.
@@ -582,13 +870,13 @@ func (r *Registry) ClientFor(id string) (Client, error) {
 //
 // This is a heuristic for Phase 1 (OpenAI-compatible first); non-OpenAI
 // wire formats (Anthropic native, Gemini native, ...) are future work.
-func DetectWireFormat(ctx context.Context, baseURL, apiKey string, factory ClientFactory) (string, error) {
+func DetectWireFormat(ctx context.Context, baseURL, apiKey string, authHeaders map[string]string, factory ClientFactory) (string, error) {
 	if factory == nil {
-		factory = func(baseURL, apiKey string) (Client, error) {
-			return NewClient(baseURL, apiKey)
+		factory = func(baseURL, apiKey string, authHeaders map[string]string) (Client, error) {
+			return NewClient(baseURL, apiKey, WithAuthHeaders(authHeaders))
 		}
 	}
-	client, err := factory(baseURL, apiKey)
+	client, err := factory(baseURL, apiKey, authHeaders)
 	if err != nil {
 		return "", err
 	}
