@@ -67,7 +67,7 @@ func (f *fakeEngine) ChatStream(_ context.Context, _ provider.ChatRequest, onDel
 
 // wrapTest builds a StaleEngine around f with a fresh ExactCache and
 // returns the concrete wrapper so tests can control its clock.
-func wrapTest(f *fakeEngine, policy Policy) (*StaleEngine, *cache.ExactCache) {
+func wrapTest(f server.Engine, policy Policy) (*StaleEngine, *cache.ExactCache) {
 	exact := cache.NewExactCache(100)
 	eng := Wrap(f, exact, policy)
 	se, ok := eng.(*StaleEngine)
@@ -714,5 +714,142 @@ func TestChatStreamFromResumerFailureNoReplay(t *testing.T) {
 	}
 	if se.LastServedStale() {
 		t.Fatal("failed resume must not be marked stale")
+	}
+}
+
+// chunkFakeEngine streams chunk-aware (tool-call deltas + finish
+// reason), like the Anthropic client behind the router engine.
+type chunkFakeEngine struct {
+	fakeEngine
+	chunks     []provider.StreamChunk
+	chunkResp  *provider.ChatResponse
+	chunkErr   error
+	chunkCalls int
+}
+
+func (f *chunkFakeEngine) ChatStreamChunks(_ context.Context, _ provider.ChatRequest, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+	f.mu.Lock()
+	f.chunkCalls++
+	chunks := append([]provider.StreamChunk(nil), f.chunks...)
+	resp, err := f.chunkResp, f.chunkErr
+	f.mu.Unlock()
+	for _, c := range chunks {
+		if err := onChunk(c); err != nil {
+			return nil, err
+		}
+	}
+	return resp, err
+}
+
+func (f *chunkFakeEngine) ChatStreamFromChunks(_ context.Context, _ provider.ChatRequest, skipChars int, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+	// Delegate to the same chunk stream; the wrapper's resume path is
+	// tested via the text-only fakeEngine instead.
+	_ = skipChars
+	return f.ChatStreamChunks(context.Background(), testReq(), onChunk)
+}
+
+func TestChatStreamChunksForwardsToolCalls(t *testing.T) {
+	f := &chunkFakeEngine{
+		chunks: []provider.StreamChunk{
+			{Content: "hi "},
+			{ToolCalls: []provider.ChunkToolCall{{Index: 0, ID: "call_1", Name: "get_weather"}}},
+			{ToolCalls: []provider.ChunkToolCall{{Index: 0, Arguments: `{"city":"Pune"}`}}},
+			{FinishReason: "tool_calls"},
+		},
+		chunkResp: &provider.ChatResponse{Content: "hi ", FinishReason: "tool_calls"},
+	}
+	se, _ := wrapTest(f, DefaultPolicy())
+	var got []provider.StreamChunk
+	resp, err := se.ChatStreamChunks(context.Background(), testReq(), func(c provider.StreamChunk) error {
+		got = append(got, c)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ChatStreamChunks: %v", err)
+	}
+	if len(got) != 4 {
+		t.Fatalf("got %d chunks, want 4 (text, tool-call head, args, finish)", len(got))
+	}
+	if len(got[1].ToolCalls) != 1 || got[1].ToolCalls[0].Name != "get_weather" {
+		t.Errorf("chunk 1 = %+v, want the tool-call head", got[1])
+	}
+	if resp.FinishReason != "tool_calls" {
+		t.Errorf("FinishReason = %q, want tool_calls", resp.FinishReason)
+	}
+}
+
+func TestChatStreamChunksTextOnlyEngineBridged(t *testing.T) {
+	// A wrapped engine without a chunk path must still serve chunk
+	// streaming (text deltas as chunks) instead of failing.
+	f := &fakeEngine{streamDeltas: []string{"a", "b"}, streamResp: freshResp()}
+	se, _ := wrapTest(f, DefaultPolicy())
+	var text string
+	resp, err := se.ChatStreamChunks(context.Background(), testReq(), func(c provider.StreamChunk) error {
+		text += c.Content
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ChatStreamChunks: %v", err)
+	}
+	if text != "ab" || resp.Content != "4" {
+		t.Errorf("text = %q resp = %+v", text, resp)
+	}
+}
+
+func TestChatStreamChunksFailureZeroChunksReplaysStale(t *testing.T) {
+	f := &chunkFakeEngine{chunkErr: errUpstreamDown}
+	se, _ := wrapTest(f, Policy{Enabled: true, AllowStale: true})
+	populate(t, se, &f.fakeEngine)
+	var text string
+	resp, err := se.ChatStreamChunks(context.Background(), testReq(), func(c provider.StreamChunk) error {
+		text += c.Content
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ChatStreamChunks: %v", err)
+	}
+	if text != "4" || resp.Content != "4" {
+		t.Errorf("stale replay text = %q resp = %+v", text, resp)
+	}
+	if !se.LastServedStale() {
+		t.Error("LastServedStale must be true after a stale chunk replay")
+	}
+}
+
+func TestChatStreamChunksFailureAfterChunkNoReplay(t *testing.T) {
+	f := &chunkFakeEngine{
+		chunks:   []provider.StreamChunk{{Content: "partial "}},
+		chunkErr: errUpstreamDown,
+	}
+	se, _ := wrapTest(f, DefaultPolicy())
+	populate(t, se, &f.fakeEngine)
+	_, err := se.ChatStreamChunks(context.Background(), testReq(), func(provider.StreamChunk) error { return nil })
+	if !errors.Is(err, errUpstreamDown) {
+		t.Errorf("error = %v, want the original upstream error (no replay after a delivered chunk)", err)
+	}
+	if se.LastServedStale() {
+		t.Error("LastServedStale must be false after a partial delivery")
+	}
+}
+
+func TestChatStreamFromChunksFallbackTrims(t *testing.T) {
+	// Text-only wrapped engine: replay via ChatStreamChunks, trim
+	// the first 3 runes, drop tool-call chunks inside the prefix.
+	f := &fakeEngine{streamDeltas: []string{"Hello ", "world"}, streamResp: freshResp()}
+	se, _ := wrapTest(f, DefaultPolicy())
+	var got []provider.StreamChunk
+	_, err := se.ChatStreamFromChunks(context.Background(), testReq(), 3, func(c provider.StreamChunk) error {
+		got = append(got, c)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ChatStreamFromChunks: %v", err)
+	}
+	var text string
+	for _, c := range got {
+		text += c.Content
+	}
+	if text != "lo world" {
+		t.Errorf("trimmed text = %q, want lo world", text)
 	}
 }

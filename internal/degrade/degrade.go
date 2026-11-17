@@ -431,6 +431,176 @@ func (e *StaleEngine) ChatStreamFrom(ctx context.Context, req provider.ChatReque
 	return toChatResponse(req, cached), nil
 }
 
+// chunkStreamer / chunkResumer mirror server's chunk interfaces
+// (unexported there). Any engine that implements them streams
+// tool-call deltas and finish reasons, not just text.
+type chunkStreamer interface {
+	ChatStreamChunks(ctx context.Context, req provider.ChatRequest, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error)
+}
+type chunkResumer interface {
+	ChatStreamFromChunks(ctx context.Context, req provider.ChatRequest, skipChars int, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error)
+}
+
+// ChatStreamChunks is the chunk-aware twin of ChatStream, with the
+// same stale rules: a success is stored; on error after any chunk
+// was delivered the error is returned unchanged; on error before
+// any chunk, a young enough cached entry is replayed as a single
+// text chunk. The wrapped engine's chunk path is preferred; a
+// text-only wrapped engine is bridged by converting its deltas to
+// chunks. Without this method the server's chunk-aware path would
+// silently fall back to text-only streaming for every request that
+// passes through this wrapper — which is every request in serve
+// mode — and tool-call deltas would never reach the client.
+//
+// Limitation: a stale replay carries text only. The exact-match
+// cache stores content, not tool calls, so a stale stream cannot
+// reconstruct the tool calls of the original response.
+func (e *StaleEngine) ChatStreamChunks(ctx context.Context, req provider.ChatRequest, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+	if onChunk == nil {
+		onChunk = func(provider.StreamChunk) error { return nil }
+	}
+	delivered := 0
+	counting := func(c provider.StreamChunk) error {
+		if err := onChunk(c); err != nil {
+			return err
+		}
+		if c.Content != "" || len(c.ToolCalls) > 0 || c.FinishReason != "" {
+			delivered++
+		}
+		return nil
+	}
+	var stream func(func(provider.StreamChunk) error) (*provider.ChatResponse, error)
+	if cs, ok := e.engine.(chunkStreamer); ok {
+		stream = func(onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+			return cs.ChatStreamChunks(ctx, req, onChunk)
+		}
+	} else {
+		stream = func(onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+			return e.engine.ChatStream(ctx, req, func(delta string) error {
+				return onChunk(provider.StreamChunk{Content: delta})
+			})
+		}
+	}
+	resp, err := stream(counting)
+	if err == nil {
+		e.store(ctx, req, resp)
+		e.setOutcome(false, 0)
+		return resp, nil
+	}
+	if delivered > 0 {
+		e.setOutcome(false, 0)
+		return nil, err
+	}
+	cached, age, ok := e.staleFor(ctx, req)
+	if !ok {
+		e.setOutcome(false, 0)
+		return nil, err
+	}
+	if cached.Content != "" {
+		if err := onChunk(provider.StreamChunk{Content: cached.Content}); err != nil {
+			e.setOutcome(false, 0)
+			return nil, err
+		}
+	}
+	e.setOutcome(true, age)
+	return toChatResponse(req, cached), nil
+}
+
+// ChatStreamFromChunks is the chunk-aware twin of ChatStreamFrom.
+// If the wrapped engine implements chunk resume, the resume is
+// delegated to it (a failure is returned unchanged — a stale replay
+// must never follow a resume). Otherwise the wrapper replays via
+// ChatStreamChunks and trims the first skipChars runes itself.
+// Tool-call chunks that fall inside the skipped prefix are dropped,
+// matching the router's documented resume limitation (only the text
+// prefix is continued); the returned response still carries the
+// full reassembled tool calls.
+func (e *StaleEngine) ChatStreamFromChunks(ctx context.Context, req provider.ChatRequest, skipChars int, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+	if onChunk == nil {
+		onChunk = func(provider.StreamChunk) error { return nil }
+	}
+	if cr, ok := e.engine.(chunkResumer); ok {
+		resp, err := cr.ChatStreamFromChunks(ctx, req, skipChars, onChunk)
+		if err == nil {
+			e.store(ctx, req, resp)
+			e.setOutcome(false, 0)
+			return resp, nil
+		}
+		e.setOutcome(false, 0)
+		return nil, err
+	}
+	remaining := skipChars
+	if remaining < 0 {
+		remaining = 0
+	}
+	delivered := 0
+	trimming := func(c provider.StreamChunk) error {
+		if remaining > 0 {
+			if c.Content != "" {
+				runes := []rune(c.Content)
+				if len(runes) <= remaining {
+					remaining -= len(runes)
+					// Whole chunk was already sent; any
+					// tool-call fragments in it belong to
+					// the prefix too.
+					return nil
+				}
+				c.Content = string(runes[remaining:])
+				remaining = 0
+			} else if len(c.ToolCalls) > 0 || c.FinishReason != "" {
+				// No text to measure against the skip point:
+				// drop, like the router's resume does.
+				return nil
+			}
+		}
+		if c.Content == "" && len(c.ToolCalls) == 0 && c.FinishReason == "" {
+			return nil
+		}
+		if err := onChunk(c); err != nil {
+			return err
+		}
+		delivered++
+		return nil
+	}
+	resp, err := e.chatStreamChunksInner(ctx, req, trimming)
+	if err == nil {
+		e.store(ctx, req, resp)
+		e.setOutcome(false, 0)
+		return resp, nil
+	}
+	if delivered > 0 {
+		e.setOutcome(false, 0)
+		return nil, err
+	}
+	cached, age, ok := e.staleFor(ctx, req)
+	if !ok {
+		e.setOutcome(false, 0)
+		return nil, err
+	}
+	if cached.Content != "" {
+		if err := trimming(provider.StreamChunk{Content: cached.Content}); err != nil {
+			e.setOutcome(false, 0)
+			return nil, err
+		}
+	}
+	e.setOutcome(true, age)
+	return toChatResponse(req, cached), nil
+}
+
+// chatStreamChunksInner runs one chunk stream against the wrapped
+// engine (chunk path when it has one, text deltas bridged to chunks
+// otherwise), without any stale handling — shared by
+// ChatStreamChunks and the ChatStreamFromChunks replay fallback, so
+// stale logic is applied exactly once per call.
+func (e *StaleEngine) chatStreamChunksInner(ctx context.Context, req provider.ChatRequest, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+	if cs, ok := e.engine.(chunkStreamer); ok {
+		return cs.ChatStreamChunks(ctx, req, onChunk)
+	}
+	return e.engine.ChatStream(ctx, req, func(delta string) error {
+		return onChunk(provider.StreamChunk{Content: delta})
+	})
+}
+
 // LastTrace returns the wrapped engine's route trace when it exposes
 // one (router.Engine does), so callers can attribute requests and
 // count failovers through this wrapper. It returns nil when the
@@ -447,3 +617,10 @@ var _ server.Engine = (*StaleEngine)(nil)
 
 // Ensure StaleEngine satisfies server.StreamResumer at compile time.
 var _ server.StreamResumer = (*StaleEngine)(nil)
+
+// Ensure StaleEngine satisfies the chunk interfaces (defined locally
+// because server's are unexported). Without these, the server's
+// chunk-aware streaming path would silently fall back to text-only
+// for every request in serve mode.
+var _ chunkStreamer = (*StaleEngine)(nil)
+var _ chunkResumer = (*StaleEngine)(nil)
