@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -216,5 +217,300 @@ func TestSaveRefusesInvalidConfig(t *testing.T) {
 	cfg.Listen = "0.0.0.0:20128"
 	if err := cfg.Save(filepath.Join(t.TempDir(), "config.json")); err == nil {
 		t.Error("Save should refuse a non-loopback listen address")
+	}
+}
+
+func TestUnknownFieldsRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	raw := []byte(`{
+  "version": 1,
+  "listen": "127.0.0.1:20128",
+  "data_dir": "/tmp/data",
+  "gateway_keys": [],
+  "providers": [],
+  "budget_usd": 0,
+  "fail_closed": true,
+  "telemetry_enabled": false,
+  "future_feature": {"enabled": true, "level": 3},
+  "ui_theme": "dark",
+  "max_retries": 5,
+  "ratio": 1.5,
+  "notes": null,
+  "tags": ["a", "b"],
+  "experimental": true
+}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := map[string]any{
+		"future_feature": map[string]any{"enabled": true, "level": float64(3)},
+		"ui_theme":       "dark",
+		"max_retries":    float64(5),
+		"ratio":          1.5,
+		"notes":          nil,
+		"tags":           []any{"a", "b"},
+		"experimental":   true,
+	}
+	if len(loaded.Extensions) != len(want) {
+		t.Fatalf("Extensions = %d entries, want %d: %v", len(loaded.Extensions), len(want), loaded.Extensions)
+	}
+	for k, w := range want {
+		var got any
+		if err := json.Unmarshal(loaded.Extensions[k], &got); err != nil {
+			t.Fatalf("Extensions[%q] is not valid JSON: %v", k, err)
+		}
+		if !reflect.DeepEqual(got, w) {
+			t.Errorf("Extensions[%q] = %#v, want %#v", k, got, w)
+		}
+	}
+	// MarshalJSON must re-emit an unknown value byte-for-byte (verbatim
+	// raw bytes, including its original spacing). Note the top-level
+	// json.Marshal compacts Marshaler output, so the verbatim check has
+	// to call MarshalJSON directly; via json.Marshal the same value
+	// appears in compacted form, still value-identical.
+	rawOut, err := loaded.MarshalJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(rawOut), `"future_feature":{"enabled": true, "level": 3}`) {
+		t.Errorf("MarshalJSON did not preserve future_feature verbatim: %s", rawOut)
+	}
+	encoded, err := json.Marshal(loaded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(encoded), `"future_feature":{"enabled":true,"level":3}`) {
+		t.Errorf("Marshal did not preserve future_feature value: %s", encoded)
+	}
+	// Save -> Load must preserve the unknown values, and "extensions"
+	// itself must never appear as a top-level key in the file.
+	savedPath := filepath.Join(dir, "saved.json")
+	if err := loaded.Save(savedPath); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	savedRaw, err := os.ReadFile(savedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved map[string]any
+	if err := json.Unmarshal(savedRaw, &saved); err != nil {
+		t.Fatalf("saved config is not valid JSON: %v", err)
+	}
+	if _, ok := saved["extensions"]; ok {
+		t.Error("saved JSON must not contain an \"extensions\" key")
+	}
+	for k, w := range want {
+		if !reflect.DeepEqual(saved[k], w) {
+			t.Errorf("saved[%q] = %#v, want %#v", k, saved[k], w)
+		}
+	}
+	if saved["version"] != float64(1) || saved["listen"] != DefaultListen {
+		t.Errorf("known fields changed across round-trip: %v", saved)
+	}
+	reloaded, err := Load(savedPath)
+	if err != nil {
+		t.Fatalf("Load(saved): %v", err)
+	}
+	for k, w := range want {
+		var got any
+		if err := json.Unmarshal(reloaded.Extensions[k], &got); err != nil {
+			t.Fatalf("reloaded Extensions[%q] is not valid JSON: %v", k, err)
+		}
+		if !reflect.DeepEqual(got, w) {
+			t.Errorf("reloaded Extensions[%q] = %#v, want %#v", k, got, w)
+		}
+	}
+}
+
+func TestUnknownFieldsAbsentWhenNone(t *testing.T) {
+	cfg := DefaultConfig(t.TempDir())
+	if cfg.Extensions != nil {
+		t.Error("fresh config should have nil Extensions")
+	}
+	encoded, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded) != 8 {
+		t.Errorf("encoded config has %d top-level keys, want 8: %v", len(decoded), decoded)
+	}
+}
+
+func writeTempConfig(t *testing.T, cfg *Config) string {
+	t.Helper()
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestValidateFile(t *testing.T) {
+	twoKeys := func() (*Config, string) {
+		cfg := DefaultConfig(t.TempDir())
+		k1, _, err := IssueKey("one", []string{"chat"}, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		k2, _, err := IssueKey("two", []string{"chat"}, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		k2.ID = k1.ID
+		_ = cfg.AddGatewayKey(k1)
+		// AddGatewayKey would reject the duplicate, so append directly.
+		cfg.GatewayKeys = append(cfg.GatewayKeys, k2)
+		return cfg, k1.ID
+	}
+	dupKeysCfg, dupKeyID := twoKeys()
+
+	cases := []struct {
+		name string
+		cfg  *Config
+		want string // substring the error must contain; "" means no error
+	}{
+		{"valid", DefaultConfig(t.TempDir()), ""},
+		{"version", func() *Config { c := DefaultConfig(t.TempDir()); c.Version = 2; return c }(), "version"},
+		{"listen not loopback", func() *Config { c := DefaultConfig(t.TempDir()); c.Listen = "0.0.0.0:20128"; return c }(), "listen"},
+		{"negative budget", func() *Config { c := DefaultConfig(t.TempDir()); c.BudgetUSD = -5; return c }(), "budget_usd"},
+		{"duplicate gateway key id", dupKeysCfg, `duplicate gateway key id "` + dupKeyID + `"`},
+		{"duplicate provider id", func() *Config {
+			c := DefaultConfig(t.TempDir())
+			c.Providers = []ProviderConfig{
+				{ID: "openai", BaseURL: "https://api.openai.com/v1"},
+				{ID: "openai", BaseURL: "https://api.other.com/v1"},
+			}
+			return c
+		}(), `duplicate provider id "openai"`},
+		{"duplicate provider base_url normalized", func() *Config {
+			c := DefaultConfig(t.TempDir())
+			c.Providers = []ProviderConfig{
+				{ID: "a", BaseURL: "https://api.example.com/v1/"},
+				{ID: "b", BaseURL: "HTTPS://API.EXAMPLE.COM/v1"},
+			}
+			return c
+		}(), "duplicate provider base_url"},
+		{"provider empty id", func() *Config {
+			c := DefaultConfig(t.TempDir())
+			c.Providers = []ProviderConfig{{ID: "", BaseURL: "https://api.example.com/v1"}}
+			return c
+		}(), "empty id"},
+		{"provider empty base_url", func() *Config {
+			c := DefaultConfig(t.TempDir())
+			c.Providers = []ProviderConfig{{ID: "p1", BaseURL: ""}}
+			return c
+		}(), "empty base_url"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateFile(writeTempConfig(t, tc.cfg))
+			if tc.want == "" {
+				if err != nil {
+					t.Fatalf("ValidateFile(valid) = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("ValidateFile(%s) = nil, want error containing %q", tc.name, tc.want)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("ValidateFile(%s) error = %v, want it to contain %q", tc.name, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidateFileBadInput(t *testing.T) {
+	if err := ValidateFile(filepath.Join(t.TempDir(), "missing.json")); err == nil {
+		t.Error("ValidateFile of a missing file should error")
+	}
+	path := filepath.Join(t.TempDir(), "bad.json")
+	if err := os.WriteFile(path, []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateFile(path); err == nil || !strings.Contains(err.Error(), "invalid JSON") {
+		t.Errorf("ValidateFile of invalid JSON should report invalid JSON, got: %v", err)
+	}
+}
+
+func TestCloneIndependent(t *testing.T) {
+	cfg := DefaultConfig(t.TempDir())
+	cfg.BudgetUSD = 10
+	key, _, err := IssueKey("test", []string{"chat"}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.AddGatewayKey(key); err != nil {
+		t.Fatal(err)
+	}
+	cfg.Providers = []ProviderConfig{
+		{ID: "openai", BaseURL: "https://api.openai.com/v1", Models: []provider.Model{{ID: "gpt-4o", Name: "GPT-4o"}}},
+	}
+	cfg.Extensions = map[string]json.RawMessage{
+		"future": json.RawMessage(`{"a":1}`),
+		"list":   json.RawMessage(`[1,2]`),
+	}
+
+	clone := cfg.Clone()
+	if clone == cfg {
+		t.Fatal("Clone must return a new pointer")
+	}
+	clone.Listen = "127.0.0.1:9999"
+	clone.BudgetUSD = 99
+	clone.GatewayKeys[0].Name = "changed"
+	clone.GatewayKeys[0].Scopes[0] = "changed"
+	clone.GatewayKeys = append(clone.GatewayKeys, GatewayKey{ID: "extra"})
+	clone.Providers[0].ID = "changed"
+	clone.Providers[0].Models[0].ID = "changed"
+	clone.Providers = append(clone.Providers, ProviderConfig{ID: "extra"})
+	clone.Extensions["future"] = json.RawMessage(`{"a":2}`)
+	clone.Extensions["new"] = json.RawMessage(`true`)
+	listBytes := clone.Extensions["list"]
+	listBytes[1] = '9' // mutates the clone's raw bytes in place
+
+	if cfg.Listen != DefaultListen {
+		t.Errorf("original Listen mutated: %q", cfg.Listen)
+	}
+	if cfg.BudgetUSD != 10 {
+		t.Errorf("original BudgetUSD mutated: %v", cfg.BudgetUSD)
+	}
+	if len(cfg.GatewayKeys) != 1 || cfg.GatewayKeys[0].Name != "test" {
+		t.Errorf("original gateway keys mutated: %+v", cfg.GatewayKeys)
+	}
+	if cfg.GatewayKeys[0].Scopes[0] != "chat" {
+		t.Errorf("original gateway key scopes mutated: %v", cfg.GatewayKeys[0].Scopes)
+	}
+	if len(cfg.Providers) != 1 || cfg.Providers[0].ID != "openai" {
+		t.Errorf("original providers mutated: %+v", cfg.Providers)
+	}
+	if cfg.Providers[0].Models[0].ID != "gpt-4o" {
+		t.Errorf("original provider models mutated: %+v", cfg.Providers[0].Models)
+	}
+	if string(cfg.Extensions["future"]) != `{"a":1}` {
+		t.Errorf("original Extensions[future] mutated: %s", cfg.Extensions["future"])
+	}
+	if string(cfg.Extensions["list"]) != `[1,2]` {
+		t.Errorf("original Extensions[list] mutated: %s", cfg.Extensions["list"])
+	}
+	if _, ok := cfg.Extensions["new"]; ok {
+		t.Error("original Extensions gained the clone's new key")
+	}
+
+	var nilCfg *Config
+	if nilCfg.Clone() != nil {
+		t.Error("Clone of a nil config should be nil")
 	}
 }
