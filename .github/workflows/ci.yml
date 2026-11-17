@@ -1,0 +1,24 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  sanity:
+    name: Repo sanity check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: Required files exist
+        run: |
+          set -e
+          for f in LICENSE README.md SECURITY.md CONTRIBUTING.md; do
+            if [ ! -f "$f" ]; then
+              echo "Missing required file: $f"
+              exit 1
+            fi
+            echo "OK: $f"
+          done
+          echo "All required files present."
