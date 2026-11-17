@@ -175,6 +175,22 @@ func TestValidateRejectsNegativeBudget(t *testing.T) {
 	}
 }
 
+func TestValidateCatalogProviderMayOmitBaseURL(t *testing.T) {
+	// A catalog-linked provider resolves its base URL from the
+	// catalog at load, so an empty base_url is valid for it — but a
+	// fully-custom provider with no base URL is still rejected.
+	cfg := DefaultConfig(t.TempDir())
+	cfg.Providers = []ProviderConfig{{ID: "prov-groq", Name: "Groq", CatalogID: "groq"}}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("Validate should accept a catalog provider with no base_url: %v", err)
+	}
+
+	cfg.Providers = []ProviderConfig{{ID: "prov-custom", Name: "Custom"}}
+	if err := cfg.Validate(); err == nil {
+		t.Error("Validate should reject a custom provider with no base_url")
+	}
+}
+
 func TestLoadOrCreate(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sub", "config.json")
@@ -340,8 +356,8 @@ func TestUnknownFieldsAbsentWhenNone(t *testing.T) {
 	if err := json.Unmarshal(encoded, &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if len(decoded) != 8 {
-		t.Errorf("encoded config has %d top-level keys, want 8: %v", len(decoded), decoded)
+	if len(decoded) != 9 {
+		t.Errorf("encoded config has %d top-level keys, want 9: %v", len(decoded), decoded)
 	}
 }
 
@@ -512,5 +528,76 @@ func TestCloneIndependent(t *testing.T) {
 	var nilCfg *Config
 	if nilCfg.Clone() != nil {
 		t.Error("Clone of a nil config should be nil")
+	}
+}
+
+func TestConfigAutoRouterValidation(t *testing.T) {
+	base := func() *Config {
+		cfg := DefaultConfig(t.TempDir())
+		return cfg
+	}
+	// Defaults are valid.
+	if err := base().Validate(); err != nil {
+		t.Errorf("DefaultConfig failed Validate: %v", err)
+	}
+	// A full auto_router block round-trips through JSON.
+	cfg := base()
+	cfg.AutoRouter = AutoRouterConfig{
+		Threshold:    0.6,
+		Thresholds:   map[string]float64{"auto/fast": 0.7},
+		DefaultTier:  "coding",
+		DefaultModel: "strong-model",
+		TierModels:   map[string][]string{"coding": {"coder-model"}, "chat": {"chat-model"}},
+	}
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var back Config
+	if err := json.Unmarshal(raw, &back); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if back.AutoRouter.Threshold != 0.6 || back.AutoRouter.Thresholds["auto/fast"] != 0.7 ||
+		back.AutoRouter.DefaultTier != "coding" || back.AutoRouter.DefaultModel != "strong-model" ||
+		len(back.AutoRouter.TierModels["coding"]) != 1 {
+		t.Errorf("auto_router did not round-trip: %+v", back.AutoRouter)
+	}
+	if err := back.Validate(); err != nil {
+		t.Errorf("round-tripped config failed Validate: %v", err)
+	}
+	// Clone deep-copies the auto-router maps.
+	clone := cfg.Clone()
+	clone.AutoRouter.Thresholds["auto/fast"] = 0.1
+	clone.AutoRouter.TierModels["coding"][0] = "other-model"
+	if cfg.AutoRouter.Thresholds["auto/fast"] != 0.7 {
+		t.Error("Clone shared Thresholds map with the original")
+	}
+	if cfg.AutoRouter.TierModels["coding"][0] != "coder-model" {
+		t.Error("Clone shared TierModels slices with the original")
+	}
+	// Invalid values are rejected, naming the field.
+	bad := []struct {
+		name string
+		mut  func(*Config)
+	}{
+		{"threshold > 1", func(c *Config) { c.AutoRouter.Threshold = 1.5 }},
+		{"threshold < 0", func(c *Config) { c.AutoRouter.Threshold = -0.1 }},
+		{"per-model threshold 0", func(c *Config) { c.AutoRouter.Thresholds = map[string]float64{"auto": 0} }},
+		{"unknown virtual model", func(c *Config) { c.AutoRouter.Thresholds = map[string]float64{"auto/nope": 0.5} }},
+		{"unknown default tier", func(c *Config) { c.AutoRouter.DefaultTier = "magic" }},
+		{"unknown tier_models tier", func(c *Config) { c.AutoRouter.TierModels = map[string][]string{"magic": {"m"}} }},
+	}
+	for _, tc := range bad {
+		c := base()
+		tc.mut(c)
+		if err := c.Validate(); err == nil {
+			t.Errorf("%s: Validate passed; want an error naming the field", tc.name)
+		}
+	}
+	// Threshold 0 (unset) is valid: it means "use the 0.5 default".
+	c := base()
+	c.AutoRouter.Threshold = 0
+	if err := c.Validate(); err != nil {
+		t.Errorf("threshold 0 (unset) failed Validate: %v", err)
 	}
 }

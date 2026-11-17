@@ -12,6 +12,7 @@
 //	  "budget_usd": 0,           // 0 = no global cap set
 //	  "fail_closed": true,       // refuse work instead of bypassing limits
 //	  "telemetry_enabled": false // no telemetry ever unless explicitly true
+//	  "auto_router": { ... }     // see AutoRouterConfig; omitted = defaults
 //	}
 //
 // The router is local-only by design: Listen must be a loopback address
@@ -30,6 +31,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/raunakiitp/codvian-router/internal/autorouter"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 )
 
@@ -61,8 +63,38 @@ type Config struct {
 	BudgetUSD        float64          `json:"budget_usd"`
 	FailClosed       bool             `json:"fail_closed"`
 	TelemetryEnabled bool             `json:"telemetry_enabled"`
+	// AutoRouter tunes the local auto-router ("auto/*" virtual
+	// models). Omitted entirely means defaults: threshold 0.5,
+	// fallback tier reasoning, no tier models (so auto-routing
+	// falls back to DefaultModel, or fails honestly when that is
+	// empty too).
+	AutoRouter AutoRouterConfig `json:"auto_router,omitempty"`
 
 	Extensions map[string]json.RawMessage `json:"-"`
+}
+
+// AutoRouterConfig is the persisted shape of the auto-router
+// settings in the config file. Thresholds are confidence dials:
+// a tier match below the threshold falls back to the default tier
+// instead of guessing (see internal/autorouter). TierModels maps a
+// tier name ("coding", "chat", "reasoning", "quick-qa") to concrete
+// model IDs in preference order; a tier with no entry uses
+// DefaultModel. Keys are never stored here — only model names.
+type AutoRouterConfig struct {
+	// Threshold is the default confidence dial (0.5 when 0).
+	// Must be in (0, 1] when set.
+	Threshold float64 `json:"threshold,omitempty"`
+	// Thresholds overrides Threshold per virtual model name
+	// ("auto/fast", ...). Each entry must be in (0, 1].
+	Thresholds map[string]float64 `json:"thresholds,omitempty"`
+	// DefaultTier is the fallback tier ("reasoning" when empty).
+	DefaultTier string `json:"default_tier,omitempty"`
+	// DefaultModel is the concrete model used when the picked
+	// tier has no TierModels entry. Empty means "no model" —
+	// auto-routing then fails honestly instead of inventing one.
+	DefaultModel string `json:"default_model,omitempty"`
+	// TierModels maps tier names to concrete model IDs.
+	TierModels map[string][]string `json:"tier_models,omitempty"`
 }
 
 // knownConfigFields is the set of top-level JSON keys owned by Config v1.
@@ -76,6 +108,7 @@ var knownConfigFields = map[string]bool{
 	"budget_usd":        true,
 	"fail_closed":       true,
 	"telemetry_enabled": true,
+	"auto_router":       true,
 }
 
 // configAlias is Config without its MarshalJSON/UnmarshalJSON methods, so
@@ -207,6 +240,10 @@ func DefaultConfig(dataDir string) *Config {
 		BudgetUSD:        0,
 		FailClosed:       true,
 		TelemetryEnabled: false,
+		AutoRouter: AutoRouterConfig{
+			Threshold:   autorouter.DefaultThreshold,
+			DefaultTier: string(autorouter.DefaultTier),
+		},
 	}
 }
 
@@ -236,6 +273,25 @@ func (c *Config) Validate() error {
 	}
 	if c.BudgetUSD < 0 {
 		return fmt.Errorf("config: budget_usd must not be negative (got %v)", c.BudgetUSD)
+	}
+	if c.AutoRouter.Threshold < 0 || c.AutoRouter.Threshold > 1 {
+		return fmt.Errorf("config: auto_router.threshold must be in [0, 1] (0 = default 0.5, got %v)", c.AutoRouter.Threshold)
+	}
+	for name, th := range c.AutoRouter.Thresholds {
+		if th <= 0 || th > 1 {
+			return fmt.Errorf("config: auto_router.thresholds[%q] must be in (0, 1] (got %v)", name, th)
+		}
+		if !autorouter.IsVirtualModel(name) {
+			return fmt.Errorf("config: auto_router.thresholds[%q] is not a known virtual model (auto, auto/fast, auto/cheap, auto/coding, auto/reasoning)", name)
+		}
+	}
+	if c.AutoRouter.DefaultTier != "" && !autorouter.IsTier(c.AutoRouter.DefaultTier) {
+		return fmt.Errorf("config: auto_router.default_tier %q is not a known tier (coding, chat, reasoning, quick-qa)", c.AutoRouter.DefaultTier)
+	}
+	for tier := range c.AutoRouter.TierModels {
+		if !autorouter.IsTier(tier) {
+			return fmt.Errorf("config: auto_router.tier_models[%q] is not a known tier (coding, chat, reasoning, quick-qa)", tier)
+		}
 	}
 	for i, p := range c.Providers {
 		if p.ID == "" {
@@ -276,6 +332,18 @@ func (c *Config) Clone() *Config {
 				p.Models = append([]provider.Model(nil), p.Models...)
 			}
 			out.Providers[i] = p
+		}
+	}
+	if c.AutoRouter.Thresholds != nil {
+		out.AutoRouter.Thresholds = make(map[string]float64, len(c.AutoRouter.Thresholds))
+		for k, v := range c.AutoRouter.Thresholds {
+			out.AutoRouter.Thresholds[k] = v
+		}
+	}
+	if c.AutoRouter.TierModels != nil {
+		out.AutoRouter.TierModels = make(map[string][]string, len(c.AutoRouter.TierModels))
+		for k, v := range c.AutoRouter.TierModels {
+			out.AutoRouter.TierModels[k] = append([]string(nil), v...)
 		}
 	}
 	if c.Extensions != nil {

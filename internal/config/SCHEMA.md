@@ -18,6 +18,7 @@ disagree, the code wins and this document must be fixed.
 | BudgetUSD | `budget_usd` | number (float) | no | `0` | Global spend cap in USD. `0` means no cap. Must not be negative. |
 | FailClosed | `fail_closed` | boolean | no | `true` | When `true`, the router refuses work instead of bypassing limits when a check cannot be performed. |
 | TelemetryEnabled | `telemetry_enabled` | boolean | no | `false` | No telemetry is ever sent unless this is explicitly `true`. |
+| AutoRouter | `auto_router` | object | no | `{threshold: 0.5, default_tier: "reasoning"}` | Local auto-router (`auto/*` virtual models). `threshold` (number, 0 = default 0.5, otherwise in (0, 1]): a tier match below it falls back to the default tier instead of guessing. `thresholds` (object, virtual-model name → number in (0, 1]) overrides the threshold per virtual model (`auto`, `auto/fast`, `auto/cheap`, `auto/coding`, `auto/reasoning`). `default_tier` (string, one of `coding`, `chat`, `reasoning`, `quick-qa`) is the fallback tier. `default_model` (string) is the concrete model used when the picked tier has no `tier_models` entry; empty means auto-routing fails honestly instead of inventing a model. `tier_models` (object, tier name → array of concrete model IDs in preference order) maps tiers to models. No keys are stored here — only model names. |
 
 Notes on "required": a missing field decodes to its Go zero value, and
 `Validate` then rejects the file if that zero value is unsafe (for
