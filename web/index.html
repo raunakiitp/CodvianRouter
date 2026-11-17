@@ -1,0 +1,1476 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<link rel="icon" href="data:," />
+<title>Codvian Router — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    color-scheme: light;
+    /* Light: pure white everywhere — canvas, sidebar and cards are all
+       #FFFFFF. Depth comes only from soft neutral shadows, never from
+       tinted or off-white surfaces. */
+    --bg:#FFFFFF;
+    --surface:#FFFFFF;
+    --surface-2:#FFFFFF;
+    --surface-3:#FFFFFF;
+    --grid:rgba(0,0,0,.08);
+    --ring:rgba(0,0,0,.10);
+    --side-bg:#FFFFFF;
+    --well:#FFFFFF;
+    --border:transparent;
+    --border-strong:transparent;
+    --text:#000000;
+    --text-2:#4A4A4A;
+    --text-3:#9A9A9A;
+    --blue:#3F6212;
+    --blue-bg:#F2F7E3;
+    /* Status palette — dark lime for healthy, solid near-black for
+       degraded. No generic vibe-coded green, no orange anywhere. */
+    --green:#3F6212;
+    --green-bg:#EFF6DC;
+    --green-dot:#65A30D;
+    --amber:#171717;
+    --amber-bg:#FFFFFF;
+    --amber-dot:#171717;
+    --red:#8C1D18;
+    --red-bg:#FFFFFF;
+    --red-dot:#8C1D18;
+    --btn:#000000;
+    --btn-text:#FFFFFF;
+    --shadow:0 1px 2px rgba(0,0,0,.05), 0 10px 24px -12px rgba(0,0,0,.12), 0 24px 44px -24px rgba(0,0,0,.14), inset 0 1px 0 rgba(255,255,255,.9);
+    --shadow-lg:0 2px 4px rgba(0,0,0,.06), 0 20px 40px -16px rgba(0,0,0,.22), 0 36px 64px -32px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.9);
+    --shadow-soft:0 1px 2px rgba(0,0,0,.04), 0 6px 16px -8px rgba(0,0,0,.10), inset 0 1px 0 rgba(255,255,255,.85);
+    --radius:26px;
+    --radius-sm:15px;
+    --sidebar-w:252px;
+  }
+  html[data-theme="dark"]{
+    color-scheme: dark;
+    /* Dark: pure black everywhere — canvas, sidebar and cards are all
+       #000000, no grey phases or charcoal tints. Cards separate from
+       the canvas only by a hairline ring in their shadow. */
+    --bg:#000000;
+    --surface:#000000;
+    --surface-2:#000000;
+    --surface-3:#000000;
+    --grid:rgba(255,255,255,.09);
+    --ring:rgba(255,255,255,.14);
+    --side-bg:#000000;
+    --well:#000000;
+    --border:transparent;
+    --border-strong:transparent;
+    --text:#FFFFFF;
+    --text-2:#B5B5B5;
+    --text-3:#767676;
+    --blue:#BEF264;
+    --blue-bg:#1E2A08;
+    /* Status: bright lime on black for healthy, solid white for degraded */
+    --green:#BEF264;
+    --green-bg:#1E2A08;
+    --green-dot:#A3E635;
+    --amber:#FFFFFF;
+    --amber-bg:#000000;
+    --amber-dot:#FFFFFF;
+    --red:#F0A8A2;
+    --red-bg:#000000;
+    --red-dot:#E0655C;
+    --btn:#FFFFFF;
+    --btn-text:#000000;
+    --shadow:inset 0 0 0 1px rgba(255,255,255,.09), 0 14px 30px -12px rgba(0,0,0,.75), 0 30px 56px -28px rgba(0,0,0,.85);
+    --shadow-lg:inset 0 0 0 1px rgba(255,255,255,.12), 0 24px 48px -16px rgba(0,0,0,.85), 0 44px 80px -36px rgba(0,0,0,.9);
+    --shadow-soft:inset 0 0 0 1px rgba(255,255,255,.07), 0 8px 20px -10px rgba(0,0,0,.7);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:"Plus Jakarta Sans",-apple-system,"Segoe UI",sans-serif;
+    background:var(--bg); color:var(--text);
+    font-size:14px; line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  button{font-family:inherit; cursor:pointer}
+  button,[role="button"],select,input,textarea{min-height:36px}
+  a{color:var(--blue); text-decoration:none}
+  a:hover{text-decoration:underline}
+  ::selection{background:var(--blue-bg)}
+
+  /* ---------- Shell ---------- */
+  .shell{display:flex; min-height:100vh}
+  .sidebar{
+    width:var(--sidebar-w); flex:0 0 var(--sidebar-w);
+    background:var(--side-bg); border:0;
+    box-shadow:18px 0 36px -28px rgba(0,0,0,.25);
+    display:flex; flex-direction:column;
+    position:sticky; top:0; height:100vh; z-index:40;
+  }
+  html[data-theme="dark"] .sidebar{box-shadow:inset -1px 0 0 rgba(255,255,255,.08)}
+  .brand{display:flex; align-items:center; gap:10px; padding:18px 18px 16px; border:0}
+  .brand-mark{width:34px;height:34px;border-radius:12px;background:var(--surface);display:flex;align-items:center;justify-content:center;flex:0 0 34px; overflow:hidden; box-shadow:0 6px 14px -6px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.9)}
+  html[data-theme="dark"] .brand-mark{background:#000000; box-shadow:inset 0 0 0 1px rgba(255,255,255,.12), 0 6px 14px -6px rgba(0,0,0,.8)}
+  .brand-mark img{width:27px;height:27px;object-fit:contain;display:block}
+  .brand-name{font-weight:800; font-size:15px; letter-spacing:-.02em; line-height:1.15}
+  .brand-ver{margin-left:auto; font-size:11px; color:var(--text-2); background:var(--surface); border:0; padding:3px 8px; border-radius:99px; box-shadow:var(--shadow-soft)}
+  .nav{flex:1; overflow-y:auto; padding:12px 10px}
+  .nav-label{font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--text-3); padding:14px 8px 6px}
+  .nav-label:first-child{padding-top:2px}
+  .nav-item{
+    display:flex; align-items:center; gap:10px; width:100%;
+    padding:0 10px; min-height:38px; border:0; background:transparent;
+    border-radius:var(--radius-sm); color:var(--text-2);
+    font-size:13.5px; font-weight:500; text-align:left; position:relative;
+    transition:background .25s cubic-bezier(.22,.9,.28,1), color .25s cubic-bezier(.22,.9,.28,1), box-shadow .25s cubic-bezier(.22,.9,.28,1);
+  }
+  .nav-item::before{transition:opacity .25s ease, transform .25s cubic-bezier(.22,.9,.28,1)}
+  .nav-item:not(.active)::before{content:""; position:absolute; left:-10px; top:8px; bottom:8px; width:3px; border-radius:0 3px 3px 0; background:var(--text); opacity:0; transform:scaleY(.4)}
+  .nav-item svg{width:17px;height:17px;flex:0 0 17px;stroke:currentColor}
+  .nav-item:hover{background:var(--surface); color:var(--text); box-shadow:inset 0 0 0 1px var(--ring)}
+  .nav-item.active{background:var(--surface); color:var(--text); font-weight:600}
+  .nav-item.active::before{content:""; position:absolute; left:-10px; top:8px; bottom:8px; width:3px; border-radius:0 3px 3px 0; background:var(--text)}
+  .nav-badge{margin-left:auto; font-size:11px; font-weight:700; background:var(--surface); border:0; color:var(--text-2); border-radius:99px; padding:2px 8px; box-shadow:inset 0 0 0 1px var(--ring)}
+  .nav-item.active .nav-badge{background:var(--surface); box-shadow:var(--shadow-soft)}
+  .nav-item.active{box-shadow:inset 0 0 0 1px var(--ring), var(--shadow-soft)}
+  .side-foot{border:0; padding:14px}
+  .instance{border:0; border-radius:20px; padding:14px; background:var(--surface); box-shadow:var(--shadow)}
+  .instance-row{display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600}
+  .dot{width:8px;height:8px;border-radius:50%;flex:0 0 8px}
+  .dot.green{background:var(--green-dot)} .dot.amber{background:var(--amber-dot)} .dot.red{background:var(--red-dot)} .dot.grey{background:var(--text-3)}
+  .instance-meta{font-size:12px; color:var(--text-2); margin-top:5px; line-height:1.55}
+  .instance-meta .mono{font-size:11.5px}
+
+  .main{flex:1; min-width:0; display:flex; flex-direction:column}
+  .topbar{
+    position:sticky; top:0; z-index:30;
+    background:var(--bg); border:0;
+    box-shadow:0 18px 30px -26px rgba(0,0,0,.28);
+    display:flex; align-items:center; gap:12px; padding:0 24px; height:60px;
+  }
+  html[data-theme="dark"] .topbar{box-shadow:inset 0 -1px 0 rgba(255,255,255,.08)}
+  .crumb{font-size:13.5px; color:var(--text-3); display:flex; align-items:center; gap:8px; white-space:nowrap}
+  .crumb b{color:var(--text); font-weight:600}
+  .search{flex:1; max-width:420px; margin-left:8px; position:relative}
+  .search input{
+    width:100%; height:38px; border:0; border-radius:99px;
+    background:var(--surface); padding:0 58px 0 36px; font:inherit; font-size:13.5px; color:var(--text); outline:none;
+    box-shadow:inset 0 0 0 1px var(--ring), inset 0 1px 3px rgba(0,0,0,.04);
+  }
+  .search input:focus{background:var(--surface); box-shadow:0 0 0 4px var(--blue-bg), var(--shadow-soft)}
+  .search svg{position:absolute; left:10px; top:50%; transform:translateY(-50%); width:15px; height:15px; stroke:var(--text-3)}
+  .search kbd{position:absolute; right:10px; top:50%; transform:translateY(-50%); font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--text-3); border:0; border-radius:7px; padding:2px 6px; background:var(--surface); box-shadow:var(--shadow-soft)}
+  .top-actions{margin-left:auto; display:flex; align-items:center; gap:8px}
+  .icon-btn{width:38px; height:38px; display:inline-flex; align-items:center; justify-content:center; border:0; background:var(--surface); border-radius:13px; color:var(--text-2); box-shadow:var(--shadow-soft)}
+  .icon-btn:hover{background:var(--surface); color:var(--text); box-shadow:inset 0 0 0 1px var(--ring), var(--shadow)}
+  .icon-btn svg{width:16px;height:16px;stroke:currentColor}
+  .avatar{width:36px;height:36px;border-radius:50%;background:var(--text);color:var(--bg);display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700; box-shadow:0 8px 16px -6px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.28), inset 0 -6px 10px -6px rgba(0,0,0,.35)}
+  .hamburger{display:none}
+
+  .content{padding:28px 24px 32px; max-width:1240px; width:100%; margin:0 auto}
+  /* Section switching: gentle cross-fade + soft slide, never an instant
+     snap. The outgoing view fades and lifts away (.leaving, ~150ms),
+     then the incoming view eases in while its blocks rise in sequence
+     with a small stagger. Works for every current and future section —
+     anything rendered as .view gets the same transition for free. */
+  .view{display:none}
+  .view.on{display:block; animation:viewIn .38s cubic-bezier(.22,.9,.28,1) both; will-change:opacity,transform}
+  .view.leaving{display:block; animation:viewOut .15s ease-in both; pointer-events:none}
+  @keyframes viewIn{from{opacity:0; transform:translateY(12px)} to{opacity:1; transform:translateY(0)}}
+  @keyframes viewOut{from{opacity:1; transform:translateY(0)} to{opacity:0; transform:translateY(-6px)}}
+  .view.on > *{animation:viewChildIn .5s cubic-bezier(.22,.9,.28,1) both}
+  .view.on > *:nth-child(2){animation-delay:.045s}
+  .view.on > *:nth-child(3){animation-delay:.09s}
+  .view.on > *:nth-child(4){animation-delay:.135s}
+  .view.on > *:nth-child(n+5){animation-delay:.18s}
+  @keyframes viewChildIn{from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:translateY(0)}}
+  .crumb b.crumb-swap{animation:crumbIn .32s cubic-bezier(.22,.9,.28,1) both}
+  @keyframes crumbIn{from{opacity:0; transform:translateY(4px)} to{opacity:1; transform:translateY(0)}}
+
+  /* ---------- Page head ---------- */
+  .page-head{display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap; margin-bottom:20px}
+  .page-head h1{font-family:"Source Serif 4",Georgia,serif; font-size:27px; font-weight:600; letter-spacing:-.01em; margin:0; line-height:1.15}
+  .page-head p{margin:3px 0 0; color:var(--text-2); font-size:13.5px}
+  .head-actions{margin-left:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  .seg{display:inline-flex; background:var(--surface); border:0; border-radius:99px; padding:4px; gap:2px; box-shadow:inset 0 0 0 1px var(--ring), inset 0 1px 3px rgba(0,0,0,.04)}
+  .seg button{border:0; background:transparent; min-height:30px; padding:0 13px; border-radius:99px; font-size:13px; font-weight:600; color:var(--text-2)}
+  .seg button:hover{color:var(--text)}
+  .seg button.on{background:var(--surface); color:var(--text); font-weight:700; box-shadow:inset 0 0 0 1px var(--ring), var(--shadow-soft)}
+  .btn{display:inline-flex; align-items:center; gap:7px; border-radius:99px; font-size:13.5px; font-weight:600; padding:0 16px; min-height:38px; border:0; background:var(--surface); color:var(--text); box-shadow:var(--shadow-soft); transition:box-shadow .15s ease, transform .15s ease}
+  .btn:hover{box-shadow:var(--shadow)}
+  .btn:active{transform:translateY(1px)}
+  .btn svg{width:15px;height:15px;stroke:currentColor}
+  .btn.primary{background:var(--btn); color:var(--btn-text); box-shadow:0 10px 22px -10px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.18)}
+  .btn.primary:hover{opacity:.92; background:var(--btn)}
+  .btn.small{min-height:32px; padding:0 11px; font-size:13px}
+  .btn.danger{color:var(--red)}
+  .btn.danger:hover{background:var(--red-bg)}
+  .btn:disabled{opacity:.5; cursor:not-allowed}
+
+  /* ---------- Cards: borderless, generously curved, softly 3D ---------- */
+  .card{background:var(--surface); border:0; border-radius:var(--radius); box-shadow:var(--shadow)}
+  .card-head{display:flex; align-items:center; gap:10px; padding:20px 22px 0}
+  .card-head h3{font-size:14.5px; font-weight:700; margin:0; letter-spacing:-.015em}
+  .card-head .sub{font-size:12.5px; color:var(--text-3)}
+  .card-head .right{margin-left:auto; display:flex; align-items:center; gap:8px}
+  .card-body{padding:16px 22px 22px}
+  .link-btn{border:0; background:none; color:var(--blue); font-size:13px; font-weight:500; padding:4px 2px; min-height:32px}
+  .link-btn:hover{text-decoration:underline}
+
+  /* KPI row */
+  .kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:16px}
+  .kpis3{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:16px}
+  .kpi{padding:20px 22px 16px; border-radius:28px}
+  .kpi-top{display:flex; align-items:center; justify-content:space-between; gap:8px}
+  .kpi-label{font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text-3)}
+  .pill{display:inline-flex; align-items:center; gap:3px; font-size:11.5px; font-weight:700; border-radius:99px; padding:3px 9px; line-height:1.4; white-space:nowrap; flex:0 0 auto; box-shadow:0 4px 10px -6px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.8)}
+  .pill.up{background:var(--green-bg); color:var(--green)}
+  .pill.down{background:var(--red-bg); color:var(--red)}
+  .pill.flat{background:var(--surface); color:var(--text-2)}
+  .kpi-value{font-size:31px; font-weight:800; letter-spacing:-.04em; line-height:1.12; margin-top:8px; font-variant-numeric:tabular-nums}
+  .kpi-value .unit{font-size:14px; font-weight:500; color:var(--text-3); letter-spacing:0}
+  .kpi-note{font-size:12.5px; color:var(--text-2); margin-top:2px}
+  .kpi-spark{margin-top:10px; display:block}
+
+  /* Overview grid */
+  .grid-2{display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:16px; margin-bottom:16px}
+  .grid-2b{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; margin-bottom:16px}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; color:var(--text-2)}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .swatch{width:14px; height:3px; border-radius:2px; display:inline-block}
+  .swatch.dash{background:repeating-linear-gradient(90deg,var(--amber-dot) 0 4px, transparent 4px 7px); height:2px}
+  .chart-wrap{padding:6px 10px 4px}
+  .axis-note{display:flex; justify-content:space-between; font-size:11px; color:var(--text-3); padding:0 10px 14px; font-family:"JetBrains Mono",monospace}
+
+  /* Donut */
+  .donut-flex{display:flex; align-items:center; gap:18px}
+  .donut-legend{flex:1; display:flex; flex-direction:column; gap:9px; font-size:13px}
+  .donut-legend .row{display:flex; align-items:center; gap:8px}
+  .donut-legend .row b{margin-left:auto; font-weight:600; font-variant-numeric:tabular-nums}
+  .donut-legend .row .pct{color:var(--text-3); font-size:12px; width:38px; text-align:right}
+  .sq{width:9px;height:9px;border-radius:3px;flex:0 0 9px}
+  .meter{height:7px; border-radius:99px; background:var(--surface); overflow:hidden; box-shadow:inset 0 0 0 1px var(--ring)}
+  .meter i{display:block; height:100%; border-radius:99px; background:var(--green-dot)}
+  .cache-row{margin-top:18px; background:var(--surface); border:0; border-radius:18px; padding:14px 16px; box-shadow:inset 0 0 0 1px var(--ring)}
+  .cache-row .lbl{display:flex; justify-content:space-between; font-size:13px; margin-bottom:7px}
+  .cache-row .lbl b{font-weight:600}
+
+  /* Provider health */
+  .prov-row{display:flex; align-items:center; gap:12px; padding:12px 22px; border:0; border-radius:18px; margin:2px 8px}
+  .prov-row:hover{background:var(--surface); box-shadow:inset 0 0 0 1px var(--ring)}
+  .prov-id{display:flex; align-items:center; gap:10px; width:172px; flex:0 0 172px; min-width:0}
+  .prov-logo{width:32px;height:32px;border-radius:11px;border:0; background:var(--surface); box-shadow:inset 0 0 0 1px var(--ring), 0 1px 2px rgba(0,0,0,.04), 0 6px 16px -8px rgba(0,0,0,.10); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; letter-spacing:.02em; color:var(--text); flex:0 0 32px}
+  .prov-name{font-weight:600; font-size:13.5px; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .prov-sub{font-size:11.5px; color:var(--text-3); white-space:nowrap}
+  .uptime{flex:1; min-width:90px}
+  .uptime-bars{display:flex; gap:2px}
+  .uptime-bars i{flex:1; height:18px; border-radius:4px; background:var(--green-dot); opacity:.85; min-width:2px}
+  .uptime-bars i.warn{background:var(--amber-dot)}
+  .uptime-bars i.out{background:var(--red-dot)}
+  .uptime-meta{display:flex; justify-content:space-between; font-size:11px; color:var(--text-3); margin-top:3px}
+  .prov-stat{width:86px; flex:0 0 86px; text-align:right}
+  .prov-stat .v{font-weight:600; font-size:13.5px; font-variant-numeric:tabular-nums}
+  .prov-stat .l{font-size:11px; color:var(--text-3)}
+  /* Status chips: premium capsule with a faceted diamond marker and the
+     same soft 3D depth as the cards — no flat orange/green pills. */
+  .status-chip{display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:600; border-radius:99px; padding:5px 12px 5px 10px; border:0; background:var(--surface); white-space:nowrap; box-shadow:inset 0 0 0 1px var(--ring), 0 1px 2px rgba(0,0,0,.05), 0 6px 14px -8px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.85)}
+  html[data-theme="dark"] .status-chip{box-shadow:0 1px 0 rgba(255,255,255,.05) inset, 0 8px 18px -10px rgba(0,0,0,.8)}
+  .status-chip .dot{width:7px; height:7px; flex-basis:7px; border-radius:2.5px; transform:rotate(45deg); box-shadow:inset 0 1px 1px rgba(255,255,255,.55), 0 1px 2px rgba(0,0,0,.22)}
+  .status-chip.ok{color:var(--green); background:var(--green-bg)}
+  /* Degraded / failover: a solid dark capsule — near-black with white
+     text in light mode, inverted to solid white in dark mode.
+     Never orange, never amber. */
+  .status-chip.warn{color:#FFFFFF; background:#171717; box-shadow:0 1px 2px rgba(0,0,0,.12), 0 8px 16px -8px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.22)}
+  .status-chip.warn .dot{background:#FFFFFF}
+  html[data-theme="dark"] .status-chip.warn{color:#000000; background:#FFFFFF; box-shadow:0 8px 18px -10px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.4)}
+  html[data-theme="dark"] .status-chip.warn .dot{background:#000000}
+  .status-chip.off{color:var(--text-2)}
+
+  /* Live feed */
+  .feed{padding:6px 0 4px}
+  .feed-row{display:flex; align-items:center; gap:10px; padding:9px 22px; font-size:13px; border-radius:14px; margin:1px 8px}
+  .feed-row:hover{background:var(--surface); box-shadow:inset 0 0 0 1px var(--ring)}
+  .feed-row .time{color:var(--text-3); font-size:12px; width:64px; flex:0 0 64px}
+  .feed-row .model{font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .feed-row .arrow{color:var(--text-3)}
+  .feed-row .to{color:var(--text-2); white-space:nowrap}
+  .feed-row .lat{margin-left:auto; color:var(--text-2); font-size:12.5px; font-variant-numeric:tabular-nums; white-space:nowrap}
+  .feed-empty{padding:18px; color:var(--text-3); font-size:13px}
+
+  /* Tables */
+  .table-wrap{overflow-x:auto}
+  table{width:100%; border-collapse:collapse; font-size:13.5px}
+  th{ text-align:left; font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-3); padding:12px 22px 8px; border:0; white-space:nowrap}
+  td{padding:12px 22px; border:0; vertical-align:middle}
+  tbody tr{transition:background .1s ease}
+  tbody tr:hover{background:var(--surface)}
+  tbody tr:hover td{box-shadow:inset 0 1px 0 var(--ring), inset 0 -1px 0 var(--ring)}
+  tbody tr:hover td:first-child{box-shadow:inset 0 1px 0 var(--ring), inset 0 -1px 0 var(--ring), inset 1px 0 0 var(--ring)}
+  tbody tr:hover td:last-child{box-shadow:inset 0 1px 0 var(--ring), inset 0 -1px 0 var(--ring), inset -1px 0 0 var(--ring)}
+  td.num, th.num{text-align:right; font-variant-numeric:tabular-nums}
+  .tag{display:inline-block; font-size:11.5px; font-weight:600; border:0; background:var(--surface); color:var(--text-2); border-radius:99px; padding:2px 9px; margin:1px 2px 1px 0; white-space:nowrap; box-shadow:inset 0 0 0 1px var(--ring)}
+  .tag.hot{color:var(--green); background:var(--green-bg); font-weight:700}
+
+  /* Quick start / code */
+  .qs{display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:10px}
+  .qs-left{padding:14px 16px; background:var(--surface); border:0; border-radius:20px; box-shadow:inset 0 0 0 1px var(--ring)}
+  .qs-left h4{margin:0 0 4px; font-size:13.5px; font-weight:600}
+  .qs-left p{margin:0 0 12px; font-size:13px; color:var(--text-2)}
+  .field{margin-bottom:12px}
+  .field label{display:block; font-size:12px; font-weight:600; color:var(--text-2); margin-bottom:5px; letter-spacing:.02em}
+  .copyline{display:flex; gap:8px}
+  .copyline .val{flex:1; min-width:0; display:flex; align-items:center; border:0; background:var(--surface); border-radius:13px; padding:0 12px; height:38px; font-family:"JetBrains Mono",monospace; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; box-shadow:var(--shadow-soft)}
+  .codeblock{background:#000000; color:#F5F5F5; border-radius:20px; padding:18px 20px; font-family:"JetBrains Mono",monospace; font-size:12.5px; line-height:1.75; overflow-x:auto; white-space:pre; box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 14px 28px -16px rgba(0,0,0,.5)}
+  html[data-theme="dark"] .codeblock{background:#000000; box-shadow:inset 0 0 0 1px rgba(255,255,255,.1), 0 14px 28px -16px rgba(0,0,0,.5)}
+  .codeblock .cm{color:#8A8A8A} .codeblock .st{color:#D9F99D} .codeblock .kw{color:#FFFFFF}
+
+  /* Providers grid */
+  .prov-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px}
+  .prov-card{padding:22px; display:flex; flex-direction:column; gap:0; border-radius:28px; transition:box-shadow .18s ease, transform .18s ease}
+  .prov-card:hover{box-shadow:var(--shadow-lg); transform:translateY(-2px)}
+  .prov-card-top{display:flex; align-items:flex-start; gap:12px}
+  .prov-card .prov-logo{width:42px;height:42px;flex-basis:42px;font-size:13px;border-radius:14px}
+  .prov-card h3{margin:0; font-size:15.5px; font-weight:700; letter-spacing:-.015em}
+  .prov-card .desc{font-size:12.5px; color:var(--text-2); margin-top:1px}
+  .prov-card .status-chip{margin-left:auto}
+  .prov-stats{display:flex; gap:18px; margin:16px 0; padding:13px 14px; background:var(--surface); border:0; border-radius:16px; box-shadow:inset 0 0 0 1px var(--ring)}
+  .prov-stats .s .v{font-weight:600; font-size:14px; font-variant-numeric:tabular-nums}
+  .prov-stats .s .l{font-size:11px; color:var(--text-3)}
+  .connect-box{display:none; margin-bottom:12px}
+  .connect-box.open{display:block}
+  .connect-box input{width:100%; height:40px; border:0; border-radius:13px; padding:0 13px; font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--surface); color:var(--text); outline:none; box-shadow:inset 0 0 0 1px var(--ring), inset 0 1px 3px rgba(0,0,0,.04)}
+  .connect-box input:focus{box-shadow:0 0 0 4px var(--blue-bg); background:var(--surface)}
+  .connect-box .hint{font-size:12px; color:var(--text-3); margin-top:6px}
+  .connect-box .hint a{font-size:12px}
+  .prov-actions{display:flex; gap:8px; margin-top:auto}
+  .steps{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:16px}
+  .step{padding:20px 22px; display:flex; gap:13px; border-radius:28px}
+  .step-n{width:28px;height:28px;flex:0 0 28px;border-radius:50%;border:0; background:var(--surface); box-shadow:inset 0 0 0 1px var(--ring), var(--shadow-soft); display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700; color:var(--text-2)}
+  .step.done .step-n{background:var(--green-bg); color:var(--green)}
+  .step h4{margin:1px 0 3px; font-size:13.5px; font-weight:600}
+  .step p{margin:0; font-size:12.5px; color:var(--text-2); line-height:1.5}
+
+  /* Keys */
+  .key-row{display:flex; align-items:center; gap:12px; padding:13px 22px; border:0; border-radius:16px; margin:2px 8px; flex-wrap:wrap}
+  .key-row:hover{background:var(--surface); box-shadow:inset 0 0 0 1px var(--ring)}
+  .key-name{font-weight:600; font-size:13.5px}
+  .key-meta{font-size:12px; color:var(--text-3)}
+  .key-val{font-family:"JetBrains Mono",monospace; font-size:12.5px; background:var(--surface); border:0; border-radius:99px; padding:5px 11px; box-shadow:inset 0 0 0 1px var(--ring)}
+
+  /* Settings */
+  .set-grid{display:grid; grid-template-columns:200px minmax(0,1fr); gap:14px; align-items:start}
+  .set-nav{display:flex; flex-direction:column; padding:10px; gap:2px}
+  .set-nav button{border:0; background:none; text-align:left; padding:0 12px; min-height:38px; border-radius:12px; font-size:13.5px; font-weight:600; color:var(--text-2)}
+  .set-nav button.on{background:var(--surface); color:var(--text); font-weight:700; box-shadow:inset 0 0 0 1px var(--ring), var(--shadow-soft)}
+  .set-row{display:flex; align-items:center; gap:16px; padding:16px 22px; border:0; border-radius:16px; margin:2px 8px}
+  .set-row:hover{background:var(--surface); box-shadow:inset 0 0 0 1px var(--ring)}
+  .set-row .txt{flex:1; min-width:0}
+  .set-row .txt b{font-size:13.5px; font-weight:600; display:block}
+  .set-row .txt span{font-size:12.5px; color:var(--text-2)}
+  .switch{width:42px; height:24px; border-radius:99px; background:var(--surface); border:0; position:relative; flex:0 0 42px; min-height:24px; transition:background .15s ease; padding:0; box-shadow:inset 0 0 0 1px var(--ring), inset 0 1px 3px rgba(0,0,0,.08)}
+  .switch::after{content:""; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 2px 5px rgba(0,0,0,.28); transition:left .15s ease}
+  .switch[aria-checked="true"]{background:var(--green-dot)}
+  .switch[aria-checked="true"]::after{left:21px}
+  /* Dropdowns: borderless, softly 3D, with a proper chevron — never the
+     raw native select look. */
+  select.sel{height:38px; border:0; border-radius:14px; background-color:var(--surface); color:var(--text); font:inherit; font-size:13.5px; font-weight:600; padding:0 36px 0 14px; box-shadow:inset 0 0 0 1px var(--ring), var(--shadow-soft); appearance:none; -webkit-appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23737373' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 13px center; cursor:pointer; transition:box-shadow .15s ease, background-color .15s ease}
+  select.sel:hover{background-color:var(--surface); box-shadow:var(--shadow)}
+  select.sel:focus{outline:none; background-color:var(--surface); box-shadow:0 0 0 4px var(--blue-bg), var(--shadow-soft)}
+  input.num{width:86px; height:38px; border:0; border-radius:12px; padding:0 12px; font:inherit; font-size:13.5px; background:var(--surface); color:var(--text); box-shadow:inset 0 0 0 1px var(--ring), inset 0 1px 3px rgba(0,0,0,.04)}
+  .danger{background:#FFFFFF}
+  html[data-theme="dark"] .danger{background:#000000}
+  .danger .card-head h3{color:var(--red)}
+
+  /* Toast */
+  .toast{position:fixed; bottom:22px; left:50%; transform:translate(-50%,16px); background:var(--text); color:var(--bg); font-size:13.5px; font-weight:600; padding:11px 18px; border-radius:99px; box-shadow:var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,.22); opacity:0; pointer-events:none; transition:opacity .18s ease, transform .18s ease; z-index:100; display:flex; gap:8px; align-items:center; max-width:calc(100vw - 32px)}
+  .toast.show{opacity:1; transform:translate(-50%,0)}
+  .scrim{display:none}
+
+  @media (max-width:1080px){
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .grid-2,.grid-2b{grid-template-columns:1fr}
+    .prov-grid{grid-template-columns:repeat(2,1fr)}
+    .qs{grid-template-columns:1fr}
+    .codeblock{border-radius:20px}
+    .steps{grid-template-columns:1fr}
+  }
+  @media (max-width:820px){
+    .sidebar{display:none}
+    .sidebar.open{display:flex; position:fixed; left:0; top:0; box-shadow:var(--shadow-lg)}
+    .scrim{display:block; position:fixed; inset:0; background:rgba(16,24,40,.45); z-index:35; opacity:0; pointer-events:none; transition:opacity .2s ease}
+    .scrim.on{opacity:1; pointer-events:auto}
+    .hamburger{display:inline-flex}
+    .search{display:none}
+    .content{padding:16px}
+    .topbar{padding:0 14px}
+    .prov-grid{grid-template-columns:1fr}
+    .set-grid{grid-template-columns:1fr}
+    .prov-id{flex-basis:128px; width:128px}
+    .prov-stat{display:none}
+    .crumb .hide-m{display:none}
+  }
+  @media (max-width:640px){
+    .kpis,.kpis3{grid-template-columns:1fr}
+    .card-head{flex-wrap:wrap}
+    .card-head .right{margin-left:0}
+    .kpi{padding:14px 15px 12px}
+    .kpi-value{font-size:25px}
+    .codeblock{white-space:pre-wrap; word-break:break-word; border-radius:20px}
+    #view-overview .table-wrap th:nth-child(1), #view-overview .table-wrap td:nth-child(1),
+    #view-overview .table-wrap th:nth-child(3), #view-overview .table-wrap td:nth-child(3),
+    #view-overview .table-wrap th:nth-child(4), #view-overview .table-wrap td:nth-child(4),
+    #view-overview .table-wrap th:nth-child(6), #view-overview .table-wrap td:nth-child(6){display:none}
+    #view-logs .table-wrap th:nth-child(4), #view-logs .table-wrap td:nth-child(4){display:none}
+    th,td{padding:10px 12px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none !important; animation:none !important}
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <img src="data:image/png;base64,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" alt="" />
+      </div>
+      <div>
+        <div class="brand-name">Codvian Router</div>
+      </div>
+      <span class="brand-ver mono">v0.4.2</span>
+    </div>
+
+    <nav class="nav" id="mainNav">
+      <button class="nav-item active" data-view="overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="9" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="5.5" rx="1.5"/><rect x="13.5" y="12" width="7.5" height="9" rx="1.5"/><rect x="3" y="15.5" width="7.5" height="5.5" rx="1.5"/></svg>
+        Overview
+      </button>
+      <button class="nav-item" data-view="providers">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
+        Providers
+        <span class="nav-badge" id="provBadge">6 of 8</span>
+      </button>
+      <button class="nav-item" data-view="models">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>
+        Models
+        <span class="nav-badge">128</span>
+      </button>
+      <div class="nav-label">Manage</div>
+      <button class="nav-item" data-view="keys">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4.5"/><path d="M11.2 11.8L20 3m-3.5 3.5L19 9m-5-1l2.5 2.5"/></svg>
+        API Keys
+      </button>
+      <button class="nav-item" data-view="logs">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        Logs
+      </button>
+      <button class="nav-item" data-view="usage">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10m6 10V4m6 16v-7m4 7H2" transform="translate(1 0)"/></svg>
+        Usage
+      </button>
+      <button class="nav-item" data-view="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 00-2-1.2L14 3h-4l-.5 2.6a7 7 0 00-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 005 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 002 1.2L10 21h4l.5-2.6a7 7 0 002-1.2l2.4 1 2-3.4-2-1.6c.06-.4.1-.8.1-1.2z"/></svg>
+        Settings
+      </button>
+      <a class="nav-item" href="https://github.com/raunakiitp/CodvianRouter" target="_blank" rel="noopener" style="text-decoration:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6M9 13h6M9 17h6"/></svg>
+        Documentation
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" style="width:13px;height:13px;margin-left:auto"><path d="M7 17L17 7M9 7h8v8"/></svg>
+      </a>
+    </nav>
+
+    <div class="side-foot">
+      <div class="instance">
+        <div class="instance-row"><span class="dot green" id="instDot"></span> Router running</div>
+        <div class="instance-meta">
+          <span class="mono">localhost:8080</span> · uptime 6d 14h<br/>
+          Failover on · cache on · <span id="instProvCount">6</span> providers live
+        </div>
+      </div>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <!-- ============ MAIN ============ -->
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn hamburger" id="hamburger" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <div class="crumb"><span class="hide-m">Codvian Router</span><span class="hide-m">/</span><b id="crumbNow">Overview</b></div>
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="globalSearch" type="search" placeholder="Search models, providers, logs…" aria-label="Search" />
+        <kbd>⌘K</kbd>
+      </div>
+      <div class="top-actions">
+        <span class="status-chip warn"><span class="dot amber"></span> 1 provider degraded</span>
+        <button class="icon-btn" id="themeBtn" aria-label="Toggle light and dark theme">
+          <svg id="themeIconSun" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg id="themeIconMoon" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+        </button>
+        <div class="avatar" title="Raunak">R</div>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- ================= OVERVIEW ================= -->
+      <section class="view on" id="view-overview">
+        <div class="page-head">
+          <div>
+            <h1>Overview</h1>
+            <p>Tuesday, 17 November 2026 · Local instance · All traffic stays on this machine</p>
+          </div>
+          <div class="head-actions">
+            <div class="seg" role="tablist" aria-label="Time range" id="rangeSeg">
+              <button data-range="24h" class="on">24 hours</button>
+              <button data-range="7d">7 days</button>
+              <button data-range="30d">30 days</button>
+            </div>
+            <button class="btn" id="refreshBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.6-6.4M21 4v5h-5"/></svg>
+              Refresh
+            </button>
+            <button class="btn primary" data-goto="providers">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              Add provider
+            </button>
+          </div>
+        </div>
+
+        <!-- KPI row -->
+        <div class="kpis">
+          <div class="card kpi">
+            <div class="kpi-top"><span class="kpi-label">Requests</span><span class="pill up" data-kpi="reqPill">↑ 12.4%</span></div>
+            <div class="kpi-value" data-kpi="req">48,210</div>
+            <div class="kpi-note" data-kpi="reqNote">vs 42,890 in previous period</div>
+            <svg class="kpi-spark" width="100%" height="30" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 22 L22 19 L44 21 L66 15 L88 17 L110 11 L132 13 L154 8 L176 10 L198 5 L220 6" fill="none" stroke="#65A30D" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-top"><span class="kpi-label">Tokens routed</span><span class="pill up" data-kpi="tokPill">↑ 8.1%</span></div>
+            <div class="kpi-value" data-kpi="tok">12.4<span class="unit"> M</span></div>
+            <div class="kpi-note" data-kpi="tokNote">9.1M prompt incl. 3.3M cached · 3.3M completion</div>
+            <svg class="kpi-spark" width="100%" height="30" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 24 L22 22 L44 23 L66 18 L88 19 L110 14 L132 16 L154 10 L176 12 L198 7 L220 8" fill="none" stroke="#65A30D" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-top"><span class="kpi-label">Latency · p95</span><span class="pill up" data-kpi="latPill">↓ 6.2% faster</span></div>
+            <div class="kpi-value" data-kpi="lat">842<span class="unit"> ms</span></div>
+            <div class="kpi-note" data-kpi="latNote">p50 212 ms · first token 148 ms</div>
+            <svg class="kpi-spark" width="100%" height="30" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 10 L22 13 L44 11 L66 16 L88 14 L110 18 L132 16 L154 20 L176 19 L198 23 L220 22" fill="none" stroke="#737373" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-top"><span class="kpi-label">Spend · est.</span><span class="pill flat" data-kpi="costPill">Cache saved $6.18</span></div>
+            <div class="kpi-value" data-kpi="cost">$18.42</div>
+            <div class="kpi-note" data-kpi="costNote">25% cheaper than direct API use</div>
+            <svg class="kpi-spark" width="100%" height="30" viewBox="0 0 220 30" preserveAspectRatio="none" aria-hidden="true"><path d="M0 20 L22 21 L44 17 L66 18 L88 13 L110 15 L132 10 L154 12 L176 8 L198 9 L220 5" fill="none" stroke="#84CC16" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <!-- Traffic chart + token mix -->
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <h3>Traffic</h3>
+                <div class="sub" id="chartSub">Requests per hour · last 24 hours</div>
+              </div>
+              <div class="right">
+                <div class="legend">
+                  <span><i class="swatch" style="background:#65A30D"></i> Requests</span>
+                  <span><i class="swatch dash"></i> p95 latency (right axis)</span>
+                  <span><i class="sq" style="background:#8C1D18; opacity:.6"></i> Errors / hour</span>
+                </div>
+              </div>
+            </div>
+            <div class="chart-wrap">
+              <svg id="trafficChart" viewBox="0 0 762 240" width="100%" role="img" aria-label="Traffic chart: requests, latency and errors over time" style="display:block">
+                <!-- gridlines -->
+                <g stroke="var(--grid)" stroke-width="1">
+                  <line x1="44" y1="30" x2="690" y2="30" stroke-dasharray="3 4"/>
+                  <line x1="44" y1="85" x2="690" y2="85" stroke-dasharray="3 4"/>
+                  <line x1="44" y1="140" x2="690" y2="140" stroke-dasharray="3 4"/>
+                  <line x1="44" y1="195" x2="690" y2="195"/>
+                </g>
+                <g fill="var(--text-3)" font-size="10.5" font-family="JetBrains Mono, monospace" text-anchor="end">
+                  <text id="axL1" x="36" y="34">3.0k</text><text id="axL2" x="36" y="89">2.0k</text><text id="axL3" x="36" y="144">1.0k</text><text x="36" y="199">0</text>
+                </g>
+                <g fill="#737373" font-size="10.5" font-family="JetBrains Mono, monospace" text-anchor="start" opacity="0.85">
+                  <text x="698" y="34">1200ms</text><text x="698" y="89">800</text><text x="698" y="144">400</text><text x="698" y="199">0</text>
+                </g>
+                <path id="chartArea" fill="#65A30D" opacity="0.08" d=""/>
+                <path id="chartLine" fill="none" stroke="#65A30D" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" d=""/>
+                <path id="chartLat" fill="none" stroke="#737373" stroke-width="1.6" stroke-dasharray="5 4" stroke-linejoin="round" d=""/>
+                <g id="chartErrBars" fill="#8C1D18" opacity="0.55"></g>
+                <circle id="chartDot" r="4" fill="#65A30D" stroke="var(--surface)" stroke-width="2" cx="0" cy="0"/>
+              </svg>
+            </div>
+            <div class="axis-note" id="chartAxis"><span>00:00</span><span>04:00</span><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span><span>Now</span></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h3>Token mix</h3><div class="right"><span class="sub">last 24 hours</span></div></div>
+            <div class="card-body">
+              <div class="donut-flex">
+                <svg width="118" height="118" viewBox="0 0 118 118" role="img" aria-label="Token mix donut chart">
+                  <circle cx="59" cy="59" r="46" fill="none" stroke="var(--ring)" stroke-width="15"/>
+                  <circle cx="59" cy="59" r="46" fill="none" stroke="#65A30D" stroke-width="15" stroke-dasharray="135.4 289" transform="rotate(-90 59 59)"/>
+                  <circle cx="59" cy="59" r="46" fill="none" stroke="#84CC16" stroke-width="15" stroke-dasharray="76.7 289" stroke-dashoffset="-135.4" transform="rotate(-90 59 59)"/>
+                  <circle cx="59" cy="59" r="46" fill="none" stroke="#737373" stroke-width="15" stroke-dasharray="76.9 289" stroke-dashoffset="-212.1" transform="rotate(-90 59 59)"/>
+                  <text x="59" y="56" text-anchor="middle" font-size="17" font-weight="600" fill="var(--text)" font-family="Plus Jakarta Sans">12.4M</text>
+                  <text x="59" y="72" text-anchor="middle" font-size="10" fill="var(--text-3)" font-family="Plus Jakarta Sans">tokens</text>
+                </svg>
+                <div class="donut-legend">
+                  <div class="row"><i class="sq" style="background:#65A30D"></i> Prompt <b>5.81M</b><span class="pct">46.9%</span></div>
+                  <div class="row"><i class="sq" style="background:#84CC16"></i> Cached <b>3.29M</b><span class="pct">26.5%</span></div>
+                  <div class="row"><i class="sq" style="background:#737373"></i> Completion <b>3.30M</b><span class="pct">26.6%</span></div>
+                </div>
+              </div>
+              <div class="cache-row">
+                <div class="lbl"><span>Prompt cache hit rate</span><b>36%</b></div>
+                <div class="meter"><i style="width:36%"></i></div>
+                <p style="margin:8px 0 0; font-size:12.5px; color:var(--text-2)">Cached reads bill at 0.1× on OpenAI &amp; Anthropic — that is where most of the $6.18 saving came from.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Provider health + live routing -->
+        <div class="grid-2b">
+          <div class="card">
+            <div class="card-head">
+              <h3>Provider health</h3>
+              <div class="right"><button class="link-btn" data-goto="providers">Manage providers →</button></div>
+            </div>
+            <div style="padding-top:12px" id="healthList"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h3>Live routing</h3>
+              <div class="right"><span class="status-chip ok"><span class="dot green"></span> Streaming</span></div>
+            </div>
+            <div class="feed" id="liveFeed" style="padding-top:10px"></div>
+            <div style="padding:10px 18px 14px; border-top:1px solid var(--border)">
+              <button class="link-btn" data-goto="logs">View full request log →</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick start -->
+        <div class="card" style="margin-bottom:14px">
+          <div class="qs">
+            <div class="qs-left">
+              <h4>Point your app at the router</h4>
+              <p>One base URL and one key. Every provider you connect becomes available behind it — no code changes per provider.</p>
+              <div class="field">
+                <label for="baseUrlVal">Base URL</label>
+                <div class="copyline">
+                  <span class="val" id="baseUrlVal">http://localhost:8080/v1</span>
+                  <button class="btn small" data-copy="http://localhost:8080/v1">Copy</button>
+                </div>
+              </div>
+              <div class="field" style="margin-bottom:0">
+                <label for="routerKeyVal">Router API key</label>
+                <div class="copyline">
+                  <span class="val" id="routerKeyVal">cr_live_9f2ka…x41d</span>
+                  <button class="btn small" data-copy="cr_live_9f2ka7d3x41d">Copy</button>
+                  <button class="btn small" id="revealKeyBtn">Reveal</button>
+                </div>
+              </div>
+            </div>
+            <div class="codeblock"><span class="cm"># Works with the OpenAI SDK — just change base_url</span>
+<span class="kw">from</span> openai <span class="kw">import</span> OpenAI
+
+client = OpenAI(
+    base_url=<span class="st">"http://localhost:8080/v1"</span>,
+    api_key=<span class="st">"cr_live_9f2ka7d3x41d"</span>,
+)
+
+resp = client.chat.completions.create(
+    model=<span class="st">"auto"</span>,  <span class="cm"># router picks the best live provider</span>
+    messages=[{<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: <span class="st">"Hello"</span>}],
+)</div>
+          </div>
+        </div>
+
+        <!-- Recent requests -->
+        <div class="card">
+          <div class="card-head">
+            <h3>Recent requests</h3>
+            <div class="right"><button class="link-btn" data-goto="logs">All requests →</button></div>
+          </div>
+          <div class="table-wrap" style="margin-top:10px">
+            <table>
+              <thead><tr><th>Time</th><th>Requested model</th><th>Routed to</th><th class="num">Tokens</th><th class="num">Latency</th><th class="num">Cost</th><th>Status</th></tr></thead>
+              <tbody id="recentBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= PROVIDERS ================= -->
+      <section class="view" id="view-providers">
+        <div class="page-head">
+          <div>
+            <h1>Providers</h1>
+            <p>Connect a provider once with its API key. Its models appear in the catalog instantly.</p>
+          </div>
+          <div class="head-actions">
+            <button class="btn primary" id="addCustomBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              Add custom provider
+            </button>
+          </div>
+        </div>
+
+        <div class="steps">
+          <div class="step card done">
+            <div class="step-n">✓</div>
+            <div><h4>Pick a provider</h4><p>Any OpenAI-compatible endpoint works — or a local Ollama instance with no key at all.</p></div>
+          </div>
+          <div class="step card done">
+            <div class="step-n">✓</div>
+            <div><h4>Paste the API key</h4><p>Keys are encrypted on this machine and never leave it. One paste, one click — connected.</p></div>
+          </div>
+          <div class="step card">
+            <div class="step-n">3</div>
+            <div><h4>Route with one key</h4><p>Use model <span class="mono" style="font-size:12px">"auto"</span> or pin any model. Failover switches provider mid-request if one goes down.</p></div>
+          </div>
+        </div>
+
+        <div class="prov-grid" id="provGrid"></div>
+      </section>
+
+      <!-- ================= MODELS ================= -->
+      <section class="view" id="view-models">
+        <div class="page-head">
+          <div>
+            <h1>Models</h1>
+            <p>Every model from your connected providers, in one catalog. Prices per 1M tokens.</p>
+          </div>
+          <div class="head-actions">
+            <div class="seg" id="capSeg">
+              <button data-cap="all" class="on">All</button>
+              <button data-cap="tools">Tools</button>
+              <button data-cap="json">JSON</button>
+              <button data-cap="reasoning">Reasoning</button>
+              <button data-cap="vision">Vision</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head" style="padding-bottom:2px">
+            <div class="search" style="margin:0; max-width:340px; flex:none">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+              <input id="modelSearch" type="search" placeholder="Filter models… e.g. gpt, llama, cheap" aria-label="Filter models" style="padding-right:12px" />
+            </div>
+            <div class="right"><span class="sub" id="modelCount"></span></div>
+          </div>
+          <div class="table-wrap" style="margin-top:8px">
+            <table>
+              <thead><tr><th>Model</th><th>Provider</th><th class="num">Context</th><th class="num">Input / 1M</th><th class="num">Output / 1M</th><th class="num">Throughput</th><th>Capabilities</th><th>Status</th></tr></thead>
+              <tbody id="modelBody"></tbody>
+            </table>
+          </div>
+          <div class="card-body" id="modelEmpty" style="display:none; color:var(--text-2)">No models match that filter. Try a different capability or search term.</div>
+        </div>
+      </section>
+
+      <!-- ================= API KEYS ================= -->
+      <section class="view" id="view-keys">
+        <div class="page-head">
+          <div>
+            <h1>API Keys</h1>
+            <p>Your router key works with any OpenAI-compatible SDK. Provider keys stay encrypted on this machine.</p>
+          </div>
+          <div class="head-actions"><button class="btn primary" id="newKeyBtn">+ New router key</button></div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-head"><h3>Router keys</h3><span class="sub">Use these in your apps</span></div>
+          <div style="padding-top:8px" id="routerKeys">
+            <div class="key-row">
+              <span class="dot green"></span>
+              <div><div class="key-name">Default key</div><div class="key-meta">Created 11 Nov 2026 · Last used 2 min ago · All providers</div></div>
+              <span class="key-val" style="margin-left:auto">cr_live_9f2ka7d3x41d</span>
+              <button class="btn small" data-copy="cr_live_9f2ka7d3x41d">Copy</button>
+              <button class="btn small danger" data-revoke>Revoke</button>
+            </div>
+            <div class="key-row">
+              <span class="dot green"></span>
+              <div><div class="key-name">Codvian app (dev)</div><div class="key-meta">Created 14 Nov 2026 · Last used 1 h ago · Rate limit 600 rpm</div></div>
+              <span class="key-val" style="margin-left:auto">cr_live_51md02b8q7we</span>
+              <button class="btn small" data-copy="cr_live_51md02b8q7we">Copy</button>
+              <button class="btn small danger" data-revoke>Revoke</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>Provider keys</h3><span class="sub">Stored encrypted · AES-256-GCM</span><div class="right"><button class="link-btn" data-goto="providers">Manage in Providers →</button></div></div>
+          <div style="padding-top:8px" id="providerKeys"></div>
+        </div>
+      </section>
+
+      <!-- ================= LOGS ================= -->
+      <section class="view" id="view-logs">
+        <div class="page-head">
+          <div>
+            <h1>Request Logs</h1>
+            <p>Every request through the router — including failovers, so nothing fails silently.</p>
+          </div>
+          <div class="head-actions">
+            <div class="seg" id="logSeg">
+              <button data-log="all" class="on">All</button>
+              <button data-log="ok">Success</button>
+              <button data-log="failover">Failovers</button>
+              <button data-log="error">Errors</button>
+            </div>
+            <button class="btn" id="exportLogsBtn">Export CSV</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Time</th><th>Requested</th><th>Routed to</th><th class="num">Tokens in / out</th><th class="num">Latency</th><th class="num">Cost</th><th>Status</th></tr></thead>
+              <tbody id="logBody"></tbody>
+            </table>
+          </div>
+          <div class="card-body" id="logEmpty" style="display:none; color:var(--text-2)">No requests in this category yet.</div>
+        </div>
+      </section>
+
+      <!-- ================= USAGE ================= -->
+      <section class="view" id="view-usage">
+        <div class="page-head">
+          <div>
+            <h1>Usage &amp; Cost</h1>
+            <p>Where tokens and money actually go, per provider and per model.</p>
+          </div>
+        </div>
+        <div class="kpis3">
+          <div class="card kpi">
+            <div class="kpi-top"><span class="kpi-label">Spend this month</span><span class="pill up">Cache saved $41.07</span></div>
+            <div class="kpi-value">$96.30</div>
+            <div class="kpi-note">Across 6 providers · Nov 1 – 17</div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-top"><span class="kpi-label">Cheapest route share</span><span class="pill up">↑ 9.3%</span></div>
+            <div class="kpi-value">57<span class="unit"> %</span></div>
+            <div class="kpi-note">Requests served by the lowest-cost healthy provider</div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-top"><span class="kpi-label">Failovers absorbed</span><span class="pill flat">0 user-visible errors</span></div>
+            <div class="kpi-value">23</div>
+            <div class="kpi-note">Provider failures your apps never saw</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Spend by provider</h3><span class="sub">November 2026</span></div>
+          <div style="padding:14px 18px 18px" id="spendBars"></div>
+        </div>
+      </section>
+
+      <!-- ================= SETTINGS ================= -->
+      <section class="view" id="view-settings">
+        <div class="page-head">
+          <div>
+            <h1>Settings</h1>
+            <p>Router behaviour. Changes apply instantly — no restart needed.</p>
+          </div>
+        </div>
+        <div class="set-grid">
+          <div class="card set-nav">
+            <button class="on">Routing</button>
+            <button data-goto="providers">Providers</button>
+            <button data-goto="keys">API Keys</button>
+            <button data-goto="logs">Logging</button>
+          </div>
+          <div>
+            <div class="card" style="margin-bottom:14px">
+              <div class="card-head"><h3>Routing</h3></div>
+              <div style="padding-top:6px">
+                <div class="set-row">
+                  <div class="txt"><b>Automatic failover</b><span>If a provider errors or times out, retry the request on the next healthy provider — mid-request, under a second.</span></div>
+                  <button class="switch" role="switch" aria-checked="true" aria-label="Automatic failover"></button>
+                </div>
+                <div class="set-row">
+                  <div class="txt"><b>Prompt-cache pinning</b><span>Keep a conversation on one provider + key so its prompt cache stays warm and reads bill at 0.1×.</span></div>
+                  <button class="switch" role="switch" aria-checked="true" aria-label="Prompt-cache pinning"></button>
+                </div>
+                <div class="set-row">
+                  <div class="txt"><b>Cost-aware routing</b><span>For model “auto”, prefer the cheapest provider that meets the latency target.</span></div>
+                  <button class="switch" role="switch" aria-checked="true" aria-label="Cost-aware routing"></button>
+                </div>
+                <div class="set-row">
+                  <div class="txt"><b>Routing strategy</b><span>How “auto” scores providers.</span></div>
+                  <select class="sel" id="strategySel">
+                    <option>Balanced — latency + cost</option>
+                    <option>Fastest first</option>
+                    <option>Cheapest first</option>
+                    <option>Round robin</option>
+                  </select>
+                </div>
+                <div class="set-row">
+                  <div class="txt"><b>Request timeout</b><span>Seconds before a request counts as failed and failover kicks in.</span></div>
+                  <input class="num mono" type="number" value="30" min="5" max="300" aria-label="Request timeout in seconds" />
+                </div>
+                <div class="set-row">
+                  <div class="txt"><b>Health checks</b><span>Ping every provider on an interval and keep the uptime record.</span></div>
+                  <button class="switch" role="switch" aria-checked="true" aria-label="Health checks"></button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card" style="margin-bottom:14px">
+              <div class="card-head"><h3>Server</h3></div>
+              <div style="padding-top:6px">
+                <div class="set-row">
+                  <div class="txt"><b>Listen address</b><span>Localhost only is safest. LAN lets other devices on your network use this router.</span></div>
+                  <select class="sel"><option>localhost only</option><option>LAN (0.0.0.0)</option></select>
+                </div>
+                <div class="set-row">
+                  <div class="txt"><b>Port</b><span>The dashboard and API share this port.</span></div>
+                  <input class="num mono" type="number" value="8080" min="1024" max="65535" aria-label="Port" />
+                </div>
+                <div class="set-row">
+                  <div class="txt"><b>Request logging</b><span>Store request metadata locally. Prompt and response bodies are never stored.</span></div>
+                  <button class="switch" role="switch" aria-checked="true" aria-label="Request logging"></button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card danger">
+              <div class="card-head"><h3>Danger zone</h3></div>
+              <div style="padding-top:6px">
+                <div class="set-row">
+                  <div class="txt"><b>Revoke all router keys</b><span>Every app using this router stops working until you issue new keys.</span></div>
+                  <button class="btn danger" id="revokeAllBtn">Revoke all</button>
+                </div>
+                <div class="set-row">
+                  <div class="txt"><b>Reset configuration</b><span>Remove all provider keys and restore defaults. This cannot be undone.</span></div>
+                  <button class="btn danger" id="resetBtn">Reset config</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(s, c){ return (c||document).querySelector(s); };
+  var $$ = function(s, c){ return Array.prototype.slice.call((c||document).querySelectorAll(s)); };
+
+  /* ---------- Toast ---------- */
+  var toastTimer = null;
+  function toast(msg){
+    var t = $("#toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ t.classList.remove("show"); }, 2400);
+  }
+
+  /* ---------- Navigation ---------- */
+  var titles = { overview:"Overview", providers:"Providers", models:"Models", keys:"API Keys", logs:"Logs", usage:"Usage", settings:"Settings" };
+  var viewTimer = null;
+  function go(view){
+    var target = $("#view-" + view); if(!target) return;
+    /* Nav, breadcrumb and mobile sidebar respond instantly so the click
+       feels acknowledged; only the content cross-fades. Any section
+       added later just needs a .view, a data-view item and a title. */
+    $$("#mainNav .nav-item[data-view]").forEach(function(n){ n.classList.toggle("active", n.getAttribute("data-view") === view); });
+    var crumb = $("#crumbNow");
+    crumb.textContent = titles[view] || view.charAt(0).toUpperCase() + view.slice(1);
+    crumb.classList.remove("crumb-swap"); void crumb.offsetWidth; crumb.classList.add("crumb-swap");
+    $("#sidebar").classList.remove("open"); $("#scrim").classList.remove("on");
+    var current = $(".view.on");
+    clearTimeout(viewTimer);
+    if(!current || current === target){
+      /* Same section (or first paint): settle instantly, no re-animation. */
+      $$(".view.leaving").forEach(function(v){ v.classList.remove("leaving"); });
+      if(!current){ target.classList.remove("leaving"); target.classList.add("on"); window.scrollTo(0,0); }
+      return;
+    }
+    if(current.classList.contains("leaving")){
+      /* A switch is already mid-fade: finish it instantly and move on. */
+      current.classList.remove("on"); current.classList.remove("leaving");
+      target.classList.remove("leaving"); target.classList.add("on");
+      window.scrollTo(0,0);
+      return;
+    }
+    /* Phase 1 — outgoing view fades and lifts away (~150ms). */
+    current.classList.add("leaving");
+    /* Phase 2 — incoming view eases in (see .view.on animation in CSS). */
+    viewTimer = setTimeout(function(){
+      current.classList.remove("on"); current.classList.remove("leaving");
+      target.classList.remove("leaving"); target.classList.add("on");
+      window.scrollTo(0,0);
+    }, 150);
+  }
+  $$("#mainNav .nav-item[data-view]").forEach(function(n){
+    n.addEventListener("click", function(){ go(n.getAttribute("data-view")); });
+  });
+  document.addEventListener("click", function(e){
+    var g = e.target.closest("[data-goto]");
+    if(g){ go(g.getAttribute("data-goto")); }
+  });
+  $("#hamburger").addEventListener("click", function(){ $("#sidebar").classList.add("open"); $("#scrim").classList.add("on"); });
+  $("#scrim").addEventListener("click", function(){ $("#sidebar").classList.remove("open"); $("#scrim").classList.remove("on"); });
+
+  /* ---------- Theme ---------- */
+  var dark = false;
+  try{ dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches && false; }catch(e){}
+  function applyTheme(){
+    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    $("#themeIconSun").style.display = dark ? "none" : "";
+    $("#themeIconMoon").style.display = dark ? "" : "none";
+  }
+  $("#themeBtn").addEventListener("click", function(){ dark = !dark; applyTheme(); });
+  applyTheme();
+
+  /* ---------- Copy ---------- */
+  document.addEventListener("click", function(e){
+    var c = e.target.closest("[data-copy]");
+    if(!c) return;
+    var text = c.getAttribute("data-copy");
+    function done(){ toast("Copied to clipboard"); }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){ toast(text); });
+    } else { toast(text); }
+  });
+
+  /* ---------- Data ---------- */
+  var providers = [
+    { id:"openai",    name:"OpenAI",     init:"O",  desc:"GPT-4o, GPT-4o mini, o-series", models:14, uptime:"99.98%", lat:"212 ms", connected:true,  key:"sk-…8f2d", health:"ok",   note:"Operational" },
+    { id:"anthropic", name:"Anthropic",  init:"A",  desc:"Claude Sonnet & Haiku",         models:9,  uptime:"99.95%", lat:"268 ms", connected:true,  key:"sk-ant-…c41a", health:"ok", note:"Operational" },
+    { id:"gemini",    name:"Google Gemini", init:"G", desc:"Gemini 2.5 Pro & Flash",       models:11, uptime:"99.91%", lat:"301 ms", connected:true,  key:"AIza…9xk2", health:"ok",   note:"Operational" },
+    { id:"groq",      name:"Groq",       init:"G",  desc:"Llama & Mixtral at full speed", models:8,  uptime:"99.87%", lat:"96 ms",  connected:true,  key:"gsk_…m7q1", health:"ok",  note:"Operational" },
+    { id:"openrouter",name:"OpenRouter", init:"OR", desc:"80+ more models behind one key", models:82, uptime:"99.62%", lat:"388 ms", connected:true,  key:"sk-or-…51bd", health:"warn", note:"Degraded · 2 slow regions" },
+    { id:"deepseek",  name:"DeepSeek",   init:"D",  desc:"DeepSeek Chat & Reasoner",      models:4,  uptime:"99.99%", lat:"342 ms", connected:true,  key:"sk-…77e0", health:"ok",   note:"Operational" },
+    { id:"mistral",   name:"Mistral AI", init:"M",  desc:"Mistral Large, Medium, Codestral", models:12, uptime:"—", lat:"—", connected:false, key:"", health:"off", note:"Not connected" },
+    { id:"ollama",    name:"Ollama (local)", init:"O", desc:"Models on this machine · no key needed", models:6, uptime:"100%", lat:"18 ms", connected:false, key:"", health:"off", note:"Not connected" }
+  ];
+
+  function seeded(seed){ var x = seed; return function(){ x = (x * 1103515245 + 12345) % 2147483648; return x / 2147483648; }; }
+
+  /* Provider health rows (Overview) */
+  function renderHealth(){
+    var host = $("#healthList"); host.innerHTML = "";
+    providers.filter(function(p){ return p.connected; }).forEach(function(p, idx){
+      var rnd = seeded(1000 + idx * 77);
+      var bars = "";
+      for(var d = 0; d < 30; d++){
+        var r = rnd(); var cls = "";
+        if(p.health === "warn" && (d === 9 || d === 21)) cls = "warn";
+        if(p.id === "openrouter" && d === 17) cls = "out";
+        if(r > 0.985) cls = "warn";
+        bars += '<i class="' + cls + '"></i>';
+      }
+      var chip = p.health === "warn"
+        ? '<span class="status-chip warn"><span class="dot amber"></span> Degraded</span>'
+        : '<span class="status-chip ok"><span class="dot green"></span> Operational</span>';
+      var row = document.createElement("div"); row.className = "prov-row";
+      row.innerHTML =
+        '<div class="prov-id"><div class="prov-logo">' + p.init + '</div><div style="min-width:0"><div class="prov-name">' + p.name + '</div><div class="prov-sub">' + p.models + ' models</div></div></div>' +
+        '<div class="uptime"><div class="uptime-bars">' + bars + '</div><div class="uptime-meta"><span>30 days ago</span><span>' + p.uptime + ' uptime</span><span>Today</span></div></div>' +
+        '<div class="prov-stat"><div class="v mono">' + p.lat + '</div><div class="l">p50 latency</div></div>' +
+        '<div>' + chip + '</div>';
+      host.appendChild(row);
+    });
+  }
+  renderHealth();
+
+  /* Provider cards */
+  function renderProviders(){
+    var grid = $("#provGrid"); grid.innerHTML = "";
+    providers.forEach(function(p){
+      var card = document.createElement("div"); card.className = "card prov-card";
+      var chip = p.connected
+        ? (p.health === "warn" ? '<span class="status-chip warn"><span class="dot amber"></span> Degraded</span>' : '<span class="status-chip ok"><span class="dot green"></span> Connected</span>')
+        : '<span class="status-chip off"><span class="dot grey"></span> Not connected</span>';
+      var stats = p.connected
+        ? '<div class="s"><div class="v">' + p.models + '</div><div class="l">Models</div></div><div class="s"><div class="v mono">' + p.lat + '</div><div class="l">p50 latency</div></div><div class="s"><div class="v">' + p.uptime + '</div><div class="l">30d uptime</div></div>'
+        : '<div class="s"><div class="v">' + p.models + '</div><div class="l">Models available</div></div><div class="s"><div class="v">—</div><div class="l">p50 latency</div></div><div class="s"><div class="v">—</div><div class="l">30d uptime</div></div>';
+      var actions = p.connected
+        ? '<button class="btn small" data-act="test">Test connection</button><button class="btn small" data-act="manage">Manage key</button>'
+        : '<button class="btn small primary" data-act="connect">' + (p.id === "ollama" ? "Connect local instance" : "Connect") + '</button><a class="btn small" href="#" data-act="getkey">Get API key ↗</a>';
+      card.innerHTML =
+        '<div class="prov-card-top"><div class="prov-logo">' + p.init + '</div><div style="min-width:0"><h3>' + p.name + '</h3><div class="desc">' + p.desc + '</div></div>' + chip + '</div>' +
+        '<div class="prov-stats">' + stats + '</div>' +
+        '<div class="connect-box"><input type="password" placeholder="' + (p.id === "ollama" ? "http://localhost:11434" : "Paste API key — e.g. sk-…") + '" aria-label="API key for ' + p.name + '" /><div class="hint">' + (p.id === "ollama" ? "Default Ollama address. No key needed." : "Stored encrypted on this machine only. We test it once, then it just works.") + '</div></div>' +
+        '<div class="prov-actions">' + actions + '</div>';
+      card.querySelectorAll("[data-act]").forEach(function(b){
+        b.addEventListener("click", function(ev){
+          ev.preventDefault();
+          var act = b.getAttribute("data-act");
+          var box = card.querySelector(".connect-box");
+          if(act === "connect"){
+            if(box.classList.contains("open")){ finishConnect(p, card); }
+            else { box.classList.add("open"); var inp = box.querySelector("input"); if(inp) inp.focus(); b.textContent = p.id === "ollama" ? "Connect now" : "Connect provider"; }
+          }
+          if(act === "getkey"){ toast("Opening " + p.name + " key page in your browser…"); }
+          if(act === "test"){ b.textContent = "Testing…"; setTimeout(function(){ b.textContent = "Test connection"; toast(p.name + " · reachable · " + p.lat + " p50"); }, 650); }
+          if(act === "manage"){ box.classList.add("open"); box.querySelector("input").value = ""; box.querySelector("input").placeholder = "Paste a replacement key…"; toast("Paste a new key to rotate it"); }
+        });
+      });
+      var inp = card.querySelector(".connect-box input");
+      if(inp){ inp.addEventListener("keydown", function(e){ if(e.key === "Enter"){ finishConnect(p, card); } }); }
+      grid.appendChild(card);
+    });
+  }
+  function finishConnect(p, card){
+    var inp = card.querySelector(".connect-box input");
+    if(p.id !== "ollama" && (!inp.value || inp.value.trim().length < 6)){ toast("Paste a valid API key first"); inp.focus(); return; }
+    p.connected = true; p.health = "ok"; p.note = "Operational"; if(p.id !== "ollama"){ p.key = "key…just now"; } p.lat = p.lat === "—" ? "240 ms" : p.lat; p.uptime = p.uptime === "—" ? "100%" : p.uptime;
+    var liveCount = providers.filter(function(x){ return x.connected; }).length;
+    var badge = $("#provBadge"); if(badge) badge.textContent = liveCount + " of " + providers.length;
+    var ipc = $("#instProvCount"); if(ipc) ipc.textContent = liveCount;
+    renderProviders(); renderHealth(); renderProviderKeys();
+    toast(p.name + " connected — " + p.models + " models now available");
+  }
+  renderProviders();
+
+  /* Provider keys list */
+  function renderProviderKeys(){
+    var host = $("#providerKeys"); host.innerHTML = "";
+    providers.forEach(function(p){
+      var row = document.createElement("div"); row.className = "key-row";
+      if(p.connected){
+        row.innerHTML = '<span class="dot ' + (p.health === "warn" ? "amber" : "green") + '"></span><div><div class="key-name">' + p.name + '</div><div class="key-meta">' + p.note + ' · ' + p.models + ' models</div></div><span class="key-val" style="margin-left:auto">' + (p.id === "ollama" ? "no key · local" : p.key) + '</span><button class="btn small" data-goto="providers">Manage</button>';
+      } else {
+        row.innerHTML = '<span class="dot grey"></span><div><div class="key-name">' + p.name + '</div><div class="key-meta">Not connected</div></div><button class="btn small" style="margin-left:auto" data-goto="providers">Connect</button>';
+      }
+      host.appendChild(row);
+    });
+    $$("[data-goto]", host).forEach(function(b){ b.addEventListener("click", function(){ go("providers"); }); });
+  }
+  renderProviderKeys();
+
+  /* ---------- Models ---------- */
+  var models = [
+    { name:"gpt-4o", prov:"OpenAI", ctx:"128K", inP:2.50, outP:10.00, tps:"86 tok/s", caps:["tools","json","vision"], on:true },
+    { name:"gpt-4o-mini", prov:"OpenAI", ctx:"128K", inP:0.15, outP:0.60, tps:"112 tok/s", caps:["tools","json","vision"], on:true, cheap:true },
+    { name:"claude-sonnet-4-5", prov:"Anthropic", ctx:"200K", inP:3.00, outP:15.00, tps:"74 tok/s", caps:["tools","json","vision","reasoning"], on:true },
+    { name:"claude-haiku-4-5", prov:"Anthropic", ctx:"200K", inP:1.00, outP:5.00, tps:"118 tok/s", caps:["tools","json","vision"], on:true },
+    { name:"gemini-2.5-pro", prov:"Google Gemini", ctx:"1M", inP:1.25, outP:10.00, tps:"92 tok/s", caps:["tools","json","vision","reasoning"], on:true },
+    { name:"gemini-2.5-flash", prov:"Google Gemini", ctx:"1M", inP:0.30, outP:2.50, tps:"164 tok/s", caps:["tools","json","vision"], on:true, cheap:true },
+    { name:"llama-3.3-70b-versatile", prov:"Groq", ctx:"128K", inP:0.59, outP:0.79, tps:"394 tok/s", caps:["tools","json"], on:true, cheap:true },
+    { name:"deepseek-chat", prov:"DeepSeek", ctx:"128K", inP:0.27, outP:1.10, tps:"68 tok/s", caps:["tools","json"], on:true, cheap:true },
+    { name:"deepseek-reasoner", prov:"DeepSeek", ctx:"128K", inP:0.55, outP:2.19, tps:"41 tok/s", caps:["json","reasoning"], on:true },
+    { name:"qwen-2.5-coder-32b", prov:"OpenRouter", ctx:"128K", inP:0.40, outP:1.20, tps:"88 tok/s", caps:["tools","json"], on:true },
+    { name:"mistral-large-2411", prov:"Mistral AI", ctx:"128K", inP:2.00, outP:6.00, tps:"—", caps:["tools","json"], on:false },
+    { name:"llama3.1:8b (local)", prov:"Ollama (local)", ctx:"128K", inP:0, outP:0, tps:"54 tok/s", caps:["json"], on:false }
+  ];
+  var capFilter = "all", modelQuery = "";
+  function money(v){ return v === 0 ? "Free" : "$" + v.toFixed(2); }
+  function renderModels(){
+    var body = $("#modelBody"); body.innerHTML = ""; var shown = 0;
+    models.forEach(function(m){
+      if(capFilter !== "all" && m.caps.indexOf(capFilter) === -1) return;
+      if(modelQuery && (m.name + " " + m.prov).toLowerCase().indexOf(modelQuery) === -1) return;
+      shown++;
+      var tr = document.createElement("tr");
+      var caps = m.caps.map(function(c){ return '<span class="tag">' + c + '</span>'; }).join("") + (m.cheap ? ' <span class="tag hot">Low cost</span>' : "");
+      tr.innerHTML =
+        '<td><span class="mono" style="font-size:12.5px; font-weight:500">' + m.name + '</span></td>' +
+        '<td style="color:var(--text-2)">' + m.prov + '</td>' +
+        '<td class="num mono" style="font-size:12.5px">' + m.ctx + '</td>' +
+        '<td class="num">' + money(m.inP) + '</td><td class="num">' + money(m.outP) + '</td>' +
+        '<td class="num" style="color:var(--text-2)">' + m.tps + '</td>' +
+        '<td>' + caps + '</td>' +
+        '<td>' + (m.on ? '<span class="status-chip ok"><span class="dot green"></span> Live</span>' : '<span class="status-chip off">Connect provider</span>') + '</td>';
+      body.appendChild(tr);
+    });
+    $("#modelCount").textContent = shown + " shown · 128 models in catalog";
+    $("#modelEmpty").style.display = shown ? "none" : "block";
+  }
+  renderModels();
+  $$("#capSeg button").forEach(function(b){
+    b.addEventListener("click", function(){
+      $$("#capSeg button").forEach(function(x){ x.classList.remove("on"); });
+      b.classList.add("on"); capFilter = b.getAttribute("data-cap"); renderModels();
+    });
+  });
+  $("#modelSearch").addEventListener("input", function(e){ modelQuery = e.target.value.trim().toLowerCase(); renderModels(); });
+
+  /* ---------- Requests / logs ---------- */
+  var reqPool = [
+    { req:"gpt-4o-mini", to:"OpenAI", tin:1240, tout:312, lat:486, cost:0.0004, st:"ok" },
+    { req:"auto", to:"Groq · llama-3.3-70b", tin:842, tout:196, lat:231, cost:0.0006, st:"ok" },
+    { req:"claude-sonnet-4-5", to:"Anthropic", tin:3120, tout:884, lat:1240, cost:0.0228, st:"ok" },
+    { req:"auto", to:"Gemini · 2.5-flash", tin:640, tout:150, lat:318, cost:0.0006, st:"ok" },
+    { req:"gpt-4o", to:"OpenRouter → OpenAI", tin:1980, tout:402, lat:2210, cost:0.0090, st:"failover", note:"OpenAI 429 → rerouted" },
+    { req:"deepseek-chat", to:"DeepSeek", tin:2210, tout:530, lat:764, cost:0.0012, st:"ok" },
+    { req:"auto", to:"Anthropic · haiku-4-5", tin:415, tout:98, lat:290, cost:0.0009, st:"ok" },
+    { req:"gemini-2.5-pro", to:"Google Gemini", tin:5210, tout:1102, lat:1680, cost:0.0175, st:"ok" },
+    { req:"gpt-4o-mini", to:"—", tin:0, tout:0, lat:30012, cost:0, st:"error", note:"All providers timed out" }
+  ];
+  function statusChip(st, note){
+    if(st === "ok") return '<span class="status-chip ok"><span class="dot green"></span> 200 OK</span>';
+    if(st === "failover") return '<span class="status-chip warn" title="' + (note||"") + '"><span class="dot amber"></span> Failover</span>';
+    return '<span class="status-chip" style="color:var(--red); background:var(--red-bg)"><span class="dot red"></span> Error</span>';
+  }
+  function timeStr(minAgo){
+    var d = new Date(Date.now() - minAgo * 60000);
+    return d.toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+  }
+  function renderRecent(){
+    var body = $("#recentBody"); body.innerHTML = "";
+    reqPool.slice(0, 6).forEach(function(r, i){
+      var tr = document.createElement("tr");
+      tr.innerHTML = '<td class="mono" style="font-size:12px; color:var(--text-2)">' + timeStr(i * 3 + 1) + '</td>' +
+        '<td><span class="mono" style="font-size:12.5px">' + r.req + '</span></td>' +
+        '<td style="color:var(--text-2)">' + r.to + '</td>' +
+        '<td class="num">' + (r.tin + r.tout).toLocaleString("en-IN") + '</td>' +
+        '<td class="num">' + r.lat.toLocaleString("en-IN") + ' ms</td>' +
+        '<td class="num">$' + r.cost.toFixed(4) + '</td>' +
+        '<td>' + statusChip(r.st, r.note) + '</td>';
+      body.appendChild(tr);
+    });
+  }
+  renderRecent();
+
+  var logFilter = "all";
+  function renderLogs(){
+    var body = $("#logBody"); body.innerHTML = ""; var shown = 0;
+    reqPool.forEach(function(r, i){
+      if(logFilter === "ok" && r.st !== "ok") return;
+      if(logFilter === "failover" && r.st !== "failover") return;
+      if(logFilter === "error" && r.st !== "error") return;
+      shown++;
+      var tr = document.createElement("tr");
+      tr.innerHTML = '<td class="mono" style="font-size:12px; color:var(--text-2)">' + timeStr(i * 7 + 2) + '</td>' +
+        '<td><span class="mono" style="font-size:12.5px">' + r.req + '</span>' + (r.note ? '<div style="font-size:11.5px; color:var(--text-3)">' + r.note + '</div>' : '') + '</td>' +
+        '<td style="color:var(--text-2)">' + r.to + '</td>' +
+        '<td class="num">' + r.tin.toLocaleString("en-IN") + ' / ' + r.tout.toLocaleString("en-IN") + '</td>' +
+        '<td class="num">' + r.lat.toLocaleString("en-IN") + ' ms</td>' +
+        '<td class="num">$' + r.cost.toFixed(4) + '</td>' +
+        '<td>' + statusChip(r.st, r.note) + '</td>';
+      body.appendChild(tr);
+    });
+    $("#logEmpty").style.display = shown ? "none" : "block";
+  }
+  renderLogs();
+  $$("#logSeg button").forEach(function(b){
+    b.addEventListener("click", function(){
+      $$("#logSeg button").forEach(function(x){ x.classList.remove("on"); });
+      b.classList.add("on"); logFilter = b.getAttribute("data-log"); renderLogs();
+    });
+  });
+  $("#exportLogsBtn").addEventListener("click", function(){
+    var csv = "time,requested,routed_to,tokens_in,tokens_out,latency_ms,cost_usd,status\n" +
+      reqPool.map(function(r, i){ return [timeStr(i*7+2), r.req, '"' + r.to + '"', r.tin, r.tout, r.lat, r.cost.toFixed(4), r.st].join(","); }).join("\n");
+    var a = document.createElement("a");
+    a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+    a.download = "codvian-router-logs.csv"; document.body.appendChild(a); a.click(); a.remove();
+    toast("Logs exported as CSV");
+  });
+
+  /* Live feed */
+  var feedModels = [
+    ["gpt-4o-mini","OpenAI"],["auto → llama-3.3-70b","Groq"],["claude-sonnet-4-5","Anthropic"],
+    ["auto → gemini-2.5-flash","Gemini"],["deepseek-chat","DeepSeek"],["gpt-4o","OpenAI"],["auto → haiku-4-5","Anthropic"]
+  ];
+  var feedIdx = 0;
+  function feedRow(){
+    var m = feedModels[feedIdx % feedModels.length]; feedIdx++;
+    var lat = 140 + Math.floor(Math.random() * 900);
+    var row = document.createElement("div"); row.className = "feed-row";
+    row.innerHTML = '<span class="time mono">' + timeStr(0) + '</span><span class="dot green"></span><span class="model mono" style="font-size:12.5px">' + m[0] + '</span><span class="to">via ' + m[1] + '</span><span class="lat mono">' + lat + ' ms</span>';
+    return row;
+  }
+  function initFeed(){
+    var feed = $("#liveFeed"); feed.innerHTML = "";
+    for(var i = 0; i < 5; i++) feed.appendChild(feedRow());
+  }
+  initFeed();
+  setInterval(function(){
+    if(document.hidden) return;
+    var feed = $("#liveFeed"); if(!feed) return;
+    feed.insertBefore(feedRow(), feed.firstChild);
+    while(feed.children.length > 5) feed.removeChild(feed.lastChild);
+  }, 5000);
+
+  /* ---------- Traffic chart + ranges ---------- */
+  var ranges = {
+    "24h": { sub:"Requests per hour · last 24 hours", axis:["−24h","−20h","−16h","−12h","−8h","−4h","Now"], maxR:3000,
+      req:[620,540,480,700,1150,1680,2100,2380,2050,1760,1980,2260], lat:[812,786,801,845,902,918,884,862,849,838,855,842], err:[4,3,5,4,7,9,6,8,5,4,6,5],
+      kpi:{ req:"48,210", reqPill:"↑ 12.4%", reqNote:"vs 42,890 in previous period", tok:"12.4", tokPill:"↑ 8.1%", tokNote:"9.1M prompt incl. 3.3M cached · 3.3M completion", lat:"842", latPill:"↓ 6.2% faster", latNote:"p50 212 ms · first token 148 ms", cost:"$18.42", costPill:"Cache saved $6.18", costNote:"25% cheaper than direct API use" } },
+    "7d": { sub:"Requests per day · last 7 days", axis:["Thu","Fri","Sat","Sun","Mon","Tue","Today"], maxR:3600,
+      req:[2900,3100,2400,2100,3300,3050,2600], lat:[864,902,845,831,918,896,876], err:[22,26,18,15,29,24,17],
+      kpi:{ req:"2,84,930", reqPill:"↑ 9.7%", reqNote:"vs 2,59,700 in previous period", tok:"74.8", tokPill:"↑ 11.2%", tokNote:"55.2M prompt incl. 19.8M cached · 19.6M completion", lat:"876", latPill:"↓ 3.1% faster", latNote:"p50 224 ms · first token 156 ms", cost:"$112.64", costPill:"Cache saved $38.90", costNote:"26% cheaper than direct API use" } },
+    "30d": { sub:"Requests per day · last 30 days", axis:["Week 1","","Week 2","","Week 3","","Week 4"], maxR:3600,
+      req:[2600,2900,2750,3200,3050,3400,3350], lat:[940,912,905,884,879,868,891], err:[24,21,26,19,22,18,16],
+      kpi:{ req:"11,42,380", reqPill:"↑ 21.6%", reqNote:"vs 9,39,120 in previous period", tok:"296", tokPill:"↑ 18.4%", tokNote:"218M prompt incl. 79M cached · 78M completion", lat:"891", latPill:"↓ 8.8% faster", latNote:"p50 231 ms · first token 161 ms", cost:"$438.17", costPill:"Cache saved $141.55", costNote:"24% cheaper than direct API use" } }
+  };
+  function smoothPath(pts){
+    if(pts.length < 3) return "M" + pts.map(function(p){ return p[0] + " " + p[1]; }).join(" L");
+    var d = "M" + pts[0][0] + " " + pts[0][1];
+    for(var i = 0; i < pts.length - 1; i++){
+      var p0 = pts[Math.max(0, i-1)], p1 = pts[i], p2 = pts[i+1], p3 = pts[Math.min(pts.length-1, i+2)];
+      var c1x = p1[0] + (p2[0]-p0[0])/6, c1y = p1[1] + (p2[1]-p0[1])/6;
+      var c2x = p2[0] - (p3[0]-p1[0])/6, c2y = p2[1] - (p3[1]-p1[1])/6;
+      d += " C" + c1x.toFixed(1) + " " + c1y.toFixed(1) + " " + c2x.toFixed(1) + " " + c2y.toFixed(1) + " " + p2[0] + " " + p2[1];
+    }
+    return d;
+  }
+  function drawChart(key){
+    var r = ranges[key]; if(!r) return;
+    var W = 720, top = 30, bottom = 195, left = 44, right = 690;
+    var maxReq = r.maxR || 3000;
+    var maxLat = 1200, maxErr = Math.max.apply(null, r.err) * 1.25;
+    function fmtK(v){ var s = (v/1000).toFixed(1); return (s.slice(-2) === ".0" ? s.slice(0,-2) : s) + "k"; }
+    $("#axL1").textContent = fmtK(maxReq);
+    $("#axL2").textContent = fmtK(maxReq * 2/3);
+    $("#axL3").textContent = fmtK(maxReq / 3);
+    function pts(arr, max){
+      return arr.map(function(v, i){
+        var x = left + (right - left) * (arr.length === 1 ? 0 : i / (arr.length - 1));
+        var y = bottom - (v / max) * (bottom - top);
+        return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
+      });
+    }
+    var rp = pts(r.req, maxReq);
+    $("#chartLine").setAttribute("d", smoothPath(rp));
+    $("#chartArea").setAttribute("d", smoothPath(rp) + " L" + right + " " + bottom + " L" + left + " " + bottom + " Z");
+    $("#chartLat").setAttribute("d", smoothPath(pts(r.lat, maxLat)));
+    var barsG = $("#chartErrBars"); barsG.innerHTML = "";
+    var maxErrRaw = Math.max.apply(null, r.err);
+    var rpX = pts(r.req, maxReq);
+    var bw = Math.max(6, Math.min(16, (right - left) / r.err.length * 0.42));
+    r.err.forEach(function(v, i){
+      var h = Math.max(2, (v / maxErrRaw) * 34);
+      var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rect.setAttribute("x", (rpX[i][0] - bw/2).toFixed(1)); rect.setAttribute("y", (bottom - h).toFixed(1));
+      rect.setAttribute("width", bw.toFixed(1)); rect.setAttribute("height", h.toFixed(1));
+      rect.setAttribute("rx", 1.5);
+      barsG.appendChild(rect);
+    });
+    var last = rp[rp.length - 1];
+    var dot = $("#chartDot"); dot.setAttribute("cx", last[0]); dot.setAttribute("cy", last[1]);
+    $("#chartSub").textContent = r.sub;
+    $("#chartAxis").innerHTML = r.axis.map(function(a){ return "<span>" + a + "</span>"; }).join("");
+    var k = r.kpi;
+    $('[data-kpi="req"]').textContent = k.req;
+    $('[data-kpi="reqPill"]').textContent = k.reqPill;
+    $('[data-kpi="reqNote"]').textContent = k.reqNote;
+    $('[data-kpi="tok"]').innerHTML = k.tok + '<span class="unit"> M</span>';
+    $('[data-kpi="tokPill"]').textContent = k.tokPill;
+    $('[data-kpi="tokNote"]').textContent = k.tokNote;
+    $('[data-kpi="lat"]').innerHTML = k.lat + '<span class="unit"> ms</span>';
+    $('[data-kpi="latPill"]').textContent = k.latPill;
+    $('[data-kpi="latNote"]').textContent = k.latNote;
+    $('[data-kpi="cost"]').textContent = k.cost;
+    $('[data-kpi="costPill"]').textContent = k.costPill;
+    $('[data-kpi="costNote"]').textContent = k.costNote;
+  }
+  drawChart("24h");
+  $$("#rangeSeg button").forEach(function(b){
+    b.addEventListener("click", function(){
+      $$("#rangeSeg button").forEach(function(x){ x.classList.remove("on"); });
+      b.classList.add("on"); drawChart(b.getAttribute("data-range"));
+    });
+  });
+  $("#refreshBtn").addEventListener("click", function(){ initFeed(); renderRecent(); toast("Dashboard refreshed · just now"); });
+
+  /* ---------- Usage bars ---------- */
+  var spend = [
+    { name:"Anthropic", amt:34.20, color:"#65A30D" }, { name:"OpenAI", amt:28.45, color:"#84CC16" },
+    { name:"Google Gemini", amt:16.80, color:"#737373" }, { name:"OpenRouter", amt:9.35, color:"#A3A3A3" },
+    { name:"DeepSeek", amt:4.90, color:"#3F6212" }, { name:"Groq", amt:2.60, color:"#8C1D18" }
+  ];
+  (function(){
+    var host = $("#spendBars"); var max = 34.20;
+    spend.forEach(function(s){
+      var row = document.createElement("div");
+      row.style.cssText = "display:flex; align-items:center; gap:14px; padding:7px 0";
+      row.innerHTML = '<span style="width:130px; font-size:13.5px; font-weight:500">' + s.name + '</span>' +
+        '<span style="flex:1"><span class="meter" style="display:block; height:8px"><i style="width:' + Math.round(s.amt / max * 100) + '%; background:' + s.color + '"></i></span></span>' +
+        '<b class="mono" style="font-size:13px; width:64px; text-align:right">$' + s.amt.toFixed(2) + '</b>';
+      host.appendChild(row);
+    });
+  })();
+
+  /* ---------- Keys ---------- */
+  var keyRevealed = false;
+  $("#revealKeyBtn").addEventListener("click", function(){
+    keyRevealed = !keyRevealed;
+    $("#routerKeyVal").textContent = keyRevealed ? "cr_live_9f2ka7d3x41d" : "cr_live_9f2ka…x41d";
+    this.textContent = keyRevealed ? "Hide" : "Reveal";
+  });
+  $("#newKeyBtn").addEventListener("click", function(){
+    var rand = Math.random().toString(36).slice(2, 10);
+    var val = "cr_live_" + rand + "x9";
+    var row = document.createElement("div"); row.className = "key-row";
+    row.innerHTML = '<span class="dot green"></span><div><div class="key-name">New key</div><div class="key-meta">Created just now · All providers</div></div><span class="key-val" style="margin-left:auto">' + val + '</span><button class="btn small" data-copy="' + val + '">Copy</button><button class="btn small danger" data-revoke>Revoke</button>';
+    $("#routerKeys").appendChild(row);
+    toast("New router key created — copy it now");
+  });
+  document.addEventListener("click", function(e){
+    var rv = e.target.closest("[data-revoke]");
+    if(rv){
+      var row = rv.closest(".key-row");
+      if(row){ row.style.opacity = ".45"; rv.textContent = "Revoked"; rv.disabled = true; toast("Key revoked"); }
+    }
+  });
+  $("#addCustomBtn").addEventListener("click", function(){ toast("Custom provider: any OpenAI-compatible base URL + key works the same way"); });
+
+  /* ---------- Settings ---------- */
+  $$(".switch").forEach(function(sw){
+    sw.addEventListener("click", function(){
+      var on = sw.getAttribute("aria-checked") === "true";
+      sw.setAttribute("aria-checked", on ? "false" : "true");
+      toast(sw.getAttribute("aria-label") + (on ? " turned off" : " turned on") + " · saved");
+    });
+  });
+  $("#strategySel").addEventListener("change", function(){ toast("Routing strategy saved"); });
+  var armState = {};
+  function armDanger(id, btn, label, doneMsg){
+    if(!armState[id]){
+      armState[id] = true; btn.textContent = "Click again to proceed";
+      setTimeout(function(){ armState[id] = false; btn.textContent = label; }, 3500);
+      return;
+    }
+    armState[id] = false; btn.textContent = label; toast(doneMsg);
+  }
+  $("#revokeAllBtn").addEventListener("click", function(){ armDanger("revokeAll", this, "Revoke all", "All router keys revoked — create a new one to reconnect apps"); });
+  $("#resetBtn").addEventListener("click", function(){ armDanger("reset", this, "Reset config", "Configuration reset to defaults"); });
+
+  /* ---------- Global search / shortcuts ---------- */
+  $("#globalSearch").addEventListener("keydown", function(e){
+    if(e.key === "Enter"){
+      var q = this.value.trim().toLowerCase();
+      if(!q) return;
+      if(q.indexOf("model") > -1 || q.indexOf("gpt") > -1 || q.indexOf("llama") > -1 || q.indexOf("claude") > -1){ go("models"); var ms = $("#modelSearch"); if(ms){ ms.value = this.value.trim(); modelQuery = q; renderModels(); } }
+      else if(q.indexOf("provider") > -1 || q.indexOf("key") > -1 && q.indexOf("api") > -1){ go("providers"); }
+      else if(q.indexOf("api") > -1 || q.indexOf("key") > -1){ go("keys"); }
+      else if(q.indexOf("log") > -1){ go("logs"); }
+      else if(q.indexOf("setting") > -1){ go("settings"); }
+      else { go("models"); var ms2 = $("#modelSearch"); if(ms2){ ms2.value = this.value.trim(); modelQuery = q; renderModels(); } }
+      this.value = "";
+    }
+  });
+  document.addEventListener("keydown", function(e){
+    if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"){
+      e.preventDefault(); var s = $("#globalSearch"); if(s) s.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>
