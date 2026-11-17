@@ -80,6 +80,49 @@ func TestResolveAuthGemini(t *testing.T) {
 	}
 }
 
+func TestResolveAuthCoherePerSurface(t *testing.T) {
+	p := mustProvider(t, "cohere")
+	// Native surface: Bearer on https://api.cohere.com, Cohere v2 wire.
+	native, err := ResolveAuth(p, EndpointNative, "", "co-test")
+	if err != nil {
+		t.Fatalf("cohere native: %v", err)
+	}
+	if native.Headers["Authorization"] != "Bearer co-test" {
+		t.Fatalf("cohere native Authorization = %q", native.Headers["Authorization"])
+	}
+	if native.BaseURL != "https://api.cohere.com" {
+		t.Fatalf("cohere native base = %q", native.BaseURL)
+	}
+	if native.Wire != WireCohere {
+		t.Fatalf("cohere native wire = %q, want cohere", native.Wire)
+	}
+	// OpenAI-compatible shim: Bearer on .../compatibility/v1, but the
+	// wire is OpenAI, NOT Cohere — the shim speaks /v1/chat/completions.
+	chat, err := ResolveAuth(p, EndpointChat, "", "co-test")
+	if err != nil {
+		t.Fatalf("cohere chat: %v", err)
+	}
+	if chat.Headers["Authorization"] != "Bearer co-test" {
+		t.Fatalf("cohere chat Authorization = %q", chat.Headers["Authorization"])
+	}
+	if chat.BaseURL != "https://api.cohere.com/compatibility/v1" {
+		t.Fatalf("cohere chat base = %q", chat.BaseURL)
+	}
+	if chat.Wire != WireOpenAI {
+		t.Fatalf("cohere chat wire = %q, want openai", chat.Wire)
+	}
+	// Base-URL lookup agrees: the native base resolves Cohere wire,
+	// the shim base resolves OpenAI wire.
+	res, found, err := ResolveAuthForBaseURL("https://api.cohere.com", "", "", "co-test")
+	if err != nil || !found || res.Wire != WireCohere {
+		t.Fatalf("base lookup native = %+v found=%v err=%v", res, found, err)
+	}
+	res, found, err = ResolveAuthForBaseURL("https://api.cohere.com/compatibility/v1", "", "", "co-test")
+	if err != nil || !found || res.Wire != WireOpenAI {
+		t.Fatalf("base lookup shim = %+v found=%v err=%v", res, found, err)
+	}
+}
+
 func TestResolveAuthDeepSeekPerSurface(t *testing.T) {
 	p := mustProvider(t, "deepseek")
 	chat, err := ResolveAuth(p, EndpointChat, "", "k")

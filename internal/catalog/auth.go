@@ -92,15 +92,21 @@ func ResolveAuth(p Provider, endpoint, variant, credential string) (AuthResoluti
 		wire = p.WireFormats[0]
 	}
 	// A surface whose base URL names the Anthropic path speaks the
-	// Anthropic wire; a Gemini base speaks Gemini. This keeps the
-	// reported wire honest for multi-surface providers whose
-	// WireFormats list is ordered by preference.
+	// Anthropic wire; a Gemini base speaks Gemini; an OpenAI
+	// compatibility shim speaks OpenAI wire even when the provider's
+	// preferred (first) wire is native (Cohere's
+	// /compatibility/v1 shim is OpenAI wire, its native base is
+	// Cohere v2). This keeps the reported wire honest for
+	// multi-surface providers whose WireFormats list is ordered by
+	// preference.
 	switch {
 	case strings.Contains(base, "/anthropic"):
 		wire = WireAnthropic
 	case strings.Contains(base, "generativelanguage.googleapis.com") ||
 		strings.Contains(base, "aiplatform.googleapis.com"):
 		wire = WireGemini
+	case strings.Contains(base, "/compatibility/v1"):
+		wire = WireOpenAI
 	case strings.Contains(base, "bedrock-runtime") || strings.Contains(base, "bedrock-mantle"):
 		if ep.Endpoint == EndpointConverse {
 			wire = WireBedrock
