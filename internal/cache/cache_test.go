@@ -2,6 +2,8 @@ package cache
 
 import (
 	"context"
+	"math"
+	"sync"
 	"testing"
 	"time"
 )
@@ -198,4 +200,199 @@ func TestNoopSemanticCache(t *testing.T) {
 
 func TestExactCacheImplementsCache(t *testing.T) {
 	var _ Cache = NewExactCache(10)
+}
+
+func TestLocalSemanticCacheImplementsInterface(t *testing.T) {
+	var _ SemanticCache = NewLocalSemanticCache()
+}
+
+func TestEmbedTextDeterministicAndNormalized(t *testing.T) {
+	c := NewLocalSemanticCache()
+	v1 := c.EmbedText("explain how to install python on windows step by step")
+	v2 := c.EmbedText("explain how to install python on windows step by step")
+	if len(v1) != SemanticVectorDims {
+		t.Fatalf("EmbedText length = %d, want %d", len(v1), SemanticVectorDims)
+	}
+	for i := range v1 {
+		if v1[i] != v2[i] {
+			t.Fatalf("EmbedText not deterministic at dim %d: %v vs %v", i, v1[i], v2[i])
+		}
+	}
+	var sum float64
+	for _, x := range v1 {
+		sum += float64(x) * float64(x)
+	}
+	if math.Abs(math.Sqrt(sum)-1) > 1e-5 {
+		t.Fatalf("EmbedText L2 norm = %v, want ~1.0", math.Sqrt(sum))
+	}
+	// Token-less text yields the zero vector.
+	for i, x := range c.EmbedText("   !!! ") {
+		if x != 0 {
+			t.Fatalf("empty text vector[%d] = %v, want 0", i, x)
+		}
+	}
+}
+
+func TestLocalSemanticCacheIdenticalTextHits(t *testing.T) {
+	ctx := context.Background()
+	c := NewLocalSemanticCache()
+	text := "explain how to install python on windows step by step"
+	c.SetText(ctx, text, SemanticEntry{Response: CachedResponse{Content: "install guide"}}, time.Minute)
+	got, ok := c.GetText(ctx, text)
+	if !ok {
+		t.Fatalf("GetText identical text = miss, want hit")
+	}
+	if got.Response.Content != "install guide" {
+		t.Fatalf("GetText content = %q, want %q", got.Response.Content, "install guide")
+	}
+	if math.Abs(float64(got.Similarity)-1.0) > 1e-5 {
+		t.Fatalf("identical text similarity = %v, want ~1.0", got.Similarity)
+	}
+}
+
+func TestLocalSemanticCacheHighOverlapHits(t *testing.T) {
+	ctx := context.Background()
+	c := NewLocalSemanticCache()
+	c.SetText(ctx, "explain how to install python on windows step by step",
+		SemanticEntry{Response: CachedResponse{Content: "install guide"}}, time.Minute)
+	// One word changed out of nine: high token overlap.
+	got, ok := c.GetText(ctx, "explain how to install python on mac step by step")
+	if !ok {
+		t.Fatalf("GetText high-overlap text = miss, want hit")
+	}
+	if got.Similarity < DefaultSemanticThreshold {
+		t.Fatalf("high-overlap similarity = %v, want >= %v", got.Similarity, DefaultSemanticThreshold)
+	}
+}
+
+func TestLocalSemanticCacheUnrelatedMisses(t *testing.T) {
+	ctx := context.Background()
+	c := NewLocalSemanticCache()
+	c.SetText(ctx, "explain how to install python on windows step by step",
+		SemanticEntry{Response: CachedResponse{Content: "install guide"}}, time.Minute)
+	if _, ok := c.GetText(ctx, "what is the capital of france"); ok {
+		t.Fatalf("GetText unrelated text = hit, want miss")
+	}
+	if _, ok := c.GetText(ctx, ""); ok {
+		t.Fatalf("GetText empty text = hit, want miss")
+	}
+}
+
+func TestLocalSemanticCacheBelowThresholdMisses(t *testing.T) {
+	ctx := context.Background()
+	c := NewLocalSemanticCache()
+	c.SetText(ctx, "how do i reset my password in the app",
+		SemanticEntry{Response: CachedResponse{Content: "reset help"}}, time.Minute)
+	// Shares words ("how do i ... my ... in the app") but swaps the
+	// key content words: token-overlap similarity lands well below
+	// the 0.85 default threshold.
+	if _, ok := c.GetText(ctx, "how do i change my username in the app"); ok {
+		t.Fatalf("GetText near-miss = hit, want miss below threshold")
+	}
+
+	// A stricter threshold also rejects even a high-overlap query.
+	strict := NewLocalSemanticCacheWithConfig(LocalSemanticCacheConfig{Threshold: 0.99})
+	strict.SetText(ctx, "explain how to install python on windows step by step",
+		SemanticEntry{Response: CachedResponse{Content: "install guide"}}, time.Minute)
+	if _, ok := strict.GetText(ctx, "explain how to install python on mac step by step"); ok {
+		t.Fatalf("threshold 0.99: high-overlap query = hit, want miss")
+	}
+	if _, ok := strict.GetText(ctx, "explain how to install python on windows step by step"); !ok {
+		t.Fatalf("threshold 0.99: identical text = miss, want hit")
+	}
+}
+
+func TestLocalSemanticCacheTTLExpiry(t *testing.T) {
+	ctx := context.Background()
+	c := NewLocalSemanticCache()
+	c.SetText(ctx, "hello world", SemanticEntry{Response: CachedResponse{Content: "hi"}}, 20*time.Millisecond)
+	if _, ok := c.GetText(ctx, "hello world"); !ok {
+		t.Fatalf("GetText before expiry = miss, want hit")
+	}
+	time.Sleep(40 * time.Millisecond)
+	if _, ok := c.GetText(ctx, "hello world"); ok {
+		t.Fatalf("GetText after expiry = hit, want miss")
+	}
+	// ttl <= 0 stores nothing.
+	c.SetText(ctx, "never stored", SemanticEntry{Response: CachedResponse{Content: "x"}}, 0)
+	if _, ok := c.GetText(ctx, "never stored"); ok {
+		t.Fatalf("ttl=0 entry was stored, want nothing cached")
+	}
+}
+
+func TestLocalSemanticCacheLRUEviction(t *testing.T) {
+	ctx := context.Background()
+	c := NewLocalSemanticCacheWithConfig(LocalSemanticCacheConfig{MaxEntries: 3})
+	c.SetText(ctx, "alpha one two three", SemanticEntry{Response: CachedResponse{Content: "a"}}, time.Minute)
+	c.SetText(ctx, "bravo four five six", SemanticEntry{Response: CachedResponse{Content: "b"}}, time.Minute)
+	c.SetText(ctx, "charlie seven eight nine", SemanticEntry{Response: CachedResponse{Content: "c"}}, time.Minute)
+	// Touch "alpha" so "bravo" is least recently used.
+	if _, ok := c.GetText(ctx, "alpha one two three"); !ok {
+		t.Fatalf("GetText alpha = miss, want hit")
+	}
+	c.SetText(ctx, "delta ten eleven twelve", SemanticEntry{Response: CachedResponse{Content: "d"}}, time.Minute)
+	if c.Size() != 3 {
+		t.Fatalf("Size = %d, want 3", c.Size())
+	}
+	if _, ok := c.GetText(ctx, "bravo four five six"); ok {
+		t.Fatalf("LRU victim bravo still present, want evicted")
+	}
+	if _, ok := c.GetText(ctx, "alpha one two three"); !ok {
+		t.Fatalf("recently used alpha evicted, want present")
+	}
+	if _, ok := c.GetText(ctx, "delta ten eleven twelve"); !ok {
+		t.Fatalf("new entry delta missing, want present")
+	}
+}
+
+func TestLocalSemanticCacheRawEmbeddingInterface(t *testing.T) {
+	ctx := context.Background()
+	var sc SemanticCache = NewLocalSemanticCache()
+	// The interface path works with vectors produced by EmbedText.
+	lc := sc.(*LocalSemanticCache)
+	vec := lc.EmbedText("explain how to install python on windows step by step")
+	sc.Set(ctx, vec, SemanticEntry{Response: CachedResponse{Content: "install guide"}})
+	got, ok := sc.Get(ctx, lc.EmbedText("explain how to install python on windows step by step"))
+	if !ok || got.Response.Content != "install guide" {
+		t.Fatalf("interface Get = (%+v, %v), want install guide hit", got, ok)
+	}
+	// Zero / empty embeddings always miss and store nothing.
+	if _, ok := sc.Get(ctx, []float32{}); ok {
+		t.Fatalf("empty embedding Get = hit, want miss")
+	}
+	if _, ok := sc.Get(ctx, make([]float32, SemanticVectorDims)); ok {
+		t.Fatalf("zero embedding Get = hit, want miss")
+	}
+}
+
+func TestLocalSemanticCacheConcurrentAccess(t *testing.T) {
+	ctx := context.Background()
+	c := NewLocalSemanticCacheWithConfig(LocalSemanticCacheConfig{MaxEntries: 50})
+	texts := []string{
+		"explain how to install python on windows step by step",
+		"what is the capital of france",
+		"how do i reset my password in the app",
+		"best way to learn golang concurrency patterns",
+		"why is the sky blue on a clear day",
+	}
+	var wg sync.WaitGroup
+	for g := 0; g < 8; g++ {
+		wg.Add(1)
+		go func(g int) {
+			defer wg.Done()
+			for i := 0; i < 50; i++ {
+				text := texts[(g+i)%len(texts)]
+				c.SetText(ctx, text, SemanticEntry{Response: CachedResponse{Content: text}}, time.Minute)
+				c.GetText(ctx, text)
+				c.GetText(ctx, "some unrelated query text here")
+			}
+		}(g)
+	}
+	wg.Wait()
+	if c.Size() == 0 {
+		t.Fatalf("Size after concurrent use = 0, want > 0")
+	}
+	if c.Size() > 50 {
+		t.Fatalf("Size = %d, want <= 50 (max entries)", c.Size())
+	}
 }
