@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -997,6 +999,74 @@ func TestEngineCrossWireFailoverAnthropicToOpenAI(t *testing.T) {
 			failing := errClient(&provider.RateLimitError{})
 			winning := okClient("from-winner")
 			clients := map[string]provider.Client{tc.first: failing, "other": winning}
+			eng := NewEngine(clients, nil, testConfig())
+			resp, trace, err := eng.ChatWithChain(context.Background(), []Attempt{
+				{ProviderID: tc.first, Model: "m"},
+				{ProviderID: "other", Model: "m"},
+			}, provider.ChatRequest{Model: "m", Messages: []provider.Message{{Role: RoleUser, Content: "hi"}}})
+			if err != nil {
+				t.Fatalf("ChatWithChain: %v", err)
+			}
+			if resp.Content != "from-winner" {
+				t.Fatalf("Content = %q, want from-winner", resp.Content)
+			}
+			if len(trace.Attempts) != 2 || trace.Attempts[0].Outcome != "rate_limited" || trace.Attempts[1].Outcome != "success" {
+				t.Errorf("trace = %+v, want rate_limited then success", trace.Attempts)
+			}
+		})
+	}
+}
+
+func TestEngineCrossWireFailoverGeminiToOpenAI(t *testing.T) {
+	// Same shape as the Anthropic cross-wire test, but with a REAL
+	// Gemini client as the failing attempt: its 429 (Gemini
+	// RESOURCE_EXHAUSTED) must map to *provider.RateLimitError and
+	// the engine must fail over to an OpenAI provider — and the
+	// reverse direction must work too. This proves the failover
+	// decision is driven by the error type, not the wire format.
+	for _, tc := range []struct {
+		name  string
+		first string
+	}{
+		{"gemini-429-then-openai", "gem"},
+		{"openai-429-then-gemini", "oai"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var clients map[string]provider.Client
+			if tc.first == "gem" {
+				// The Gemini client fails with a real 429
+				// (RESOURCE_EXHAUSTED); the OpenAI fake wins.
+				geminiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if strings.HasSuffix(r.URL.Path, ":generateContent") {
+						w.WriteHeader(http.StatusTooManyRequests)
+						_, _ = w.Write([]byte(`{"error":{"code":429,"message":"quota exceeded","status":"RESOURCE_EXHAUSTED"}}`))
+						return
+					}
+					w.WriteHeader(http.StatusNotFound)
+				}))
+				defer geminiSrv.Close()
+				gemClient, err := provider.NewClient(geminiSrv.URL, "gem-key",
+					provider.WithAuthHeaders(map[string]string{"x-goog-api-key": "gem-key"}),
+					provider.WithWireFormat(provider.WireFormatGemini))
+				if err != nil {
+					t.Fatalf("NewClient gemini: %v", err)
+				}
+				clients = map[string]provider.Client{"gem": gemClient, "other": okClient("from-winner")}
+			} else {
+				// The OpenAI fake fails with a 429; a real Gemini
+				// client answers the second attempt.
+				geminiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					_, _ = w.Write([]byte(`{"candidates":[{"content":{"role":"model","parts":[{"text":"from-winner"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1,"totalTokenCount":2}}`))
+				}))
+				defer geminiSrv.Close()
+				gemClient, err := provider.NewClient(geminiSrv.URL, "gem-key",
+					provider.WithAuthHeaders(map[string]string{"x-goog-api-key": "gem-key"}),
+					provider.WithWireFormat(provider.WireFormatGemini))
+				if err != nil {
+					t.Fatalf("NewClient gemini: %v", err)
+				}
+				clients = map[string]provider.Client{"oai": errClient(&provider.RateLimitError{}), "other": gemClient}
+			}
 			eng := NewEngine(clients, nil, testConfig())
 			resp, trace, err := eng.ChatWithChain(context.Background(), []Attempt{
 				{ProviderID: tc.first, Model: "m"},
