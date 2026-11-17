@@ -241,7 +241,10 @@ func (c *Config) Validate() error {
 		if p.ID == "" {
 			return fmt.Errorf("config: providers[%d] has an empty id", i)
 		}
-		if p.BaseURL == "" {
+		// A catalog-linked provider may leave base_url empty: the
+		// registry resolves it from the catalog entry at load. A
+		// fully-custom provider must name its own base URL.
+		if p.BaseURL == "" && p.CatalogID == "" {
 			return fmt.Errorf("config: provider %q has an empty base_url", p.ID)
 		}
 	}
@@ -326,6 +329,9 @@ func ValidateFile(path string) error {
 			return fmt.Errorf("config: duplicate provider id %q", p.ID)
 		}
 		seenProviders[p.ID] = true
+		if p.BaseURL == "" {
+			continue // catalog-resolved at load; nothing to compare yet
+		}
 		norm := normalizeBaseURL(p.BaseURL)
 		if first, ok := seenURLs[norm]; ok {
 			return fmt.Errorf("config: duplicate provider base_url %q (provider %q): same normalized URL as provider %q", p.BaseURL, p.ID, first)
