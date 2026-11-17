@@ -81,6 +81,23 @@ type StreamResumer interface {
 	ChatStreamFrom(ctx context.Context, req provider.ChatRequest, skipChars int, onDelta func(string) error) (*provider.ChatResponse, error)
 }
 
+// chunkEngine is optionally implemented by engines that stream
+// chunk-aware: onChunk is called once per chunk (text delta,
+// tool-call deltas, finish reason) and the returned response holds
+// the reassembled result. The server prefers it over the text-only
+// ChatStream so tool calls and the real finish reason reach the
+// client instead of a hard-coded "stop".
+type chunkEngine interface {
+	ChatStreamChunks(ctx context.Context, req provider.ChatRequest, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error)
+}
+
+// chunkResumer is optionally implemented by chunk engines that support
+// mid-stream resume, chunk-aware (see server.StreamResumer for the
+// text-only form).
+type chunkResumer interface {
+	ChatStreamFromChunks(ctx context.Context, req provider.ChatRequest, skipChars int, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error)
+}
+
 // ---------------------------------------------------------------------------
 // Gateway-key verification.
 // ---------------------------------------------------------------------------
@@ -566,6 +583,10 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	if model == "" {
 		model = req.Model
 	}
+	finishReason := resp.FinishReason
+	if finishReason == "" {
+		finishReason = "stop"
+	}
 	s.setStaleHeader(w)
 	writeJSON(w, http.StatusOK, chatCompletionResponse{
 		ID:      id,
@@ -574,8 +595,8 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		Model:   model,
 		Choices: []chatChoiceJSON{{
 			Index:        0,
-			Message:      provider.Message{Role: "assistant", Content: resp.Content},
-			FinishReason: "stop",
+			Message:      provider.Message{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls},
+			FinishReason: finishReason,
 		}},
 		Usage: resp.Usage,
 	})
@@ -597,8 +618,9 @@ func validateChatRequest(req *provider.ChatRequest) string {
 			return fmt.Sprintf("messages[%d].role must be one of system, developer, user, assistant, tool", i)
 		}
 		// Content is required for prompts; assistant/tool turns may
-		// legitimately carry empty content in history.
-		if m.Content == "" && (m.Role == "user" || m.Role == "system" || m.Role == "developer") {
+		// legitimately carry empty content in history (tool calls,
+		// or multi-part content carried in Parts).
+		if m.Content == "" && len(m.Parts) == 0 && len(m.ToolCalls) == 0 && (m.Role == "user" || m.Role == "system" || m.Role == "developer") {
 			return fmt.Sprintf("messages[%d].content is required", i)
 		}
 	}
@@ -635,8 +657,9 @@ type chatChoiceJSON struct {
 // ---------------------------------------------------------------------------
 
 type streamDelta struct {
-	Role    string `json:"role,omitempty"`
-	Content string `json:"content,omitempty"`
+	Role      string                   `json:"role,omitempty"`
+	Content   string                   `json:"content,omitempty"`
+	ToolCalls []provider.ChunkToolCall `json:"tool_calls,omitempty"`
 }
 
 type streamChoice struct {
@@ -700,39 +723,67 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 	}
 
 	first := true
-	onDelta := func(delta string) error {
-		if delta == "" {
-			return nil
-		}
+	finishSent := false // a chunk already carried finish_reason
+	onChunk := func(chunk provider.StreamChunk) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		d := streamDelta{Content: delta}
+		d := streamDelta{Content: chunk.Content, ToolCalls: chunk.ToolCalls}
 		if first {
 			d.Role = "assistant"
 			first = false
 		}
-		if err := writeChunk(d, nil); err != nil {
+		var fr *string
+		if chunk.FinishReason != "" {
+			fr = &chunk.FinishReason
+			finishSent = true
+		}
+		if d.Content == "" && len(d.ToolCalls) == 0 && fr == nil {
+			return nil
+		}
+		if err := writeChunk(d, fr); err != nil {
 			return err
 		}
-		sent.WriteString(delta)
+		sent.WriteString(chunk.Content)
 		return nil
 	}
-	finish := func() error {
-		// A completed stream always ends with finish_reason "stop" in Phase 1.
-		fr := "stop"
+	onDelta := func(delta string) error {
+		if delta == "" {
+			return nil
+		}
+		return onChunk(provider.StreamChunk{Content: delta})
+	}
+	finish := func(reason string) error {
+		// A chunk already carried the finish reason: just close.
+		if finishSent {
+			return writeSSE("data: [DONE]\n\n")
+		}
+		if reason == "" {
+			reason = "stop"
+		}
+		fr := reason
 		if err := writeChunk(streamDelta{}, &fr); err != nil {
 			return err
 		}
 		return writeSSE("data: [DONE]\n\n")
 	}
 
-	_, err := s.engine.ChatStream(ctx, req, onDelta)
+	var resp *provider.ChatResponse
+	var err error
+	if ce, ok := s.engine.(chunkEngine); ok {
+		resp, err = ce.ChatStreamChunks(ctx, req, onChunk)
+	} else {
+		resp, err = s.engine.ChatStream(ctx, req, onDelta)
+	}
 	if err == nil {
 		if sr, ok := s.engine.(staleReporter); ok && sr.LastServedStale() {
 			s.logger.Printf("stream served stale response (age %s)", sr.LastStaleAge())
 		}
-		_ = finish()
+		reason := "stop"
+		if resp != nil && resp.FinishReason != "" {
+			reason = resp.FinishReason
+		}
+		_ = finish(reason)
 		return nil
 	}
 
@@ -746,8 +797,33 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 
 	// Partial content already reached the client: it must not be re-sent.
 	// Resume once from the exact offset, if the engine supports it.
-	if resumer, ok := s.engine.(StreamResumer); ok {
-		skipChars := len([]rune(sent.String()))
+	// The chunk-aware resumer is preferred (tool-call deltas survive);
+	// otherwise the text-only resumer replays content only.
+	skipChars := len([]rune(sent.String()))
+	if resumer, ok := s.engine.(chunkResumer); ok {
+		resumeChunk := func(chunk provider.StreamChunk) error {
+			if chunk.Content != "" {
+				// Safety net: strip any prefix the client already
+				// has, in case the engine ignored skipChars and
+				// replayed from start.
+				chunk.Content = trimAlreadySent(sent.String(), chunk.Content)
+				if chunk.Content == "" && len(chunk.ToolCalls) == 0 && chunk.FinishReason == "" {
+					return nil
+				}
+			}
+			return onChunk(chunk)
+		}
+		resp2, err2 := resumer.ChatStreamFromChunks(ctx, req, skipChars, resumeChunk)
+		if err2 == nil {
+			reason := "stop"
+			if resp2 != nil && resp2.FinishReason != "" {
+				reason = resp2.FinishReason
+			}
+			_ = finish(reason)
+			return nil
+		}
+		err = err2
+	} else if resumer, ok := s.engine.(StreamResumer); ok {
 		resumeDelta := func(delta string) error {
 			if delta == "" {
 				return nil
@@ -762,9 +838,13 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 			}
 			return onDelta(delta)
 		}
-		_, err2 := resumer.ChatStreamFrom(ctx, req, skipChars, resumeDelta)
+		resp2, err2 := resumer.ChatStreamFrom(ctx, req, skipChars, resumeDelta)
 		if err2 == nil {
-			_ = finish()
+			reason := "stop"
+			if resp2 != nil && resp2.FinishReason != "" {
+				reason = resp2.FinishReason
+			}
+			_ = finish(reason)
 			return nil
 		}
 		err = err2

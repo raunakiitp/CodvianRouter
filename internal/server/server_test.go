@@ -595,3 +595,113 @@ func TestStaleHeaderAbsentForFresh(t *testing.T) {
 		t.Fatalf("X-Codvian-Stale = %q, want absent for fresh responses", got.Header().Get("X-Codvian-Stale"))
 	}
 }
+
+// fakeChunkEngine streams chunk-aware (tool-call deltas + finish
+// reason), like the real router engine after the wire integration.
+type fakeChunkEngine struct {
+	fakeEngine
+	chunks []provider.StreamChunk
+}
+
+func (f *fakeChunkEngine) ChatStreamChunks(ctx context.Context, req provider.ChatRequest, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+	for _, c := range f.chunks {
+		if err := onChunk(c); err != nil {
+			return nil, err
+		}
+	}
+	resp := f.chatResp
+	return &resp, nil
+}
+
+func (f *fakeChunkEngine) ChatStreamFromChunks(ctx context.Context, req provider.ChatRequest, skipChars int, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+	return f.ChatStreamChunks(ctx, req, onChunk)
+}
+
+func TestChatCompletionsToolCallsAndFinishReason(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{chatResp: provider.ChatResponse{
+		Content:      "checking",
+		Model:        "claude-sonnet-4-5",
+		FinishReason: "tool_calls",
+		ToolCalls:    mustToolCalls(t),
+	}})
+	rec := doReq(t, srv, http.MethodPost, "/v1/chat/completions",
+		`{"model":"m","messages":[{"role":"user","content":"hi"}]}`, "test-key-123")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Choices []struct {
+			Message struct {
+				Content   string `json:"content"`
+				ToolCalls []struct {
+					Function struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					} `json:"function"`
+				} `json:"tool_calls"`
+			} `json:"message"`
+			FinishReason string `json:"finish_reason"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("response is not JSON: %v", err)
+	}
+	if len(body.Choices) != 1 {
+		t.Fatalf("choices = %v", body.Choices)
+	}
+	if body.Choices[0].FinishReason != "tool_calls" {
+		t.Errorf("finish_reason = %q, want tool_calls (not a hard-coded stop)", body.Choices[0].FinishReason)
+	}
+	if len(body.Choices[0].Message.ToolCalls) != 1 || body.Choices[0].Message.ToolCalls[0].Function.Name != "get_weather" {
+		t.Errorf("tool_calls = %+v", body.Choices[0].Message.ToolCalls)
+	}
+}
+
+func mustToolCalls(t *testing.T) []provider.ToolCall {
+	t.Helper()
+	var calls []provider.ToolCall
+	if err := json.Unmarshal([]byte(`[{"id":"call_1","type":"function","function":{"name":"get_weather","arguments":"{\"city\":\"Pune\"}"}}]`), &calls); err != nil {
+		t.Fatalf("tool calls fixture: %v", err)
+	}
+	return calls
+}
+
+func TestChatCompletionsStreamingChunkAware(t *testing.T) {
+	eng := &fakeChunkEngine{
+		fakeEngine: fakeEngine{chatResp: provider.ChatResponse{
+			Content:      "hi ",
+			FinishReason: "tool_calls",
+			ToolCalls:    mustToolCalls(t),
+		}},
+		chunks: []provider.StreamChunk{
+			{Content: "hi "},
+			{ToolCalls: []provider.ChunkToolCall{{Index: 0, ID: "call_1", Name: "get_weather"}}},
+			{ToolCalls: []provider.ChunkToolCall{{Index: 0, Arguments: `{"city":"Pune"}`}}},
+			{FinishReason: "tool_calls"},
+		},
+	}
+	srv := newTestServer(t, eng)
+	rec := doReq(t, srv, http.MethodPost, "/v1/chat/completions",
+		`{"model":"m","messages":[{"role":"user","content":"hi"}],"stream":true}`, "test-key-123")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"tool_calls"`) {
+		t.Errorf("SSE body has no tool_calls chunk:\n%s", body)
+	}
+	if !strings.Contains(body, `"finish_reason":"tool_calls"`) {
+		t.Errorf("SSE body has no tool_calls finish_reason:\n%s", body)
+	}
+	if !strings.Contains(body, "data: [DONE]") {
+		t.Errorf("SSE body has no [DONE]:\n%s", body)
+	}
+	// Exactly one tool_calls finish_reason: the chunk-aware path must
+	// not also emit the old hard-coded "stop" finish chunk.
+	if n := strings.Count(body, `"finish_reason":"tool_calls"`); n != 1 {
+		t.Errorf(`"finish_reason":"tool_calls" appears %d times, want exactly 1:\n%s`, n, body)
+	}
+	if strings.Contains(body, `"finish_reason":"stop"`) {
+		t.Errorf("SSE body must not contain a hard-coded stop finish chunk:\n%s", body)
+	}
+}
