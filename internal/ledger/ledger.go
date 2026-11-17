@@ -6,8 +6,16 @@
 //
 //	usage_events(id, ts, gateway_key_id, provider, model,
 //	             prompt_tokens, completion_tokens, total_tokens,
-//	             tokens_split_known, cost_usd, ok, latency_ms)
+//	             tokens_split_known, cost_usd, ok, latency_ms,
+//	             shared)
 //	budgets(key_id, cap_usd, spent_usd, period)
+//
+// shared marks a request served from a coalesced (single-flight)
+// upstream call: 1 when the row is a waiter that shared the leader's
+// call, 0 otherwise. A shared row always carries zero tokens and
+// zero cost — the leader's row is the only one billed — so summing
+// cost_usd or tokens over usage_events never double-counts, and
+// filtering shared = 0 gives exactly the real upstream attempts.
 //
 // Cost is computed from caller-supplied per-model prices: tokens *
 // per-token price. Prices are never invented here — a model with no
@@ -61,6 +69,14 @@ func (p Prices) Cost(model string, promptTokens, completionTokens int) float64 {
 // are stored as 0) and only TotalTokens is meaningful — and the cost
 // is 0, because a split is needed for honest pricing. Callers must
 // never set SplitKnown true with a guessed split.
+//
+// Shared reports whether the request was served from a coalesced
+// (single-flight) upstream call instead of making its own: the
+// leader's row carries the real tokens and cost, and a shared row
+// always records zero tokens and zero cost, so it can never inflate
+// spend or token totals. It exists so a served-but-not-billed
+// request is still visible in the ledger, distinguishable from a
+// real upstream attempt.
 type Usage struct {
 	GatewayKeyID     string
 	Provider         string
@@ -71,6 +87,7 @@ type Usage struct {
 	SplitKnown       bool
 	OK               bool
 	LatencyMS        int64
+	Shared           bool
 }
 
 // Ledger is the usage/budget store backed by a local SQLite file.
@@ -98,7 +115,8 @@ CREATE TABLE IF NOT EXISTS usage_events (
   tokens_split_known INTEGER NOT NULL DEFAULT 1,
   cost_usd          REAL NOT NULL DEFAULT 0,
   ok                INTEGER NOT NULL DEFAULT 1,
-  latency_ms        INTEGER NOT NULL DEFAULT 0
+  latency_ms        INTEGER NOT NULL DEFAULT 0,
+  shared            INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_usage_key_ts
   ON usage_events(gateway_key_id, ts);
@@ -178,6 +196,7 @@ func ensureUsageColumns(db *sql.DB) error {
 	add := map[string]string{
 		"total_tokens":       `ALTER TABLE usage_events ADD COLUMN total_tokens INTEGER NOT NULL DEFAULT 0`,
 		"tokens_split_known": `ALTER TABLE usage_events ADD COLUMN tokens_split_known INTEGER NOT NULL DEFAULT 1`,
+		"shared":             `ALTER TABLE usage_events ADD COLUMN shared INTEGER NOT NULL DEFAULT 0`,
 	}
 	for col, stmt := range add {
 		if present[col] {
@@ -214,6 +233,10 @@ func (l *Ledger) Path() string { return l.path }
 //     reported total is stored in total_tokens, tokens_split_known is
 //     0, and cost is 0 — a split is needed for honest pricing, so no
 //     cost is guessed from a bare total.
+//   - Shared true: the row is a waiter served from a coalesced
+//     upstream call — tokens, split and cost are all forced to 0
+//     (the leader's row carries the real usage), so a shared row can
+//     never inflate spend or token totals.
 func (l *Ledger) RecordUsage(ctx context.Context, u Usage, prices Prices) (float64, error) {
 	var promptTokens, completionTokens, totalTokens, splitKnown int
 	var cost float64
@@ -235,6 +258,14 @@ func (l *Ledger) RecordUsage(ctx context.Context, u Usage, prices Prices) (float
 	if u.OK {
 		ok = 1
 	}
+	shared := 0
+	if u.Shared {
+		shared = 1
+		// A shared row is served, never billed: zero tokens and
+		// zero cost, whatever the caller passed. The leader's row
+		// carries the real usage for the one upstream call.
+		promptTokens, completionTokens, totalTokens, splitKnown, cost = 0, 0, 0, 0, 0
+	}
 	tx, err := l.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("ledger: begin tx: %w", err)
@@ -244,11 +275,11 @@ func (l *Ledger) RecordUsage(ctx context.Context, u Usage, prices Prices) (float
 		INSERT INTO usage_events
 		  (ts, gateway_key_id, provider, model, prompt_tokens,
 		   completion_tokens, total_tokens, tokens_split_known,
-		   cost_usd, ok, latency_ms)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		   cost_usd, ok, latency_ms, shared)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		time.Now().UnixMilli(), u.GatewayKeyID, u.Provider, u.Model,
 		promptTokens, completionTokens, totalTokens, splitKnown,
-		cost, ok, u.LatencyMS); err != nil {
+		cost, ok, u.LatencyMS, shared); err != nil {
 		return 0, fmt.Errorf("ledger: insert usage event: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
@@ -260,6 +291,21 @@ func (l *Ledger) RecordUsage(ctx context.Context, u Usage, prices Prices) (float
 		return 0, fmt.Errorf("ledger: commit: %w", err)
 	}
 	return cost, nil
+}
+
+// RecordShared records one request served from a coalesced
+// (single-flight) upstream call: a row marked shared with zero tokens
+// and zero cost (see Usage.Shared). ok is whether the shared result
+// was a success; latencyMs is how long the waiter waited for the
+// leader's flight. It never moves a budget (cost is always 0).
+func (l *Ledger) RecordShared(ctx context.Context, provider, model string, ok bool, latencyMs int64) (float64, error) {
+	return l.RecordUsage(ctx, Usage{
+		Provider:  provider,
+		Model:     model,
+		OK:        ok,
+		LatencyMS: latencyMs,
+		Shared:    true,
+	}, nil)
 }
 
 // SpendFor returns the total USD recorded for keyID since the given

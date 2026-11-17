@@ -451,3 +451,97 @@ CREATE TABLE budgets (
 		t.Fatalf("columns after re-open = %v", cols)
 	}
 }
+
+// TestRecordShared: a shared (coalesced) row is marked shared, carries
+// zero tokens and zero cost even when usage is passed in, and never
+// moves spend — the leader's row is the only one billed.
+func TestRecordShared(t *testing.T) {
+	ctx := context.Background()
+	l := openTestLedger(t)
+	prices := Prices{"model-a": {PromptPerToken: 0.001, CompletionPerToken: 0.002}}
+
+	// The leader's real attempt.
+	if _, err := l.RecordUsage(ctx, Usage{
+		GatewayKeyID: "key-1", Provider: "p1", Model: "model-a",
+		PromptTokens: 100, CompletionTokens: 50, SplitKnown: true, OK: true, LatencyMS: 120,
+	}, prices); err != nil {
+		t.Fatalf("RecordUsage (leader): %v", err)
+	}
+	// Two waiters served from the leader's call.
+	for i := 0; i < 2; i++ {
+		cost, err := l.RecordShared(ctx, "p1", "model-a", true, 90)
+		if err != nil {
+			t.Fatalf("RecordShared: %v", err)
+		}
+		if cost != 0 {
+			t.Fatalf("RecordShared cost = %v, want 0", cost)
+		}
+	}
+	// Spend is the leader's cost only: 100*0.001 + 50*0.002 = 0.20.
+	spent, err := l.SpendFor(ctx, "key-1", time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("SpendFor: %v", err)
+	}
+	if spent != 0.20 {
+		t.Fatalf("spent = %v, want 0.20 (shared rows must not add spend)", spent)
+	}
+	// Rows: 1 leader (shared=0) + 2 waiters (shared=1, zero tokens/cost).
+	rows, err := l.db.QueryContext(ctx, `
+		SELECT shared, prompt_tokens, completion_tokens, total_tokens,
+		       tokens_split_known, cost_usd, ok, latency_ms
+		FROM usage_events ORDER BY id`)
+	if err != nil {
+		t.Fatalf("query usage_events: %v", err)
+	}
+	defer rows.Close()
+	type row struct {
+		shared, prompt, completion, total, splitKnown int
+		cost                                          float64
+		ok                                            int
+		latency                                       int64
+	}
+	var got []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.shared, &r.prompt, &r.completion, &r.total, &r.splitKnown, &r.cost, &r.ok, &r.latency); err != nil {
+			t.Fatalf("scan row: %v", err)
+		}
+		got = append(got, r)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("rows: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("rows = %d, want 3", len(got))
+	}
+	if got[0].shared != 0 || got[0].total != 150 || got[0].cost != 0.20 {
+		t.Fatalf("leader row = %+v, want shared=0 total=150 cost=0.20", got[0])
+	}
+	for i, r := range got[1:] {
+		if r.shared != 1 || r.prompt != 0 || r.completion != 0 || r.total != 0 || r.splitKnown != 0 || r.cost != 0 || r.ok != 1 || r.latency != 90 {
+			t.Fatalf("shared row %d = %+v, want shared=1 zero tokens/cost ok=1 latency=90", i, r)
+		}
+	}
+}
+
+// TestRecordUsageSharedFlagForcedZero: even RecordUsage with Shared
+// set and a real split records zero tokens and zero cost.
+func TestRecordUsageSharedFlagForcedZero(t *testing.T) {
+	ctx := context.Background()
+	l := openTestLedger(t)
+	prices := Prices{"model-a": {PromptPerToken: 0.01, CompletionPerToken: 0.02}}
+	cost, err := l.RecordUsage(ctx, Usage{
+		GatewayKeyID: "key-1", Provider: "p1", Model: "model-a",
+		PromptTokens: 100, CompletionTokens: 50, SplitKnown: true, OK: true, Shared: true,
+	}, prices)
+	if err != nil {
+		t.Fatalf("RecordUsage: %v", err)
+	}
+	if cost != 0 {
+		t.Fatalf("cost = %v, want 0 for a shared row", cost)
+	}
+	prompt, completion, total, splitKnown, rowCost := readUsageRow(t, l, "key-1")
+	if prompt != 0 || completion != 0 || total != 0 || splitKnown != 0 || rowCost != 0 {
+		t.Fatalf("row = %d/%d/%d split=%d cost=%v, want all zero", prompt, completion, total, splitKnown, rowCost)
+	}
+}
