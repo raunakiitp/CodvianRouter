@@ -41,6 +41,35 @@ Gate run 2026-11-17 by the coordinator (independent re-run, not the builders' ow
 | 33 | Packaging: multi-stage Dockerfile (distroless nonroot), docker-compose, npm wrapper, `.goreleaser.yml`, checksum-verified `install.sh` (refuses pipe-to-shell); `--listen` opt-in for non-loopback bind (127.0.0.1 / ::1 / 0.0.0.0 only, 0.0.0.0 warns) | ✅ | ✅ |
 | 34 | Route trace moved to leaf package `internal/routetrace` (no internal imports) so server metrics + degrade forwarding cannot create an import cycle | ✅ | ✅ |
 | 35 | Phase 4 docs: INSTALL, DEMO, ARCHITECTURE, CHANGELOG, RELEASE-v0.2.0 draft | ✅ | ✅ |
+| 36 | Dashboard wired into the server: GET /dashboard serves the approved dashboard (web/index.html, embedded via //go:embed in web/web.go); GET-only (405 otherwise), no auth on the static dashboard, /v1/* and /metrics stay auth-gated; startup line prints the dashboard URL; NO Playground section anywhere | ✅ | ✅ |
+| 37 | Catalog wired into the provider registry: `Registry.AddCatalog` / `AddCatalogWithOptions` add a provider by catalog ID (or alias) — base URL, wire format and auth scheme come from the catalog entry; only the ID + the operator's own key are needed. `provider add-catalog` CLI subcommand (with `--endpoint` / `--variant` / `--base-url` override) + `provider list` / `provider add` | ✅ | ✅ |
+| 38 | Catalog auth in the request path: `ClientFor` resolves credentials per (provider, endpoint) via `catalog.ResolveAuth` — Anthropic messages surface sends Bearer + `anthropic-version: 2026-10-21`, DeepSeek's Anthropic surface sends `x-api-key` (Bearer on its chat surface), Fireworks alt-header sends `X-Fireworks-Api-Key`, Azure api-key variant sends `api-key`. Hand-added providers are matched by base URL when the catalog knows it (`ResolveAuthForBaseURL`, endpoint bases matched first); unknown URLs keep the legacy Bearer default. Exchange surfaces (Vertex service-account JSON, Bedrock SigV4, OpenRouter JWT, Azure Entra) fail loudly with a clear error — never a faked static header | ✅ | ✅ |
+| 39 | Catalog policy enforced: ToS-grey entries (web-cookie / subscription-OAuth, e.g. Claude Code, ChatGPT Web) are refused as routing targets at add time and at config load; entries with no known base URL are refused; templated catalog base URLs (Azure `{resource}`, Vertex `{LOCATION}`) require a concrete `--base-url` override. Verification status (`verified-from-docs` / `from-reference-metadata-only` / `unverified`) is stored on the provider and printed at startup per provider — never hidden | ✅ | ✅ |
+| 40 | Catalog-linked providers in the config file: `catalog_id` (+ `auth_endpoint` / `auth_variant`) persisted in `ProviderConfig`; an empty `base_url` is allowed when `catalog_id` is set and resolves from the catalog at registry load; `validate` accepts it | ✅ | ✅ |
+
+## Test gate results — catalog wiring (2026-11-17, Go 1.27.4, measured by coordinator)
+
+- `go build ./...` — exit 0; `go vet ./...` — clean; `gofmt -l cmd internal web` — clean
+- `go test -count=1 ./...` — **295/295 PASS, 0 fail** (was 224; +71 incl. 13 new provider catalog tests, 1 new config test, 1 new cmd test, 1 extended catalog test; catalog itself still 22 tests, all green)
+- `go test -race` — clean on all touched packages (provider, catalog, config, health, cmd/codvian-router)
+
+## Live smoke — catalog wiring (real binary, Python mock upstreams, 2026-11-17, run by coordinator)
+
+Isolated HOME, fresh config via `init`; mocks on 127.0.0.1:21011 (standing in for Fireworks) and 127.0.0.1:21012 (standing in for Anthropic); router on 127.0.0.1:20199, auth ON.
+
+| Scenario | Result |
+|---|---|
+| `provider add-catalog fireworks … --endpoint chat --variant alt-header --base-url <mock>` | **exit 0** — `catalog: fireworks (verification: verified-from-docs)`, wire openai, 2 models fetched |
+| `provider add-catalog anthropic … --endpoint messages --base-url <mock>` | **exit 0** — `catalog: anthropic (verification: verified-from-docs)`, wire anthropic, 2 models fetched |
+| `provider add-catalog vertex …` (exchange auth) | **exit 1** — `credential exchange required … service-account-json … credential exchange is not supported yet` |
+| Startup log (stderr) | `provider "Fireworks" catalog fireworks verification verified-from-docs wire openai auth chat (variant alt-header)` and `provider "Anthropic" catalog anthropic verification verified-from-docs wire anthropic auth messages` |
+| `POST /v1/chat/completions` model `fw-model` | **200, "fireworks says hi"**; mock recorded exactly `X-Fireworks-Api-Key: fw-smoke-key` and NO `Authorization` header |
+| `POST /v1/chat/completions` model `an-model` | **200, "anthropic says hi"**; mock recorded exactly `Authorization: Bearer sk-ant-smoke` + `Anthropic-Version: 2026-10-21` |
+| Streaming `an-model` (`stream: true`) | SSE deltas + `[DONE]`, content "anthropic says hi" |
+| `GET /v1/models` with gateway key | 3 models with correct owners (Fireworks ×2, Anthropic ×1); without key → **401** |
+| `provider list` / `validate` | List shows catalog + verification + auth endpoint per provider; config OK |
+
+Notes: the mocks stand in for the catalog entries' base URLs via the `--base-url` override (the real upstream hosts were not contacted). The two header-less `/v1/models` hits in the mock logs are the smoke script's own unauthenticated `curl` health checks, not router traffic — every router request carried the resolved headers. `ClientFor` exchange refusal for a stored Vertex provider is covered by unit test (`TestRegistryClientForCatalogExchangeError`); the CLI refusal above is the same error through the real binary.
 
 ## Test gate results (2026-11-17, Go 1.27.4, measured by coordinator)
 
@@ -155,3 +184,14 @@ localhost mocks (real-world numbers will depend on upstream latency).
   `network_mode: host` deliberately, on a trusted network only.
 - `go.mod` was concurrently edited by parallel agents mid-build; it has converged
   (`github.com/raunakiitp/codvian-router`, `go 1.22`, modernc.org/sqlite v1.34.0, golang.org/x/crypto v0.24.0).
+- Catalog wiring (2026-11-17): native wire transports are NOT implemented — the client only speaks OpenAI wire. Catalog auth resolves correctly per (provider, endpoint) for every provider, but a native-wire provider (Anthropic Messages, Gemini generateContent, Cohere /v2/chat, Bedrock Converse) will fail at the upstream (404/400) and fail over until native wire support lands. The live smoke proves the AUTH (Bearer + anthropic-version arrived at the mock), not the Anthropic wire — the mock spoke OpenAI wire.
+- Catalog wiring: DeepSeek's chat path has NO `/v1` per the catalog note, but the client always appends `/v1` — per-endpoint path support is still open. The catalog note itself conflicts with DeepSeek's own docs (which use base `https://api.deepseek.com/v1`); verify against DeepSeek docs before changing either side.
+- Catalog wiring: exchange auth (Vertex service-account JSON, Bedrock SigV4, OpenRouter JWT, Azure Entra) is refused loudly, not implemented. ToS-grey providers are refused as routing targets. Dashboard surfacing of per-provider verification status is a later step (startup log + `provider list` cover it for now).
+- Catalog wiring: `ResolveAuthForBaseURL` scans all 423 catalog entries per `ClientFor` call (no cache). Fine at current rates (startup + 60 s health probes); revisit if `ClientFor` gets hot.
+
+## Dashboard wiring gate (2026-11-17, Go 1.27.4, measured by coordinator)
+
+- `go build ./...` — OK; `go vet ./...` — OK; `gofmt -l cmd internal web` — clean
+- `go test -count=1 ./...` — **all 15 packages ok** (server 24 tests incl. 3 new dashboard tests: `TestDashboard`, `TestDashboardMethodNotAllowed`, `TestDashboardDoesNotBypassAPIAuth`)
+- Live smoke (real binary, isolated HOME, fresh config, port 20199): startup prints `dashboard: http://127.0.0.1:20199/dashboard`; `GET /dashboard` → **200**, `text/html; charset=utf-8`, 113,427 B, "Codvian Router"/"Overview"/"Providers"/"Models" present, "Playground" absent; `GET /healthz` → 200; `GET /v1/models` + `GET /metrics` without key → 401; `POST /dashboard` → 405; `--listen 192.168.1.5` still refused
+- Note: the dashboard loads Google Fonts from fonts.googleapis.com (external); offline it falls back to system fonts — same as the approved artifact.
