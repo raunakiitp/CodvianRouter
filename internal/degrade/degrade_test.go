@@ -853,3 +853,324 @@ func TestChatStreamFromChunksFallbackTrims(t *testing.T) {
 		t.Errorf("trimmed text = %q, want lo world", text)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Proactive cache serving (Policy.ServeCache + WrapWithSemantic).
+// ---------------------------------------------------------------------------
+
+// stubCacheMetrics records cache hit/miss reports for tests.
+type stubCacheMetrics struct {
+	mu     sync.Mutex
+	hits   map[string]int
+	misses map[string]int
+}
+
+func (s *stubCacheMetrics) IncCacheHit(layer string) {
+	s.mu.Lock()
+	s.hits[layer]++
+	s.mu.Unlock()
+}
+
+func (s *stubCacheMetrics) IncCacheMiss(layer string) {
+	s.mu.Lock()
+	s.misses[layer]++
+	s.mu.Unlock()
+}
+
+func (s *stubCacheMetrics) get(layer string) (hits, misses int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.hits[layer], s.misses[layer]
+}
+
+// serveCachePolicy is DefaultPolicy with proactive cache serving on.
+// Degradation stays enabled too, so the stale fallback keeps working
+// alongside it.
+func serveCachePolicy() Policy {
+	p := DefaultPolicy()
+	p.Enabled = true
+	p.ServeCache = true
+	return p
+}
+
+// wrapSemanticTest builds a StaleEngine with both caches and a stub
+// metrics sink, so tests can assert which layer served and that the
+// provider was (not) called.
+func wrapSemanticTest(f server.Engine, policy Policy) (*StaleEngine, *cache.ExactCache, *cache.LocalSemanticCache, *stubCacheMetrics) {
+	exact := cache.NewExactCache(100)
+	sem := cache.NewLocalSemanticCache()
+	m := &stubCacheMetrics{hits: map[string]int{}, misses: map[string]int{}}
+	eng := WrapWithSemantic(f, exact, sem, policy)
+	se, ok := eng.(*StaleEngine)
+	if !ok {
+		panic("WrapWithSemantic did not return *StaleEngine")
+	}
+	se.SetCacheMetrics(m)
+	return se, exact, sem, m
+}
+
+func capitalReq(text string) provider.ChatRequest {
+	return provider.ChatRequest{
+		Model:    "test-model",
+		Messages: []provider.Message{{Role: "user", Content: text}},
+	}
+}
+
+func TestServeCacheExactHitServesWithoutCallingProvider(t *testing.T) {
+	f := &fakeEngine{chatResp: freshResp()}
+	se, _, _, m := wrapSemanticTest(f, serveCachePolicy())
+	ctx := context.Background()
+
+	if _, err := se.Chat(ctx, testReq()); err != nil {
+		t.Fatalf("first Chat: %v", err)
+	}
+	if f.chatCalls != 1 {
+		t.Fatalf("first Chat calls = %d, want 1", f.chatCalls)
+	}
+
+	// Providers now fail: an exact hit must still answer, without
+	// calling them, and must be marked a cache hit — never stale.
+	f.chatResp = nil
+	f.chatErr = errUpstreamDown
+	resp, err := se.Chat(ctx, testReq())
+	if err != nil {
+		t.Fatalf("exact-hit Chat: %v", err)
+	}
+	if resp == nil || resp.Content != "4" {
+		t.Fatalf("exact-hit Chat returned %+v", resp)
+	}
+	if f.chatCalls != 1 {
+		t.Fatalf("exact hit called provider %d times, want 1 (no provider call on a hit)", f.chatCalls)
+	}
+	if se.LastServedStale() {
+		t.Fatal("exact cache hit must not be marked stale")
+	}
+	kind, sim, ok := se.LastCacheHit()
+	if !ok || kind != "exact" || sim != 0 {
+		t.Fatalf("LastCacheHit = (%q, %v, %v), want (exact, 0, true)", kind, sim, ok)
+	}
+	if h, _ := m.get("exact"); h != 1 {
+		t.Fatalf("exact cache hits = %d, want 1", h)
+	}
+}
+
+func TestServeCacheSemanticHitOnParaphrase(t *testing.T) {
+	f := &fakeEngine{chatResp: &provider.ChatResponse{
+		Content: "Paris is the capital of France.",
+		Usage:   provider.Usage{PromptTokens: 8, CompletionTokens: 7, TotalTokens: 15},
+		Model:   "test-model",
+	}}
+	se, _, _, m := wrapSemanticTest(f, serveCachePolicy())
+	ctx := context.Background()
+
+	if _, err := se.Chat(ctx, capitalReq("What is the capital of France?")); err != nil {
+		t.Fatalf("first Chat: %v", err)
+	}
+	if f.chatCalls != 1 {
+		t.Fatalf("first Chat calls = %d, want 1", f.chatCalls)
+	}
+
+	// Paraphrase with one extra word: same words, same order.
+	// Must hit semantically, without calling the provider, and the
+	// similarity must be reported honestly (>= threshold 0.85).
+	f.chatResp = nil
+	f.chatErr = errUpstreamDown
+	resp, err := se.Chat(ctx, capitalReq("What is the capital of France today?"))
+	if err != nil {
+		t.Fatalf("paraphrase Chat: %v", err)
+	}
+	if resp == nil || resp.Content != "Paris is the capital of France." {
+		t.Fatalf("paraphrase Chat returned %+v", resp)
+	}
+	if f.chatCalls != 1 {
+		t.Fatalf("semantic hit called provider %d times, want 1 (no provider call on a hit)", f.chatCalls)
+	}
+	if se.LastServedStale() {
+		t.Fatal("semantic cache hit must not be marked stale")
+	}
+	kind, sim, ok := se.LastCacheHit()
+	if !ok || kind != "semantic" {
+		t.Fatalf("LastCacheHit = (%q, %v, %v), want (semantic, >=0.85, true)", kind, sim, ok)
+	}
+	if sim < 0.85 {
+		t.Fatalf("semantic similarity = %v, want >= 0.85", sim)
+	}
+	if h, _ := m.get("semantic"); h != 1 {
+		t.Fatalf("semantic cache hits = %d, want 1", h)
+	}
+	// The paraphrase is now stored under its own exact key too, so
+	// repeating it is an exact hit next time.
+	if _, err := se.Chat(ctx, capitalReq("What is the capital of France today?")); err != nil {
+		t.Fatalf("repeat paraphrase Chat: %v", err)
+	}
+	if kind, _, ok := se.LastCacheHit(); !ok || kind != "exact" {
+		t.Fatalf("repeat paraphrase LastCacheHit kind = %q, want exact", kind)
+	}
+}
+
+func TestServeCacheUnrelatedPromptMisses(t *testing.T) {
+	f := &fakeEngine{chatResp: &provider.ChatResponse{
+		Content: "Paris is the capital of France.",
+		Usage:   provider.Usage{PromptTokens: 8, CompletionTokens: 7, TotalTokens: 15},
+		Model:   "test-model",
+	}}
+	se, _, _, m := wrapSemanticTest(f, serveCachePolicy())
+	ctx := context.Background()
+
+	if _, err := se.Chat(ctx, capitalReq("What is the capital of France?")); err != nil {
+		t.Fatalf("first Chat: %v", err)
+	}
+	calls := f.chatCalls
+
+	// Unrelated prompt: no shared words, must miss both layers and
+	// call the provider.
+	f.chatResp = &provider.ChatResponse{Content: "Preheat the oven to 220C.", Model: "test-model"}
+	f.chatErr = nil
+	resp, err := se.Chat(ctx, capitalReq("How do I bake sourdough bread?"))
+	if err != nil {
+		t.Fatalf("unrelated Chat: %v", err)
+	}
+	if resp == nil || resp.Content != "Preheat the oven to 220C." {
+		t.Fatalf("unrelated Chat returned %+v", resp)
+	}
+	if f.chatCalls != calls+1 {
+		t.Fatalf("unrelated prompt did not call provider (calls %d, want %d)", f.chatCalls, calls+1)
+	}
+	if _, _, ok := se.LastCacheHit(); ok {
+		t.Fatal("unrelated prompt must not report a cache hit")
+	}
+	if _, miss := m.get("semantic"); miss < 1 {
+		t.Fatalf("semantic cache misses = %d, want >= 1", miss)
+	}
+}
+
+func TestServeCacheSkipsToolRequests(t *testing.T) {
+	f := &fakeEngine{chatResp: freshResp()}
+	se, exact, _, _ := wrapSemanticTest(f, serveCachePolicy())
+	ctx := context.Background()
+
+	// A tool-using success must not be stored: the cached entry
+	// holds content only and would silently drop tool calls.
+	toolReq := testReq()
+	toolReq.Tools = []provider.ToolDefinition{{Type: "function"}}
+	toolReq.Tools[0].Function.Name = "get_weather"
+	if _, err := se.Chat(ctx, toolReq); err != nil {
+		t.Fatalf("tool Chat: %v", err)
+	}
+	key, err := cache.ExactKey(toolReq.Model, toolReq.Messages)
+	if err != nil {
+		t.Fatalf("ExactKey: %v", err)
+	}
+	if _, ok := exact.Get(ctx, key); ok {
+		t.Fatal("tool request must not be stored in the exact cache")
+	}
+
+	// And a tool request must not be served from the cache either,
+	// even when a plain-text entry for the same messages exists.
+	if _, err := se.Chat(ctx, testReq()); err != nil {
+		t.Fatalf("plain Chat: %v", err)
+	}
+	calls := f.chatCalls
+	f.chatResp = nil
+	f.chatErr = errUpstreamDown
+	if _, err := se.Chat(ctx, toolReq); !errors.Is(err, errUpstreamDown) {
+		t.Fatalf("tool Chat with failing provider: err = %v, want original error (no cache serve)", err)
+	}
+	if f.chatCalls != calls+1 {
+		t.Fatalf("tool request did not reach provider (calls %d, want %d)", f.chatCalls, calls+1)
+	}
+	if _, _, ok := se.LastCacheHit(); ok {
+		t.Fatal("tool request must not report a cache hit")
+	}
+}
+
+func TestServeCacheOffByDefault(t *testing.T) {
+	f := &fakeEngine{chatResp: freshResp()}
+	// DefaultPolicy: ServeCache is false. A repeat request must call
+	// the provider again — proactive serving is opt-in, so the old
+	// behaviour (cache only as a failure fallback) is preserved.
+	se, _ := wrapTest(f, DefaultPolicy())
+	ctx := context.Background()
+
+	if _, err := se.Chat(ctx, testReq()); err != nil {
+		t.Fatalf("first Chat: %v", err)
+	}
+	if _, err := se.Chat(ctx, testReq()); err != nil {
+		t.Fatalf("second Chat: %v", err)
+	}
+	if f.chatCalls != 2 {
+		t.Fatalf("chatCalls = %d, want 2 (no proactive serving without ServeCache)", f.chatCalls)
+	}
+	if _, _, ok := se.LastCacheHit(); ok {
+		t.Fatal("ServeCache off must never report a cache hit")
+	}
+}
+
+func TestServeCacheStreamReplaysSemanticHit(t *testing.T) {
+	f := &fakeEngine{chatResp: &provider.ChatResponse{
+		Content: "Paris is the capital of France.",
+		Model:   "test-model",
+	}}
+	se, _, _, _ := wrapSemanticTest(f, serveCachePolicy())
+	ctx := context.Background()
+
+	if _, err := se.Chat(ctx, capitalReq("What is the capital of France?")); err != nil {
+		t.Fatalf("populate Chat: %v", err)
+	}
+	if f.streamCalls != 0 {
+		t.Fatalf("populate used stream calls = %d, want 0", f.streamCalls)
+	}
+
+	// Streaming paraphrase: no provider stream is started; the cached
+	// answer is replayed as a single delta.
+	f.chatResp = nil
+	f.chatErr = errUpstreamDown
+	f.streamErr = errUpstreamDown
+	var deltas []string
+	resp, err := se.ChatStream(ctx, capitalReq("What is the capital of France today?"), func(d string) error {
+		deltas = append(deltas, d)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("paraphrase ChatStream: %v", err)
+	}
+	if f.streamCalls != 0 {
+		t.Fatalf("semantic stream hit started provider stream %d times, want 0", f.streamCalls)
+	}
+	if len(deltas) != 1 || deltas[0] != "Paris is the capital of France." {
+		t.Fatalf("stream deltas = %q, want one cached delta", deltas)
+	}
+	if resp == nil || resp.Content != "Paris is the capital of France." {
+		t.Fatalf("stream response = %+v", resp)
+	}
+	if kind, _, ok := se.LastCacheHit(); !ok || kind != "semantic" {
+		t.Fatalf("stream LastCacheHit = (%q, %v), want (semantic, true)", kind, ok)
+	}
+}
+
+func TestServeCacheFreshSuccessClearsCacheHit(t *testing.T) {
+	f := &fakeEngine{chatResp: freshResp()}
+	se, _, _, _ := wrapSemanticTest(f, serveCachePolicy())
+	ctx := context.Background()
+
+	if _, err := se.Chat(ctx, testReq()); err != nil {
+		t.Fatalf("first Chat: %v", err)
+	}
+	if _, err := se.Chat(ctx, testReq()); err != nil {
+		t.Fatalf("exact-hit Chat: %v", err)
+	}
+	if _, _, ok := se.LastCacheHit(); !ok {
+		t.Fatal("expected a cache hit on the repeat")
+	}
+	// A fresh provider success for a different prompt must clear it.
+	f.chatResp = freshResp()
+	if _, err := se.Chat(ctx, capitalReq("What is the capital of France?")); err != nil {
+		t.Fatalf("fresh Chat: %v", err)
+	}
+	if _, _, ok := se.LastCacheHit(); ok {
+		t.Fatal("fresh provider success must clear LastCacheHit")
+	}
+	if se.LastServedStale() {
+		t.Fatal("fresh provider success must not be marked stale")
+	}
+}

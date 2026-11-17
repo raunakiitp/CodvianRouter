@@ -34,6 +34,7 @@ package degrade
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -73,6 +74,17 @@ type Policy struct {
 	// Both Enabled and AllowStale must be true for a stale
 	// response to be served.
 	AllowStale bool
+	// ServeCache turns proactive cache serving on: for a cacheable
+	// request (see cacheable) the wrapper first consults the
+	// exact-match cache and then the semantic cache, and serves a
+	// hit WITHOUT calling any provider. A proactive hit is marked
+	// via LastCacheHit — never as stale — and is not gated by
+	// Enabled/AllowStale, because a within-TTL cache hit is not
+	// degradation: the answer was produced by a provider for an
+	// (almost) identical prompt and is still fresh. Default false,
+	// so existing callers keep the old behaviour (cache only as a
+	// failure fallback) unless they opt in explicitly.
+	ServeCache bool
 }
 
 // DefaultPolicy returns the safe default: degradation OFF
@@ -100,13 +112,31 @@ func (p Policy) staleAllowed() bool { return p.Enabled && p.AllowStale }
 // forwards to the wrapped engine when it supports resume, and falls
 // back to a full-stream replay with rune-accurate trimming when it
 // does not. A stale replay never follows a partial resume.
+// CacheMetrics receives cache hit/miss counts by layer ("exact",
+// "semantic"). metrics.Recorder satisfies it; a nil value disables
+// reporting. It is a separate interface so this package does not
+// import internal/metrics.
+type CacheMetrics interface {
+	IncCacheHit(layer string)
+	IncCacheMiss(layer string)
+}
+
 type StaleEngine struct {
-	engine    server.Engine
-	exact     *cache.ExactCache
-	policy    Policy
-	now       func() time.Time
-	mu        sync.Mutex
-	lastStale bool
+	engine       server.Engine
+	exact        *cache.ExactCache
+	semantic     *cache.LocalSemanticCache
+	policy       Policy
+	now          func() time.Time
+	mu           sync.Mutex
+	cacheMetrics CacheMetrics
+	lastStale    bool
+	// lastCacheKind is "exact" or "semantic" when the most recent
+	// call was served proactively from a cache, "" otherwise.
+	// lastCacheSimilarity is the semantic similarity of that hit
+	// (0 for exact hits). A stale serve is not a cache hit: it
+	// sets lastStale and clears these fields.
+	lastCacheKind       string
+	lastCacheSimilarity float32
 	// lastStaleAge is the age of the entry served by the most recent
 	// call, when that call served stale content; 0 otherwise. When
 	// the entry's store time is unknown (it was cached by someone
@@ -131,16 +161,64 @@ type StaleEngine struct {
 // are returned as-is and failures have nothing to fall back to, so
 // the original error is returned unchanged.
 func Wrap(engine server.Engine, exact *cache.ExactCache, policy Policy) server.Engine {
+	return WrapWithSemantic(engine, exact, nil, policy)
+}
+
+// WrapWithSemantic is Wrap plus the semantic cache layer: successful
+// responses are stored in both the exact-match cache and the semantic
+// cache, and when Policy.ServeCache is true, cacheable requests are
+// served proactively from exact first, then semantic. A nil semantic
+// cache disables the semantic layer (exact behaviour unchanged).
+func WrapWithSemantic(engine server.Engine, exact *cache.ExactCache, semantic *cache.LocalSemanticCache, policy Policy) server.Engine {
 	if engine == nil {
 		return nil
 	}
 	return &StaleEngine{
 		engine:   engine,
 		exact:    exact,
+		semantic: semantic,
 		policy:   policy,
 		now:      time.Now,
 		storedAt: make(map[string]time.Time),
 	}
+}
+
+// SetCacheMetrics wires hit/miss reporting (e.g. *metrics.Recorder).
+// A nil value disables reporting.
+func (e *StaleEngine) SetCacheMetrics(m CacheMetrics) {
+	e.mu.Lock()
+	e.cacheMetrics = m
+	e.mu.Unlock()
+}
+
+// LastCacheHit reports whether the most recent Chat or ChatStream call
+// on this wrapper was served proactively from a cache without calling
+// any provider: kind is "exact" or "semantic", similarity is the
+// semantic cosine similarity (0 for exact hits), and ok is true.
+// It is false after a fresh provider success, after a failure, after
+// a stale serve, and before any call. Callers (the coordinator /
+// server) must surface this to the client — e.g. as an
+// X-Codvian-Cache header — because the response itself carries no
+// marker and must never be mistaken for a fresh provider response.
+func (e *StaleEngine) LastCacheHit() (kind string, similarity float32, ok bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.lastCacheKind == "" {
+		return "", 0, false
+	}
+	return e.lastCacheKind, e.lastCacheSimilarity, true
+}
+
+// setCacheOutcome records a proactive cache hit. Caller must not hold
+// e.mu (it takes it). It also clears the stale flag: a cache hit is
+// fresh, not stale.
+func (e *StaleEngine) setCacheOutcome(kind string, similarity float32) {
+	e.mu.Lock()
+	e.lastCacheKind = kind
+	e.lastCacheSimilarity = similarity
+	e.lastStale = false
+	e.lastStaleAge = 0
+	e.mu.Unlock()
 }
 
 // LastServedStale reports whether the most recent Chat or ChatStream
@@ -167,26 +245,128 @@ func (e *StaleEngine) LastStaleAge() time.Duration {
 }
 
 // setOutcome records the outcome of a call. Caller must not hold e.mu
-// (setOutcome takes it).
+// (setOutcome takes it). It also clears any previous cache-hit record:
+// a fresh success, a failure, or a stale serve is not a proactive
+// cache hit.
 func (e *StaleEngine) setOutcome(stale bool, age time.Duration) {
 	e.mu.Lock()
 	e.lastStale = stale
 	e.lastStaleAge = age
+	e.lastCacheKind = ""
+	e.lastCacheSimilarity = 0
 	e.mu.Unlock()
+}
+
+// cacheable reports whether req may be served from, or stored into,
+// the caches. Tool-using requests are excluded: a cached entry stores
+// content only, so serving it would silently drop the tool calls the
+// caller asked for, and a tool result in the history makes a semantic
+// text match meaningless (the answer depends on the tool output, not
+// just the prompt words).
+func cacheable(req provider.ChatRequest) bool {
+	if len(req.Tools) > 0 || len(req.ToolChoice) > 0 {
+		return false
+	}
+	for _, m := range req.Messages {
+		if m.Role == "tool" || len(m.ToolCalls) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// semanticText is the text the semantic cache matches on: the last
+// user message's text (Content, or its text parts when sent as an
+// array). "" when there is no user message with text.
+func semanticText(req provider.ChatRequest) string {
+	for i := len(req.Messages) - 1; i >= 0; i-- {
+		m := req.Messages[i]
+		if m.Role != "user" {
+			continue
+		}
+		if m.Content != "" {
+			return m.Content
+		}
+		var sb strings.Builder
+		for _, p := range m.Parts {
+			if p.Type == "text" && p.Text != "" {
+				sb.WriteString(p.Text)
+				sb.WriteString(" ")
+			}
+		}
+		return strings.TrimSpace(sb.String())
+	}
+	return ""
+}
+
+// reportHit records a cache hit with the metrics sink, if any.
+func (e *StaleEngine) reportHit(layer string) {
+	e.mu.Lock()
+	m := e.cacheMetrics
+	e.mu.Unlock()
+	if m != nil {
+		m.IncCacheHit(layer)
+	}
+}
+
+// reportMiss records a cache miss with the metrics sink, if any.
+func (e *StaleEngine) reportMiss(layer string) {
+	e.mu.Lock()
+	m := e.cacheMetrics
+	e.mu.Unlock()
+	if m != nil {
+		m.IncCacheMiss(layer)
+	}
+}
+
+// lookup consults the exact-match cache first, then the semantic
+// cache, for a cacheable request under a ServeCache policy. It
+// returns the cached response, the hit kind ("exact" or "semantic"),
+// the semantic similarity (0 for exact hits), and true on a hit.
+// Misses are reported per layer consulted. It never calls a provider
+// and never serves a hit for a non-cacheable request or when
+// ServeCache is off.
+func (e *StaleEngine) lookup(ctx context.Context, req provider.ChatRequest) (cache.CachedResponse, string, float32, bool) {
+	if !e.policy.ServeCache || !cacheable(req) {
+		return cache.CachedResponse{}, "", 0, false
+	}
+	if e.exact != nil {
+		key, err := cache.ExactKey(req.Model, req.Messages)
+		if err == nil {
+			if hit, found := e.exact.Get(ctx, key); found {
+				e.reportHit("exact")
+				return hit, "exact", 0, true
+			}
+			e.reportMiss("exact")
+		}
+	}
+	if e.semantic != nil {
+		if text := semanticText(req); text != "" {
+			if hit, found := e.semantic.GetText(ctx, text); found {
+				e.reportHit("semantic")
+				return hit.Response, "semantic", hit.Similarity, true
+			}
+			e.reportMiss("semantic")
+		}
+	}
+	return cache.CachedResponse{}, "", 0, false
 }
 
 // store caches a successful response and records its store time.
 // Failures to derive a key or to store are silently ignored: caching
 // is best-effort and must never break a successful response.
+// Non-cacheable requests (tool-using) are never stored: a cached
+// entry holds content only, so storing one would let a later lookup
+// silently drop tool calls. Cacheable successes are stored in the
+// exact cache under their exact key and, when a semantic cache is
+// configured, in the semantic cache under the last user message's
+// text — same 1h TTL and LRU eviction rules as the exact cache, so
+// neither layer can serve an entry the other has aged out of.
 func (e *StaleEngine) store(ctx context.Context, req provider.ChatRequest, resp *provider.ChatResponse) {
-	if e.exact == nil || resp == nil {
+	if resp == nil || !cacheable(req) {
 		return
 	}
-	key, err := cache.ExactKey(req.Model, req.Messages)
-	if err != nil {
-		return
-	}
-	e.exact.Set(ctx, key, cache.CachedResponse{
+	entry := cache.CachedResponse{
 		Content: resp.Content,
 		Usage: cache.Usage{
 			PromptTokens:     resp.Usage.PromptTokens,
@@ -194,10 +374,21 @@ func (e *StaleEngine) store(ctx context.Context, req provider.ChatRequest, resp 
 			TotalTokens:      resp.Usage.TotalTokens,
 		},
 		Model: resp.Model,
-	}, DefaultStoreTTL)
-	e.mu.Lock()
-	e.storedAt[key] = e.now()
-	e.mu.Unlock()
+	}
+	if e.exact != nil {
+		key, err := cache.ExactKey(req.Model, req.Messages)
+		if err == nil {
+			e.exact.Set(ctx, key, entry, DefaultStoreTTL)
+			e.mu.Lock()
+			e.storedAt[key] = e.now()
+			e.mu.Unlock()
+		}
+	}
+	if e.semantic != nil {
+		if text := semanticText(req); text != "" {
+			e.semantic.SetText(ctx, text, cache.SemanticEntry{Response: entry}, DefaultStoreTTL)
+		}
+	}
 }
 
 // staleFor returns the cached response for req if one exists and is
@@ -212,6 +403,13 @@ func (e *StaleEngine) store(ctx context.Context, req provider.ChatRequest, resp 
 // served, because its age cannot be proven to be within the limit.
 func (e *StaleEngine) staleFor(ctx context.Context, req provider.ChatRequest) (cached cache.CachedResponse, age time.Duration, ok bool) {
 	if e.exact == nil || !e.policy.staleAllowed() {
+		return cache.CachedResponse{}, 0, false
+	}
+	if !cacheable(req) {
+		// A cached entry holds content only. Serving it for a
+		// tool-using request would silently drop the tool calls
+		// the caller asked for — same reason proactive lookup and
+		// store skip such requests.
 		return cache.CachedResponse{}, 0, false
 	}
 	key, err := cache.ExactKey(req.Model, req.Messages)
@@ -280,6 +478,19 @@ func toChatResponse(req provider.ChatRequest, cached cache.CachedResponse) *prov
 // this wrapper never wraps, replaces, or annotates the upstream
 // error, so callers see exactly what the engine reported.
 func (e *StaleEngine) Chat(ctx context.Context, req provider.ChatRequest) (*provider.ChatResponse, error) {
+	// Proactive cache serving: a hit returns the cached response
+	// without calling any provider, so no provider is billed and
+	// the ledger (which the engine feeds) records nothing for this
+	// request. The hit is marked via LastCacheHit so the server can
+	// label it honestly; it is never marked stale. The hit is also
+	// stored under this request's exact key, so a paraphrase that
+	// hit semantically becomes an exact hit next time.
+	if cached, kind, sim, ok := e.lookup(ctx, req); ok {
+		resp := toChatResponse(req, cached)
+		e.store(ctx, req, resp)
+		e.setCacheOutcome(kind, sim)
+		return resp, nil
+	}
 	resp, err := e.engine.Chat(ctx, req)
 	if err == nil {
 		e.store(ctx, req, resp)
@@ -315,6 +526,23 @@ func (e *StaleEngine) Chat(ctx context.Context, req provider.ChatRequest) (*prov
 func (e *StaleEngine) ChatStream(ctx context.Context, req provider.ChatRequest, onDelta func(string) error) (*provider.ChatResponse, error) {
 	if onDelta == nil {
 		onDelta = func(string) error { return nil }
+	}
+	// Proactive cache serving for streams: a hit is replayed as a
+	// single delta, exactly like a stale replay, and no provider is
+	// called. A stream that already delivered content never reaches
+	// this path (lookup happens before any delta), so nothing can
+	// be duplicated.
+	if cached, kind, sim, ok := e.lookup(ctx, req); ok {
+		resp := toChatResponse(req, cached)
+		if cached.Content != "" {
+			if err := onDelta(cached.Content); err != nil {
+				e.setOutcome(false, 0)
+				return nil, err
+			}
+		}
+		e.store(ctx, req, resp)
+		e.setCacheOutcome(kind, sim)
+		return resp, nil
 	}
 	delivered := 0
 	counting := func(delta string) error {
@@ -355,6 +583,11 @@ func (e *StaleEngine) ChatStream(ctx context.Context, req provider.ChatRequest, 
 }
 
 // ChatStreamFrom resumes a stream from skipChars runes in.
+//
+// Proactive cache lookup is deliberately skipped here: a resume means
+// the client already holds a prefix, so serving a cached full
+// response would duplicate content. The stale fallback below is the
+// only cache path on a resume, exactly as before.
 //
 // If the wrapped engine implements server.StreamResumer, the resume
 // is delegated to it (a success is stored like any other; a failure
@@ -458,6 +691,22 @@ type chunkResumer interface {
 func (e *StaleEngine) ChatStreamChunks(ctx context.Context, req provider.ChatRequest, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
 	if onChunk == nil {
 		onChunk = func(provider.StreamChunk) error { return nil }
+	}
+	// Proactive cache serving for chunk streams: a hit is replayed
+	// as a single text chunk (tool calls cannot be reconstructed
+	// from a content-only cached entry — same limitation as a stale
+	// replay — and cacheable requests carry no tools anyway).
+	if cached, kind, sim, ok := e.lookup(ctx, req); ok {
+		resp := toChatResponse(req, cached)
+		if cached.Content != "" {
+			if err := onChunk(provider.StreamChunk{Content: cached.Content}); err != nil {
+				e.setOutcome(false, 0)
+				return nil, err
+			}
+		}
+		e.store(ctx, req, resp)
+		e.setCacheOutcome(kind, sim)
+		return resp, nil
 	}
 	delivered := 0
 	counting := func(c provider.StreamChunk) error {
