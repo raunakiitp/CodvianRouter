@@ -1,0 +1,713 @@
+// Package server implements the OpenAI-compatible HTTP gateway for Codvian Router.
+//
+// Stdlib only (net/http). No dashboard, no HTML.
+//
+// CONTRACT NOTES — read before wiring in the real packages:
+//
+//   - Chat types come from internal/provider (Message, ChatRequest,
+//     ChatResponse, Usage). The Engine interface here is the contract the
+//     router must satisfy: Chat + ChatStream over provider types. The
+//     router package (internal/router) does not exist yet; when it lands
+//     it should implement this Engine interface and main.go can pass it to
+//     New. No local copies of the chat types are kept.
+//   - Auth goes through the KeyVerifier interface. The production
+//     implementation is NewConfigVerifier, which adapts
+//     *config.Config.VerifyGatewayKey (config stores only SHA-256 hashes
+//     of gateway keys). StaticKeyVerifier is a test/fallback helper only.
+//     Auth is ON by default: with no verifier configured every /v1/*
+//     request is rejected, and there is no bypass flag.
+//   - /v1/models reads from the ModelRegistry interface when one is
+//     supplied, and otherwise falls back to the model IDs given via
+//     WithModels (the configured models). AdaptProviderRegistry adapts
+//     the real *provider.Registry (which lists providers, each with its
+//     own models) to that interface.
+//
+// Logging policy: only route, model, status and latency are logged. API
+// keys and message content are never logged.
+package server
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/raunakiitp/codvian-router/internal/config"
+	"github.com/raunakiitp/codvian-router/internal/provider"
+)
+
+// DefaultTimeout is the per-request timeout applied to /v1/* handlers.
+const DefaultTimeout = 120 * time.Second
+
+// maxRequestBody caps a single chat-completions request body (10 MiB).
+const maxRequestBody = 10 << 20
+
+// ---------------------------------------------------------------------------
+// Engine contract (router to implement; see package doc).
+// ---------------------------------------------------------------------------
+
+// Engine is the routing engine contract, over provider types. ChatStream
+// calls onDelta once per content fragment (in order) and returns the
+// completed response; the engine owns provider failover, so a ChatStream
+// that fails over internally must not re-emit fragments it already
+// delivered.
+type Engine interface {
+	Chat(ctx context.Context, req provider.ChatRequest) (*provider.ChatResponse, error)
+	ChatStream(ctx context.Context, req provider.ChatRequest, onDelta func(string) error) (*provider.ChatResponse, error)
+}
+
+// StreamResumer is optionally implemented by engines that support
+// mid-stream resume. skipChars is the number of runes of content the
+// client has already received; the engine must not re-emit them. The
+// server additionally trims any replayed overlap (see trimAlreadySent)
+// as a safety net, so a resume that ignores skipChars still cannot
+// duplicate content on the wire.
+type StreamResumer interface {
+	ChatStreamFrom(ctx context.Context, req provider.ChatRequest, skipChars int, onDelta func(string) error) (*provider.ChatResponse, error)
+}
+
+// ---------------------------------------------------------------------------
+// Gateway-key verification.
+// ---------------------------------------------------------------------------
+
+// KeyVerifier verifies a gateway key. Implementations must not log keys.
+type KeyVerifier interface {
+	VerifyKey(ctx context.Context, key string) bool
+}
+
+// configVerifier adapts *config.Config to KeyVerifier via
+// Config.VerifyGatewayKey (hash comparison, scopes/budgets live in config).
+type configVerifier struct {
+	cfg *config.Config
+}
+
+// NewConfigVerifier returns a KeyVerifier backed by cfg. This is the
+// production verifier: main.go should pass the loaded *config.Config.
+func NewConfigVerifier(cfg *config.Config) KeyVerifier {
+	return configVerifier{cfg: cfg}
+}
+
+// VerifyKey reports whether key matches any gateway key stored in cfg.
+func (v configVerifier) VerifyKey(_ context.Context, key string) bool {
+	if v.cfg == nil || key == "" {
+		return false
+	}
+	_, ok := v.cfg.VerifyGatewayKey(key)
+	return ok
+}
+
+// StaticKeyVerifier is an in-memory KeyVerifier for tests and for use
+// when no config is loaded. It is NOT the production path — use
+// NewConfigVerifier with the loaded config instead. Keys are stored only
+// as SHA-256 hashes and compared in constant time.
+type StaticKeyVerifier struct {
+	hashes map[[32]byte]struct{}
+}
+
+// NewStaticKeyVerifier builds a verifier for the given keys. Empty keys
+// are ignored.
+func NewStaticKeyVerifier(keys ...string) *StaticKeyVerifier {
+	v := &StaticKeyVerifier{hashes: make(map[[32]byte]struct{}, len(keys))}
+	for _, k := range keys {
+		if k == "" {
+			continue
+		}
+		v.hashes[sha256.Sum256([]byte(k))] = struct{}{}
+	}
+	return v
+}
+
+// VerifyKey reports whether key is one of the configured keys.
+func (v *StaticKeyVerifier) VerifyKey(_ context.Context, key string) bool {
+	if v == nil || key == "" {
+		return false
+	}
+	sum := sha256.Sum256([]byte(key))
+	for h := range v.hashes {
+		if subtle.ConstantTimeCompare(h[:], sum[:]) == 1 {
+			return true
+		}
+	}
+	return false
+}
+
+// ---------------------------------------------------------------------------
+// Model registry.
+// ---------------------------------------------------------------------------
+
+// Model is one entry in a GET /v1/models list response.
+type Model struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	OwnedBy string `json:"owned_by"`
+}
+
+// ModelRegistry lists the models the gateway may serve. When no registry
+// is configured the server falls back to the model IDs from WithModels.
+type ModelRegistry interface {
+	Models(ctx context.Context) ([]Model, error)
+}
+
+// providerRegistryAdapter adapts *provider.Registry — which lists
+// providers, each carrying its own models — to ModelRegistry by
+// flattening all enabled providers' models (deduplicated by model ID).
+type providerRegistryAdapter struct {
+	reg *provider.Registry
+}
+
+// AdaptProviderRegistry adapts a *provider.Registry to ModelRegistry.
+func AdaptProviderRegistry(reg *provider.Registry) ModelRegistry {
+	return providerRegistryAdapter{reg: reg}
+}
+
+// Models returns every model of every provider in the registry.
+func (a providerRegistryAdapter) Models(_ context.Context) ([]Model, error) {
+	if a.reg == nil {
+		return []Model{}, nil
+	}
+	seen := make(map[string]struct{})
+	var out []Model
+	for _, p := range a.reg.List() {
+		if p == nil {
+			continue
+		}
+		for _, m := range p.Models {
+			if m.ID == "" {
+				continue
+			}
+			if _, dup := seen[m.ID]; dup {
+				continue
+			}
+			seen[m.ID] = struct{}{}
+			out = append(out, Model{ID: m.ID, Object: "model", OwnedBy: p.Name})
+		}
+	}
+	if out == nil {
+		out = []Model{}
+	}
+	return out, nil
+}
+
+// ---------------------------------------------------------------------------
+// Server.
+// ---------------------------------------------------------------------------
+
+// Server is the OpenAI-compatible HTTP gateway.
+type Server struct {
+	engine   Engine
+	verifier KeyVerifier
+	registry ModelRegistry
+	models   []string
+	timeout  time.Duration
+	logger   *log.Logger
+	handler  http.Handler
+}
+
+// Option configures a Server.
+type Option func(*Server)
+
+// WithKeyVerifier sets the gateway-key verifier.
+func WithKeyVerifier(v KeyVerifier) Option {
+	return func(s *Server) { s.verifier = v }
+}
+
+// WithConfig sets the verifier from a loaded *config.Config (production
+// path — see NewConfigVerifier).
+func WithConfig(cfg *config.Config) Option {
+	return func(s *Server) { s.verifier = NewConfigVerifier(cfg) }
+}
+
+// WithStaticKeys configures the in-memory key list (tests / fallback
+// only — see StaticKeyVerifier).
+func WithStaticKeys(keys ...string) Option {
+	return func(s *Server) { s.verifier = NewStaticKeyVerifier(keys...) }
+}
+
+// WithRegistry sets the model registry used by GET /v1/models.
+func WithRegistry(r ModelRegistry) Option {
+	return func(s *Server) { s.registry = r }
+}
+
+// WithProviderRegistry sets the model registry from a *provider.Registry
+// (adapted via AdaptProviderRegistry).
+func WithProviderRegistry(r *provider.Registry) Option {
+	return func(s *Server) { s.registry = AdaptProviderRegistry(r) }
+}
+
+// WithModels sets the configured model IDs returned by GET /v1/models
+// when no registry is configured.
+func WithModels(ids ...string) Option {
+	return func(s *Server) { s.models = append([]string(nil), ids...) }
+}
+
+// WithTimeout overrides the per-request timeout (default 120s).
+func WithTimeout(d time.Duration) Option {
+	return func(s *Server) {
+		if d > 0 {
+			s.timeout = d
+		}
+	}
+}
+
+// WithLogger overrides the logger (default log.Default()).
+func WithLogger(l *log.Logger) Option {
+	return func(s *Server) {
+		if l != nil {
+			s.logger = l
+		}
+	}
+}
+
+// New builds a Server. engine must not be nil.
+func New(engine Engine, opts ...Option) *Server {
+	s := &Server{engine: engine, timeout: DefaultTimeout, logger: log.Default()}
+	for _, o := range opts {
+		o(s)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", s.handleHealthz)
+	mux.HandleFunc("/v1/models", s.requireAuth(s.handleModels))
+	mux.HandleFunc("/v1/chat/completions", s.requireAuth(s.handleChatCompletions))
+	s.handler = s.withLogging(mux)
+	return s
+}
+
+// ServeHTTP implements http.Handler.
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.handler.ServeHTTP(w, r)
+}
+
+// Handler returns the full handler (logging + routes), for embedding in
+// another mux or for httptest.
+func (s *Server) Handler() http.Handler { return s.handler }
+
+// ---------------------------------------------------------------------------
+// Auth.
+// ---------------------------------------------------------------------------
+
+// requireAuth enforces Authorization: Bearer <gateway key> on /v1/*.
+// There is no bypass flag: a missing verifier rejects everything.
+func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.authorized(r) {
+			writeError(w, http.StatusUnauthorized, "invalid gateway key")
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (s *Server) authorized(r *http.Request) bool {
+	if s.verifier == nil {
+		return false
+	}
+	auth := r.Header.Get("Authorization")
+	if auth == "" {
+		return false
+	}
+	parts := strings.SplitN(auth, " ", 2)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
+		return false
+	}
+	return s.verifier.VerifyKey(r.Context(), parts[1])
+}
+
+// ---------------------------------------------------------------------------
+// JSON helpers.
+// ---------------------------------------------------------------------------
+
+type errorBody struct {
+	Error errorDetail `json:"error"`
+}
+
+type errorDetail struct {
+	Message string `json:"message"`
+	Type    string `json:"type"`
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+// writeError writes an OpenAI-shaped client error.
+func writeError(w http.ResponseWriter, status int, msg string) {
+	writeJSON(w, status, errorBody{Error: errorDetail{Message: msg, Type: "invalid_request_error"}})
+}
+
+// writeServerError writes an OpenAI-shaped server/upstream error.
+func writeServerError(w http.ResponseWriter, status int, msg string) {
+	writeJSON(w, status, errorBody{Error: errorDetail{Message: msg, Type: "server_error"}})
+}
+
+// ---------------------------------------------------------------------------
+// Handlers.
+// ---------------------------------------------------------------------------
+
+func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
+	defer cancel()
+
+	var models []Model
+	if s.registry != nil {
+		var err error
+		models, err = s.registry.Models(ctx)
+		if err != nil {
+			s.logger.Printf("models registry error: %v", err)
+			writeServerError(w, http.StatusBadGateway, "upstream provider error")
+			return
+		}
+	} else {
+		for _, id := range s.models {
+			models = append(models, Model{ID: id, Object: "model", OwnedBy: "codvian-router"})
+		}
+	}
+	if models == nil {
+		models = []Model{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"object": "list", "data": models})
+}
+
+func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
+	defer cancel()
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
+	var req provider.ChatRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeError(w, http.StatusRequestEntityTooLarge, "request body too large")
+		} else if errors.Is(err, io.EOF) {
+			writeError(w, http.StatusBadRequest, "empty request body")
+		} else {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+		}
+		return
+	}
+	if msg := validateChatRequest(&req); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	if lf := logFieldsFrom(ctx); lf != nil {
+		lf.model = req.Model
+	}
+
+	if req.Stream {
+		s.handleChatStream(w, ctx, req)
+		return
+	}
+
+	resp, err := s.engine.Chat(ctx, req)
+	if err != nil {
+		s.handleEngineError(w, err)
+		return
+	}
+	if resp == nil {
+		// A nil response with a nil error is an upstream failure.
+		writeServerError(w, http.StatusBadGateway, "upstream provider error")
+		return
+	}
+	id := newChatID()
+	model := resp.Model
+	if model == "" {
+		model = req.Model
+	}
+	writeJSON(w, http.StatusOK, chatCompletionResponse{
+		ID:      id,
+		Object:  "chat.completion",
+		Created: time.Now().Unix(),
+		Model:   model,
+		Choices: []chatChoiceJSON{{
+			Index:        0,
+			Message:      provider.Message{Role: "assistant", Content: resp.Content},
+			FinishReason: "stop",
+		}},
+		Usage: resp.Usage,
+	})
+}
+
+func validateChatRequest(req *provider.ChatRequest) string {
+	if req.Model == "" {
+		return "model is required"
+	}
+	if len(req.Messages) == 0 {
+		return "messages must not be empty"
+	}
+	for i, m := range req.Messages {
+		switch m.Role {
+		case "system", "developer", "user", "assistant", "tool":
+		case "":
+			return fmt.Sprintf("messages[%d].role is required", i)
+		default:
+			return fmt.Sprintf("messages[%d].role must be one of system, developer, user, assistant, tool", i)
+		}
+		// Content is required for prompts; assistant/tool turns may
+		// legitimately carry empty content in history.
+		if m.Content == "" && (m.Role == "user" || m.Role == "system" || m.Role == "developer") {
+			return fmt.Sprintf("messages[%d].content is required", i)
+		}
+	}
+	return ""
+}
+
+// handleEngineError maps an engine failure to a status code. Upstream
+// detail is not exposed to the client.
+func (s *Server) handleEngineError(w http.ResponseWriter, err error) {
+	if errors.Is(err, context.DeadlineExceeded) {
+		writeServerError(w, http.StatusGatewayTimeout, "request timed out")
+		return
+	}
+	writeServerError(w, http.StatusBadGateway, "upstream provider error")
+}
+
+type chatCompletionResponse struct {
+	ID      string           `json:"id"`
+	Object  string           `json:"object"`
+	Created int64            `json:"created"`
+	Model   string           `json:"model"`
+	Choices []chatChoiceJSON `json:"choices"`
+	Usage   provider.Usage   `json:"usage"`
+}
+
+type chatChoiceJSON struct {
+	Index        int              `json:"index"`
+	Message      provider.Message `json:"message"`
+	FinishReason string           `json:"finish_reason"`
+}
+
+// ---------------------------------------------------------------------------
+// Streaming (SSE) with failover-safe resume.
+// ---------------------------------------------------------------------------
+
+type streamDelta struct {
+	Role    string `json:"role,omitempty"`
+	Content string `json:"content,omitempty"`
+}
+
+type streamChoice struct {
+	Index        int         `json:"index"`
+	Delta        streamDelta `json:"delta"`
+	FinishReason *string     `json:"finish_reason"`
+}
+
+type streamChunk struct {
+	ID      string         `json:"id"`
+	Object  string         `json:"object"`
+	Created int64          `json:"created"`
+	Model   string         `json:"model"`
+	Choices []streamChoice `json:"choices"`
+}
+
+func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, req provider.ChatRequest) {
+	id := newChatID()
+	created := time.Now().Unix()
+
+	var sent strings.Builder // full content already sent to the client
+	headersSent := false
+	flusher, _ := w.(http.Flusher)
+
+	ensureHeaders := func() {
+		if headersSent {
+			return
+		}
+		h := w.Header()
+		h.Set("Content-Type", "text/event-stream")
+		h.Set("Cache-Control", "no-cache")
+		h.Set("Connection", "keep-alive")
+		h.Set("X-Accel-Buffering", "no")
+		w.WriteHeader(http.StatusOK)
+		headersSent = true
+	}
+	writeSSE := func(line string) error {
+		ensureHeaders()
+		if _, err := io.WriteString(w, line); err != nil {
+			return err
+		}
+		if flusher != nil {
+			flusher.Flush()
+		}
+		return nil
+	}
+	writeChunk := func(delta streamDelta, finishReason *string) error {
+		b, err := json.Marshal(streamChunk{
+			ID: id, Object: "chat.completion.chunk", Created: created, Model: req.Model,
+			Choices: []streamChoice{{Index: 0, Delta: delta, FinishReason: finishReason}},
+		})
+		if err != nil {
+			return err
+		}
+		return writeSSE("data: " + string(b) + "\n\n")
+	}
+
+	first := true
+	onDelta := func(delta string) error {
+		if delta == "" {
+			return nil
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		d := streamDelta{Content: delta}
+		if first {
+			d.Role = "assistant"
+			first = false
+		}
+		if err := writeChunk(d, nil); err != nil {
+			return err
+		}
+		sent.WriteString(delta)
+		return nil
+	}
+	finish := func() error {
+		// A completed stream always ends with finish_reason "stop" in Phase 1.
+		fr := "stop"
+		if err := writeChunk(streamDelta{}, &fr); err != nil {
+			return err
+		}
+		return writeSSE("data: [DONE]\n\n")
+	}
+
+	_, err := s.engine.ChatStream(ctx, req, onDelta)
+	if err == nil {
+		_ = finish()
+		return
+	}
+
+	// The engine failed. If nothing was sent yet, headers have not gone
+	// out (they are written lazily on the first chunk), so a plain JSON
+	// error with a 502/504 status is still possible.
+	if sent.Len() == 0 && !headersSent {
+		s.handleEngineError(w, err)
+		return
+	}
+
+	// Partial content already reached the client: it must not be re-sent.
+	// Resume once from the exact offset, if the engine supports it.
+	if resumer, ok := s.engine.(StreamResumer); ok {
+		skipChars := len([]rune(sent.String()))
+		resumeDelta := func(delta string) error {
+			if delta == "" {
+				return nil
+			}
+			// Safety net: strip any prefix the client already has, in
+			// case the engine ignored skipChars and replayed from start.
+			if trimmed := trimAlreadySent(sent.String(), delta); trimmed != delta {
+				delta = trimmed
+				if delta == "" {
+					return nil
+				}
+			}
+			return onDelta(delta)
+		}
+		_, err2 := resumer.ChatStreamFrom(ctx, req, skipChars, resumeDelta)
+		if err2 == nil {
+			_ = finish()
+			return
+		}
+		err = err2
+	}
+
+	// Resume unavailable or failed: end the stream with an SSE error
+	// event rather than duplicating content or hanging.
+	s.logger.Printf("stream failed after %d bytes sent: %v", sent.Len(), err)
+	payload, _ := json.Marshal(errorBody{Error: errorDetail{Message: "upstream provider error", Type: "server_error"}})
+	_ = writeSSE("data: " + string(payload) + "\n\n")
+}
+
+// trimAlreadySent removes the portion of delta that the client has already
+// received: the longest suffix of sent that is also a prefix of delta.
+// Returns delta unchanged when there is no overlap.
+func trimAlreadySent(sent, delta string) string {
+	max := len(sent)
+	if len(delta) < max {
+		max = len(delta)
+	}
+	for n := max; n > 0; n-- {
+		if sent[len(sent)-n:] == delta[:n] {
+			return delta[n:]
+		}
+	}
+	return delta
+}
+
+func newChatID() string {
+	var b [12]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano())
+	}
+	return "chatcmpl-" + hex.EncodeToString(b[:])
+}
+
+// ---------------------------------------------------------------------------
+// Logging middleware (route, model, status, latency only).
+// ---------------------------------------------------------------------------
+
+type ctxKeyLogFields struct{}
+
+type logFields struct {
+	model string
+}
+
+func logFieldsFrom(ctx context.Context) *logFields {
+	lf, _ := ctx.Value(ctxKeyLogFields{}).(*logFields)
+	return lf
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(status int) {
+	r.status = status
+	r.ResponseWriter.WriteHeader(status)
+}
+
+// Flush passes through so SSE streaming works behind the recorder.
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (s *Server) withLogging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lf := &logFields{}
+		r = r.WithContext(context.WithValue(r.Context(), ctxKeyLogFields{}, lf))
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		start := time.Now()
+		next.ServeHTTP(rec, r)
+		// Never log keys or message content — route, model, status,
+		// latency only.
+		s.logger.Printf("method=%s path=%s model=%s status=%d latency_ms=%d",
+			r.Method, r.URL.Path, lf.model, rec.status, time.Since(start).Milliseconds())
+	})
+}
