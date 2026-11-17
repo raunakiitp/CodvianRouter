@@ -42,7 +42,9 @@ import (
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/config"
+	"github.com/raunakiitp/codvian-router/internal/metrics"
 	"github.com/raunakiitp/codvian-router/internal/provider"
+	"github.com/raunakiitp/codvian-router/internal/routetrace"
 )
 
 // DefaultTimeout is the per-request timeout applied to /v1/* handlers.
@@ -210,6 +212,7 @@ type Server struct {
 	models   []string
 	timeout  time.Duration
 	logger   *log.Logger
+	recorder *metrics.Recorder // nil = metrics disabled
 	handler  http.Handler
 }
 
@@ -268,6 +271,13 @@ func WithLogger(l *log.Logger) Option {
 	}
 }
 
+// WithMetrics enables the /metrics endpoint and per-request recording
+// (requests, latency, in-flight, failovers) with the given recorder.
+// A nil recorder disables metrics: /metrics answers 503.
+func WithMetrics(rec *metrics.Recorder) Option {
+	return func(s *Server) { s.recorder = rec }
+}
+
 // New builds a Server. engine must not be nil.
 func New(engine Engine, opts ...Option) *Server {
 	s := &Server{engine: engine, timeout: DefaultTimeout, logger: log.Default()}
@@ -276,6 +286,7 @@ func New(engine Engine, opts ...Option) *Server {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
+	mux.HandleFunc("/metrics", s.requireAuth(s.handleMetrics))
 	mux.HandleFunc("/v1/models", s.requireAuth(s.handleModels))
 	mux.HandleFunc("/v1/chat/completions", s.requireAuth(s.handleChatCompletions))
 	s.handler = s.withLogging(mux)
@@ -363,6 +374,93 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// handleMetrics serves the Prometheus exposition of the recorder. It
+// is auth-gated like the rest of /v1/*: a scrape config must present a
+// gateway key, because the router may be bound to a non-loopback
+// address with --listen. Without a recorder it answers 503.
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if s.recorder == nil {
+		writeError(w, http.StatusServiceUnavailable, "metrics not enabled")
+		return
+	}
+	s.recorder.Handler().ServeHTTP(w, r)
+}
+
+// ---------------------------------------------------------------------------
+// Metrics recording (best-effort telemetry; never fails a request).
+// ---------------------------------------------------------------------------
+
+// traceProvider is optionally implemented by engines that expose the
+// RouteTrace of the most recently finished request (router.Engine,
+// and degrade.StaleEngine which forwards it).
+type traceProvider interface {
+	LastTrace() *routetrace.RouteTrace
+}
+
+// staleReporter is optionally implemented by engines that can report
+// whether the most recent call served a stale cached response
+// (degrade.StaleEngine).
+type staleReporter interface {
+	LastServedStale() bool
+	LastStaleAge() time.Duration
+}
+
+// recordMetrics records one finished chat request when a recorder is
+// configured. Provider/model come from the route trace when available
+// (the last attempt is the winner on success, the last tried on
+// failure), falling back to the request model and "unknown" provider.
+// Failovers — a non-success attempt followed by another attempt — are
+// counted from the trace. The trace is the engine's most recent one,
+// so under concurrency a request may occasionally be attributed to a
+// neighbour's trace; these counters are approximate telemetry, not
+// billing data (the ledger is the billing record).
+func (s *Server) recordMetrics(req provider.ChatRequest, resp *provider.ChatResponse, err error, started time.Time) {
+	rec := s.recorder
+	if rec == nil {
+		return
+	}
+	providerName, model := "unknown", req.Model
+	if tp, ok := s.engine.(traceProvider); ok {
+		if trace := tp.LastTrace(); trace != nil && len(trace.Attempts) > 0 {
+			last := trace.Attempts[len(trace.Attempts)-1]
+			providerName, model = last.Provider, last.Model
+			for i := 0; i+1 < len(trace.Attempts); i++ {
+				if trace.Attempts[i].Outcome != "success" {
+					rec.IncFailover(trace.Attempts[i].Provider, trace.Attempts[i+1].Provider)
+				}
+			}
+		}
+	}
+	if resp != nil && resp.Model != "" {
+		model = resp.Model
+	}
+	outcome := "ok"
+	if err != nil {
+		outcome = "error"
+		if errors.Is(err, context.DeadlineExceeded) {
+			outcome = "timeout"
+		}
+	}
+	rec.IncRequest(providerName, model, outcome)
+	rec.ObserveLatency(providerName, model, float64(time.Since(started).Milliseconds()))
+}
+
+// setStaleHeader marks a non-streaming response as stale when the
+// engine reports it served a stale cached response. It must be called
+// before the response body is written. Streaming responses cannot
+// carry the header (staleness is known only after the stream ends),
+// so handleChatStream logs it instead.
+func (s *Server) setStaleHeader(w http.ResponseWriter) {
+	if sr, ok := s.engine.(staleReporter); ok && sr.LastServedStale() {
+		w.Header().Set("X-Codvian-Stale", "true")
+		w.Header().Set("X-Codvian-Stale-Age", sr.LastStaleAge().String())
+	}
+}
+
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -420,12 +518,20 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		lf.model = req.Model
 	}
 
+	start := time.Now()
+	if s.recorder != nil {
+		s.recorder.IncInFlight()
+		defer s.recorder.DecInFlight()
+	}
+
 	if req.Stream {
-		s.handleChatStream(w, ctx, req)
+		err := s.handleChatStream(w, ctx, req)
+		s.recordMetrics(req, nil, err, start)
 		return
 	}
 
 	resp, err := s.engine.Chat(ctx, req)
+	s.recordMetrics(req, resp, err, start)
 	if err != nil {
 		s.handleEngineError(w, err)
 		return
@@ -440,6 +546,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	if model == "" {
 		model = req.Model
 	}
+	s.setStaleHeader(w)
 	writeJSON(w, http.StatusOK, chatCompletionResponse{
 		ID:      id,
 		Object:  "chat.completion",
@@ -526,7 +633,12 @@ type streamChunk struct {
 	Choices []streamChoice `json:"choices"`
 }
 
-func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, req provider.ChatRequest) {
+// handleChatStream streams SSE deltas to the client. It returns nil
+// on a completed stream and the engine error otherwise, so the caller
+// can record metrics. A stream that served a stale cached response
+// cannot carry the X-Codvian-Stale header (staleness is known only
+// after the stream ends), so it is logged instead.
+func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, req provider.ChatRequest) error {
 	id := newChatID()
 	created := time.Now().Unix()
 
@@ -597,8 +709,11 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 
 	_, err := s.engine.ChatStream(ctx, req, onDelta)
 	if err == nil {
+		if sr, ok := s.engine.(staleReporter); ok && sr.LastServedStale() {
+			s.logger.Printf("stream served stale response (age %s)", sr.LastStaleAge())
+		}
 		_ = finish()
-		return
+		return nil
 	}
 
 	// The engine failed. If nothing was sent yet, headers have not gone
@@ -606,7 +721,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 	// error with a 502/504 status is still possible.
 	if sent.Len() == 0 && !headersSent {
 		s.handleEngineError(w, err)
-		return
+		return err
 	}
 
 	// Partial content already reached the client: it must not be re-sent.
@@ -630,7 +745,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 		_, err2 := resumer.ChatStreamFrom(ctx, req, skipChars, resumeDelta)
 		if err2 == nil {
 			_ = finish()
-			return
+			return nil
 		}
 		err = err2
 	}
@@ -640,6 +755,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 	s.logger.Printf("stream failed after %d bytes sent: %v", sent.Len(), err)
 	payload, _ := json.Marshal(errorBody{Error: errorDetail{Message: "upstream provider error", Type: "server_error"}})
 	_ = writeSSE("data: " + string(payload) + "\n\n")
+	return err
 }
 
 // trimAlreadySent removes the portion of delta that the client has already

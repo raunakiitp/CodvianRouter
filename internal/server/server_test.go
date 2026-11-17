@@ -15,7 +15,9 @@ import (
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/config"
+	"github.com/raunakiitp/codvian-router/internal/metrics"
 	"github.com/raunakiitp/codvian-router/internal/provider"
+	"github.com/raunakiitp/codvian-router/internal/routetrace"
 )
 
 // fakeEngine is a controllable Engine for tests. It can succeed, fail,
@@ -416,5 +418,138 @@ func TestTrimAlreadySent(t *testing.T) {
 		if got := trimAlreadySent(tc.sent, tc.delta); got != tc.want {
 			t.Errorf("trimAlreadySent(%q, %q) = %q, want %q", tc.sent, tc.delta, got, tc.want)
 		}
+	}
+}
+
+// staleFakeEngine wraps a fakeEngine and reports that its last call
+// served a stale cached response.
+type staleFakeEngine struct {
+	*fakeEngine
+	age time.Duration
+}
+
+func (f *staleFakeEngine) LastServedStale() bool       { return true }
+func (f *staleFakeEngine) LastStaleAge() time.Duration { return f.age }
+
+// tracedFakeEngine wraps a fakeEngine and exposes a fixed RouteTrace.
+type tracedFakeEngine struct {
+	*fakeEngine
+	trace *routetrace.RouteTrace
+}
+
+func (f *tracedFakeEngine) LastTrace() *routetrace.RouteTrace { return f.trace }
+
+func chatBody() string {
+	return `{"model":"model-a","messages":[{"role":"user","content":"hi"}]}`
+}
+
+func TestMetricsEndpointRecordsRequest(t *testing.T) {
+	rec := metrics.NewRecorder()
+	eng := &fakeEngine{chatResp: provider.ChatResponse{Content: "hi", Model: "model-a"}}
+	srv := newTestServer(t, eng, WithMetrics(rec))
+
+	got := doReq(t, srv, http.MethodPost, "/v1/chat/completions", chatBody(), "test-key-123")
+	if got.Code != http.StatusOK {
+		t.Fatalf("chat status = %d, want 200", got.Code)
+	}
+	m := doReq(t, srv, http.MethodGet, "/metrics", "", "test-key-123")
+	if m.Code != http.StatusOK {
+		t.Fatalf("metrics status = %d, want 200", m.Code)
+	}
+	body := m.Body.String()
+	if !strings.Contains(body, "codvian_router_requests_total{") ||
+		!strings.Contains(body, `outcome="ok"`) ||
+		!strings.Contains(body, `model="model_a"`) {
+		t.Fatalf("metrics body missing request counter:\n%s", body)
+	}
+	if !strings.Contains(body, "codvian_router_request_latency_ms") {
+		t.Fatalf("metrics body missing latency histogram:\n%s", body)
+	}
+}
+
+func TestMetricsRequiresAuth(t *testing.T) {
+	rec := metrics.NewRecorder()
+	srv := newTestServer(t, &fakeEngine{}, WithMetrics(rec))
+	got := doReq(t, srv, http.MethodGet, "/metrics", "", "")
+	if got.Code != http.StatusUnauthorized {
+		t.Fatalf("metrics without key: status = %d, want 401", got.Code)
+	}
+}
+
+func TestMetricsDisabledWithoutRecorder(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{})
+	got := doReq(t, srv, http.MethodGet, "/metrics", "", "test-key-123")
+	if got.Code != http.StatusServiceUnavailable {
+		t.Fatalf("metrics without recorder: status = %d, want 503", got.Code)
+	}
+}
+
+func TestMetricsCountsFailoverFromTrace(t *testing.T) {
+	rec := metrics.NewRecorder()
+	eng := &tracedFakeEngine{
+		fakeEngine: &fakeEngine{chatResp: provider.ChatResponse{Content: "hi", Model: "model-a"}},
+		trace: &routetrace.RouteTrace{Attempts: []routetrace.AttemptTrace{
+			{Provider: "provider-a", Model: "model-a", Outcome: "error"},
+			{Provider: "provider-b", Model: "model-a", Outcome: "success"},
+		}},
+	}
+	srv := newTestServer(t, eng, WithMetrics(rec))
+	got := doReq(t, srv, http.MethodPost, "/v1/chat/completions", chatBody(), "test-key-123")
+	if got.Code != http.StatusOK {
+		t.Fatalf("chat status = %d, want 200", got.Code)
+	}
+	m := doReq(t, srv, http.MethodGet, "/metrics", "", "test-key-123")
+	body := m.Body.String()
+	if !strings.Contains(body, "codvian_router_failovers_total{") ||
+		!strings.Contains(body, `from_provider="provider_a"`) ||
+		!strings.Contains(body, `to_provider="provider_b"`) {
+		t.Fatalf("metrics body missing failover counter:\n%s", body)
+	}
+	if !strings.Contains(body, `provider="provider_b"`) {
+		t.Fatalf("request counter should attribute the winning provider:\n%s", body)
+	}
+}
+
+func TestMetricsRecordsErrorOutcome(t *testing.T) {
+	rec := metrics.NewRecorder()
+	eng := &fakeEngine{chatErr: errors.New("boom")}
+	srv := newTestServer(t, eng, WithMetrics(rec))
+	got := doReq(t, srv, http.MethodPost, "/v1/chat/completions", chatBody(), "test-key-123")
+	if got.Code != http.StatusBadGateway {
+		t.Fatalf("chat status = %d, want 502", got.Code)
+	}
+	m := doReq(t, srv, http.MethodGet, "/metrics", "", "test-key-123")
+	if !strings.Contains(m.Body.String(), `outcome="error"`) {
+		t.Fatalf("metrics body missing error outcome:\n%s", m.Body.String())
+	}
+}
+
+func TestStaleHeaderSet(t *testing.T) {
+	eng := &staleFakeEngine{
+		fakeEngine: &fakeEngine{chatResp: provider.ChatResponse{Content: "old answer", Model: "model-a"}},
+		age:        5 * time.Minute,
+	}
+	srv := newTestServer(t, eng)
+	got := doReq(t, srv, http.MethodPost, "/v1/chat/completions", chatBody(), "test-key-123")
+	if got.Code != http.StatusOK {
+		t.Fatalf("chat status = %d, want 200", got.Code)
+	}
+	if got.Header().Get("X-Codvian-Stale") != "true" {
+		t.Fatalf("X-Codvian-Stale = %q, want true", got.Header().Get("X-Codvian-Stale"))
+	}
+	if got.Header().Get("X-Codvian-Stale-Age") != "5m0s" {
+		t.Fatalf("X-Codvian-Stale-Age = %q, want 5m0s", got.Header().Get("X-Codvian-Stale-Age"))
+	}
+}
+
+func TestStaleHeaderAbsentForFresh(t *testing.T) {
+	eng := &fakeEngine{chatResp: provider.ChatResponse{Content: "fresh", Model: "model-a"}}
+	srv := newTestServer(t, eng)
+	got := doReq(t, srv, http.MethodPost, "/v1/chat/completions", chatBody(), "test-key-123")
+	if got.Code != http.StatusOK {
+		t.Fatalf("chat status = %d, want 200", got.Code)
+	}
+	if got.Header().Get("X-Codvian-Stale") != "" {
+		t.Fatalf("X-Codvian-Stale = %q, want absent for fresh responses", got.Header().Get("X-Codvian-Stale"))
 	}
 }
