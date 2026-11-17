@@ -190,10 +190,11 @@ func (s *JSONFileStore) Save(configs []ProviderConfig) error {
 // not a Bearer header it never asked for.
 //
 // wireFormat is the wire the client must speak ("openai", "anthropic",
-// ...); "" means the OpenAI default. Only "anthropic" changes the
-// client today (Messages client); other formats fall back to OpenAI
-// wire (see WithWireFormat), so a provider added before native
-// transports exist keeps its previous behaviour.
+// "gemini", ...); "" means the OpenAI default. "anthropic" and
+// "gemini" change the client (Messages / generateContent clients);
+// other formats fall back to OpenAI wire (see WithWireFormat), so a
+// provider added before native transports exist keeps its previous
+// behaviour.
 type ClientFactory func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (Client, error)
 
 // Registry is the in-memory provider registry, persisted through a Store.
@@ -833,8 +834,9 @@ func (r *Registry) DecryptedKey(id string) (string, error) {
 // client is never built with a faked static header for them.
 //
 // The wire format likewise comes from the catalog resolution: a
-// provider whose surface speaks Anthropic gets a Messages client,
-// everything else the OpenAI client.
+// provider whose surface speaks Anthropic gets a Messages client, a
+// Gemini surface a generateContent client, everything else the
+// OpenAI client.
 func (r *Registry) ClientFor(id string) (Client, error) {
 	r.mu.RLock()
 	p, ok := r.providers[id]
@@ -850,12 +852,15 @@ func (r *Registry) ClientFor(id string) (Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Anthropic wins from either source: a stored wire from an older
-	// config must not be silently downgraded by a base-URL lookup
-	// that could not see it (e.g. a proxy base), and a resolved
-	// Anthropic wire must not be lost to a stale stored "openai".
+	// A native wire wins from either source: a stored wire from an
+	// older config must not be silently downgraded by a base-URL
+	// lookup that could not see it (e.g. a proxy base), and a
+	// resolved native wire must not be lost to a stale stored
+	// "openai".
 	if p.WireFormat == WireFormatAnthropic || wireFormat == WireFormatAnthropic {
 		wireFormat = WireFormatAnthropic
+	} else if p.WireFormat == WireFormatGemini || wireFormat == WireFormatGemini {
+		wireFormat = WireFormatGemini
 	} else if wireFormat == "" {
 		wireFormat = p.WireFormat
 	}
@@ -864,9 +869,10 @@ func (r *Registry) ClientFor(id string) (Client, error) {
 
 // catalogWireForBaseURL derives the wire format for a raw base URL
 // from the catalog (default surface): "anthropic" when the matched
-// surface speaks Messages, "openai" otherwise (unknown base, lookup
-// error, or an OpenAI surface). It never errors — callers treat the
-// OpenAI default as the safe fallback.
+// surface speaks Messages, "gemini" when it speaks generateContent,
+// "openai" otherwise (unknown base, lookup error, or an OpenAI
+// surface). It never errors — callers treat the OpenAI default as
+// the safe fallback.
 func catalogWireForBaseURL(baseURL, apiKey string) string {
 	res, found, err := catalog.ResolveAuthForBaseURL(baseURL, "", "", apiKey)
 	if err != nil || !found {
@@ -874,6 +880,9 @@ func catalogWireForBaseURL(baseURL, apiKey string) string {
 	}
 	if res.Wire == catalog.WireAnthropic {
 		return WireFormatAnthropic
+	}
+	if res.Wire == catalog.WireGemini {
+		return WireFormatGemini
 	}
 	return WireFormatOpenAI
 }
@@ -924,8 +933,11 @@ func (r *Registry) resolveAuthHeaders(p *Provider, key string) (map[string]strin
 // body mentions the model (endpoint exists, probe model unknown) — means
 // "openai". When both endpoints 404, the result is "unknown".
 //
-// This is a heuristic for Phase 1 (OpenAI-compatible first); non-OpenAI
-// wire formats (Anthropic native, Gemini native, ...) are future work.
+// This is a heuristic for Phase 1 (OpenAI-compatible first). Native
+// wire formats are derived from the catalog by base URL in
+// addProvider (catalogWireForBaseURL), not probed here — this probe
+// only ever speaks OpenAI wire, so it can only ever report "openai"
+// or "unknown".
 func DetectWireFormat(ctx context.Context, baseURL, apiKey string, authHeaders map[string]string, factory ClientFactory) (string, error) {
 	if factory == nil {
 		factory = func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (Client, error) {

@@ -21,8 +21,8 @@ import (
 	"time"
 )
 
-// WireFormatOpenAI is the default (and currently only supported) wire
-// format: OpenAI-compatible /v1/models and /v1/chat/completions.
+// WireFormatOpenAI is the default wire format: OpenAI-compatible
+// /v1/models and /v1/chat/completions.
 const WireFormatOpenAI = "openai"
 
 // WireFormatAnthropic is the Anthropic Messages wire format
@@ -30,6 +30,13 @@ const WireFormatOpenAI = "openai"
 // catalog wire format resolves to this speaks Messages, not OpenAI
 // chat completions; see NewClient (client.go).
 const WireFormatAnthropic = "anthropic"
+
+// WireFormatGemini is the Gemini generateContent wire format
+// (POST /v1beta/models/{model}:generateContent), spoken by
+// internal/wire. A provider whose catalog wire format resolves to
+// this speaks generateContent, not OpenAI chat completions; see
+// NewClient (client.go).
+const WireFormatGemini = "gemini"
 
 // WireFormatUnknown means auto-detection could not confirm an
 // OpenAI-compatible endpoint. The provider is still stored, but routing

@@ -337,7 +337,9 @@ func TestAnthropicListModels(t *testing.T) {
 func TestNewClientWireFallback(t *testing.T) {
 	// An unimplemented wire format falls back to the OpenAI client
 	// instead of breaking ClientFor for providers added before
-	// native transports existed.
+	// native transports existed. (Gemini used to be the example
+	// here; it has its own client now, so Cohere — still
+	// unimplemented — is the fallback case.)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" {
 			w.WriteHeader(http.StatusNotFound)
@@ -347,9 +349,9 @@ func TestNewClientWireFallback(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "k", WithWireFormat("gemini"))
+	c, err := NewClient(srv.URL, "k", WithWireFormat("cohere"))
 	if err != nil {
-		t.Fatalf("NewClient gemini: %v", err)
+		t.Fatalf("NewClient cohere: %v", err)
 	}
 	resp, err := c.Chat(context.Background(), ChatRequest{Model: "m", Messages: []Message{{Role: "user", Content: "x"}}})
 	if err != nil {

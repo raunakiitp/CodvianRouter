@@ -14,14 +14,19 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/crypto"
 )
 
-// recordingUpstream serves /v1/models and /v1/chat/completions and
-// records every request's path and headers, so tests can prove which
-// auth the client actually sent.
+// recordingUpstream serves /v1/models, /v1/chat/completions,
+// /v1/messages, and the Gemini shapes (/models,
+// /models/{model}:generateContent) and records every request's path
+// and headers, so tests can prove which auth the client actually
+// sent and which wire it spoke.
 type recordingUpstream struct {
-	mu       sync.Mutex
-	models   string
-	chatBody string
-	seen     []recordedRequest
+	mu           sync.Mutex
+	models       string
+	chatBody     string
+	messagesBody string
+	geminiModels string
+	geminiBody   string
+	seen         []recordedRequest
 }
 
 type recordedRequest struct {
@@ -41,7 +46,18 @@ func (m *recordingUpstream) handler() http.HandlerFunc {
 		case "/v1/chat/completions":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(m.chatBody))
+		case "/v1/messages":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(m.messagesBody))
+		case "/models":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(m.geminiModels))
 		default:
+			if strings.HasSuffix(r.URL.Path, ":generateContent") {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(m.geminiBody))
+				return
+			}
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}
@@ -70,8 +86,11 @@ func (m *recordingUpstream) lastHeader(path, header string) (string, bool) {
 func newRecordingServer(t *testing.T) (*httptest.Server, *recordingUpstream) {
 	t.Helper()
 	m := &recordingUpstream{
-		models:   `{"data":[{"id":"model-a"},{"id":"model-b"}]}`,
-		chatBody: `{"model":"model-a","choices":[{"message":{"role":"assistant","content":"hi"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`,
+		models:       `{"data":[{"id":"model-a"},{"id":"model-b"}]}`,
+		chatBody:     `{"model":"model-a","choices":[{"message":{"role":"assistant","content":"hi"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`,
+		messagesBody: `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"hi"}],"model":"model-a","stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":5}}`,
+		geminiModels: `{"models":[{"name":"models/gemini-2.0-flash"},{"name":"models/gemini-1.5-pro"}]}`,
+		geminiBody:   `{"candidates":[{"content":{"role":"model","parts":[{"text":"hi"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"totalTokenCount":15},"modelVersion":"gemini-2.0-flash"}`,
 	}
 	return httptest.NewServer(m.handler()), m
 }
@@ -200,13 +219,23 @@ func TestRegistryAddCatalogDeepSeekAnthropicEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClientFor: %v", err)
 	}
-	if _, err := client.Chat(context.Background(), ChatRequest{Model: "model-a", Messages: []Message{{Role: "user", Content: "hi"}}}); err != nil {
+	// The Anthropic surface speaks Messages, not OpenAI chat: the
+	// request must land on /v1/messages with x-api-key, and the
+	// Anthropic reply must come back as an OpenAI-shaped response.
+	resp, err := client.Chat(context.Background(), ChatRequest{Model: "model-a", Messages: []Message{{Role: "user", Content: "hi"}}})
+	if err != nil {
 		t.Fatalf("Chat: %v", err)
 	}
-	if got, ok := mock.lastHeader("/v1/chat/completions", "x-api-key"); !ok || got != "sk-ds-test" {
+	if resp.Content != "hi" {
+		t.Errorf("Content = %q, want hi", resp.Content)
+	}
+	if resp.FinishReason != "stop" {
+		t.Errorf("FinishReason = %q, want stop", resp.FinishReason)
+	}
+	if got, ok := mock.lastHeader("/v1/messages", "x-api-key"); !ok || got != "sk-ds-test" {
 		t.Errorf("x-api-key = %q (present=%v), want sk-ds-test", got, ok)
 	}
-	if got, ok := mock.lastHeader("/v1/chat/completions", "Authorization"); ok {
+	if got, ok := mock.lastHeader("/v1/messages", "Authorization"); ok {
 		t.Errorf("Authorization must NOT be sent on the Anthropic surface, got %q", got)
 	}
 }
@@ -230,14 +259,73 @@ func TestRegistryAddCatalogAnthropicMessagesEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClientFor: %v", err)
 	}
-	if _, err := client.Chat(context.Background(), ChatRequest{Model: "model-a", Messages: []Message{{Role: "user", Content: "hi"}}}); err != nil {
+	// The messages surface speaks Anthropic Messages: the request
+	// must land on /v1/messages with Bearer + anthropic-version.
+	resp, err := client.Chat(context.Background(), ChatRequest{Model: "model-a", Messages: []Message{{Role: "user", Content: "hi"}}})
+	if err != nil {
 		t.Fatalf("Chat: %v", err)
 	}
-	if got, ok := mock.lastHeader("/v1/chat/completions", "Authorization"); !ok || got != "Bearer sk-ant-test" {
+	if resp.Content != "hi" {
+		t.Errorf("Content = %q, want hi", resp.Content)
+	}
+	if got, ok := mock.lastHeader("/v1/messages", "Authorization"); !ok || got != "Bearer sk-ant-test" {
 		t.Errorf("Authorization = %q (present=%v), want Bearer sk-ant-test", got, ok)
 	}
-	if got, ok := mock.lastHeader("/v1/chat/completions", "anthropic-version"); !ok || got != "2026-10-21" {
+	if got, ok := mock.lastHeader("/v1/messages", "anthropic-version"); !ok || got != "2026-10-21" {
 		t.Errorf("anthropic-version = %q (present=%v), want 2026-10-21", got, ok)
+	}
+}
+
+func TestRegistryAddCatalogGeminiGenerateEndpoint(t *testing.T) {
+	srv, mock := newRecordingServer(t)
+	defer srv.Close()
+	reg, _ := newCatalogTestRegistry(t)
+
+	// Gemini's only recorded surface is "generate" with the
+	// x-goog-api-key header; the default endpoint resolves to it.
+	p, err := reg.AddCatalogWithOptions(context.Background(), "gemini", "gem-key-test",
+		CatalogAddOptions{BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("AddCatalog gemini: %v", err)
+	}
+	if p.AuthEndpoint != "generate" {
+		t.Errorf("AuthEndpoint = %q, want generate", p.AuthEndpoint)
+	}
+	if p.WireFormat != WireFormatGemini {
+		t.Errorf("WireFormat = %q, want gemini", p.WireFormat)
+	}
+	if len(p.Models) != 2 || p.Models[0].ID != "gemini-2.0-flash" {
+		t.Errorf("Models = %+v, want the models/ prefix stripped", p.Models)
+	}
+	client, err := reg.ClientFor(p.ID)
+	if err != nil {
+		t.Fatalf("ClientFor: %v", err)
+	}
+	// The generate surface speaks Gemini: the request must land on
+	// /models/{model}:generateContent with x-goog-api-key and no
+	// Authorization header.
+	resp, err := client.Chat(context.Background(), ChatRequest{Model: "gemini-2.0-flash", Messages: []Message{{Role: "user", Content: "hi"}}})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if resp.Content != "hi" {
+		t.Errorf("Content = %q, want hi", resp.Content)
+	}
+	var genPath string
+	var genHeaders http.Header
+	for _, req := range mock.requests() {
+		if strings.HasSuffix(req.path, ":generateContent") {
+			genPath, genHeaders = req.path, req.headers
+		}
+	}
+	if genPath != "/models/gemini-2.0-flash:generateContent" {
+		t.Errorf("generate path = %q", genPath)
+	}
+	if got := genHeaders.Get("x-goog-api-key"); got != "gem-key-test" {
+		t.Errorf("x-goog-api-key = %q, want gem-key-test", got)
+	}
+	if _, ok := genHeaders["Authorization"]; ok {
+		t.Errorf("Gemini must not send an Authorization header")
 	}
 }
 
@@ -494,10 +582,10 @@ func TestRegistryClientForAnthropicViaStore(t *testing.T) {
 	if _, err := client.Chat(context.Background(), ChatRequest{Model: "model-a", Messages: []Message{{Role: "user", Content: "hi"}}}); err != nil {
 		t.Fatalf("Chat: %v", err)
 	}
-	if got, ok := mock.lastHeader("/v1/chat/completions", "Authorization"); !ok || got != "Bearer sk-ant-test" {
+	if got, ok := mock.lastHeader("/v1/messages", "Authorization"); !ok || got != "Bearer sk-ant-test" {
 		t.Errorf("Authorization = %q (present=%v), want Bearer sk-ant-test", got, ok)
 	}
-	if got, ok := mock.lastHeader("/v1/chat/completions", "anthropic-version"); !ok || got != "2026-10-21" {
+	if got, ok := mock.lastHeader("/v1/messages", "anthropic-version"); !ok || got != "2026-10-21" {
 		t.Errorf("anthropic-version = %q (present=%v), want 2026-10-21", got, ok)
 	}
 }
@@ -525,7 +613,7 @@ func TestRegistryClientForBaseURLFallback(t *testing.T) {
 	// base URL is a real catalog URL) and records the headers the
 	// registry resolved.
 	var captured map[string]string
-	factory := func(baseURL, apiKey string, authHeaders map[string]string) (Client, error) {
+	factory := func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (Client, error) {
 		captured = authHeaders
 		return NewClient(srv.URL, apiKey, WithAuthHeaders(authHeaders))
 	}
