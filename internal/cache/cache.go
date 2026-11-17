@@ -381,8 +381,10 @@ type localSemanticEntry struct {
 // neural-embedding backend would replace EmbedText (the vector
 // builder) while Get/Set and the SemanticCache interface stay as-is.
 //
-// It is intentionally NOT wired into the server/engine request path
-// yet; it is a layer available for Phase 2 wiring.
+// It is wired into the request path through degrade.StaleEngine
+// (WrapWithSemantic + Policy.ServeCache): cacheable requests are
+// served proactively from exact first, then this layer, and
+// successes are stored here under the last user message's text.
 type LocalSemanticCache struct {
 	mu         sync.Mutex
 	threshold  float32
