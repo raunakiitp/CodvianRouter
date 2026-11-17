@@ -25,6 +25,12 @@ import (
 // format: OpenAI-compatible /v1/models and /v1/chat/completions.
 const WireFormatOpenAI = "openai"
 
+// WireFormatAnthropic is the Anthropic Messages wire format
+// (POST /v1/messages), spoken by internal/wire. A provider whose
+// catalog wire format resolves to this speaks Messages, not OpenAI
+// chat completions; see NewClient (client.go).
+const WireFormatAnthropic = "anthropic"
+
 // WireFormatUnknown means auto-detection could not confirm an
 // OpenAI-compatible endpoint. The provider is still stored, but routing
 // to it should be treated as best-effort.

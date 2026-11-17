@@ -12,22 +12,165 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/raunakiitp/codvian-router/internal/wire"
 )
 
-// Message is a single chat message.
+// ContentPart, ToolCall and ToolDefinition are the OpenAI shapes from
+// internal/wire, aliased here so the gateway and the conversion layer
+// share one definition (there is exactly one OpenAI wire shape).
+type ContentPart = wire.ContentPart
+type ToolCall = wire.ToolCall
+type ToolDefinition = wire.ToolDefinition
+
+// Message is a single chat message. Content is the plain-text form
+// (concatenated text parts when the wire sent an array). Parts carries
+// multi-part content (text + image_url) when the client sent it as an
+// array; ToolCalls carries assistant tool calls, ToolCallID the id a
+// "tool" message answers. Content decodes from either a JSON string
+// or an array of parts, and encodes back the same way it arrived
+// (array when Parts is set, string otherwise); see MarshalJSON /
+// UnmarshalJSON below.
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string        `json:"role"`
+	Content    string        `json:"content"`
+	Parts      []ContentPart `json:"-"`
+	ToolCalls  []ToolCall    `json:"tool_calls,omitempty"`
+	ToolCallID string        `json:"tool_call_id,omitempty"`
+	Name       string        `json:"name,omitempty"`
+}
+
+// messageJSON is the decode/encode shape for Message.
+type messageJSON struct {
+	Role       string          `json:"role"`
+	Content    json.RawMessage `json:"content,omitempty"`
+	ToolCalls  []ToolCall      `json:"tool_calls,omitempty"`
+	ToolCallID string          `json:"tool_call_id,omitempty"`
+	Name       string          `json:"name,omitempty"`
+}
+
+// UnmarshalJSON decodes a Message, accepting content as a plain string,
+// an array of content parts, or null (assistant messages that only
+// carry tool calls).
+func (m *Message) UnmarshalJSON(data []byte) error {
+	var raw messageJSON
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	m.Role = raw.Role
+	m.ToolCalls = raw.ToolCalls
+	m.ToolCallID = raw.ToolCallID
+	m.Name = raw.Name
+	m.Parts = nil
+	m.Content = ""
+	trimmed := strings.TrimSpace(string(raw.Content))
+	if trimmed == "" || trimmed == "null" {
+		return nil
+	}
+	var asString string
+	if err := json.Unmarshal(raw.Content, &asString); err == nil {
+		m.Content = asString
+		return nil
+	}
+	var parts []ContentPart
+	if err := json.Unmarshal(raw.Content, &parts); err != nil {
+		return fmt.Errorf("provider: message content is neither a string nor a content-part array: %w", err)
+	}
+	m.Parts = parts
+	var sb strings.Builder
+	for _, p := range parts {
+		if p.Type == "text" {
+			sb.WriteString(p.Text)
+		}
+	}
+	m.Content = sb.String()
+	return nil
+}
+
+// MarshalJSON encodes a Message: content goes out as an array when
+// Parts is set, as a string otherwise (null when there is no content
+// at all, e.g. an assistant message carrying only tool calls).
+func (m Message) MarshalJSON() ([]byte, error) {
+	var content any
+	switch {
+	case len(m.Parts) > 0:
+		content = m.Parts
+	case m.Content != "":
+		content = m.Content
+	default:
+		content = nil
+	}
+	return json.Marshal(messageJSON{
+		Role:       m.Role,
+		Content:    mustJSONRaw(content),
+		ToolCalls:  m.ToolCalls,
+		ToolCallID: m.ToolCallID,
+		Name:       m.Name,
+	})
+}
+
+// mustJSONRaw marshals v to its JSON encoding (infallible for the
+// values used here: string, []ContentPart, nil).
+func mustJSONRaw(v any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return json.RawMessage(`null`)
+	}
+	return b
 }
 
 // ChatRequest is a chat completion request. MaxTokens 0 means "provider
-// default"; Temperature 0 means "omit, use provider default".
+// default"; Temperature / TopP 0 means "omit, use provider default".
+// Stop accepts a string or an array of strings on decode (it always
+// encodes as an array). ToolChoice is kept raw so every OpenAI form
+// ("none" | "auto" | "required" | {"type":"function",...}) passes
+// through to the wire conversion unchanged.
 type ChatRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Stream      bool      `json:"stream"`
-	MaxTokens   int       `json:"max_tokens,omitempty"`
-	Temperature float64   `json:"temperature,omitempty"`
+	Model       string           `json:"model"`
+	Messages    []Message        `json:"messages"`
+	Stream      bool             `json:"stream"`
+	MaxTokens   int              `json:"max_tokens,omitempty"`
+	Temperature float64          `json:"temperature,omitempty"`
+	TopP        float64          `json:"top_p,omitempty"`
+	Stop        []string         `json:"stop,omitempty"`
+	Tools       []ToolDefinition `json:"tools,omitempty"`
+	ToolChoice  json.RawMessage  `json:"tool_choice,omitempty"`
+}
+
+// chatRequestAlias is ChatRequest without its methods, so decoding
+// into chatRequestJSON cannot recurse back into UnmarshalJSON.
+type chatRequestAlias ChatRequest
+
+// chatRequestJSON is the decode shape for ChatRequest (Stop may be a
+// string or a string array on the wire).
+type chatRequestJSON struct {
+	chatRequestAlias
+	Stop json.RawMessage `json:"stop,omitempty"`
+}
+
+// UnmarshalJSON decodes a ChatRequest, accepting Stop as either a
+// single string or an array of strings.
+func (r *ChatRequest) UnmarshalJSON(data []byte) error {
+	var raw chatRequestJSON
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*r = ChatRequest(raw.chatRequestAlias)
+	r.Stop = nil
+	if len(raw.Stop) == 0 {
+		return nil
+	}
+	var single string
+	if err := json.Unmarshal(raw.Stop, &single); err == nil {
+		r.Stop = []string{single}
+		return nil
+	}
+	var multi []string
+	if err := json.Unmarshal(raw.Stop, &multi); err != nil {
+		return fmt.Errorf("provider: invalid stop value: %w", err)
+	}
+	r.Stop = multi
+	return nil
 }
 
 // Usage is token usage reported by the upstream.
@@ -38,11 +181,52 @@ type Usage struct {
 }
 
 // ChatResponse is a completed (non-streaming or reassembled streaming)
-// chat completion.
+// chat completion. ToolCalls carries the model's tool calls (empty
+// for a plain text turn) and FinishReason the upstream finish reason
+// ("stop", "length", "tool_calls", ...); both are "" when the upstream
+// did not report them.
 type ChatResponse struct {
-	Content string `json:"content"`
-	Usage   Usage  `json:"usage"`
-	Model   string `json:"model"`
+	Content      string     `json:"content"`
+	Usage        Usage      `json:"usage"`
+	Model        string     `json:"model"`
+	ToolCalls    []ToolCall `json:"tool_calls,omitempty"`
+	FinishReason string     `json:"finish_reason,omitempty"`
+}
+
+// ChunkToolCall is one tool-call delta inside a streaming chunk:
+// Index identifies the call, ID/Name arrive on its first delta,
+// Arguments carries a fragment (streaming) or the complete arguments
+// (reassembled response).
+type ChunkToolCall struct {
+	Index     int    `json:"index"`
+	ID        string `json:"id,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Arguments string `json:"arguments,omitempty"`
+}
+
+// StreamChunk is one chunk of a streaming chat completion, in
+// provider-neutral form: Content is a text delta ("" when the chunk
+// carries only tool-call deltas), ToolCalls the tool-call deltas of
+// this chunk, FinishReason the upstream finish reason ("" until the
+// final chunk), Usage the usage block when the upstream sent one
+// (nil otherwise).
+type StreamChunk struct {
+	Content      string          `json:"content,omitempty"`
+	ToolCalls    []ChunkToolCall `json:"tool_calls,omitempty"`
+	FinishReason string          `json:"finish_reason,omitempty"`
+	Usage        *Usage          `json:"usage,omitempty"`
+}
+
+// ChunkStreamer is optionally implemented by Clients that can stream
+// chunk-aware: onChunk is called once per upstream chunk, in order,
+// with the full chunk (text delta, tool-call deltas, finish reason,
+// usage) — not just a text string. The returned ChatResponse holds
+// the reassembled result (content, completed tool calls, finish
+// reason, usage). Clients that do not implement it stream text-only
+// through ChatStream; the router and server prefer this interface
+// when present and fall back otherwise.
+type ChunkStreamer interface {
+	ChatStreamChunks(ctx context.Context, req ChatRequest, onChunk func(StreamChunk) error) (*ChatResponse, error)
 }
 
 // RateLimitError is returned when the upstream answers 429. RetryAfter is
@@ -155,6 +339,19 @@ func WithAuthHeaders(headers map[string]string) ClientOption {
 	return func(c *openAIClient) { c.authHeaders = headers }
 }
 
+// WithWireFormat selects the wire format the client speaks.
+// "anthropic" returns a Messages client (internal/wire); "" and
+// "openai" return the OpenAI-compatible client. Any other format
+// (gemini, cohere, bedrock-converse, ollama, unknown) also returns
+// the OpenAI client for now — those native transports are not built
+// yet, and the previous behaviour was to speak OpenAI wire to them
+// and fail over on the upstream error, so falling back preserves it
+// instead of breaking ClientFor for providers added before this
+// option existed.
+func WithWireFormat(format string) ClientOption {
+	return func(c *openAIClient) { c.wireFormat = format }
+}
+
 // openAIClient is the Client implementation for OpenAI-compatible upstreams.
 type openAIClient struct {
 	baseURL    string
@@ -164,12 +361,18 @@ type openAIClient struct {
 	// (resolved per provider + endpoint by the catalog). Nil means the
 	// legacy default: Authorization: Bearer <apiKey>.
 	authHeaders map[string]string
+	// wireFormat selects the wire spoken by NewClient: "" / "openai"
+	// stays here, "anthropic" builds an anthropicClient wrapping this
+	// one, anything else falls back to OpenAI wire (see WithWireFormat).
+	wireFormat string
 }
 
-// NewClient builds a Client for an OpenAI-compatible upstream. baseURL is
-// the API root: it may already end in "/v1" (e.g. https://api.codvian.com/v1)
-// or be a bare host root (e.g. https://api.openai.com); the client appends
-// "/v1/..." only when the path does not already end in "/v1".
+// NewClient builds a Client for an upstream. baseURL is the API root: it
+// may already end in "/v1" (e.g. https://api.codvian.com/v1) or be a
+// bare host root (e.g. https://api.openai.com); the client appends
+// "/v1/..." only when the path does not already end in "/v1". The wire
+// format comes from WithWireFormat: "anthropic" returns a Messages
+// client, everything else the OpenAI-compatible client.
 func NewClient(baseURL, apiKey string, opts ...ClientOption) (Client, error) {
 	normalized, err := ValidateBaseURL(baseURL)
 	if err != nil {
@@ -184,6 +387,9 @@ func NewClient(baseURL, apiKey string, opts ...ClientOption) (Client, error) {
 		if opt != nil {
 			opt(c)
 		}
+	}
+	if c.wireFormat == WireFormatAnthropic {
+		return &anthropicClient{openAIClient: c}, nil
 	}
 	return c, nil
 }
@@ -349,22 +555,86 @@ func (c *openAIClient) do(req *http.Request) ([]byte, http.Header, error) {
 
 // chatCompletionRequest is the wire shape for /v1/chat/completions.
 type chatCompletionRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Stream      bool      `json:"stream"`
-	MaxTokens   int       `json:"max_tokens,omitempty"`
-	Temperature float64   `json:"temperature,omitempty"`
+	Model       string           `json:"model"`
+	Messages    []Message        `json:"messages"`
+	Stream      bool             `json:"stream"`
+	MaxTokens   int              `json:"max_tokens,omitempty"`
+	Temperature float64          `json:"temperature,omitempty"`
+	TopP        float64          `json:"top_p,omitempty"`
+	Stop        []string         `json:"stop,omitempty"`
+	Tools       []ToolDefinition `json:"tools,omitempty"`
+	ToolChoice  json.RawMessage  `json:"tool_choice,omitempty"`
+}
+
+// openAIToolCallDelta is one tool-call delta inside a streaming chunk.
+type openAIToolCallDelta struct {
+	Index    int    `json:"index"`
+	ID       string `json:"id,omitempty"`
+	Type     string `json:"type,omitempty"`
+	Function struct {
+		Name      string `json:"name,omitempty"`
+		Arguments string `json:"arguments,omitempty"`
+	} `json:"function,omitempty"`
+}
+
+// chatDelta is the delta of one streaming choice.
+type chatDelta struct {
+	Role      string                `json:"role,omitempty"`
+	Content   string                `json:"content,omitempty"`
+	ToolCalls []openAIToolCallDelta `json:"tool_calls,omitempty"`
+}
+
+// chatCompletionChoice is one choice of a chat completion, streaming
+// or not: Message for the full reply, Delta for a chunk.
+type chatCompletionChoice struct {
+	Message      Message   `json:"message"`
+	Delta        chatDelta `json:"delta"`
+	FinishReason string    `json:"finish_reason"`
 }
 
 type chatCompletionResponse struct {
-	ID      string `json:"id"`
-	Model   string `json:"model"`
-	Choices []struct {
-		Message      Message `json:"message"`
-		Delta        Message `json:"delta"`
-		FinishReason string  `json:"finish_reason"`
-	} `json:"choices"`
-	Usage Usage `json:"usage"`
+	ID      string                 `json:"id"`
+	Model   string                 `json:"model"`
+	Choices []chatCompletionChoice `json:"choices"`
+	Usage   Usage                  `json:"usage"`
+}
+
+// toChatCompletionRequest converts a provider ChatRequest to the wire shape.
+func toChatCompletionRequest(req ChatRequest) chatCompletionRequest {
+	return chatCompletionRequest{
+		Model:       req.Model,
+		Messages:    req.Messages,
+		Stream:      req.Stream,
+		MaxTokens:   req.MaxTokens,
+		Temperature: req.Temperature,
+		TopP:        req.TopP,
+		Stop:        req.Stop,
+		Tools:       req.Tools,
+		ToolChoice:  req.ToolChoice,
+	}
+}
+
+// MergeToolCallDeltas folds streaming tool-call deltas into the
+// accumulated calls (keyed by index): the first delta sets ID/Name,
+// later deltas append argument fragments.
+func MergeToolCallDeltas(calls []ToolCall, deltas []ChunkToolCall) []ToolCall {
+	for _, d := range deltas {
+		for len(calls) <= d.Index {
+			calls = append(calls, ToolCall{})
+		}
+		call := &calls[d.Index]
+		if d.ID != "" {
+			call.ID = d.ID
+		}
+		if call.Type == "" {
+			call.Type = "function"
+		}
+		if d.Name != "" {
+			call.Function.Name = d.Name
+		}
+		call.Function.Arguments += d.Arguments
+	}
+	return calls
 }
 
 func (c *openAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
@@ -374,13 +644,9 @@ func (c *openAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	if len(req.Messages) == 0 {
 		return nil, errors.New("chat request has no messages")
 	}
-	payload, err := json.Marshal(chatCompletionRequest{
-		Model:       req.Model,
-		Messages:    req.Messages,
-		Stream:      false,
-		MaxTokens:   req.MaxTokens,
-		Temperature: req.Temperature,
-	})
+	r := req
+	r.Stream = false // Chat is the non-streaming call, whatever the caller set.
+	payload, err := json.Marshal(toChatCompletionRequest(r))
 	if err != nil {
 		return nil, fmt.Errorf("encoding chat request: %w", err)
 	}
@@ -399,30 +665,57 @@ func (c *openAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	if len(decoded.Choices) == 0 {
 		return nil, &UpstreamError{StatusCode: http.StatusOK, Retryable: false, Body: "upstream returned no choices"}
 	}
+	choice := decoded.Choices[0]
 	return &ChatResponse{
-		Content: decoded.Choices[0].Message.Content,
-		Usage:   decoded.Usage,
-		Model:   decoded.Model,
+		Content:      choice.Message.Content,
+		Usage:        decoded.Usage,
+		Model:        decoded.Model,
+		ToolCalls:    choice.Message.ToolCalls,
+		FinishReason: choice.FinishReason,
 	}, nil
 }
 
+// ChatStream is the text-only streaming entry point: it drains
+// ChatStreamChunks and forwards only the content deltas. Chunk-aware
+// callers (router, server) use ChatStreamChunks directly.
 func (c *openAIClient) ChatStream(ctx context.Context, req ChatRequest, onDelta func(string) error) (*ChatResponse, error) {
+	if onDelta == nil {
+		onDelta = func(string) error { return nil }
+	}
+	return c.ChatStreamChunks(ctx, req, func(chunk StreamChunk) error {
+		if chunk.Content == "" {
+			return nil
+		}
+		return onDelta(chunk.Content)
+	})
+}
+
+// ChatStreamChunks performs a streaming chat completion, calling
+// onChunk once per SSE chunk in order with the full chunk (text delta,
+// tool-call deltas, finish reason, usage). The returned ChatResponse
+// holds the reassembled result. If onChunk returns an error,
+// streaming stops and that error is returned.
+func (c *openAIClient) ChatStreamChunks(ctx context.Context, req ChatRequest, onChunk func(StreamChunk) error) (*ChatResponse, error) {
 	if req.Model == "" {
 		return nil, errors.New("chat request model is empty")
 	}
 	if len(req.Messages) == 0 {
 		return nil, errors.New("chat request has no messages")
 	}
-	if onDelta == nil {
-		onDelta = func(string) error { return nil }
+	if onChunk == nil {
+		onChunk = func(StreamChunk) error { return nil }
 	}
-	payload, err := json.Marshal(chatCompletionRequest{
+	payload, err := json.Marshal(toChatCompletionRequest(ChatRequest{
 		Model:       req.Model,
 		Messages:    req.Messages,
 		Stream:      true,
 		MaxTokens:   req.MaxTokens,
 		Temperature: req.Temperature,
-	})
+		TopP:        req.TopP,
+		Stop:        req.Stop,
+		Tools:       req.Tools,
+		ToolChoice:  req.ToolChoice,
+	}))
 	if err != nil {
 		return nil, fmt.Errorf("encoding chat request: %w", err)
 	}
@@ -444,11 +737,28 @@ func (c *openAIClient) ChatStream(ctx context.Context, req ChatRequest, onDelta 
 		return nil, mapStatusError(resp.StatusCode, resp.Header, body)
 	}
 	var (
-		full  strings.Builder
-		model string
-		usage Usage
-		done  bool
+		full         strings.Builder
+		model        string
+		usage        Usage
+		toolCalls    []ToolCall
+		finishReason string
+		done         bool
 	)
+	emit := func(chunk StreamChunk) error {
+		if chunk.Content != "" {
+			full.WriteString(chunk.Content)
+		}
+		if len(chunk.ToolCalls) > 0 {
+			toolCalls = MergeToolCallDeltas(toolCalls, chunk.ToolCalls)
+		}
+		if chunk.FinishReason != "" {
+			finishReason = chunk.FinishReason
+		}
+		if chunk.Usage != nil {
+			usage = *chunk.Usage
+		}
+		return onChunk(chunk)
+	}
 	scanner := bufio.NewScanner(resp.Body)
 	// Deltas can be large; allow up to 1 MiB per SSE line.
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -468,38 +778,50 @@ func (c *openAIClient) ChatStream(ctx context.Context, req ChatRequest, onDelta 
 			done = true
 			break
 		}
-		var chunk chatCompletionResponse
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+		var chunkResp chatCompletionResponse
+		if err := json.Unmarshal([]byte(data), &chunkResp); err != nil {
 			return nil, &UpstreamError{StatusCode: http.StatusOK, Retryable: false, Body: "malformed SSE data: " + data}
 		}
-		if chunk.Model != "" {
-			model = chunk.Model
+		if chunkResp.Model != "" {
+			model = chunkResp.Model
 		}
 		// Some providers send usage in the final chunk.
-		if chunk.Usage.TotalTokens != 0 || chunk.Usage.PromptTokens != 0 || chunk.Usage.CompletionTokens != 0 {
-			usage = chunk.Usage
+		if chunkResp.Usage.TotalTokens != 0 || chunkResp.Usage.PromptTokens != 0 || chunkResp.Usage.CompletionTokens != 0 {
+			usage = chunkResp.Usage
 		}
-		if len(chunk.Choices) == 0 {
+		if len(chunkResp.Choices) == 0 {
 			continue
 		}
-		delta := chunk.Choices[0].Delta.Content
-		if delta == "" {
+		choice := chunkResp.Choices[0]
+		chunk := StreamChunk{Content: choice.Delta.Content, FinishReason: choice.FinishReason}
+		for _, tc := range choice.Delta.ToolCalls {
+			chunk.ToolCalls = append(chunk.ToolCalls, ChunkToolCall{
+				Index:     tc.Index,
+				ID:        tc.ID,
+				Name:      tc.Function.Name,
+				Arguments: tc.Function.Arguments,
+			})
+		}
+		if chunkResp.Usage.TotalTokens != 0 || chunkResp.Usage.PromptTokens != 0 || chunkResp.Usage.CompletionTokens != 0 {
+			u := chunkResp.Usage
+			chunk.Usage = &u
+		}
+		if chunk.Content == "" && len(chunk.ToolCalls) == 0 && chunk.FinishReason == "" && chunk.Usage == nil {
 			continue
 		}
-		full.WriteString(delta)
-		if err := onDelta(delta); err != nil {
+		if err := emit(chunk); err != nil {
 			return nil, err
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, &UpstreamError{StatusCode: http.StatusOK, Retryable: false, Body: "error reading SSE stream: " + err.Error()}
 	}
-	if !done && full.Len() == 0 {
+	if !done && full.Len() == 0 && len(toolCalls) == 0 {
 		// A stream that ends without [DONE] and without any content is
 		// treated as a truncated upstream response, not a success.
 		return nil, &UpstreamError{StatusCode: http.StatusOK, Retryable: true, Body: "SSE stream ended without [DONE]"}
 	}
-	return &ChatResponse{Content: full.String(), Usage: usage, Model: model}, nil
+	return &ChatResponse{Content: full.String(), Usage: usage, Model: model, ToolCalls: toolCalls, FinishReason: finishReason}, nil
 }
 
 type modelsListResponse struct {

@@ -188,7 +188,13 @@ func (s *JSONFileStore) Save(configs []ProviderConfig) error {
 // empty, for no-auth surfaces — replaces it entirely. Factories must
 // honour nil vs non-nil: a no-auth provider must send no credential,
 // not a Bearer header it never asked for.
-type ClientFactory func(baseURL, apiKey string, authHeaders map[string]string) (Client, error)
+//
+// wireFormat is the wire the client must speak ("openai", "anthropic",
+// ...); "" means the OpenAI default. Only "anthropic" changes the
+// client today (Messages client); other formats fall back to OpenAI
+// wire (see WithWireFormat), so a provider added before native
+// transports exist keeps its previous behaviour.
+type ClientFactory func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (Client, error)
 
 // Registry is the in-memory provider registry, persisted through a Store.
 // It is safe for concurrent use.
@@ -229,8 +235,8 @@ func NewRegistry(store Store, opts ...RegistryOption) *Registry {
 	r := &Registry{
 		providers: make(map[string]*Provider),
 		store:     store,
-		newClient: func(baseURL, apiKey string, authHeaders map[string]string) (Client, error) {
-			return NewClient(baseURL, apiKey, WithAuthHeaders(authHeaders))
+		newClient: func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (Client, error) {
+			return NewClient(baseURL, apiKey, WithAuthHeaders(authHeaders), WithWireFormat(wireFormat))
 		},
 	}
 	for _, opt := range opts {
@@ -405,14 +411,23 @@ func (r *Registry) addProvider(ctx context.Context, in addInput) (*Provider, err
 		return nil, err
 	}
 
-	client, err := r.newClient(normalized, in.apiKey, in.authHeaders)
+	// A wire format was not prescribed (hand-added provider): derive
+	// it from the catalog by base URL, so a hand-added Anthropic base
+	// speaks Messages instead of OpenAI chat completions. Catalog adds
+	// always prescribe the resolved wire, so this only fires for
+	// custom providers. Unknown bases keep the OpenAI default.
+	wireFormat := in.wireFormat
+	if wireFormat == "" {
+		wireFormat = catalogWireForBaseURL(normalized, in.apiKey)
+	}
+
+	client, err := r.newClient(normalized, in.apiKey, in.authHeaders, wireFormat)
 	if err != nil {
 		return nil, err
 	}
 
 	// 1. Inline key test.
 	testErr := client.TestKey(ctx)
-	wireFormat := in.wireFormat
 	if wireFormat == "" {
 		wireFormat = WireFormatOpenAI
 	}
@@ -428,13 +443,19 @@ func (r *Registry) addProvider(ctx context.Context, in addInput) (*Provider, err
 		models = modelsFromIDs(ids)
 	case isNotFound(testErr):
 		// /v1/models 404s: maybe the gateway only exposes chat. Probe it.
+		// The probe only speaks OpenAI wire, so it may only override a
+		// wire format that was not prescribed by the catalog: a
+		// catalog-resolved Anthropic wire is never overwritten by an
+		// OpenAI probe.
 		detected, probeErr := DetectWireFormat(ctx, normalized, in.apiKey, in.authHeaders, r.newClient)
 		if probeErr != nil {
 			return nil, fmt.Errorf("key test failed for %s: %w", normalized, testErr)
 		}
-		wireFormat = detected
 		if detected == WireFormatUnknown {
 			return nil, fmt.Errorf("key test failed for %s: %w", normalized, testErr)
+		}
+		if in.wireFormat == "" {
+			wireFormat = detected
 		}
 		// Chat endpoint exists but no model list: add with no models.
 		models = nil
@@ -810,6 +831,10 @@ func (r *Registry) DecryptedKey(id string) (string, error) {
 // the legacy Bearer default. Exchange surfaces (Vertex, Bedrock,
 // OpenRouter JWT, Azure Entra) fail here with a clear error — the
 // client is never built with a faked static header for them.
+//
+// The wire format likewise comes from the catalog resolution: a
+// provider whose surface speaks Anthropic gets a Messages client,
+// everything else the OpenAI client.
 func (r *Registry) ClientFor(id string) (Client, error) {
 	r.mu.RLock()
 	p, ok := r.providers[id]
@@ -821,45 +846,76 @@ func (r *Registry) ClientFor(id string) (Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	headers, err := r.resolveAuthHeaders(p, key)
+	headers, wireFormat, err := r.resolveAuthHeaders(p, key)
 	if err != nil {
 		return nil, err
 	}
-	return r.newClient(p.BaseURL, key, headers)
+	// Anthropic wins from either source: a stored wire from an older
+	// config must not be silently downgraded by a base-URL lookup
+	// that could not see it (e.g. a proxy base), and a resolved
+	// Anthropic wire must not be lost to a stale stored "openai".
+	if p.WireFormat == WireFormatAnthropic || wireFormat == WireFormatAnthropic {
+		wireFormat = WireFormatAnthropic
+	} else if wireFormat == "" {
+		wireFormat = p.WireFormat
+	}
+	return r.newClient(p.BaseURL, key, headers, wireFormat)
 }
 
-// resolveAuthHeaders resolves the exact auth headers for one provider.
-// It returns (nil, nil) for the legacy Bearer default.
-func (r *Registry) resolveAuthHeaders(p *Provider, key string) (map[string]string, error) {
+// catalogWireForBaseURL derives the wire format for a raw base URL
+// from the catalog (default surface): "anthropic" when the matched
+// surface speaks Messages, "openai" otherwise (unknown base, lookup
+// error, or an OpenAI surface). It never errors — callers treat the
+// OpenAI default as the safe fallback.
+func catalogWireForBaseURL(baseURL, apiKey string) string {
+	res, found, err := catalog.ResolveAuthForBaseURL(baseURL, "", "", apiKey)
+	if err != nil || !found {
+		return WireFormatOpenAI
+	}
+	if res.Wire == catalog.WireAnthropic {
+		return WireFormatAnthropic
+	}
+	return WireFormatOpenAI
+}
+
+// resolveAuthHeaders resolves the exact auth headers for one provider,
+// plus the wire format its surface speaks. It returns ("", nil, nil)
+// for the legacy Bearer default with the stored wire format.
+func (r *Registry) resolveAuthHeaders(p *Provider, key string) (map[string]string, string, error) {
 	if p.CatalogID != "" {
 		entry, err := lookupCatalog(p.CatalogID)
 		if err != nil {
-			return nil, fmt.Errorf("provider %q: %w", p.ID, err)
+			return nil, "", fmt.Errorf("provider %q: %w", p.ID, err)
 		}
 		if entry.ToSGrey {
-			return nil, fmt.Errorf("provider %q: catalog provider %q is ToS-grey and cannot be a routing target", p.ID, entry.ID)
+			return nil, "", fmt.Errorf("provider %q: catalog provider %q is ToS-grey and cannot be a routing target", p.ID, entry.ID)
 		}
 		res, err := catalog.ResolveAuth(entry, p.AuthEndpoint, p.AuthVariant, key)
 		if err != nil {
-			return nil, fmt.Errorf("provider %q (%s): %w", p.ID, entry.ID, err)
+			return nil, "", fmt.Errorf("provider %q (%s): %w", p.ID, entry.ID, err)
 		}
-		return res.Headers, nil
+		return res.Headers, string(res.Wire), nil
 	}
 	// No catalog link: match by base URL when the catalog knows it.
 	// Exchange matches fail loudly; an unknown endpoint on a known
 	// provider falls back to the legacy Bearer default (the operator
 	// typed this base URL by hand, and Bearer is what Add sent).
+	// The chat endpoint is requested for headers: a native-wire base
+	// with no chat surface (e.g. https://api.anthropic.com) errors
+	// here and keeps the legacy headers — which are correct for
+	// Anthropic — while the wire is still derived from the base URL
+	// below, so the client speaks Messages.
 	res, found, err := catalog.ResolveAuthForBaseURL(p.BaseURL, catalog.EndpointChat, "", key)
 	if err != nil {
 		if errors.Is(err, catalog.ErrExchangeRequired) {
-			return nil, fmt.Errorf("provider %q: %w", p.ID, err)
+			return nil, "", fmt.Errorf("provider %q: %w", p.ID, err)
 		}
-		return nil, nil
+		return nil, catalogWireForBaseURL(p.BaseURL, key), nil
 	}
 	if !found {
-		return nil, nil
+		return nil, catalogWireForBaseURL(p.BaseURL, key), nil
 	}
-	return res.Headers, nil
+	return res.Headers, string(res.Wire), nil
 }
 
 // DetectWireFormat probes an upstream and reports its wire format.
@@ -872,11 +928,12 @@ func (r *Registry) resolveAuthHeaders(p *Provider, key string) (map[string]strin
 // wire formats (Anthropic native, Gemini native, ...) are future work.
 func DetectWireFormat(ctx context.Context, baseURL, apiKey string, authHeaders map[string]string, factory ClientFactory) (string, error) {
 	if factory == nil {
-		factory = func(baseURL, apiKey string, authHeaders map[string]string) (Client, error) {
-			return NewClient(baseURL, apiKey, WithAuthHeaders(authHeaders))
+		factory = func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (Client, error) {
+			return NewClient(baseURL, apiKey, WithAuthHeaders(authHeaders), WithWireFormat(wireFormat))
 		}
 	}
-	client, err := factory(baseURL, apiKey, authHeaders)
+	// The probe only speaks OpenAI wire.
+	client, err := factory(baseURL, apiKey, authHeaders, WireFormatOpenAI)
 	if err != nil {
 		return "", err
 	}
