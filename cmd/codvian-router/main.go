@@ -34,6 +34,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/raunakiitp/codvian-router/internal/autorouter"
 	"github.com/raunakiitp/codvian-router/internal/cache"
 	"github.com/raunakiitp/codvian-router/internal/config"
 	"github.com/raunakiitp/codvian-router/internal/crypto"
@@ -304,24 +305,41 @@ func (a *ledgerAdapter) RecordAttempt(providerName, model string, ok bool, laten
 	}
 }
 
+// RecordShared records one waiter served from a shared single-flight
+// call (router.SharedLedger): a row marked shared with zero tokens
+// and zero cost — the leader's attempt is the only one billed.
+// latencyMs is how long the waiter waited for the leader's flight.
+func (a *ledgerAdapter) RecordShared(providerName, model string, ok bool, latencyMs int64) {
+	if a == nil || a.l == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := a.l.RecordShared(ctx, providerName, model, ok, latencyMs)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "codvian-router: ledger shared record failed: %v\n", err)
+	}
+}
+
 // stack is the fully wired router: config, vault, ledger, registry,
 // clients, routing engine (raw and degrade-wrapped), health checker
 // and metrics recorder. openStack builds it; runServe serves it,
 // runEval evaluates the raw engine against it.
 type stack struct {
-	cfg      *config.Config
-	path     string
-	listen   string // effective listen address (--listen wins, else config)
-	reg      *provider.Registry
-	clients  map[string]provider.Client
-	engine   *router.Engine // raw engine: failover, hedging, ledger
-	serving  server.Engine  // degrade-wrapped engine: what serve() serves
-	exact    *cache.ExactCache
-	semantic *cache.LocalSemanticCache
-	checker  *health.Checker
-	recorder *metrics.Recorder
-	led      *ledger.Ledger
-	vault    *crypto.Vault
+	cfg        *config.Config
+	path       string
+	listen     string // effective listen address (--listen wins, else config)
+	reg        *provider.Registry
+	clients    map[string]provider.Client
+	engine     *router.Engine // raw engine: failover, hedging, ledger
+	serving    server.Engine  // degrade-wrapped engine: what serve() serves
+	exact      *cache.ExactCache
+	semantic   *cache.LocalSemanticCache
+	autoRouter *autorouter.Router // nil = no auto-routing (no models configured)
+	checker    *health.Checker
+	recorder   *metrics.Recorder
+	led        *ledger.Ledger
+	vault      *crypto.Vault
 }
 
 // effectiveListen returns the listen address for serve: --listen when
@@ -365,6 +383,54 @@ func effectiveListen(cfg *config.Config, opts options) (string, error) {
 // quota hints), the health checker, graceful degradation (ON), and
 // the metrics recorder. The caller owns st.led (defer Close).
 //
+// buildAutoRouter builds the local auto-router from the config's
+// auto_router block. Tier models come from
+// config.AutoRouter.TierModels (tier name -> concrete model IDs);
+// when DefaultModel is empty it falls back to the first model of
+// the first enabled provider, so a fresh install with providers
+// still routes "auto/*" instead of failing. When neither exists
+// the router has no model to resolve to and Resolve reports
+// ok=false — an honest failure, never an invented model. The
+// returned router is also handed to the server, so the dashboard's
+// Auto-router section classifies with exactly the same router the
+// request path uses.
+func buildAutoRouter(cfg *config.Config, reg *provider.Registry) *autorouter.Router {
+	ac := cfg.AutoRouter
+	tierModels := make(map[autorouter.Tier][]string, len(ac.TierModels))
+	for tier, models := range ac.TierModels {
+		if !autorouter.IsTier(tier) || len(models) == 0 {
+			continue
+		}
+		cp := make([]string, len(models))
+		copy(cp, models)
+		tierModels[autorouter.Tier(tier)] = cp
+	}
+	defaultModel := ac.DefaultModel
+	if defaultModel == "" && reg != nil {
+		for _, p := range reg.List() {
+			if !p.Enabled || len(p.Models) == 0 {
+				continue
+			}
+			defaultModel = p.Models[0].ID
+			break
+		}
+	}
+	// Nothing to resolve to (no tier models, no default model, no
+	// provider models): return nil so the engine leaves "auto/*"
+	// unresolved and the server reports auto-routing as off,
+	// instead of building a router that can only fail.
+	if len(tierModels) == 0 && defaultModel == "" {
+		return nil
+	}
+	return autorouter.New(autorouter.Config{
+		Threshold:    ac.Threshold,
+		Thresholds:   ac.Thresholds,
+		DefaultTier:  autorouter.Tier(ac.DefaultTier),
+		DefaultModel: defaultModel,
+		TierModels:   tierModels,
+	})
+}
+
 // Scoring signals, honestly: latency and success come from the health
 // checker's last key probe (a single probe is a thin sample — OK is
 // 1.0, a failed probe is 0.0, no probe yet is unknown); quota comes
@@ -409,10 +475,18 @@ func openStack(opts options) (*stack, error) {
 	led.FailClosed = cfg.FailClosed
 
 	// Provider registry: providers live in the config file, keys sealed
-	// with the Vault.
+	// with the Vault. TCP Fast Open is on by default for the clients
+	// it builds; CODVIAN_ROUTER_TFO=0 disables it (measuring the
+	// with/without difference only — the dialer falls back
+	// gracefully either way).
+	tfoEnabled := true
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("CODVIAN_ROUTER_TFO"))); v == "0" || v == "false" || v == "off" {
+		tfoEnabled = false
+	}
 	reg := provider.NewRegistry(
 		&configProviderStore{cfg: cfg, path: path},
 		provider.WithCipher(provider.NewVaultCipher(vault)),
+		provider.WithTFOEnabled(tfoEnabled),
 	)
 	if err := reg.Load(); err != nil {
 		led.Close()
@@ -486,6 +560,20 @@ func openStack(opts options) (*stack, error) {
 	// for any model; the upstream rejects unknown models and the
 	// engine fails over. The scoring hook reorders the chain by
 	// ModeBalanced; it never drops or duplicates an attempt.
+	//
+	// Auto-router ("auto/*" virtual models): the local auto-router
+	// (internal/autorouter) embeds the prompt once with the same
+	// deterministic hashed bag-of-words embedding as the semantic
+	// cache, cosine-matches it against curated per-tier example
+	// utterances, and resolves the virtual model to a concrete
+	// model — in milliseconds, no LLM call, no network call. Below
+	// the configured threshold it falls back to the default tier /
+	// strong model instead of guessing; with no concrete model
+	// configured for a tier it fails honestly. Tier models come
+	// from config auto_router.tier_models; when DefaultModel is
+	// empty it falls back to the first model of the first enabled
+	// provider, so a fresh install with providers still routes.
+	autoRouter := buildAutoRouter(cfg, reg)
 	chainFor := func(model string) []router.Attempt {
 		var chain []router.Attempt
 		for _, p := range reg.List() {
@@ -508,11 +596,18 @@ func openStack(opts options) (*stack, error) {
 		}
 		return chain
 	}
-	engine := router.NewEngine(clients, &ledgerAdapter{l: led}, router.Config{
+	engCfg := router.Config{
 		ChainFor:  chainFor,
 		QuotaHint: quotaHint,
 		OrderHook: scoring.Hook(signalsFn, scoring.ModeBalanced),
-	})
+	}
+	// A nil autoRouter (nothing to resolve to) leaves AutoRoute
+	// unset: "auto/*" then behaves like any other unknown model
+	// instead of panicking on a nil-receiver method value.
+	if autoRouter != nil {
+		engCfg.AutoRoute = autoRouter.Resolve
+	}
+	engine := router.NewEngine(clients, &ledgerAdapter{l: led}, engCfg)
 
 	// Graceful degradation: successful responses are cached in the
 	// exact-match cache (500 entries, 1h store TTL); when every
@@ -534,6 +629,18 @@ func openStack(opts options) (*stack, error) {
 	degradePolicy.Enabled = true
 	degradePolicy.ServeCache = true
 	recorder := metrics.NewRecorder()
+	// Coalescing counters: every waiter served from a shared flight
+	// increments codvian_router_coalesced_total (one upstream call
+	// avoided per shared request); the dashboard's coalescing
+	// section reads the same numbers from the engine.
+	engine.SetCoalescingMetrics(recorder)
+	// Adaptive concurrency: the limiter's per-provider cap is
+	// exposed as codvian_router_concurrency_limit{provider} and
+	// every shed call as
+	// codvian_router_concurrency_rejected_total{provider}; the
+	// dashboard's concurrency section reads the same state from
+	// the engine.
+	engine.SetConcurrencyMetrics(recorder)
 	serving := degrade.WrapWithSemantic(engine, exact, semantic, degradePolicy)
 	if se, ok := serving.(*degrade.StaleEngine); ok {
 		se.SetCacheMetrics(recorder)
@@ -543,9 +650,30 @@ func openStack(opts options) (*stack, error) {
 		cfg: cfg, path: path, listen: listen,
 		reg: reg, clients: clients,
 		engine: engine, serving: serving, exact: exact, semantic: semantic,
-		checker: checker, recorder: recorder,
+		autoRouter: autoRouter,
+		checker:    checker, recorder: recorder,
 		led: led, vault: vault,
 	}, nil
+}
+
+// bootstrapIssuer returns the server.BootstrapIssuer for serve mode:
+// it issues the first gateway key and persists it to the config file.
+// The raw key is returned to the caller exactly once; only its hash is
+// stored (see config.IssueKey / AddGatewayKey).
+func bootstrapIssuer(cfg *config.Config, path string) server.BootstrapIssuer {
+	return func(_ context.Context) (string, error) {
+		key, raw, err := config.IssueKey("default", []string{"chat", "models"}, 0)
+		if err != nil {
+			return "", fmt.Errorf("cannot issue gateway key: %w", err)
+		}
+		if err := cfg.AddGatewayKey(key); err != nil {
+			return "", fmt.Errorf("cannot store gateway key: %w", err)
+		}
+		if err := cfg.Save(path); err != nil {
+			return "", fmt.Errorf("cannot save config: %w", err)
+		}
+		return raw, nil
+	}
 }
 
 // runServe builds the stack, starts the health watcher, and serves
@@ -572,20 +700,59 @@ func runServe(opts options) int {
 	defer cancelWatch()
 	go st.checker.StartWatcher(watchCtx, 60*time.Second)
 
+	// doShutdown is set after httpSrv exists; the server's shutdown
+	// hook (POST /admin/shutdown) calls it through the closure above.
+	var doShutdown func()
 	srv := server.New(st.serving,
 		server.WithConfig(st.cfg),
 		server.WithProviderRegistry(st.reg),
+		server.WithAutoRouter(st.autoRouter),
+		server.WithHealthChecker(st.checker),
 		server.WithMetrics(st.recorder),
+		server.WithListenAddr(st.listen),
+		server.WithBootstrapPending(len(st.cfg.GatewayKeys) == 0),
+		server.WithBootstrapIssuer(bootstrapIssuer(st.cfg, st.path)),
+		server.WithShutdownHook(func() {
+			if doShutdown != nil {
+				doShutdown()
+			}
+		}),
 	)
 	httpSrv := &http.Server{Addr: st.listen, Handler: srv}
+	// The shutdown hook (POST /admin/shutdown, Tier 1 LOCAL_ONLY)
+	// stops this server; it is set here because it needs httpSrv.
+	doShutdown = func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = httpSrv.Shutdown(ctx)
+	}
 
 	fmt.Printf("codvian-router v%s listening on %s (auth ON)\n", Version, st.listen)
 	fmt.Printf("config: %s\n", st.path)
 	fmt.Printf("providers: %d configured, %d clients ready\n", len(st.reg.List()), len(st.clients))
 	fmt.Println("degradation: ON (stale responses served with X-Codvian-Stale)")
 	fmt.Println("semantic cache: ON (token-overlap similarity, threshold 0.85, 500 entries, 1h TTL — not neural embeddings; hits marked X-Codvian-Cache)")
+	fmt.Println("single-flight coalescing: ON (identical non-streaming requests share one upstream call; streaming and tool-call turns never coalesce)")
+	tfo := provider.TFOStatus()
+	if tfo.Active {
+		fmt.Printf("tcp fast open: ACTIVE (%s; %s)\n", tfo.Platform, tfo.Reason)
+	} else {
+		fmt.Printf("tcp fast open: OFF (%s; %s) — dials fall back to a normal handshake\n", tfo.Platform, tfo.Reason)
+	}
+	fmt.Println("adaptive concurrency: ON (Gradient2 per provider: cap starts at 20, floor 2, ceiling 100; a slowing provider is shed before 429s appear; limiter fails open)")
+	if st.autoRouter != nil {
+		fmt.Println("auto-router: ON (local hashed bag-of-words matching, threshold 0.5, no LLM call, no network — virtual models auto, auto/fast, auto/cheap, auto/coding, auto/reasoning)")
+	} else {
+		fmt.Println("auto-router: OFF (no model configured to resolve auto/* to)")
+	}
 	fmt.Println("metrics: GET /metrics (gateway-key auth required)")
 	fmt.Printf("dashboard: http://%s/dashboard\n", st.listen)
+	fmt.Println("route guards: ON (Tier 1 LOCAL_ONLY enforced before auth by real TCP peer — no Host/X-Forwarded-For, no manage-scope bypass; Tier 2 ALWAYS_PROTECTED always needs a gateway key; Tier 3 MANAGEMENT auth required)")
+	if len(st.cfg.GatewayKeys) == 0 {
+		fmt.Println("bootstrap: PENDING (no gateway key yet — POST /admin/bootstrap, loopback-only, issues the first key once)")
+	} else {
+		fmt.Println("bootstrap: complete (a gateway key already exists)")
+	}
 
 	errCh := make(chan error, 1)
 	go func() { errCh <- httpSrv.ListenAndServe() }()

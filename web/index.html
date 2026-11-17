@@ -289,6 +289,29 @@
   html[data-theme="dark"] .status-chip.warn{color:#000000; background:#FFFFFF; box-shadow:0 8px 18px -10px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.4)}
   html[data-theme="dark"] .status-chip.warn .dot{background:#000000}
   .status-chip.off{color:var(--text-2)}
+  /* Verification badges — premium jewel-tone capsules (dark lime for
+     verified-from-docs, solid near-black for reference metadata, muted
+     flat for unverified). Never a traffic-light colour. */
+  .verif-badge{display:inline-flex; align-items:center; gap:7px; font-size:11.5px; font-weight:700; border-radius:99px; padding:4px 11px 4px 9px; border:0; white-space:nowrap; box-shadow:inset 0 0 0 1px var(--ring), 0 1px 2px rgba(0,0,0,.05), 0 6px 14px -8px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.85)}
+  html[data-theme="dark"] .verif-badge{box-shadow:0 1px 0 rgba(255,255,255,.05) inset, 0 8px 18px -10px rgba(0,0,0,.8)}
+  .verif-badge .dot{width:7px; height:7px; flex-basis:7px; border-radius:2.5px; transform:rotate(45deg); box-shadow:inset 0 1px 1px rgba(255,255,255,.55), 0 1px 2px rgba(0,0,0,.22)}
+  .verif-badge.verified{color:var(--green); background:var(--green-bg)}
+  .verif-badge.verified .dot{background:var(--green-dot)}
+  .verif-badge.reference{color:#FFFFFF; background:#171717; box-shadow:0 1px 2px rgba(0,0,0,.12), 0 8px 16px -8px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.22)}
+  .verif-badge.reference .dot{background:#FFFFFF}
+  html[data-theme="dark"] .verif-badge.reference{color:#000000; background:#FFFFFF; box-shadow:0 8px 18px -10px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.4)}
+  html[data-theme="dark"] .verif-badge.reference .dot{background:#000000}
+  .verif-badge.unverified{color:var(--text-3)}
+  .verif-badge.unverified .dot{background:var(--text-3)}
+  .verif-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:14px 0 0}
+  .verif-row .tag{margin:0}
+  /* Honest empty states — never invented numbers. */
+  .prov-empty{padding:26px 22px; color:var(--text-2); font-size:13.5px; line-height:1.6}
+  .prov-empty b{color:var(--text)}
+  .prov-empty .mono{font-size:12.5px}
+  /* Demo-data label: marks the sections whose numbers are still
+     sample data, until their live feed lands. */
+  .demo-tag{display:inline-flex; align-items:center; font-size:11px; font-weight:700; letter-spacing:.02em; border-radius:99px; padding:3px 10px; white-space:nowrap; color:var(--text-2); background:var(--surface); box-shadow:inset 0 0 0 1px var(--ring)}
 
   /* Live feed */
   .feed{padding:6px 0 4px}
@@ -381,6 +404,15 @@
   select.sel:hover{background-color:var(--surface); box-shadow:var(--shadow)}
   select.sel:focus{outline:none; background-color:var(--surface); box-shadow:0 0 0 4px var(--blue-bg), var(--shadow-soft)}
   input.num{width:86px; height:38px; border:0; border-radius:12px; padding:0 12px; font:inherit; font-size:13.5px; background:var(--surface); color:var(--text); box-shadow:inset 0 0 0 1px var(--ring), inset 0 1px 3px rgba(0,0,0,.04)}
+  /* Auto-router: borderless controls in the same design system. */
+  textarea.auto-prompt{width:100%; min-height:84px; border:0; border-radius:14px; padding:12px 14px; font:inherit; font-size:13.5px; background:var(--surface); color:var(--text); outline:none; resize:vertical; box-shadow:inset 0 0 0 1px var(--ring), inset 0 1px 3px rgba(0,0,0,.04)}
+  textarea.auto-prompt:focus{box-shadow:0 0 0 4px var(--blue-bg), var(--shadow-soft)}
+  input[type="range"].auto-range{width:100%; accent-color:var(--green-dot); height:38px; min-height:38px}
+  .auto-hint{font-size:12px; color:var(--text-3); margin-top:6px; line-height:1.5}
+  .score-row{display:flex; align-items:center; gap:10px; padding:5px 0; font-size:13px}
+  .score-row .t{width:92px; flex:0 0 92px; font-weight:500}
+  .score-row .meter{flex:1}
+  .score-row .v{width:52px; flex:0 0 52px; text-align:right; font-variant-numeric:tabular-nums}
   .danger{background:#FFFFFF}
   html[data-theme="dark"] .danger{background:#000000}
   .danger .card-head h3{color:var(--red)}
@@ -455,12 +487,28 @@
       <button class="nav-item" data-view="providers">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
         Providers
-        <span class="nav-badge" id="provBadge">6 of 8</span>
+        <span class="nav-badge" id="provBadge">0 of 0</span>
       </button>
       <button class="nav-item" data-view="models">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>
         Models
         <span class="nav-badge">128</span>
+      </button>
+      <button class="nav-item" data-view="autorouter">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8.2 7.2l7.4 3.8M8.2 16.8l7.4-3.8"/></svg>
+        Auto-router
+      </button>
+      <button class="nav-item" data-view="coalescing">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/></svg>
+        Coalescing
+      </button>
+      <button class="nav-item" data-view="concurrency">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17V7m6 10V4m6 13v-7m4 7V9"/><path d="M2 17h20"/></svg>
+        Concurrency
+      </button>
+      <button class="nav-item" data-view="guard">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+        Route guards
       </button>
       <div class="nav-label">Manage</div>
       <button class="nav-item" data-view="keys">
@@ -490,8 +538,8 @@
       <div class="instance">
         <div class="instance-row"><span class="dot green" id="instDot"></span> Router running</div>
         <div class="instance-meta">
-          <span class="mono">localhost:8080</span> · uptime 6d 14h<br/>
-          Failover on · cache on · <span id="instProvCount">6</span> providers live
+          <span class="mono">local instance</span><br/>
+          <span id="instProvCount">0</span> providers live
         </div>
       </div>
     </div>
@@ -511,7 +559,7 @@
         <kbd>⌘K</kbd>
       </div>
       <div class="top-actions">
-        <span class="status-chip warn"><span class="dot amber"></span> 1 provider degraded</span>
+        <span class="status-chip off" id="topHealthChip"><span class="dot grey"></span> Provider health unknown</span>
         <button class="icon-btn" id="themeBtn" aria-label="Toggle light and dark theme">
           <svg id="themeIconSun" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
           <svg id="themeIconMoon" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
@@ -528,6 +576,7 @@
           <div>
             <h1>Overview</h1>
             <p>Tuesday, 17 November 2026 · Local instance · All traffic stays on this machine</p>
+            <span class="demo-tag" title="KPIs, live feed and recent requests are sample data — their live feeds are not wired yet">Demo data</span>
           </div>
           <div class="head-actions">
             <div class="seg" role="tablist" aria-label="Time range" id="rangeSeg">
@@ -673,8 +722,8 @@
               <div class="field">
                 <label for="baseUrlVal">Base URL</label>
                 <div class="copyline">
-                  <span class="val" id="baseUrlVal">http://localhost:8080/v1</span>
-                  <button class="btn small" data-copy="http://localhost:8080/v1">Copy</button>
+                  <span class="val" id="baseUrlVal">http://localhost:20128/v1</span>
+                  <button class="btn small" data-copy="http://localhost:20128/v1">Copy</button>
                 </div>
               </div>
               <div class="field" style="margin-bottom:0">
@@ -690,7 +739,7 @@
 <span class="kw">from</span> openai <span class="kw">import</span> OpenAI
 
 client = OpenAI(
-    base_url=<span class="st">"http://localhost:8080/v1"</span>,
+    base_url=<span class="st">"http://localhost:20128/v1"</span>,
     api_key=<span class="st">"cr_live_9f2ka7d3x41d"</span>,
 )
 
@@ -705,7 +754,7 @@ resp = client.chat.completions.create(
         <div class="card">
           <div class="card-head">
             <h3>Recent requests</h3>
-            <div class="right"><button class="link-btn" data-goto="logs">All requests →</button></div>
+            <div class="right"><span class="demo-tag" title="Sample requests — the live request log is not wired yet">Demo data</span><button class="link-btn" data-goto="logs">All requests →</button></div>
           </div>
           <div class="table-wrap" style="margin-top:10px">
             <table>
@@ -772,7 +821,7 @@ resp = client.chat.completions.create(
               <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
               <input id="modelSearch" type="search" placeholder="Filter models… e.g. gpt, llama, cheap" aria-label="Filter models" style="padding-right:12px" />
             </div>
-            <div class="right"><span class="sub" id="modelCount"></span></div>
+            <div class="right"><span class="demo-tag" title="Sample model catalog — the live model feed is not wired yet">Demo data</span><span class="sub" id="modelCount"></span></div>
           </div>
           <div class="table-wrap" style="margin-top:8px">
             <table>
@@ -781,6 +830,223 @@ resp = client.chat.completions.create(
             </table>
           </div>
           <div class="card-body" id="modelEmpty" style="display:none; color:var(--text-2)">No models match that filter. Try a different capability or search term.</div>
+        </div>
+      </section>
+
+      <!-- ================= AUTO-ROUTER ================= -->
+      <section class="view" id="view-autorouter">
+        <div class="page-head">
+          <div>
+            <h1>Auto-router</h1>
+            <p>Local, instant routing: the prompt is matched against built-in example phrases per tier — no extra LLM call, no network call. Below the threshold it falls back to the strong tier instead of guessing.</p>
+          </div>
+        </div>
+
+        <div class="grid-2b">
+          <div class="card">
+            <div class="card-head"><h3>Try a routing decision</h3><div class="right"><span class="sub">Live — computed by this router, now</span></div></div>
+            <div class="card-body">
+              <div class="field">
+                <label>Virtual model</label>
+                <div class="seg" id="autoModelSeg" role="tablist" aria-label="Virtual model">
+                  <button data-auto-model="auto" class="on">auto</button>
+                  <button data-auto-model="auto/fast">auto/fast</button>
+                  <button data-auto-model="auto/cheap">auto/cheap</button>
+                  <button data-auto-model="auto/coding">auto/coding</button>
+                  <button data-auto-model="auto/reasoning">auto/reasoning</button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="autoThreshold">Confidence threshold — <span class="mono" id="autoThresholdVal">0.50</span></label>
+                <input type="range" class="auto-range" id="autoThreshold" min="0.05" max="1" step="0.05" value="0.5" aria-label="Confidence threshold" />
+                <div class="auto-hint">Below this, the router falls back to the default (strong) tier instead of guessing. This slider previews the decision only — live requests use the threshold from the config file.</div>
+              </div>
+              <div class="field">
+                <label for="autoPrompt">Prompt</label>
+                <textarea class="auto-prompt" id="autoPrompt" rows="3" placeholder="Type a prompt to see where it would route — e.g. Write a Python function to sort a list"></textarea>
+              </div>
+              <button class="btn primary" id="autoRouteBtn">Route it</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h3>Decision</h3><div class="right"><span class="sub" id="autoDecisionMeta">No decision yet</span></div></div>
+            <div class="card-body" id="autoDecision">
+              <p style="color:var(--text-2)">No routing decision yet — type a prompt and press “Route it”. Decisions shown here are computed live by this router; nothing is pre-filled.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-head"><h3>Last live decision</h3><div class="right"><span class="sub">From real /v1 requests using auto/*</span></div></div>
+          <div class="card-body" id="autoLast">
+            <p style="color:var(--text-2)">No auto-routed request yet — send a request with model “auto” (or auto/fast, auto/cheap, auto/coding, auto/reasoning) and its decision will appear here.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>How it works</h3></div>
+          <div class="card-body" style="font-size:13.5px; color:var(--text-2)">
+            <p style="margin-top:0">The prompt is embedded once with the same deterministic hashed bag-of-words embedding as the semantic cache (token unigrams + bigrams into 256 buckets), then cosine-matched against 15 built-in example utterances per tier — coding, chat, reasoning, quick Q&amp;A. Those utterances are config defaults, not measured traffic: they are the examples the matcher compares against. The tier with the highest score wins when it clears the threshold; otherwise the router falls back to the strong tier and says so. Scores are token-overlap similarity (0–1), not a quality judgement — paraphrases with different words score low, and that is exactly what the fallback is for.</p>
+            <p style="margin-bottom:0">Every decision reports its measured latency (embed + score only). Virtual models are also listed by <span class="mono">GET /v1/models</span>, and every auto-routed response carries <span class="mono">X-Codvian-Auto-Tier</span>, <span class="mono">X-Codvian-Auto-Confidence</span> and <span class="mono">X-Codvian-Auto-Model</span> headers.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= COALESCING ================= -->
+      <section class="view" id="view-coalescing">
+        <div class="page-head">
+          <div>
+            <h1>Request coalescing</h1>
+            <p>Single-flight: identical non-streaming requests that arrive at the same time share one upstream call — one charge, one quota hit. Streaming requests and tool-call turns never coalesce.</p>
+          </div>
+          <div class="head-actions">
+            <button class="btn" id="coalRefreshBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.6-6.4M21 4v5h-5"/></svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div class="kpis3">
+          <div class="card kpi">
+            <div class="kpi-top"><span class="kpi-label">Shared calls</span><span class="pill flat">Live</span></div>
+            <div class="kpi-value" id="coalShared">0</div>
+            <div class="kpi-note">Requests served from a shared flight instead of calling upstream</div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-top"><span class="kpi-label">Upstream calls avoided</span><span class="pill flat">Live</span></div>
+            <div class="kpi-value" id="coalAvoided">0</div>
+            <div class="kpi-note">One avoided upstream call per shared request</div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-top"><span class="kpi-label">Quota hits saved</span><span class="pill flat">Live</span></div>
+            <div class="kpi-value" id="coalSaved">0</div>
+            <div class="kpi-note">One quota hit saved per avoided call (calls, not tokens)</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-head"><h3>Live flights</h3><div class="right"><span class="sub" id="coalMeta">No coalescable request yet</span></div></div>
+          <div class="card-body" id="coalDetail">
+            <p style="color:var(--text-2)">No coalesced request yet — send the same non-streaming request twice at once (same model, messages and sampling params) and the second will share the first&rsquo;s upstream call. Counters stay at zero until that happens; nothing here is pre-filled.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>How it works</h3></div>
+          <div class="card-body" style="font-size:13.5px; color:var(--text-2)">
+            <p style="margin-top:0">A coalescable request is keyed on its canonical hash — model + messages + sampling params (max tokens, temperature, top-p, stop). The first request for a key becomes the leader: its whole retry loop (fallback, 429 backoff, hedging) runs once inside the flight. Identical requests arriving while it is in flight wait and share the leader&rsquo;s result, success or failure; a shared failure reaches every waiter as the one error it was. The entry is registered before the leader dials, so a duplicate can never slip in as a second upstream call.</p>
+            <p style="margin-bottom:0">Streaming requests never coalesce (a stream cannot be shared between callers), and neither do tool-using or tool-call turns — a shared answer holds content only and must never silently drop tool calls. Usage accounting stays honest: the leader&rsquo;s upstream attempt is the only one billed, and each waiter is recorded in the ledger as a shared row with zero tokens and zero cost. Counters come from <span class="mono">GET /dashboard/coalescing</span> and the same shared count is exposed as <span class="mono">codvian_router_coalesced_total</span> on the auth-gated <span class="mono">/metrics</span>.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= CONCURRENCY ================= -->
+      <section class="view" id="view-concurrency">
+        <div class="page-head">
+          <div>
+            <h1>Concurrency &amp; TCP Fast Open</h1>
+            <p>Adaptive per-provider concurrency limits (Gradient2): a provider that slows gets a smaller in-flight cap, so new calls shed to healthy providers before its queue grows and before 429s appear. The limiter fails open — it can only refuse a provider whose RTT has actually degraded.</p>
+          </div>
+          <div class="head-actions">
+            <button class="btn" id="concRefreshBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.6-6.4M21 4v5h-5"/></svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-head"><h3>TCP Fast Open</h3><div class="right"><span class="pill flat" id="tfoPill">Checking…</span></div></div>
+          <div class="card-body" id="tfoDetail">
+            <p style="color:var(--text-2)">No TFO probe result yet — the router reports whether this platform can attempt TCP Fast Open when the feed answers.</p>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-head"><h3>Per-provider concurrency</h3><div class="right"><span class="sub" id="concMeta">No traffic yet</span></div></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Provider</th><th class="num">In-flight</th><th class="num">Adaptive limit</th><th class="num">RTT (smoothed)</th><th class="num">Baseline RTT</th><th class="num">Gradient</th><th class="num">Samples</th><th class="num">Shed</th></tr></thead>
+              <tbody id="concBody"></tbody>
+            </table>
+          </div>
+          <div class="card-body" id="concEmpty" style="color:var(--text-2)">No providers connected yet — add a provider and send a request, and its live cap, in-flight count and RTT vs baseline will appear here. Nothing here is pre-filled.</div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>How it works</h3></div>
+          <div class="card-body" style="font-size:13.5px; color:var(--text-2)">
+            <p style="margin-top:0">Each provider gets its own in-flight cap, starting at 20 (floor 2, ceiling 100). Every successful call feeds its RTT into a Gradient2 estimate: cap = cap × (baseline RTT ÷ smoothed RTT) + 1. When a provider slows, its gradient drops below 1 and the cap shrinks within a few calls; the router then tries healthy providers first and only admits the slow one up to its reduced cap. When it recovers, the cap grows back gradually. Failed calls never move the estimate — a fast 429 says nothing about serving speed. Streaming calls hold a slot for the stream&rsquo;s duration but never feed the RTT estimate (a stream&rsquo;s wall time is not a serving RTT).</p>
+            <p>TCP Fast Open only pays on cold or failover dials: warm HTTP/2 pools are the primary defence, and the early data on a repeat dial is the TLS ClientHello, which TLS itself handles — the router never carries a request body in early data. A first-ever connection to a host still does a normal handshake to obtain a TFO cookie. Numbers come from <span class="mono">GET /dashboard/concurrency</span>; the same cap is exposed as <span class="mono">codvian_router_concurrency_limit{provider}</span> and shed calls as <span class="mono">codvian_router_concurrency_rejected_total{provider}</span> on the auth-gated <span class="mono">/metrics</span>.</p>
+            <p style="margin-bottom:0">On localhost the measured cold-dial difference is within noise (medians under a millisecond either way) — TFO saves up to one RTT, which only matters when the RTT is real.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= ROUTE GUARDS ================= -->
+      <section class="view" id="view-guard">
+        <div class="page-head">
+          <div>
+            <h1>Route guards</h1>
+            <p>Every admin/management route is classified into one of three static tiers, evaluated before any other auth branch. Tier 1 routes can spawn processes or execute runtime code, so they answer only to loopback callers — a leaked key over a non-loopback connection still cannot reach a spawn.</p>
+          </div>
+          <div class="head-actions">
+            <button class="btn" id="guardRefreshBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.6-6.4M21 4v5h-5"/></svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-head"><h3>Live guard status</h3><div class="right"><span class="pill flat" id="guardPill">Checking…</span></div></div>
+          <div class="card-body" id="guardDetail">
+            <p style="color:var(--text-2)">No guard status yet — the router reports the live enforcement state when the feed answers.</p>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-head"><h3>Tier 1 — Local only</h3><div class="right"><span class="verif-badge verified"><span class="dot"></span>Loopback only</span></div></div>
+          <div class="card-body" style="padding-top:8px; font-size:13.5px; color:var(--text-2)" id="guardTierLocalDesc">Routes that spawn processes, execute runtime code, or change the system.</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Method</th><th>Route</th><th>Why it is local-only</th></tr></thead>
+              <tbody id="guardTierLocal"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-head"><h3>Tier 2 — Always protected</h3><div class="right"><span class="verif-badge reference"><span class="dot"></span>Key always required</span></div></div>
+          <div class="card-body" style="padding-top:8px; font-size:13.5px; color:var(--text-2)" id="guardTierProtectedDesc">Destructive routes. Gateway-key auth is always required, even if auth were ever relaxed for Tier 3.</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Method</th><th>Route</th><th>Why it is always protected</th></tr></thead>
+              <tbody id="guardTierProtected"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-head"><h3>Tier 3 — Management</h3><div class="right"><span class="verif-badge unverified"><span class="dot"></span>Default tier</span></div></div>
+          <div class="card-body" style="padding-top:8px; font-size:13.5px; color:var(--text-2)" id="guardTierMgmtDesc">Default tier. Auth required unless explicitly off.</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Method</th><th>Route</th><th>Auth</th></tr></thead>
+              <tbody id="guardTierMgmt"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>How it works</h3></div>
+          <div class="card-body" style="font-size:13.5px; color:var(--text-2)">
+            <p style="margin-top:0">Evaluation order: (1) Tier 1 loopback check, by the real TCP peer address (<span class="mono">RemoteAddr</span>) — the <span class="mono">Host</span> header and <span class="mono">X-Forwarded-For</span> are never consulted, because either can be forged; a non-loopback caller gets <span class="mono">403 LOCAL_ONLY</span> before auth runs. (2) Tier 2 auth: a gateway key is always required, even when Tier 3 auth is relaxed. (3) Tier 3 auth, or anonymous when explicitly off. There is no manage-scope bypass: unlike OmniRoute, no privileged key can reach a Tier 1 route from off-host, and loopback alone is not enough either — a valid key is still required after the loopback check passes (except bootstrap, where no key exists yet).</p>
+            <p>A <span class="mono">403 LOCAL_ONLY</span> in the logs is the guard working as designed, not an error to suppress. Fresh-install bootstrap (<span class="mono">POST /admin/bootstrap</span>) is loopback-only the same way and works exactly once, while no gateway key exists. The Tier 1 routes marked &ldquo;not implemented yet&rdquo; return <span class="mono">501</span> on loopback — they are classified local-only today so the feature lands guarded, not exposed. DB export/import/wipe have no route in this build, so there is nothing to call and nothing to protect; when they land they must be registered Tier 2 (and Tier 1 if they spawn a helper). The settings export never includes secrets — provider keys and gateway-key hashes stay on disk. Numbers come from <span class="mono">GET /dashboard/guard</span>.</p>
+            <p style="margin-bottom:0">If you run the router behind a reverse proxy or tunnel, never &ldquo;fix&rdquo; a 403 by forging the client IP as loopback — that re-opens exactly the remote-code-execution class this tier closes.</p>
+          </div>
         </div>
       </section>
 
@@ -795,7 +1061,7 @@ resp = client.chat.completions.create(
         </div>
 
         <div class="card" style="margin-bottom:14px">
-          <div class="card-head"><h3>Router keys</h3><span class="sub">Use these in your apps</span></div>
+          <div class="card-head"><h3>Router keys</h3><span class="sub">Use these in your apps</span><div class="right"><span class="demo-tag" title="Sample keys shown for layout — not real router keys">Demo data</span></div></div>
           <div style="padding-top:8px" id="routerKeys">
             <div class="key-row">
               <span class="dot green"></span>
@@ -835,6 +1101,7 @@ resp = client.chat.completions.create(
               <button data-log="error">Errors</button>
             </div>
             <button class="btn" id="exportLogsBtn">Export CSV</button>
+            <span class="demo-tag" title="Sample log rows — the live request log is not wired yet">Demo data</span>
           </div>
         </div>
         <div class="card">
@@ -854,6 +1121,7 @@ resp = client.chat.completions.create(
           <div>
             <h1>Usage &amp; Cost</h1>
             <p>Where tokens and money actually go, per provider and per model.</p>
+            <span class="demo-tag" title="Sample spend figures — the live usage feed is not wired yet">Demo data</span>
           </div>
         </div>
         <div class="kpis3">
@@ -874,7 +1142,7 @@ resp = client.chat.completions.create(
           </div>
         </div>
         <div class="card">
-          <div class="card-head"><h3>Spend by provider</h3><span class="sub">November 2026</span></div>
+          <div class="card-head"><h3>Spend by provider</h3><span class="sub">November 2026</span><div class="right"><span class="demo-tag" title="Sample spend figures — the live usage feed is not wired yet">Demo data</span></div></div>
           <div style="padding:14px 18px 18px" id="spendBars"></div>
         </div>
       </section>
@@ -986,10 +1254,20 @@ resp = client.chat.completions.create(
   }
 
   /* ---------- Navigation ---------- */
-  var titles = { overview:"Overview", providers:"Providers", models:"Models", keys:"API Keys", logs:"Logs", usage:"Usage", settings:"Settings" };
+  var titles = { overview:"Overview", providers:"Providers", models:"Models", autorouter:"Auto-router", coalescing:"Coalescing", concurrency:"Concurrency", guard:"Route guards", keys:"API Keys", logs:"Logs", usage:"Usage", settings:"Settings" };
   var viewTimer = null;
   function go(view){
     var target = $("#view-" + view); if(!target) return;
+    /* The Auto-router section shows the last REAL routing decision:
+       refresh it every time the section is opened, so it never shows
+       a stale or invented decision. */
+    if(view === "autorouter"){ loadAutoLast(); }
+    /* Same for coalescing: real counters only, refreshed on open. */
+    if(view === "coalescing"){ loadCoalescing(); }
+    /* Same for concurrency: live limiter state + TFO probe. */
+    if(view === "concurrency"){ loadConcurrency(); }
+    /* Same for route guards: live tier table + guard status. */
+    if(view === "guard"){ loadGuard(); }
     /* Nav, breadcrumb and mobile sidebar respond instantly so the click
        feels acknowledged; only the content cross-fades. Any section
        added later just needs a .view, a data-view item and a title. */
@@ -1054,65 +1332,126 @@ resp = client.chat.completions.create(
     } else { toast(text); }
   });
 
-  /* ---------- Data ---------- */
-  var providers = [
-    { id:"openai",    name:"OpenAI",     init:"O",  desc:"GPT-4o, GPT-4o mini, o-series", models:14, uptime:"99.98%", lat:"212 ms", connected:true,  key:"sk-…8f2d", health:"ok",   note:"Operational" },
-    { id:"anthropic", name:"Anthropic",  init:"A",  desc:"Claude Sonnet & Haiku",         models:9,  uptime:"99.95%", lat:"268 ms", connected:true,  key:"sk-ant-…c41a", health:"ok", note:"Operational" },
-    { id:"gemini",    name:"Google Gemini", init:"G", desc:"Gemini 2.5 Pro & Flash",       models:11, uptime:"99.91%", lat:"301 ms", connected:true,  key:"AIza…9xk2", health:"ok",   note:"Operational" },
-    { id:"groq",      name:"Groq",       init:"G",  desc:"Llama & Mixtral at full speed", models:8,  uptime:"99.87%", lat:"96 ms",  connected:true,  key:"gsk_…m7q1", health:"ok",  note:"Operational" },
-    { id:"openrouter",name:"OpenRouter", init:"OR", desc:"80+ more models behind one key", models:82, uptime:"99.62%", lat:"388 ms", connected:true,  key:"sk-or-…51bd", health:"warn", note:"Degraded · 2 slow regions" },
-    { id:"deepseek",  name:"DeepSeek",   init:"D",  desc:"DeepSeek Chat & Reasoner",      models:4,  uptime:"99.99%", lat:"342 ms", connected:true,  key:"sk-…77e0", health:"ok",   note:"Operational" },
-    { id:"mistral",   name:"Mistral AI", init:"M",  desc:"Mistral Large, Medium, Codestral", models:12, uptime:"—", lat:"—", connected:false, key:"", health:"off", note:"Not connected" },
-    { id:"ollama",    name:"Ollama (local)", init:"O", desc:"Models on this machine · no key needed", models:6, uptime:"100%", lat:"18 ms", connected:false, key:"", health:"off", note:"Not connected" }
-  ];
+  /* ---------- Data ----------
+     Providers are LIVE ONLY — fetched from GET /api/providers (see
+     the live feed at the bottom of this section). There is no sample
+     provider list any more: invented providers, uptimes and latencies
+     are not shown as if they were real. Until the feed answers,
+     `providers` is empty and the Providers section renders an honest
+     empty state. */
+  var providers = [];
+  /* feedState: "loading" (fetch in flight), "live" (feed answered),
+     "unavailable" (fetch failed — router not reachable, older binary,
+     or file:// preview). */
+  var feedState = "loading";
 
-  function seeded(seed){ var x = seed; return function(){ x = (x * 1103515245 + 12345) % 2147483648; return x / 2147483648; }; }
-
-  /* Provider health rows (Overview) */
+  /* Provider health rows (Overview) — live providers only. There is
+     no 30-day uptime history to show: the router does not collect it
+     yet, so the row says so instead of inventing bars. */
   function renderHealth(){
     var host = $("#healthList"); host.innerHTML = "";
-    providers.filter(function(p){ return p.connected; }).forEach(function(p, idx){
-      var rnd = seeded(1000 + idx * 77);
-      var bars = "";
-      for(var d = 0; d < 30; d++){
-        var r = rnd(); var cls = "";
-        if(p.health === "warn" && (d === 9 || d === 21)) cls = "warn";
-        if(p.id === "openrouter" && d === 17) cls = "out";
-        if(r > 0.985) cls = "warn";
-        bars += '<i class="' + cls + '"></i>';
-      }
-      var chip = p.health === "warn"
+    var live = providers.filter(function(p){ return p.connected; });
+    if(!live.length){
+      var empty = document.createElement("div");
+      empty.className = "feed-empty";
+      empty.textContent = feedState === "unavailable"
+        ? "Provider health unavailable — the router feed could not be reached."
+        : "No providers connected yet.";
+      host.appendChild(empty);
+      return;
+    }
+    live.forEach(function(p){
+      var chip = p.healthStatus === "down"
         ? '<span class="status-chip warn"><span class="dot amber"></span> Degraded</span>'
-        : '<span class="status-chip ok"><span class="dot green"></span> Operational</span>';
+        : (p.healthStatus === "unknown"
+          ? '<span class="status-chip off"><span class="dot grey"></span> Not probed yet</span>'
+          : '<span class="status-chip ok"><span class="dot green"></span> Operational</span>');
       var row = document.createElement("div"); row.className = "prov-row";
       row.innerHTML =
         '<div class="prov-id"><div class="prov-logo">' + p.init + '</div><div style="min-width:0"><div class="prov-name">' + p.name + '</div><div class="prov-sub">' + p.models + ' models</div></div></div>' +
-        '<div class="uptime"><div class="uptime-bars">' + bars + '</div><div class="uptime-meta"><span>30 days ago</span><span>' + p.uptime + ' uptime</span><span>Today</span></div></div>' +
-        '<div class="prov-stat"><div class="v mono">' + p.lat + '</div><div class="l">p50 latency</div></div>' +
+        '<div class="uptime"><div class="feed-empty" style="padding:6px 0">No uptime history yet</div><div class="uptime-meta"><span>30 days ago</span><span>uptime unknown</span><span>Today</span></div></div>' +
+        '<div class="prov-stat"><div class="v mono">—</div><div class="l">p50 latency</div></div>' +
         '<div>' + chip + '</div>';
       host.appendChild(row);
     });
   }
   renderHealth();
 
-  /* Provider cards */
+  /* Provider cards — live providers only, each with its verification
+     badge (from GET /api/providers) and wire format. With no live
+     data the grid shows an honest empty state, never sample cards. */
+  function verificationLabel(v){
+    switch(v){
+      case "verified-from-docs": return "Verified from docs";
+      case "from-reference-metadata-only": return "Reference metadata";
+      default: return "Unverified";
+    }
+  }
+  function verificationClass(v){
+    switch(v){
+      case "verified-from-docs": return "verified";
+      case "from-reference-metadata-only": return "reference";
+      default: return "unverified";
+    }
+  }
+  function verifBadgeHTML(p){
+    var v = p.verification || "unverified";
+    return '<span class="verif-badge ' + verificationClass(v) + '" title="Verification: ' + v + '"><span class="dot"></span>' + verificationLabel(v) + '</span>';
+  }
+  /* Sidebar badge, instance count and the topbar health chip all read
+     from the same live provider list — never from hard-coded numbers. */
+  function updateProviderCounts(){
+    var liveCount = providers.filter(function(x){ return x.connected; }).length;
+    var badge = $("#provBadge"); if(badge) badge.textContent = liveCount + " of " + providers.length;
+    var ipc = $("#instProvCount"); if(ipc) ipc.textContent = liveCount;
+    var top = $("#topHealthChip");
+    if(top){
+      var down = providers.filter(function(x){ return x.connected && x.healthStatus === "down"; }).length;
+      var ok = providers.filter(function(x){ return x.connected && x.healthStatus === "ok"; }).length;
+      if(!providers.length){
+        top.className = "status-chip off";
+        top.innerHTML = '<span class="dot grey"></span> No providers connected';
+      } else if(down){
+        top.className = "status-chip warn";
+        top.innerHTML = '<span class="dot amber"></span> ' + down + (down === 1 ? " provider degraded" : " providers degraded");
+      } else if(ok){
+        top.className = "status-chip ok";
+        top.innerHTML = '<span class="dot green"></span> All providers healthy';
+      } else {
+        top.className = "status-chip off";
+        top.innerHTML = '<span class="dot grey"></span> Provider health unknown';
+      }
+    }
+  }
   function renderProviders(){
     var grid = $("#provGrid"); grid.innerHTML = "";
+    if(!providers.length){
+      var empty = document.createElement("div");
+      empty.className = "card prov-empty";
+      empty.innerHTML = feedState === "unavailable"
+        ? "<b>Live provider feed unavailable.</b><br/>The dashboard could not reach the router at <span class=\"mono\">/api/providers</span> — check the router is running and reload this page."
+        : (feedState === "loading"
+          ? "<b>Loading providers…</b>"
+          : "<b>No providers connected yet.</b><br/>Add one from the terminal — <span class=\"mono\">codvian-router provider add-catalog &lt;catalog-id&gt; &lt;api-key&gt;</span> — and it will appear here with its verification badge.");
+      grid.appendChild(empty);
+      return;
+    }
     providers.forEach(function(p){
       var card = document.createElement("div"); card.className = "card prov-card";
       var chip = p.connected
-        ? (p.health === "warn" ? '<span class="status-chip warn"><span class="dot amber"></span> Degraded</span>' : '<span class="status-chip ok"><span class="dot green"></span> Connected</span>')
+        ? (p.healthStatus === "down" ? '<span class="status-chip warn"><span class="dot amber"></span> Degraded</span>' : (p.healthStatus === "unknown" ? '<span class="status-chip off"><span class="dot grey"></span> Connected · not probed</span>' : '<span class="status-chip ok"><span class="dot green"></span> Connected</span>'))
         : '<span class="status-chip off"><span class="dot grey"></span> Not connected</span>';
       var stats = p.connected
-        ? '<div class="s"><div class="v">' + p.models + '</div><div class="l">Models</div></div><div class="s"><div class="v mono">' + p.lat + '</div><div class="l">p50 latency</div></div><div class="s"><div class="v">' + p.uptime + '</div><div class="l">30d uptime</div></div>'
+        ? '<div class="s"><div class="v">' + p.models + '</div><div class="l">Models</div></div><div class="s"><div class="v mono">—</div><div class="l">p50 latency</div></div><div class="s"><div class="v">—</div><div class="l">30d uptime</div></div>'
         : '<div class="s"><div class="v">' + p.models + '</div><div class="l">Models available</div></div><div class="s"><div class="v">—</div><div class="l">p50 latency</div></div><div class="s"><div class="v">—</div><div class="l">30d uptime</div></div>';
       var actions = p.connected
         ? '<button class="btn small" data-act="test">Test connection</button><button class="btn small" data-act="manage">Manage key</button>'
-        : '<button class="btn small primary" data-act="connect">' + (p.id === "ollama" ? "Connect local instance" : "Connect") + '</button><a class="btn small" href="#" data-act="getkey">Get API key ↗</a>';
+        : '<button class="btn small primary" data-act="connect">Connect</button>';
       card.innerHTML =
         '<div class="prov-card-top"><div class="prov-logo">' + p.init + '</div><div style="min-width:0"><h3>' + p.name + '</h3><div class="desc">' + p.desc + '</div></div>' + chip + '</div>' +
+        '<div class="verif-row">' + verifBadgeHTML(p) + '<span class="tag">' + p.wire + ' wire</span></div>' +
         '<div class="prov-stats">' + stats + '</div>' +
-        '<div class="connect-box"><input type="password" placeholder="' + (p.id === "ollama" ? "http://localhost:11434" : "Paste API key — e.g. sk-…") + '" aria-label="API key for ' + p.name + '" /><div class="hint">' + (p.id === "ollama" ? "Default Ollama address. No key needed." : "Stored encrypted on this machine only. We test it once, then it just works.") + '</div></div>' +
+        '<div class="connect-box"><input type="password" placeholder="Paste a replacement key…" aria-label="API key for ' + p.name + '" /><div class="hint">Stored encrypted on this machine only.</div></div>' +
         '<div class="prov-actions">' + actions + '</div>';
       card.querySelectorAll("[data-act]").forEach(function(b){
         b.addEventListener("click", function(ev){
@@ -1120,38 +1459,57 @@ resp = client.chat.completions.create(
           var act = b.getAttribute("data-act");
           var box = card.querySelector(".connect-box");
           if(act === "connect"){
-            if(box.classList.contains("open")){ finishConnect(p, card); }
-            else { box.classList.add("open"); var inp = box.querySelector("input"); if(inp) inp.focus(); b.textContent = p.id === "ollama" ? "Connect now" : "Connect provider"; }
+            /* Adding a provider from the dashboard is not wired to the
+               router yet — say so and point at the CLI instead of
+               pretending the provider connected. */
+            toast("Dashboard connect isn't wired yet — run: codvian-router provider add-catalog <id> <key>");
           }
-          if(act === "getkey"){ toast("Opening " + p.name + " key page in your browser…"); }
-          if(act === "test"){ b.textContent = "Testing…"; setTimeout(function(){ b.textContent = "Test connection"; toast(p.name + " · reachable · " + p.lat + " p50"); }, 650); }
-          if(act === "manage"){ box.classList.add("open"); box.querySelector("input").value = ""; box.querySelector("input").placeholder = "Paste a replacement key…"; toast("Paste a new key to rotate it"); }
+          if(act === "test"){
+            /* A real re-probe: re-read the live feed and report the
+               health checker's last result — never an invented
+               latency. */
+            b.textContent = "Testing…";
+            fetch("/api/providers").then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function(d){
+              b.textContent = "Test connection";
+              var found = null;
+              (d.providers || []).forEach(function(x){ if(x.id === p.id) found = x; });
+              if(!found){ toast(p.name + " · no longer configured"); return; }
+              var hs = found.health_status || "unknown";
+              toast(p.name + " · last probe: " + (hs === "ok" ? "healthy" : (hs === "down" ? "down" : "not probed yet")));
+            }).catch(function(){
+              b.textContent = "Test connection";
+              toast("Couldn't reach the router to test " + p.name);
+            });
+          }
+          if(act === "manage"){ box.classList.add("open"); box.querySelector("input").value = ""; box.querySelector("input").focus(); toast("Paste a new key to rotate it"); }
         });
       });
       var inp = card.querySelector(".connect-box input");
-      if(inp){ inp.addEventListener("keydown", function(e){ if(e.key === "Enter"){ finishConnect(p, card); } }); }
+      if(inp){ inp.addEventListener("keydown", function(e){ if(e.key === "Enter"){ toast("Key rotation from the dashboard isn't wired yet — use the CLI to re-add the provider"); } }); }
       grid.appendChild(card);
     });
   }
-  function finishConnect(p, card){
-    var inp = card.querySelector(".connect-box input");
-    if(p.id !== "ollama" && (!inp.value || inp.value.trim().length < 6)){ toast("Paste a valid API key first"); inp.focus(); return; }
-    p.connected = true; p.health = "ok"; p.note = "Operational"; if(p.id !== "ollama"){ p.key = "key…just now"; } p.lat = p.lat === "—" ? "240 ms" : p.lat; p.uptime = p.uptime === "—" ? "100%" : p.uptime;
-    var liveCount = providers.filter(function(x){ return x.connected; }).length;
-    var badge = $("#provBadge"); if(badge) badge.textContent = liveCount + " of " + providers.length;
-    var ipc = $("#instProvCount"); if(ipc) ipc.textContent = liveCount;
-    renderProviders(); renderHealth(); renderProviderKeys();
-    toast(p.name + " connected — " + p.models + " models now available");
-  }
   renderProviders();
 
-  /* Provider keys list */
+  /* Provider keys list — live providers only. No masked key values
+     are invented: a connected provider shows only "stored encrypted". */
   function renderProviderKeys(){
     var host = $("#providerKeys"); host.innerHTML = "";
+    if(!providers.length){
+      var empty = document.createElement("div");
+      empty.className = "feed-empty";
+      empty.textContent = feedState === "unavailable"
+        ? "Provider keys unavailable — the router feed could not be reached."
+        : "No providers connected yet.";
+      host.appendChild(empty);
+      return;
+    }
     providers.forEach(function(p){
       var row = document.createElement("div"); row.className = "key-row";
       if(p.connected){
-        row.innerHTML = '<span class="dot ' + (p.health === "warn" ? "amber" : "green") + '"></span><div><div class="key-name">' + p.name + '</div><div class="key-meta">' + p.note + ' · ' + p.models + ' models</div></div><span class="key-val" style="margin-left:auto">' + (p.id === "ollama" ? "no key · local" : p.key) + '</span><button class="btn small" data-goto="providers">Manage</button>';
+        var note = p.healthStatus === "down" ? "Down · last probe failed" : (p.healthStatus === "unknown" ? "Not probed yet" : "Operational");
+        var dot = p.healthStatus === "down" ? "red" : (p.healthStatus === "unknown" ? "grey" : "green");
+        row.innerHTML = '<span class="dot ' + dot + '"></span><div><div class="key-name">' + p.name + '</div><div class="key-meta">' + note + ' · ' + p.models + ' models</div></div><span class="key-val" style="margin-left:auto">stored encrypted</span><button class="btn small" data-goto="providers">Manage</button>';
       } else {
         row.innerHTML = '<span class="dot grey"></span><div><div class="key-name">' + p.name + '</div><div class="key-meta">Not connected</div></div><button class="btn small" style="margin-left:auto" data-goto="providers">Connect</button>';
       }
@@ -1160,6 +1518,48 @@ resp = client.chat.completions.create(
     $$("[data-goto]", host).forEach(function(b){ b.addEventListener("click", function(){ go("providers"); }); });
   }
   renderProviderKeys();
+
+  /* ---------- Live provider feed ----------
+     GET /api/providers replaces the empty provider list with the real
+     configured providers (verification badge + wire format + health).
+     If the endpoint is unavailable the dashboard keeps the honest
+     empty state above — it never falls back to invented providers. */
+  function initials(name){
+    var parts = (name || "Provider").split(/[\s\-()]+/).filter(Boolean);
+    var s = parts.slice(0, 2).map(function(w){ return w.charAt(0); }).join("");
+    return (s || "P").toUpperCase();
+  }
+  function applyLiveProviders(list){
+    if(!Array.isArray(list)) return false;
+    providers = list.map(function(p){
+      var health = p.health_status || "unknown";
+      return {
+        id: p.id, name: p.name, init: initials(p.name),
+        desc: (p.wire_format || "openai") + " wire · " + p.models + " model" + (p.models === 1 ? "" : "s"),
+        models: p.models,
+        connected: !!p.enabled,
+        verification: p.verification || "unverified",
+        wire: p.wire_format || "openai",
+        healthStatus: health
+      };
+    });
+    updateProviderCounts();
+    renderProviders(); renderHealth(); renderProviderKeys();
+    return true;
+  }
+  if(window.fetch){
+    fetch("/api/providers").then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function(d){
+      feedState = "live";
+      if(d && Array.isArray(d.providers)) applyLiveProviders(d.providers);
+      else { renderProviders(); renderHealth(); renderProviderKeys(); }
+    }).catch(function(){
+      feedState = "unavailable";
+      renderProviders(); renderHealth(); renderProviderKeys();
+    });
+  } else {
+    feedState = "unavailable";
+    renderProviders(); renderHealth(); renderProviderKeys();
+  }
 
   /* ---------- Models ---------- */
   var models = [
@@ -1465,6 +1865,244 @@ resp = client.chat.completions.create(
       this.value = "";
     }
   });
+  /* ---------- Auto-router: live decisions only ---------- */
+  /* Every decision shown here comes from GET /dashboard/auto-route
+     (a prompt the operator just typed, classified live by this
+     router) or GET /dashboard/auto-route/last (the most recent real
+     "auto/*" request through /v1/*). Nothing is pre-filled, nothing
+     is sampled: before any decision the panels read as empty. */
+  var autoModel = "auto";
+  $$("#autoModelSeg button").forEach(function(b){
+    b.addEventListener("click", function(){
+      $$("#autoModelSeg button").forEach(function(x){ x.classList.remove("on"); });
+      b.classList.add("on"); autoModel = b.getAttribute("data-auto-model");
+    });
+  });
+  var autoThreshold = $("#autoThreshold");
+  function syncThresholdLabel(){
+    var el = $("#autoThresholdVal");
+    if(el && autoThreshold) el.textContent = Number(autoThreshold.value).toFixed(2);
+  }
+  if(autoThreshold){ autoThreshold.addEventListener("input", syncThresholdLabel); syncThresholdLabel(); }
+  function escHtml(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  var autoTierNames = { coding:"Coding", chat:"Chat", reasoning:"Reasoning", "quick-qa":"Quick Q&A" };
+  function renderAutoDecision(dec){
+    var host = $("#autoDecision"); if(!host || !dec) return;
+    var order = ["coding","chat","reasoning","quick-qa"];
+    var rows = order.map(function(t){
+      var v = dec.scores ? (dec.scores[t] || 0) : 0;
+      var strong = (t === dec.tier) ? ' style="font-weight:700"' : "";
+      return '<div class="score-row"><span class="t"' + strong + '>' + autoTierNames[t] + '</span><span class="meter"><i style="width:' + Math.round(v * 100) + '%"></i></span><span class="v mono">' + Number(v).toFixed(3) + '</span></div>';
+    }).join("");
+    var chip = dec.fallback
+      ? '<span class="status-chip warn"><span class="dot amber"></span> Fallback — below threshold</span>'
+      : '<span class="status-chip ok"><span class="dot green"></span> Routed</span>';
+    var lat = dec.latency_micros >= 1000 ? (dec.latency_micros / 1000).toFixed(2) + " ms" : dec.latency_micros + " µs";
+    host.innerHTML =
+      '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px">' + chip +
+      '<b style="font-size:15px">' + escHtml(autoTierNames[dec.tier] || dec.tier) + ' tier</b>' +
+      '<span class="mono" style="font-size:12.5px; color:var(--text-2)">confidence ' + Number(dec.confidence).toFixed(3) + ' · threshold ' + Number(dec.threshold).toFixed(2) + '</span></div>' +
+      '<p style="margin:6px 0 12px; font-size:13px; color:var(--text-2)">' + escHtml(dec.reason || "") + '</p>' +
+      '<div style="font-size:13px; margin-bottom:10px">Resolves to model <span class="mono" style="font-weight:600">' + escHtml(dec.model || "—") + '</span>' + (dec.model ? "" : ' <span style="color:var(--text-3)">(no model configured for this tier)</span>') + '</div>' +
+      rows +
+      '<p style="margin:12px 0 0; font-size:12px; color:var(--text-3)">Decision computed in ' + lat + ' — local matching only, no LLM call, no network call. Scores are token-overlap similarity (0–1), not a quality judgement.</p>';
+    var meta = $("#autoDecisionMeta"); if(meta) meta.textContent = "Model " + autoModel + " · just now";
+  }
+  function autoRouteError(msg){
+    var host = $("#autoDecision"); if(!host) return;
+    host.innerHTML = '<p style="color:var(--red)">' + escHtml(msg) + '</p>';
+  }
+  function runAutoRoute(){
+    var promptEl = $("#autoPrompt");
+    var prompt = promptEl ? promptEl.value.trim() : "";
+    if(!prompt){ toast("Type a prompt first"); if(promptEl) promptEl.focus(); return; }
+    var btn = $("#autoRouteBtn"); btn.disabled = true; btn.textContent = "Routing…";
+    var url = "/dashboard/auto-route?model=" + encodeURIComponent(autoModel) +
+      "&prompt=" + encodeURIComponent(prompt) +
+      "&threshold=" + encodeURIComponent(autoThreshold ? autoThreshold.value : "0.5");
+    fetch(url).then(function(resp){
+      return resp.json().then(function(dec){ return { ok: resp.ok, status: resp.status, dec: dec }; });
+    }).then(function(res){
+      if(!res.ok){
+        // A 502 still carries a real decision (no model configured
+        // for the picked tier) — show it, with its reason.
+        if(res.dec && res.dec.tier){ renderAutoDecision(res.dec); return; }
+        throw new Error(res.dec && res.dec.error && res.dec.error.message ? res.dec.error.message : ("Request failed (" + res.status + ")"));
+      }
+      renderAutoDecision(res.dec);
+    }).catch(function(err){
+      autoRouteError(err.message || "Auto-router request failed");
+    }).finally(function(){ btn.disabled = false; btn.textContent = "Route it"; });
+  }
+  var autoBtn = $("#autoRouteBtn");
+  if(autoBtn){ autoBtn.addEventListener("click", runAutoRoute); }
+  var autoPromptEl = $("#autoPrompt");
+  if(autoPromptEl){ autoPromptEl.addEventListener("keydown", function(e){ if(e.key === "Enter" && (e.metaKey || e.ctrlKey)){ runAutoRoute(); } }); }
+  function loadAutoLast(){
+    var host = $("#autoLast"); if(!host) return;
+    fetch("/dashboard/auto-route/last").then(function(r){ return r.json(); }).then(function(body){
+      if(!body || !body.has_decision || !body.decision){ return; } /* honest empty state stays */
+      var dec = body.decision;
+      host.innerHTML = '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">' +
+        (dec.fallback ? '<span class="status-chip warn"><span class="dot amber"></span> Fallback</span>' : '<span class="status-chip ok"><span class="dot green"></span> Routed</span>') +
+        '<b>' + escHtml(autoTierNames[dec.tier] || dec.tier) + ' tier</b>' +
+        '<span class="mono" style="font-size:12.5px; color:var(--text-2)">confidence ' + Number(dec.confidence).toFixed(3) + ' · model ' + escHtml(dec.model || "—") + ' · ' + escHtml(dec.virtual_model || "") + '</span></div>' +
+        '<p style="margin:8px 0 0; font-size:13px; color:var(--text-2)">' + escHtml(dec.reason || "") + '</p>';
+    }).catch(function(){ /* leave the honest empty state */ });
+  }
+  loadAutoLast();
+
+  /* ---------- Coalescing: live counters only ---------- */
+  /* Every number comes from GET /dashboard/coalescing — real
+     counters from the engine's single-flight group, zero until
+     identical requests actually share a flight. Nothing is
+     pre-filled: before any coalesced request the tiles read 0 and
+     the detail panel keeps its honest empty state. */
+  function fmtNum(n){ return Number(n || 0).toLocaleString("en-US"); }
+  function loadCoalescing(){
+    fetch("/dashboard/coalescing").then(function(r){ return r.json(); }).then(function(s){
+      if(!s) return;
+      var shared = $("#coalShared"); if(shared) shared.textContent = fmtNum(s.shared_calls);
+      var avoided = $("#coalAvoided"); if(avoided) avoided.textContent = fmtNum(s.upstream_avoided);
+      var saved = $("#coalSaved"); if(saved) saved.textContent = fmtNum(s.quota_saved_calls);
+      var meta = $("#coalMeta");
+      if(meta) meta.textContent = (s.in_flight > 0 ? s.in_flight + " flight" + (s.in_flight === 1 ? "" : "s") + " in flight · " : "") + fmtNum(s.requests) + " coalescable request" + (s.requests === 1 ? "" : "s") + " · " + fmtNum(s.flights) + " flight" + (s.flights === 1 ? "" : "s");
+      var detail = $("#coalDetail");
+      if(detail && (s.requests > 0 || s.shared_calls > 0)){
+        detail.innerHTML = '<p style="margin:0; font-size:13.5px; color:var(--text-2)">Leader flights so far: <b class="mono" style="color:var(--text)">' + fmtNum(s.flights) + '</b> · waiters served from a shared flight: <b class="mono" style="color:var(--text)">' + fmtNum(s.shared_calls) + '</b> · flights running right now: <b class="mono" style="color:var(--text)">' + fmtNum(s.in_flight) + '</b>. Each shared waiter avoided one upstream call and one quota hit; the leader&rsquo;s attempt is the only one billed, and waiters are recorded in the ledger as shared rows with zero tokens and zero cost.</p>';
+      }
+    }).catch(function(){ /* leave the honest empty state / last values */ });
+  }
+  var coalBtn = $("#coalRefreshBtn");
+  if(coalBtn){ coalBtn.addEventListener("click", loadCoalescing); }
+  /* Refresh while the section is open, so a burst of identical
+     requests shows up without reopening the page. */
+  setInterval(function(){
+    var v = $("#view-coalescing");
+    if(v && v.classList.contains("on")) loadCoalescing();
+  }, 5000);
+
+  /* ---------- Concurrency: live limiter state + TFO probe ---------- */
+  /* Every number comes from GET /dashboard/concurrency — the real
+     per-provider Gradient2 state (cap, in-flight, smoothed RTT vs
+     baseline, samples, shed calls) and the probed TFO state for
+     this platform. Providers with no traffic yet show the initial
+     cap with zero samples and no RTT; nothing is pre-filled. */
+  function fmtMs(v){ return (v == null || v === 0) ? "—" : (Number(v) >= 100 ? Math.round(Number(v)) + " ms" : Number(v).toFixed(1) + " ms"); }
+  function loadConcurrency(){
+    fetch("/dashboard/concurrency").then(function(r){ return r.json(); }).then(function(d){
+      if(!d) return;
+      var tfo = d.tfo || {};
+      var pill = $("#tfoPill");
+      if(pill) pill.textContent = tfo.active ? "Active" : (tfo.supported ? "Supported, kernel off" : "Not available");
+      var detail = $("#tfoDetail");
+      if(detail){
+        detail.innerHTML = '<p style="margin:0; font-size:13.5px; color:var(--text-2)">' + escHtml(tfo.reason || "No probe result.") + '</p>' +
+          '<p style="margin:8px 0 0; font-size:13px; color:var(--text-2)">Platform <span class="mono" style="color:var(--text)">' + escHtml(tfo.platform || "—") + '</span>' +
+          (tfo.kernel_known ? ' · kernel <span class="mono" style="color:var(--text)">net.ipv4.tcp_fastopen=' + escHtml(tfo.kernel_value || "") + '</span>' : '') +
+          ' · dial attempts <b class="mono" style="color:var(--text)">' + fmtNum(tfo.dial_attempts) + '</b> · refused <b class="mono" style="color:var(--text)">' + fmtNum(tfo.dial_errors) + '</b> (a refused option falls back to a normal handshake — it never fails a request).</p>';
+      }
+      var list = Array.isArray(d.providers) ? d.providers : [];
+      var body = $("#concBody"); if(body) body.innerHTML = "";
+      list.forEach(function(p){
+        var grad = (p.baseline_ms > 0 && p.rtt_ms > 0) ? (p.baseline_ms / p.rtt_ms) : null;
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          '<td><span style="font-weight:600">' + escHtml(p.name || p.provider_id) + '</span>' +
+          (p.samples === 0 ? '<div style="font-size:11.5px; color:var(--text-3)">No traffic yet</div>' : '') + '</td>' +
+          '<td class="num mono" style="font-size:12.5px">' + fmtNum(p.in_flight) + '</td>' +
+          '<td class="num mono" style="font-size:12.5px">' + Number(p.limit || 0).toFixed(1) + '</td>' +
+          '<td class="num" style="color:var(--text-2)">' + fmtMs(p.rtt_ms) + '</td>' +
+          '<td class="num" style="color:var(--text-2)">' + fmtMs(p.baseline_ms) + '</td>' +
+          '<td class="num mono" style="font-size:12.5px">' + (grad == null ? "—" : grad.toFixed(2)) + '</td>' +
+          '<td class="num mono" style="font-size:12.5px">' + fmtNum(p.samples) + '</td>' +
+          '<td class="num mono" style="font-size:12.5px">' + fmtNum(p.rejected) + '</td>';
+        if(body) body.appendChild(tr);
+      });
+      var empty = $("#concEmpty");
+      if(empty) empty.style.display = list.length ? "none" : "block";
+      var meta = $("#concMeta");
+      if(meta){
+        var totalShed = list.reduce(function(a, p){ return a + (p.rejected || 0); }, 0);
+        meta.textContent = list.length
+          ? list.length + " provider" + (list.length === 1 ? "" : "s") + " · " + fmtNum(totalShed) + " call" + (totalShed === 1 ? "" : "s") + " shed"
+          : "No traffic yet";
+      }
+    }).catch(function(){ /* leave the honest empty state / last values */ });
+  }
+  var concBtn = $("#concRefreshBtn");
+  if(concBtn){ concBtn.addEventListener("click", loadConcurrency); }
+  /* Refresh while the section is open, so a slowdown shows up
+     without reopening the page. */
+  setInterval(function(){
+    var v = $("#view-concurrency");
+    if(v && v.classList.contains("on")) loadConcurrency();
+  }, 5000);
+
+  /* ---------- Route guards: live tier table + status ---------- */
+  /* Everything comes from GET /dashboard/guard — the real route
+     classification from the server's guard table plus live status
+     (loopback enforcement, bootstrap state, denial count). No tier
+     or route is hard-coded here: if the server classifies a new
+     route, this section shows it. Before the feed answers, the
+     tables stay empty and the status card keeps its honest
+     "no status yet" text. */
+  function guardTierRows(tbodyId, routes, authCol){
+    var body = $(tbodyId); if(!body) return;
+    body.innerHTML = "";
+    (routes || []).forEach(function(r){
+      var tr = document.createElement("tr");
+      var third = authCol
+        ? (r.auth_exempt ? "No key — explicitly off (no secrets)" : "Gateway key required")
+        : escHtml(r.description || "");
+      if(r.spawn_capable && !authCol){
+        third += ' <span class="tag hot">spawn-capable</span>';
+      }
+      if(r.bootstrap){
+        third += ' <span class="tag">first-key setup</span>';
+      }
+      tr.innerHTML =
+        '<td class="mono" style="font-size:12.5px">' + escHtml(r.method || "") + '</td>' +
+        '<td class="mono" style="font-size:12.5px; font-weight:600">' + escHtml(r.path || "") + '</td>' +
+        '<td style="color:var(--text-2)">' + third + '</td>';
+      body.appendChild(tr);
+    });
+  }
+  function loadGuard(){
+    fetch("/dashboard/guard").then(function(r){ return r.json(); }).then(function(d){
+      if(!d) return;
+      var tiers = {};
+      (d.tiers || []).forEach(function(t){ tiers[t.tier] = t; });
+      var local = tiers.LOCAL_ONLY || {};
+      var prot = tiers.ALWAYS_PROTECTED || {};
+      var mgmt = tiers.MANAGEMENT || {};
+      if(local.description){ var ld = $("#guardTierLocalDesc"); if(ld) ld.textContent = local.description; }
+      if(prot.description){ var pd = $("#guardTierProtectedDesc"); if(pd) pd.textContent = prot.description; }
+      if(mgmt.description){ var md = $("#guardTierMgmtDesc"); if(md) md.textContent = mgmt.description; }
+      guardTierRows("#guardTierLocal", local.routes, false);
+      guardTierRows("#guardTierProtected", prot.routes, false);
+      guardTierRows("#guardTierMgmt", mgmt.routes, true);
+      var st = d.status || {};
+      var pill = $("#guardPill");
+      if(pill) pill.textContent = st.loopback_only_enforced ? "Enforced" : "Not enforced";
+      var detail = $("#guardDetail");
+      if(detail){
+        detail.innerHTML = '<p style="margin:0; font-size:13.5px; color:var(--text-2)">Loopback-only enforcement is <b style="color:var(--text)">active</b> — Tier 1 routes are refused with <span class="mono">403 LOCAL_ONLY</span> for any non-loopback peer, before auth runs. Listening on <span class="mono" style="color:var(--text)">' + escHtml(st.listen || "unknown") + '</span>.</p>' +
+          '<p style="margin:8px 0 0; font-size:13.5px; color:var(--text-2)">Bootstrap (first-key setup): <b style="color:var(--text)">' + (st.bootstrap_pending ? "pending — no gateway key exists yet" : "complete — a gateway key already exists") + '</b>' +
+          ' · Tier 3 auth relaxed: <b style="color:var(--text)">' + (st.auth_relaxed ? "yes" : "no") + '</b>' +
+          ' · Tier 1 refusals since start: <b class="mono" style="color:var(--text)">' + fmtNum(st.local_only_denials) + '</b> (each one is the guard working, not an error).</p>';
+      }
+    }).catch(function(){ /* leave the honest empty state / last values */ });
+  }
+  var guardBtn = $("#guardRefreshBtn");
+  if(guardBtn){ guardBtn.addEventListener("click", loadGuard); }
+  /* Refresh while the section is open, so a refused spawn attempt
+     shows up in the denial count without reopening the page. */
+  setInterval(function(){
+    var v = $("#view-guard");
+    if(v && v.classList.contains("on")) loadGuard();
+  }, 5000);
+
   document.addEventListener("keydown", function(e){
     if((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k"){
       e.preventDefault(); var s = $("#globalSearch"); if(s) s.focus();
