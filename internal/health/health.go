@@ -192,10 +192,11 @@ func (c *Checker) Check(ctx context.Context, providerID string) Status {
 			return fail(p.Name, hint, fmt.Errorf("decrypting provider API key: %w", err), 0)
 		}
 		// The injected factory is a test seam: it builds with the
-		// legacy Bearer default (nil headers). Production callers
-		// pass a nil factory and go through reg.ClientFor, which
-		// resolves the catalog auth per (provider, endpoint).
-		client, err = c.factory(p.BaseURL, key, nil)
+		// legacy Bearer default (nil headers) and the provider's
+		// stored wire format. Production callers pass a nil factory
+		// and go through reg.ClientFor, which resolves the catalog
+		// auth per (provider, endpoint).
+		client, err = c.factory(p.BaseURL, key, nil, p.WireFormat)
 	} else {
 		client, err = c.reg.ClientFor(providerID)
 	}
