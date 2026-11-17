@@ -446,6 +446,15 @@ type staleReporter interface {
 	LastStaleAge() time.Duration
 }
 
+// cacheHitReporter is optionally implemented by engines that can
+// report whether the most recent call was served proactively from a
+// cache without calling any provider (degrade.StaleEngine with
+// Policy.ServeCache). kind is "exact" or "semantic"; similarity is
+// the semantic cosine similarity (0 for exact hits).
+type cacheHitReporter interface {
+	LastCacheHit() (kind string, similarity float32, ok bool)
+}
+
 // recordMetrics records one finished chat request when a recorder is
 // configured. Provider/model come from the route trace when available
 // (the last attempt is the winner on success, the last tried on
@@ -459,6 +468,23 @@ func (s *Server) recordMetrics(req provider.ChatRequest, resp *provider.ChatResp
 	rec := s.recorder
 	if rec == nil {
 		return
+	}
+	// A proactive cache hit called no provider: attribute the
+	// request to the cache, not to whatever trace the previous
+	// request left behind (which would misattribute it to a
+	// neighbour's provider and invent a failover that never
+	// happened). The ledger is untouched — it only ever sees real
+	// provider attempts, so a cache hit bills nobody.
+	if chr, ok := s.engine.(cacheHitReporter); ok {
+		if _, _, hit := chr.LastCacheHit(); hit {
+			// Hit/miss counters live with the wrapper that owns
+			// the lookup (degrade.StaleEngine via SetCacheMetrics),
+			// not here — counting here too would double-count
+			// every hit. The server only attributes the request.
+			rec.IncRequest("cache", req.Model, "ok")
+			rec.ObserveLatency("cache", req.Model, float64(time.Since(started).Milliseconds()))
+			return
+		}
 	}
 	providerName, model := "unknown", req.Model
 	if tp, ok := s.engine.(traceProvider); ok {
@@ -495,6 +521,28 @@ func (s *Server) setStaleHeader(w http.ResponseWriter) {
 	if sr, ok := s.engine.(staleReporter); ok && sr.LastServedStale() {
 		w.Header().Set("X-Codvian-Stale", "true")
 		w.Header().Set("X-Codvian-Stale-Age", sr.LastStaleAge().String())
+	}
+}
+
+// setCacheHeader marks a non-streaming response that was served
+// proactively from a cache, so the client never mistakes it for a
+// fresh provider response: X-Codvian-Cache is "exact" or "semantic",
+// and a semantic hit also carries its cosine similarity. It must be
+// called before the response body is written. Streaming responses
+// cannot carry the header (the hit is known only after the stream
+// ends), so handleChatStream logs it instead.
+func (s *Server) setCacheHeader(w http.ResponseWriter) {
+	chr, ok := s.engine.(cacheHitReporter)
+	if !ok {
+		return
+	}
+	kind, sim, hit := chr.LastCacheHit()
+	if !hit {
+		return
+	}
+	w.Header().Set("X-Codvian-Cache", kind)
+	if kind == "semantic" {
+		w.Header().Set("X-Codvian-Cache-Similarity", fmt.Sprintf("%.3f", sim))
 	}
 }
 
@@ -588,6 +636,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		finishReason = "stop"
 	}
 	s.setStaleHeader(w)
+	s.setCacheHeader(w)
 	writeJSON(w, http.StatusOK, chatCompletionResponse{
 		ID:      id,
 		Object:  "chat.completion",
@@ -778,6 +827,11 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 	if err == nil {
 		if sr, ok := s.engine.(staleReporter); ok && sr.LastServedStale() {
 			s.logger.Printf("stream served stale response (age %s)", sr.LastStaleAge())
+		}
+		if chr, ok := s.engine.(cacheHitReporter); ok {
+			if kind, sim, hit := chr.LastCacheHit(); hit {
+				s.logger.Printf("stream served from %s cache (similarity %.3f)", kind, sim)
+			}
 		}
 		reason := "stop"
 		if resp != nil && resp.FinishReason != "" {

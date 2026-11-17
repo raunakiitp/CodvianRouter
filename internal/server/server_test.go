@@ -705,3 +705,89 @@ func TestChatCompletionsStreamingChunkAware(t *testing.T) {
 		t.Errorf("SSE body must not contain a hard-coded stop finish chunk:\n%s", body)
 	}
 }
+
+// cacheHitEngine wraps a fakeEngine and reports a proactive cache hit,
+// like degrade.StaleEngine with Policy.ServeCache.
+type cacheHitEngine struct {
+	*fakeEngine
+	kind string
+	sim  float32
+}
+
+func (e *cacheHitEngine) LastCacheHit() (string, float32, bool) {
+	if e.kind == "" {
+		return "", 0, false
+	}
+	return e.kind, e.sim, true
+}
+
+func TestChatCompletionsSemanticCacheHeader(t *testing.T) {
+	eng := &cacheHitEngine{
+		fakeEngine: &fakeEngine{chatResp: provider.ChatResponse{Content: "Paris.", Model: "model-a"}},
+		kind:       "semantic",
+		sim:        0.923,
+	}
+	srv := newTestServer(t, eng, WithModels("model-a"))
+	rec := doReq(t, srv, "POST", "/v1/chat/completions", `{"model":"model-a","messages":[{"role":"user","content":"What is the capital of France today?"}]}`, "test-key-123")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("X-Codvian-Cache"); got != "semantic" {
+		t.Fatalf("X-Codvian-Cache = %q, want semantic", got)
+	}
+	if got := rec.Header().Get("X-Codvian-Cache-Similarity"); got != "0.923" {
+		t.Fatalf("X-Codvian-Cache-Similarity = %q, want 0.923", got)
+	}
+	if got := rec.Header().Get("X-Codvian-Stale"); got != "" {
+		t.Fatalf("X-Codvian-Stale = %q, want empty (a cache hit is not stale)", got)
+	}
+}
+
+func TestChatCompletionsExactCacheHeaderHasNoSimilarity(t *testing.T) {
+	eng := &cacheHitEngine{
+		fakeEngine: &fakeEngine{chatResp: provider.ChatResponse{Content: "4", Model: "model-a"}},
+		kind:       "exact",
+	}
+	srv := newTestServer(t, eng, WithModels("model-a"))
+	rec := doReq(t, srv, "POST", "/v1/chat/completions", `{"model":"model-a","messages":[{"role":"user","content":"What is 2+2?"}]}`, "test-key-123")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("X-Codvian-Cache"); got != "exact" {
+		t.Fatalf("X-Codvian-Cache = %q, want exact", got)
+	}
+	if got := rec.Header().Get("X-Codvian-Cache-Similarity"); got != "" {
+		t.Fatalf("X-Codvian-Cache-Similarity = %q, want empty for exact hits", got)
+	}
+}
+
+func TestChatCompletionsCacheHitMetricsAttributedToCache(t *testing.T) {
+	eng := &cacheHitEngine{
+		fakeEngine: &fakeEngine{chatResp: provider.ChatResponse{Content: "Paris.", Model: "model-a"}},
+		kind:       "semantic",
+		sim:        0.91,
+	}
+	recorder := metrics.NewRecorder()
+	srv := newTestServer(t, eng, WithModels("model-a"), WithMetrics(recorder))
+	rec := doReq(t, srv, "POST", "/v1/chat/completions", `{"model":"model-a","messages":[{"role":"user","content":"What is the capital of France today?"}]}`, "test-key-123")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	// The request must be attributed to the cache, not to any
+	// provider — and the semantic hit must be counted. Fetch the
+	// exposition via the metrics endpoint (auth-gated, same key).
+	mrec := doReq(t, srv, "GET", "/metrics", "", "test-key-123")
+	if mrec.Code != http.StatusOK {
+		t.Fatalf("metrics status = %d", mrec.Code)
+	}
+	body := mrec.Body.String()
+	if !strings.Contains(body, `codvian_router_requests_total{provider="cache",model="model_a",outcome="ok"} 1`) {
+		t.Fatalf("metrics do not attribute the request to provider=cache:\n%s", body)
+	}
+	// Hit/miss counters are owned by the wrapper (degrade), not the
+	// server — the server must not count them too, or every hit
+	// would be double-counted. Assert the server counted no hit.
+	if strings.Contains(body, `codvian_router_cache_hits_total{layer="semantic"}`) {
+		t.Fatalf("server must not count cache hits (wrapper owns them):\n%s", body)
+	}
+}
