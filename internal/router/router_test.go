@@ -1085,6 +1085,74 @@ func TestEngineCrossWireFailoverGeminiToOpenAI(t *testing.T) {
 	}
 }
 
+func TestEngineCrossWireFailoverCohereToOpenAI(t *testing.T) {
+	// Same shape as the Gemini cross-wire test, but with a REAL
+	// Cohere client as the failing attempt: its 429 must map to
+	// *provider.RateLimitError and the engine must fail over to an
+	// OpenAI provider — and the reverse direction must work too.
+	// This proves the failover decision is driven by the error type,
+	// not the wire format.
+	for _, tc := range []struct {
+		name  string
+		first string
+	}{
+		{"cohere-429-then-openai", "coh"},
+		{"openai-429-then-cohere", "oai"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var clients map[string]provider.Client
+			if tc.first == "coh" {
+				// The Cohere client fails with a real 429; the
+				// OpenAI fake wins.
+				cohereSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path == "/v2/chat" {
+						w.WriteHeader(http.StatusTooManyRequests)
+						_, _ = w.Write([]byte(`{"message":"Too many requests"}`))
+						return
+					}
+					w.WriteHeader(http.StatusNotFound)
+				}))
+				defer cohereSrv.Close()
+				coClient, err := provider.NewClient(cohereSrv.URL, "co-key",
+					provider.WithAuthHeaders(map[string]string{"Authorization": "Bearer co-key"}),
+					provider.WithWireFormat(provider.WireFormatCohere))
+				if err != nil {
+					t.Fatalf("NewClient cohere: %v", err)
+				}
+				clients = map[string]provider.Client{"coh": coClient, "other": okClient("from-winner")}
+			} else {
+				// The OpenAI fake fails with a 429; a real Cohere
+				// client answers the second attempt.
+				cohereSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					_, _ = w.Write([]byte(`{"id":"chat-1","finish_reason":"COMPLETE","message":{"role":"assistant","content":[{"type":"text","text":"from-winner"}]},"usage":{"input_tokens":1,"output_tokens":1}}`))
+				}))
+				defer cohereSrv.Close()
+				coClient, err := provider.NewClient(cohereSrv.URL, "co-key",
+					provider.WithAuthHeaders(map[string]string{"Authorization": "Bearer co-key"}),
+					provider.WithWireFormat(provider.WireFormatCohere))
+				if err != nil {
+					t.Fatalf("NewClient cohere: %v", err)
+				}
+				clients = map[string]provider.Client{"oai": errClient(&provider.RateLimitError{}), "other": coClient}
+			}
+			eng := NewEngine(clients, nil, testConfig())
+			resp, trace, err := eng.ChatWithChain(context.Background(), []Attempt{
+				{ProviderID: tc.first, Model: "m"},
+				{ProviderID: "other", Model: "m"},
+			}, provider.ChatRequest{Model: "m", Messages: []provider.Message{{Role: RoleUser, Content: "hi"}}})
+			if err != nil {
+				t.Fatalf("ChatWithChain: %v", err)
+			}
+			if resp.Content != "from-winner" {
+				t.Fatalf("Content = %q, want from-winner", resp.Content)
+			}
+			if len(trace.Attempts) != 2 || trace.Attempts[0].Outcome != "rate_limited" || trace.Attempts[1].Outcome != "success" {
+				t.Errorf("trace = %+v, want rate_limited then success", trace.Attempts)
+			}
+		})
+	}
+}
+
 func TestEngineChatStreamChunksToolCalls(t *testing.T) {
 	client := &chunkFakeClient{chunks: []provider.StreamChunk{
 		{Content: "hi "},
