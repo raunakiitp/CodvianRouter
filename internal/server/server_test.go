@@ -123,6 +123,48 @@ func TestHealthz(t *testing.T) {
 	}
 }
 
+func TestDashboard(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{})
+	// No gateway key: the dashboard is static UI, served without auth.
+	rec := doReq(t, srv, http.MethodGet, "/dashboard", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "text/html; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want text/html; charset=utf-8", ct)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"Codvian Router", "Overview", "Providers", "Models"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("dashboard missing %q", want)
+		}
+	}
+	// The approved design has no Playground section anywhere.
+	if strings.Contains(body, "Playground") {
+		t.Fatal("dashboard must not contain Playground")
+	}
+}
+
+func TestDashboardMethodNotAllowed(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{})
+	rec := doReq(t, srv, http.MethodPost, "/dashboard", "", "")
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405", rec.Code)
+	}
+}
+
+// TestDashboardDoesNotBypassAPIAuth guards the wiring: adding
+// /dashboard must not open /v1/* or /metrics to unauthenticated calls.
+func TestDashboardDoesNotBypassAPIAuth(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{}, WithModels("model-a"))
+	for _, path := range []string{"/v1/models", "/metrics", "/v1/chat/completions"} {
+		rec := doReq(t, srv, http.MethodGet, path, "", "")
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("GET %s without key: status = %d, want 401", path, rec.Code)
+		}
+	}
+}
+
 func TestModelsUsesConfiguredModels(t *testing.T) {
 	srv := newTestServer(t, &fakeEngine{}, WithModels("model-a", "model-b"))
 	rec := doReq(t, srv, http.MethodGet, "/v1/models", "", "test-key-123")

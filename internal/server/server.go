@@ -1,6 +1,9 @@
 // Package server implements the OpenAI-compatible HTTP gateway for Codvian Router.
 //
-// Stdlib only (net/http). No dashboard, no HTML.
+// Stdlib only (net/http). It also serves the static dashboard UI at
+// GET /dashboard (the approved dashboard embedded in the web package);
+// the dashboard carries no live data and needs no gateway key, while
+// every /v1/* route and /metrics stay auth-gated.
 //
 // CONTRACT NOTES — read before wiring in the real packages:
 //
@@ -45,6 +48,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/metrics"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/routetrace"
+	"github.com/raunakiitp/codvian-router/web"
 )
 
 // DefaultTimeout is the per-request timeout applied to /v1/* handlers.
@@ -286,6 +290,7 @@ func New(engine Engine, opts ...Option) *Server {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
+	mux.HandleFunc("/dashboard", s.handleDashboard)
 	mux.HandleFunc("/metrics", s.requireAuth(s.handleMetrics))
 	mux.HandleFunc("/v1/models", s.requireAuth(s.handleModels))
 	mux.HandleFunc("/v1/chat/completions", s.requireAuth(s.handleChatCompletions))
@@ -372,6 +377,21 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// handleDashboard serves the approved static dashboard UI (embedded
+// from the web package). It is intentionally NOT auth-gated: the page
+// is static sample UI with no live data, and the server binds
+// localhost by default (see --listen). It must never shadow the API:
+// /dashboard is an exact path, so /v1/* and /metrics are unaffected.
+func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(web.IndexHTML)
 }
 
 // handleMetrics serves the Prometheus exposition of the recorder. It
