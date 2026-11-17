@@ -505,6 +505,7 @@ func runServe(opts options) int {
 	fmt.Printf("providers: %d configured, %d clients ready\n", len(st.reg.List()), len(st.clients))
 	fmt.Println("degradation: ON (stale responses served with X-Codvian-Stale)")
 	fmt.Println("metrics: GET /metrics (gateway-key auth required)")
+	fmt.Printf("dashboard: http://%s/dashboard\n", st.listen)
 
 	errCh := make(chan error, 1)
 	go func() { errCh <- httpSrv.ListenAndServe() }()
