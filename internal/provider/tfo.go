@@ -1,0 +1,126 @@
+// TCP Fast Open (TFO) on the per-provider dialer.
+//
+// TFO lets the first application data ride in the opening SYN on a
+// repeat connection to a host the kernel already has a TFO cookie
+// for, saving up to one RTT on a cold/failover dial. For this router
+// that early data is the TLS ClientHello — TLS itself handles it, and
+// the router NEVER carries a raw POST body in early data (a replayed
+// SYN could deliver a non-idempotent request twice; RFC 7413
+// Applicability). Warm HTTP/2 connection pools are the primary
+// defence against dial latency; TFO only pays on cold dials, which
+// is exactly when a failover opens a fresh connection.
+//
+// Implementation: the per-provider http.Transport's Dialer sets the
+// client-side TFO socket option in its Control hook
+// (TCP_FASTOPEN_CONNECT on Linux, TCP_FASTOPEN on macOS/Windows —
+// see the per-OS files). The hook NEVER returns an error: a platform
+// or middlebox that rejects the option is recorded (DialErrors) and
+// the dial proceeds as a normal handshake — graceful fallback, never
+// a failed request because TFO was refused.
+//
+// Honesty: TFOState reports what was actually probed on this
+// platform — a setsockopt probe on a scratch socket plus, on Linux,
+// the net.ipv4.tcp_fastopen sysctl bitmap (bit 0x1 = client TFO).
+// "Active" means the probe succeeded AND the kernel has client TFO
+// enabled (or the kernel state is unknown on non-Linux platforms,
+// where the probe alone decides). A first-ever connection to a host
+// still does a normal handshake to obtain a cookie; only repeat
+// dials can use it, so no latency claim is made here — the
+// measurement lives in the test (cold dials with/without TFO).
+package provider
+
+import (
+	"net"
+	"net/http"
+	"sync"
+	"sync/atomic"
+	"syscall"
+	"time"
+)
+
+// TFOState is the measured TFO state for this platform. All fields
+// are real probe results, never assumed: Supported is whether the
+// client-side setsockopt succeeded on a scratch socket, Active is
+// whether the dialer will actually attempt TFO (probe + kernel
+// client flag), KernelValue is the raw sysctl value on Linux ("" +
+// KernelKnown=false elsewhere), DialAttempts/DialErrors count
+// Control-hook runs and their setsockopt failures across all
+// provider clients in this process.
+type TFOState struct {
+	Supported    bool   `json:"supported"`
+	Active       bool   `json:"active"`
+	Platform     string `json:"platform"`
+	KernelValue  string `json:"kernel_value,omitempty"`
+	KernelKnown  bool   `json:"kernel_known"`
+	Reason       string `json:"reason"`
+	DialAttempts uint64 `json:"dial_attempts"`
+	DialErrors   uint64 `json:"dial_errors"`
+}
+
+var (
+	tfoProbeOnce sync.Once
+	tfoProbe     TFOState
+	tfoAttempts  atomic.Uint64
+	tfoErrors    atomic.Uint64
+)
+
+// TFOStatus returns the probed TFO state for this platform. The probe
+// runs once per process: a setsockopt on a scratch TCP socket, plus
+// the Linux sysctl read. DialAttempts/DialErrors are live counters
+// and are refreshed on every call.
+func TFOStatus() TFOState {
+	tfoProbeOnce.Do(func() { tfoProbe = probeTFO() })
+	st := tfoProbe
+	st.DialAttempts = tfoAttempts.Load()
+	st.DialErrors = tfoErrors.Load()
+	return st
+}
+
+// tfoControl is the net.Dialer Control hook: it enables client-side
+// TFO on the socket about to be dialed. It records the attempt and
+// any setsockopt failure, and ALWAYS returns nil — a refused option
+// must fall back to a normal handshake, never fail the dial.
+func tfoControl(network, address string, c syscall.RawConn) error {
+	tfoAttempts.Add(1)
+	_ = c.Control(func(fd uintptr) {
+		if err := syscall.SetsockoptInt(int(fd), tfoLevel, tfoOption, 1); err != nil {
+			tfoErrors.Add(1)
+		}
+	})
+	return nil
+}
+
+// tfoDialer returns a net.Dialer that attempts TFO when enabled.
+// When disabled it is a plain dialer with the same timeouts, so the
+// with/without measurement compares dialers, not timeouts.
+func tfoDialer(enabled bool) *net.Dialer {
+	d := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+	if enabled {
+		d.Control = tfoControl
+	}
+	return d
+}
+
+// tfoTransport returns an http.Transport identical to
+// http.DefaultTransport except its DialContext uses tfoDialer, so
+// provider clients keep the default proxy/TLS/idle settings and
+// only the dial changes. A nil Transport (the previous behaviour)
+// used DefaultTransport implicitly; this makes the dialer explicit
+// without changing any other setting.
+func tfoTransport(enabled bool) *http.Transport {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.DialContext = tfoDialer(enabled).DialContext
+	return tr
+}
+
+// WithTCP FastOpen enables or disables TCP Fast Open on the client's
+// dialer. The default (no option) is enabled: the Control hook
+// falls back gracefully on platforms that reject it, so enabling by
+// default cannot break a dial. Disable it only to measure the
+// with/without difference.
+func WithTCPFastOpen(enabled bool) ClientOption {
+	return func(c *openAIClient) {
+		c.tfoEnabled = enabled
+		c.tfoSet = true
+	}
+}

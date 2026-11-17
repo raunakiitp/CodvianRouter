@@ -201,12 +201,13 @@ type ClientFactory func(baseURL, apiKey string, authHeaders map[string]string, w
 // Registry is the in-memory provider registry, persisted through a Store.
 // It is safe for concurrent use.
 type Registry struct {
-	mu        sync.RWMutex
-	providers map[string]*Provider
-	order     []string // insertion order (List order)
-	store     Store
-	cipher    KeyCipher
-	newClient ClientFactory
+	mu         sync.RWMutex
+	providers  map[string]*Provider
+	order      []string // insertion order (List order)
+	store      Store
+	cipher     KeyCipher
+	newClient  ClientFactory
+	tfoEnabled bool // TCP Fast Open on clients built by the default factory (default true)
 }
 
 // RegistryOption configures a Registry.
@@ -226,6 +227,15 @@ func WithClientFactory(f ClientFactory) RegistryOption {
 	return func(r *Registry) { r.newClient = f }
 }
 
+// WithTFOEnabled enables or disables TCP Fast Open on the upstream
+// clients the registry builds (default true). Disabling is only for
+// measuring the with/without difference (see provider.TFOStatus);
+// the dialer falls back gracefully either way, so disabling is
+// never needed for correctness.
+func WithTFOEnabled(enabled bool) RegistryOption {
+	return func(r *Registry) { r.tfoEnabled = enabled }
+}
+
 // NewRegistry returns an empty Registry backed by store (nil store means
 // memory-only, no persistence). Use Load to populate it from the store.
 // With no WithCipher option the registry uses an ephemeral in-memory
@@ -235,11 +245,15 @@ func WithClientFactory(f ClientFactory) RegistryOption {
 // restart.
 func NewRegistry(store Store, opts ...RegistryOption) *Registry {
 	r := &Registry{
-		providers: make(map[string]*Provider),
-		store:     store,
-		newClient: func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (Client, error) {
-			return NewClient(baseURL, apiKey, WithAuthHeaders(authHeaders), WithWireFormat(wireFormat))
-		},
+		providers:  make(map[string]*Provider),
+		store:      store,
+		tfoEnabled: true,
+	}
+	// The default factory reads r.tfoEnabled at call time (not at
+	// construction), so WithTFOEnabled applied after NewRegistry
+	// still affects clients built later.
+	r.newClient = func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (Client, error) {
+		return NewClient(baseURL, apiKey, WithAuthHeaders(authHeaders), WithWireFormat(wireFormat), WithTCPFastOpen(r.tfoEnabled))
 	}
 	for _, opt := range opts {
 		if opt != nil {

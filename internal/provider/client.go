@@ -315,8 +315,10 @@ type Client interface {
 type ClientOption func(*openAIClient)
 
 // WithHTTPClient overrides the HTTP client (tests, custom transports).
+// A client supplied this way keeps its own Transport: the TFO dialer
+// is only installed on the default client built by NewClient.
 func WithHTTPClient(hc *http.Client) ClientOption {
-	return func(c *openAIClient) { c.httpClient = hc }
+	return func(c *openAIClient) { c.httpClient = hc; c.customHTTP = true }
 }
 
 // WithTimeout sets the timeout for non-streaming requests. Streaming
@@ -359,6 +361,16 @@ type openAIClient struct {
 	baseURL    string
 	apiKey     string
 	httpClient *http.Client
+	// customHTTP is true when WithHTTPClient supplied the client: its
+	// Transport is the caller's, and NewClient must not replace it
+	// with the TFO transport.
+	customHTTP bool
+	// tfoEnabled is whether the default client's dialer attempts TCP
+	// Fast Open (default true; see WithTCPFastOpen). tfoSet records
+	// that the option was given, so the default stays enabled when
+	// it was not.
+	tfoEnabled bool
+	tfoSet     bool
 	// authHeaders, when non-nil, are the exact auth headers to send
 	// (resolved per provider + endpoint by the catalog). Nil means the
 	// legacy default: Authorization: Bearer <apiKey>.
@@ -388,11 +400,20 @@ func NewClient(baseURL, apiKey string, opts ...ClientOption) (Client, error) {
 		baseURL:    normalized,
 		apiKey:     apiKey,
 		httpClient: &http.Client{Timeout: 120 * time.Second},
+		tfoEnabled: true,
 	}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(c)
 		}
+	}
+	// The default client dials through the TFO transport: the
+	// Control hook attempts TCP_FASTOPEN_CONNECT (Linux) and falls
+	// back to a normal handshake when the platform or a middlebox
+	// refuses it — it never fails a dial. A caller-supplied client
+	// (WithHTTPClient) keeps its own Transport untouched.
+	if !c.customHTTP {
+		c.httpClient.Transport = tfoTransport(c.tfoEnabled)
 	}
 	if c.wireFormat == WireFormatAnthropic {
 		return &anthropicClient{openAIClient: c}, nil
