@@ -7,7 +7,7 @@ import (
 
 // CT-3 — Dead providers listed in the live catalog feed with free-tier
 // flags. The four entries below were retired from the live surface:
-// blackbox + galadriel are deprecated in the OmniRoute reference
+// blackbox + galadriel are deprecated in the the reference router reference
 // (dead public inference endpoints, sweep-noted); ai21's hosted
 // Jamba/Maestro APIs sunset; bytez has no base URL recorded in either
 // catalog and cannot be added or routed as listed. No shutdown date

@@ -218,7 +218,7 @@ func TestEscalationLadder(t *testing.T) {
 			t.Errorf("ladder stage %q unavailable with empty reason", s.Engine)
 		}
 	}
-	// Intensities mirror OmniRoute's ladder: rtk standard, caveman full.
+	// Intensities mirror the reference router's ladder: rtk standard, caveman full.
 	for _, s := range ladder {
 		switch s.Engine {
 		case EngineRTK:
@@ -305,8 +305,8 @@ func TestEstimateAfterTokens(t *testing.T) {
 	}
 	// Unmeasured engines are labelled as published planning factors.
 	after, src = EstimateAfterTokens(ModeStandard, 10000)
-	if after != 7000 || src != EstimateOmniRoutePublished {
-		t.Errorf("standard estimate = (%d, %q), want (7000, omniroute-published)", after, src)
+	if after != 7000 || src != EstimatePublishedPlanningFactor {
+		t.Errorf("standard estimate = (%d, %q), want (7000, published-planning)", after, src)
 	}
 	after, src = EstimateAfterTokens(ModeStacked, 10000)
 	if after != 5950 || src != EstimateDerived {
@@ -357,8 +357,8 @@ func TestDialCheapestFitting(t *testing.T) {
 	if res.SelectedMode != ModeStandard || !res.Fit || res.EstimatedAfterTokens != 7000 {
 		t.Errorf("needs-standard dial = %+v, want standard/fit/7000", res)
 	}
-	if res.EstimateSource != EstimateOmniRoutePublished {
-		t.Errorf("needs-standard estimate source = %q, want omniroute-published", res.EstimateSource)
+	if res.EstimateSource != EstimatePublishedPlanningFactor {
+		t.Errorf("needs-standard estimate source = %q, want published-planning", res.EstimateSource)
 	}
 	if res.StrongestAvailable != ModeStacked {
 		t.Errorf("StrongestAvailable = %q, want stacked", res.StrongestAvailable)

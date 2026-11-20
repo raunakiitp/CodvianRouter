@@ -68,8 +68,8 @@
 //     cache_control marker); automatic/server-side caching needs no
 //     ordering help and is not penalised beyond losing the tiebreak.
 //
-// OmniRoute semantics studied (read-only reference
-// ~/workspace/omniroute-reference; no code copied):
+// the reference router semantics studied (read-only reference
+// the local reference clone; no code copied):
 // applyStrategyOrdering.ts orderByCacheAffinity ranks by a
 // cache-affinity score for the current prompt prefix, and
 // strategyRegistry.ts:182 marks "cache-optimized" with

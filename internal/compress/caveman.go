@@ -10,7 +10,7 @@
 // dropped (enforced by the word/number self-checks below and by the
 // M7.2 fidelity gate, which reverts any message the gate would refuse).
 //
-// What was read in OmniRoute (study only — no code copied; all logic
+// What was read in the reference router (study only — no code copied; all logic
 // below is an independent Go implementation of the observed behaviour):
 //
 //   - open-sse/services/compression/caveman.ts — cavemanCompress:
@@ -35,12 +35,12 @@
 //   - open-sse/services/compression/preservation.ts —
 //     extractPreservedBlocks / restorePreservedBlocks via sentinels.
 //
-// Deliberate divergences from OmniRoute (honest, not accidental):
+// Deliberate divergences from the reference router (honest, not accidental):
 //
 //   - ENGLISH ONLY, levels lite/full only. No locales, no ultra:
 //     ultra is abbreviation substitution ("database" -> "DB"), which
 //     introduces new words and breaks the no-new-words guarantee.
-//   - No replacement that introduces a word: OmniRoute's
+//   - No replacement that introduces a word: the reference router's
 //     "due to the fact that" -> "because", "for every" -> "per",
 //     "furthermore" -> "also", "Can you ..." -> "Tell me" style
 //     mappings are NOT reproduced where the replacement word is absent
@@ -54,7 +54,7 @@
 //     / "Re:").
 //   - Assistant-context rules (assistant_fillers, summary_replacement)
 //     are not implemented: this engine condenses user-role messages
-//     by default, matching OmniRoute's default compressRoles.
+//     by default, matching the reference router's default compressRoles.
 //   - No recapitalisation, no latest-user-turn special case: the
 //     coordinator decides which messages are fed in.
 //   - Part-carrying messages (Parts set), messages with tool calls,
@@ -65,7 +65,7 @@
 // Wiring (coordinator's job, NOT done here): call CondenseMessages
 // (or CondenseText for a single string) and feed its output through
 // Apply's lossy path so the M7.2 fidelity gate and M7.3 inflation
-// guard still apply. This file never touches compress.go, PARITY.md,
+// guard still apply. This file never touches compress.go, parity tracker,
 // CHECKLIST.md or docs.
 package compress
 
@@ -82,7 +82,7 @@ import (
 )
 
 // MinMessageLength is the minimum message length (runes) for
-// condensation, matching OmniRoute's DEFAULT_CAVEMAN_CONFIG
+// condensation, matching the reference router's DEFAULT_CAVEMAN_CONFIG
 // minMessageLength of 50. Shorter messages pass through unchanged.
 const MinMessageLength = 50
 
@@ -94,9 +94,9 @@ const MinMessageLength = 50
 type Level string
 
 const (
-	// LevelLite is the conservative rule set (OmniRoute intensity "lite").
+	// LevelLite is the conservative rule set (the reference router intensity "lite").
 	LevelLite Level = "lite"
-	// LevelFull is the aggressive rule set (OmniRoute intensity "full").
+	// LevelFull is the aggressive rule set (the reference router intensity "full").
 	LevelFull Level = "full"
 )
 
@@ -623,7 +623,7 @@ func deleteWordBeforeLowerRule(name string, level Level, words []string, anchore
 }
 
 // ---------------------------------------------------------------------------
-// The rule inventory (38 rules; see the file header for the OmniRoute
+// The rule inventory (38 rules; see the file header for the the reference router
 // mapping and the deliberate omissions). Lite rules run at both
 // levels; full rules run only at LevelFull.
 // ---------------------------------------------------------------------------

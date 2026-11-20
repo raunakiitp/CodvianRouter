@@ -1,4 +1,4 @@
-// Idempotency-Key billing safety (PARITY.md Area 11, Idempotency-Key
+// Idempotency-Key billing safety (parity tracker Area 11, Idempotency-Key
 // billing safety — MISSING: zero hits in internal/ + cmd/).
 //
 // A client that retries a billable request after a timeout (the
@@ -15,13 +15,13 @@
 // authenticated gateway key is never replayed (Begin returns
 // IdemNone when the gateway key id is "").
 //
-// TTL: 24 hours by default. OmniRoute has no server-side
+// TTL: 24 hours by default. the reference router has no server-side
 // idempotency handling to match — the sampled code only forwards
 // an Idempotency-Key to providers from a dashboard controller and
 // shows idempotency stats on the cache page; no TTL is documented
 // there. 24 h is the Stripe convention for idempotency-key
 // retention, chosen here and documented as OUR choice, not an
-// OmniRoute match. After expiry the key executes normally again.
+// the reference router match. After expiry the key executes normally again.
 //
 // SAME KEY, DIFFERENT REQUEST: the claim records a SHA-256 of
 // (method, path, raw body). A repeat with the same key but a

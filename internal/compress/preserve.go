@@ -1,5 +1,5 @@
 // Package compress — cache-aware system-prompt preservation (G22,
-// PARITY.md Area 10 rows :868/:869).
+// parity tracker Area 10 rows :868/:869).
 //
 // This file is the CANONICAL home of the two pure cache-aware
 // resolvers. They lived in internal/degrade/cache_aware.go, but
@@ -10,13 +10,13 @@
 // There is exactly one implementation; do not reintroduce a copy
 // in degrade.
 //
-// What OmniRoute does (study only, never copied —
+// What the reference router does (study only, never copied —
 // open-sse/services/compression/cachingAware.ts,
 // prefixFreeze.ts, types.ts:200-240, 428):
 //
 //   - getCacheAwareStrategy downgrades aggressive/ultra to
 //     standard for a caching provider, sets skipSystemPrompt=true
-//     and deterministicOnly=true. Since OmniRoute #3955 the
+//     and deterministicOnly=true. Since the reference router #3955 the
 //     provider alone is sufficient — automatic-prefix-cache
 //     providers (OpenAI, Codex, Azure) carry no cache_control
 //     markers, yet rewriting the prefix still guarantees a cache
@@ -46,7 +46,7 @@
 package compress
 
 // CacheAwareStrategy is the cache-aware compression decision for
-// one request, mirroring OmniRoute's getCacheAwareStrategy return
+// one request, mirroring the reference router's getCacheAwareStrategy return
 // shape.
 type CacheAwareStrategy struct {
 	// Strategy is the mode to actually run: aggressive/ultra
@@ -71,7 +71,7 @@ type CacheAwareStrategy struct {
 // steps run. isCachingProvider must be supplied by the caller
 // (strategy.SupportsPromptCacheMarker at the call site). A
 // caching provider alone is sufficient — no cache_control marker
-// is required (OmniRoute #3955). A non-caching provider returns
+// is required (the reference router #3955). A non-caching provider returns
 // the strategy unchanged with both guards off.
 func ResolveCacheAwareStrategy(strategy string, isCachingProvider bool) CacheAwareStrategy {
 	if !isCachingProvider {
@@ -89,12 +89,12 @@ func ResolveCacheAwareStrategy(strategy string, isCachingProvider bool) CacheAwa
 }
 
 // SystemPromptMode is the operator's system-prompt preservation
-// intent, mirroring OmniRoute's PreserveSystemPromptMode.
+// intent, mirroring the reference router's PreserveSystemPromptMode.
 type SystemPromptMode string
 
 const (
 	// SystemPromptPreserveAlways never compresses the system
-	// prompt. This is OmniRoute's default.
+	// prompt. This is the reference router's default.
 	SystemPromptPreserveAlways SystemPromptMode = "always"
 	// SystemPromptPreserveWhenNoCache compresses the system
 	// prompt only when there is no cache to protect.

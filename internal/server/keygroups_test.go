@@ -4,7 +4,7 @@
 // filter helper. Fail closed throughout: a key whose groups are
 // all deleted / typo'd / deactivated, or whose group store is
 // unreadable, is refused for every model — never silently
-// unrestricted (OmniRoute's own fail-open trap, not copied).
+// unrestricted (the reference router's own fail-open trap, not copied).
 package server
 
 import (
@@ -221,7 +221,7 @@ func TestAK1SetKeyGroupsValidation(t *testing.T) {
 // request-path layer (checkKeyPolicy). A key whose groups are all
 // deleted / misspelled, all deactivated, or whose group store is
 // unreadable is DENIED with 403 key_group_missing — it never
-// silently becomes unrestricted (OmniRoute's fail-open trap, not
+// silently becomes unrestricted (the reference router's fail-open trap, not
 // copied here).
 func TestKeyGroupsFailClosed(t *testing.T) {
 	s, _ := keyStatusSetup(t)

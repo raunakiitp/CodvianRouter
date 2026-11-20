@@ -1,5 +1,5 @@
 // Package oauth is the gateway's own OAuth 2.0 authorization server
-// (PARITY.md:678, B3-07): gateway clients authenticate with an
+// (parity tracker:678, B3-07): gateway clients authenticate with an
 // authorization-code + PKCE flow and call /v1 routes with a JWT
 // access token, instead of a gateway key. Upstream provider OAuth
 // (provider login, token minting for Vertex etc.) is a separate

@@ -148,9 +148,25 @@ func TestG18PhoneInternational(t *testing.T) {
 func TestG18CardLuhn(t *testing.T) {
 	mustRedactAs(t, "card 4111 1111 1111 1111 charged", "card", "4111")
 	mustRedactAs(t, "card 4111111111111111 charged", "card", "4111111111111111")
+	// Amex: 15 digits starting 34/37, bare or in 4-6-5 groups.
+	// Both prefixes, both layouts, Luhn-valid.
+	mustRedactAs(t, "card 378282246310005 charged", "card", "378282246310005")
+	mustRedactAs(t, "card 371449635398431 charged", "card", "371449635398431")
+	mustRedactAs(t, "card 340000000000009 charged", "card", "340000000000009")
+	mustRedactAs(t, "card 3782 822463 10005 charged", "card", "3782")
+	mustRedactAs(t, "card 3714 496353 98431 charged", "card", "3714")
 	// True negatives: 16-digit runs that fail Luhn are order
 	// numbers, not cards, and must survive untouched.
 	for _, tn := range []string{"order 4111 1111 1111 1112 shipped", "order 1234 5678 9012 3456 shipped"} {
+		mustNotMatch(t, tn, "card")
+		if got := Redact(tn); strings.Contains(got, "[REDACTED:CARD]") {
+			t.Fatalf("Redact(%q) wrongly redacted a non-card: %q", tn, got)
+		}
+	}
+	// Amex true negatives: a 15-digit Amex run with a bad
+	// checksum is an order number, not a card; and a 15-digit
+	// run that does not start 34/37 is not Amex at all.
+	for _, tn := range []string{"order 378282246310006 shipped", "order 371449635398432 shipped", "order 123456789012345 shipped"} {
 		mustNotMatch(t, tn, "card")
 		if got := Redact(tn); strings.Contains(got, "[REDACTED:CARD]") {
 			t.Fatalf("Redact(%q) wrongly redacted a non-card: %q", tn, got)

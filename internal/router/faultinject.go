@@ -9,7 +9,7 @@
 // file provides — and nothing more. It is the B2-13 piece, not the
 // full failover-testing harness that comes later.
 //
-// Behaviour studied, not copied: OmniRoute's chaos surface
+// Behaviour studied, not copied: the reference router's chaos surface
 // (src/lib/chaos in the reference clone) is a parallel-panel
 // fan-out with per-provider overrides and timeouts — it has no
 // fault-injection capability of its own. This mechanism is our own

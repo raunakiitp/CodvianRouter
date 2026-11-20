@@ -1,6 +1,6 @@
 // Live model intelligence: Arena ELO + models.dev tier signals.
 //
-// This file closes PARITY.md B2-14 ("Live intelligence (Arena ELO +
+// This file closes parity tracker B2-14 ("Live intelligence (Arena ELO +
 // models.dev)"): the models.dev sync already existed, but there was no
 // Arena ELO, no tier derivation, and no ELO/tier signal for scoring to
 // read. What lives here:

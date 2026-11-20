@@ -81,6 +81,10 @@ const StateFileName = "models-dev-sync.json"
 // lists "image" under input; ModalitiesReported is true when the
 // feed carried a modalities table at all for the model (without
 // it, SupportsVision false means "not reported", not "text-only").
+// SupportsAudio / SupportsVideo are the same shape for "audio"
+// and "video" under input (B3-24 modality bridges): the feed is
+// the capability source for all three modalities, and a missing
+// table reports nothing for any of them.
 // Reasoning / ToolCall are the feed's capability flags (nil = not
 // reported): whether the model supports reasoning and tool
 // calling. The tier derivation in intelligence.go aggregates
@@ -94,6 +98,8 @@ type CatalogModel struct {
 	Deprecated          bool
 	CostInvalid         bool
 	SupportsVision      bool
+	SupportsAudio       bool
+	SupportsVideo       bool
 	ModalitiesReported  bool
 	Reasoning           *bool
 	ToolCall            *bool
@@ -139,15 +145,33 @@ type rawCatalogModel struct {
 	} `json:"modalities"`
 }
 
-// hasImageInput reports whether a modalities input list names
-// image input (case-insensitive, whitespace-tolerant).
-func hasImageInput(list []string) bool {
+// hasModalityInput reports whether a modalities input list names
+// one modality (case-insensitive, whitespace-tolerant).
+func hasModalityInput(list []string, want string) bool {
 	for _, m := range list {
-		if strings.EqualFold(strings.TrimSpace(m), "image") {
+		if strings.EqualFold(strings.TrimSpace(m), want) {
 			return true
 		}
 	}
 	return false
+}
+
+// hasImageInput reports whether a modalities input list names
+// image input (case-insensitive, whitespace-tolerant).
+func hasImageInput(list []string) bool {
+	return hasModalityInput(list, "image")
+}
+
+// hasAudioInput reports whether a modalities input list names
+// audio input (B3-24 modality bridges).
+func hasAudioInput(list []string) bool {
+	return hasModalityInput(list, "audio")
+}
+
+// hasVideoInput reports whether a modalities input list names
+// video input (B3-24 modality bridges).
+func hasVideoInput(list []string) bool {
+	return hasModalityInput(list, "video")
 }
 
 type rawCatalogProvider struct {
@@ -188,12 +212,17 @@ func ParseCatalog(data []byte) (*Catalog, error) {
 			m.ToolCall = rm.ToolCall
 			if rm.Modalities != nil {
 				// The feed reported a modalities table: image
-				// input means vision-capable. A missing table
+				// input means vision-capable, audio input means
+				// audio-capable, video input means video-capable
+				// (B3-24 modality bridges). A missing table
 				// leaves ModalitiesReported false, so "no
 				// image listed" is never confused with "the
-				// feed said text-only".
+				// feed said text-only" — the same holds for
+				// audio and video.
 				m.ModalitiesReported = true
 				m.SupportsVision = hasImageInput(rm.Modalities.Input)
+				m.SupportsAudio = hasAudioInput(rm.Modalities.Input)
+				m.SupportsVideo = hasVideoInput(rm.Modalities.Input)
 			}
 			if rm.Cost != nil {
 				// A reported leg that is negative or
@@ -248,8 +277,8 @@ const (
 const LiteLLMStateFileName = "litellm-sync.json"
 
 // DefaultLiteLLMURL is the public LiteLLM model cost map: the
-// second sync source (PARITY Area 3, models.dev sync row —
-// OmniRoute also syncs LiteLLM). It is the default for a LiteLLM
+// second sync source (parity tracker Area 3, models.dev sync row —
+// the reference router also syncs LiteLLM). It is the default for a LiteLLM
 // sync with no URL configured — not a fallback the router reaches
 // for on its own. Prices are USD per token (×1e6 for per-1M).
 const DefaultLiteLLMURL = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
@@ -418,6 +447,8 @@ type Counts struct {
 	PricesApplied         int `json:"prices_applied"`
 	WindowsApplied        int `json:"windows_applied"`
 	VisionsApplied        int `json:"visions_applied"`
+	AudiosApplied         int `json:"audios_applied"`
+	VideosApplied         int `json:"videos_applied"`
 	SkippedOperatorPrice  int `json:"skipped_operator_price"`
 	SkippedOperatorWindow int `json:"skipped_operator_window"`
 	SkippedDeprecated     int `json:"skipped_deprecated"`
@@ -445,9 +476,16 @@ type Update struct {
 	// Vision is then whether it lists image input. A model
 	// whose feed entry has no modalities table reports
 	// nothing — the sync never clears a capability on the
-	// absence of data.
+	// absence of data. Audio / AudioReported and Video /
+	// VideoReported are the same shape for "audio" and "video"
+	// input (B3-24 modality bridges), reported by the same
+	// table.
 	Vision         bool
 	VisionReported bool
+	Audio          bool
+	AudioReported  bool
+	Video          bool
+	VideoReported  bool
 	// PriceSkippedOperator / WindowSkippedOperator: models.dev
 	// had the datum, but the operator already set it — apply
 	// nothing for that datum.
@@ -605,9 +643,17 @@ func Plan(cat *Catalog, locals []LocalProvider, operatorHasPrice func(provider, 
 			// reported table without image input clears a
 			// previously synced vision flag; a missing table
 			// reports nothing and leaves the flag alone.
+			// Audio and video ride the same table (B3-24
+			// modality bridges): a reported table without
+			// audio/video input clears the previously synced
+			// flag the same way.
 			if rm.ModalitiesReported {
 				u.Vision = rm.SupportsVision
 				u.VisionReported = true
+				u.Audio = rm.SupportsAudio
+				u.AudioReported = true
+				u.Video = rm.SupportsVideo
+				u.VideoReported = true
 			}
 			if u.Price != nil || u.ContextWindow > 0 || u.VisionReported {
 				res.Updates = append(res.Updates, u)
@@ -619,6 +665,12 @@ func Plan(cat *Catalog, locals []LocalProvider, operatorHasPrice func(provider, 
 				}
 				if u.VisionReported && u.Vision {
 					res.Counts.VisionsApplied++
+				}
+				if u.AudioReported && u.Audio {
+					res.Counts.AudiosApplied++
+				}
+				if u.VideoReported && u.Video {
+					res.Counts.VideosApplied++
 				}
 			}
 		}
@@ -632,13 +684,18 @@ func Plan(cat *Catalog, locals []LocalProvider, operatorHasPrice func(provider, 
 // true only when a sync affirmatively reported image input for
 // the model. A false Vision means "not reported vision-capable"
 // (or never reported); the registry default is false too, so
-// only true entries need re-applying at startup.
+// only true entries need re-applying at startup. Audio and Video
+// are the same shape for audio/video input (B3-24 modality
+// bridges): true only when a sync affirmatively reported that
+// input for the model.
 type StateEntry struct {
 	Provider      string             `json:"provider"`
 	Model         string             `json:"model"`
 	Price         *config.ModelPrice `json:"price,omitempty"`
 	ContextWindow int                `json:"context_window,omitempty"`
 	Vision        bool               `json:"vision,omitempty"`
+	Audio         bool               `json:"audio,omitempty"`
+	Video         bool               `json:"video,omitempty"`
 	SyncedAt      time.Time          `json:"synced_at"`
 }
 
@@ -794,7 +851,7 @@ func (s *Syncer) LastCatalog() *Catalog {
 }
 
 // NewLiteLLMSyncer returns a Syncer for the LiteLLM cost map
-// (PARITY Area 3 / Area 11, price coverage): the second sync
+// (parity tracker Area 3 / Area 11, price coverage): the second sync
 // source, alongside the models.dev Syncer. The source is forced
 // to SourceLiteLLM — the caller cannot misspell it into fetching
 // the wrong catalog — and the URL defaults to DefaultLiteLLMURL
@@ -1186,6 +1243,12 @@ func (s *Syncer) Sync(ctx context.Context, locals []LocalProvider, operatorHasPr
 		}
 		if u.VisionReported {
 			e.Vision = u.Vision
+		}
+		if u.AudioReported {
+			e.Audio = u.Audio
+		}
+		if u.VideoReported {
+			e.Video = u.Video
 		}
 		s.entries[key] = e
 	}

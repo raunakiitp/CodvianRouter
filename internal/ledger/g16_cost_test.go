@@ -210,7 +210,7 @@ func TestG16IsFlatRateProvider(t *testing.T) {
 			t.Errorf("IsFlatRateProvider(%q) = false, want true", id)
 		}
 	}
-	// OmniRoute's deliberate exclusions: metered providers that
+	// the reference router's deliberate exclusions: metered providers that
 	// share a family name with a flat-rate plan stay metered.
 	// "poe" is also excluded on purpose: it is the id of the
 	// metered Poe API provider as well as the alias of "poe-web".

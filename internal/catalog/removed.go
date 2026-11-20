@@ -1,6 +1,6 @@
-// Removed providers (PARITY Area 3, "Deprecated / retired handling").
+// Removed providers (parity tracker Area 3, "Deprecated / retired handling").
 //
-// OmniRoute keeps a durable removal register (REMOVED_PROVIDERS.md):
+// The reference router keeps a durable removal register (REMOVED_PROVIDERS.md):
 // providers removed at their operator's request must never come back
 // by accident — a contributor finding an old fork, a cached tarball
 // or a "restore provider X" request needs one place that says do not
@@ -9,10 +9,10 @@
 // removed form, and CheckRemovedBlocklist fails the build if one
 // shows up again.
 //
-// Source: OmniRoute docs/reference/REMOVED_PROVIDERS.md, version
+// Source: reference removal register (REMOVED_PROVIDERS.md), version
 // 3.8.51, last updated 2026-10-10 (read 2026-11-19). Only the
 // identifiers, domains, dates and removal references are copied —
-// facts about a removal, not OmniRoute code.
+// facts about a removal, not reference code.
 //
 // Scope matters (read the Notes before enforcing): the `opencode`
 // removal covers ONLY the keyless "OpenCode Free" provider. The
@@ -59,8 +59,8 @@ var RemovedProviders = []RemovedProvider{
 		Domains:     []string{"puter.com"},
 		RemovedOn:   "2026-08-12",
 		RequestedBy: "Puter's owner (Nariman Jelveh)",
-		RemovalRef:  "OmniRoute PR #10210",
-		Source:      "https://github.com/diegosouzapw/OmniRoute/blob/main/docs/reference/REMOVED_PROVIDERS.md",
+		RemovalRef:  "PR #10210",
+		Source:      "reference removal register (REMOVED_PROVIDERS.md)",
 		Scope:       "API-key provider, whole integration removed.",
 	},
 	{
@@ -69,8 +69,8 @@ var RemovedProviders = []RemovedProvider{
 		Domains:     []string{"theoldllm.com", "theoldllm.vercel.app"},
 		RemovedOn:   "2026-09-02",
 		RequestedBy: "The service operator (support email)",
-		RemovalRef:  "OmniRoute PR #12440",
-		Source:      "https://github.com/diegosouzapw/OmniRoute/blob/main/docs/reference/REMOVED_PROVIDERS.md",
+		RemovalRef:  "PR #12440",
+		Source:      "reference removal register (REMOVED_PROVIDERS.md)",
 		Scope:       "Keyless provider, whole integration removed.",
 	},
 	{
@@ -78,9 +78,9 @@ var RemovedProviders = []RemovedProvider{
 		Alias:       "gembiz",
 		Domains:     []string{"business.gemini.google"},
 		RemovedOn:   "2026-09-21",
-		RequestedBy: "Project owner decision (OmniRoute issue #14217)",
-		RemovalRef:  "OmniRoute PR #14467",
-		Source:      "https://github.com/diegosouzapw/OmniRoute/blob/main/docs/reference/REMOVED_PROVIDERS.md",
+		RequestedBy: "Project owner decision (the reference router issue #14217)",
+		RemovalRef:  "PR #14467",
+		Source:      "reference removal register (REMOVED_PROVIDERS.md)",
 		Scope:       "Cookie-based web provider; Google retired the endpoint the integration targeted.",
 	},
 	{
@@ -88,9 +88,9 @@ var RemovedProviders = []RemovedProvider{
 		Alias:       "suno",
 		Domains:     []string{"studio-api.suno.ai", "studio-api-prod.suno.com"},
 		RemovedOn:   "2026-09-21",
-		RequestedBy: "Project owner decision (OmniRoute issue #14224)",
-		RemovalRef:  "OmniRoute PR #14468",
-		Source:      "https://github.com/diegosouzapw/OmniRoute/blob/main/docs/reference/REMOVED_PROVIDERS.md",
+		RequestedBy: "Project owner decision (the reference router issue #14224)",
+		RemovalRef:  "PR #14468",
+		Source:      "reference removal register (REMOVED_PROVIDERS.md)",
 		Scope:       "Cookie-auth provider; kie.ai-hosted suno models (kie/suno-v4.0, kie/suno-v3.5) are unaffected and remain supported.",
 	},
 	{
@@ -99,8 +99,8 @@ var RemovedProviders = []RemovedProvider{
 		Domains:     []string{"opencode.ai/zen/v1"},
 		RemovedOn:   "2026-10-10",
 		RequestedBy: "Preventive removal (project owner decision), honoring the OpenCode operator's public removal request to the upstream 9router project (2026-09-19)",
-		RemovalRef:  "OmniRoute PR #16310",
-		Source:      "https://github.com/diegosouzapw/OmniRoute/blob/main/docs/reference/REMOVED_PROVIDERS.md",
+		RemovalRef:  "PR #16310",
+		Source:      "reference removal register (REMOVED_PROVIDERS.md)",
 		Scope:       "ONLY the keyless \"OpenCode Free\" provider was removed. Authenticated opencode-zen and opencode-go, all Zen catalog models and the OpenCode client integrations remain — so an authenticated opencode entry is NOT a reintroduction.",
 		KeylessOnly: true,
 	},

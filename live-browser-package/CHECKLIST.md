@@ -80,7 +80,7 @@ live total 614; `/api/providers` + `/dashboard/models` +
       Health / Webhooks / Analytics / Batch / Responses /
       Activity / Audit each render (screenshots 297-<view>)
 - [ ] Settings Port field recorded as-is (known wrong `8080`,
-      `docs/PARITY.md:812`) — screenshot, not fixed in-session
+      `internal parity tracker:812`) — screenshot, not fixed in-session
 - [ ] No section shows a paragraph over 2 lines (item 293);
       any long paragraph screenshotted + recorded
 - [ ] No browser console error blocks rendering; any console

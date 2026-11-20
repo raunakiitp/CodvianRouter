@@ -77,18 +77,18 @@ const (
 	headerCodvianCacheSimilarity  = "X-Codvian-Cache-Similarity"
 	headerCodvianCacheSavedTokens = "X-Codvian-Cache-Saved-Tokens"
 	headerCodvianCacheSavedUSD    = "X-Codvian-Cache-Saved-USD"
-	// headerOmniRouteCostSaved is the OmniRoute name for the same
-	// figure (PARITY Area 11, cost-saved reporting): the USD cost
+	// headerReferenceCostSaved is the the reference router name for the same
+	// figure (parity tracker Area 11, cost-saved reporting): the USD cost
 	// a cache hit saved, priced from the real ledger price map —
 	// the same value as X-Codvian-Cache-Saved-USD, byte for byte.
 	// Emitted only when the saving was priced (HasCacheSavedUSD):
 	// on a cache miss, or when no price is configured for the
 	// model, it stays absent — never a fabricated 0. A genuinely
 	// free ($0-priced) model hit emits "0.0000000000", matching
-	// OmniRoute's rule that 0 is a valid saved cost
-	// (omnirouteResponseMeta.ts: costSavedUsd "pass 0 to
+	// the reference router's rule that 0 is a valid saved cost
+	// (reference implementation: costSavedUsd "pass 0 to
 	// explicitly mark a free-model HIT that saved nothing").
-	headerOmniRouteCostSaved = "X-OmniRoute-Cost-Saved"
+	headerReferenceCostSaved = "X-OmniRoute-Cost-Saved"
 )
 
 // ---------------------------------------------------------------------------
@@ -435,7 +435,7 @@ func (s *Server) writeResponseHeaders(w http.ResponseWriter, ctx context.Context
 	}
 	if meta.HasCacheSavedUSD {
 		h.Set(headerCodvianCacheSavedUSD, strconv.FormatFloat(meta.CacheSavedUSD, 'f', 10, 64))
-		// OmniRoute name for the same priced saving (see the
+		// the reference router name for the same priced saving (see the
 		// const above): same value, same 10-dp format, so the
 		// two headers can never disagree. A memory-only hit
 		// carries it too — withCacheSavings prices from the
@@ -443,7 +443,7 @@ func (s *Server) writeResponseHeaders(w http.ResponseWriter, ctx context.Context
 		// persistence is irrelevant to this header (the table
 		// feeds only the aggregate GET /api/cache/stats block,
 		// whose savings_note covers the memory-only case).
-		h.Set(headerOmniRouteCostSaved, strconv.FormatFloat(meta.CacheSavedUSD, 'f', 10, 64))
+		h.Set(headerReferenceCostSaved, strconv.FormatFloat(meta.CacheSavedUSD, 'f', 10, 64))
 	}
 }
 
@@ -521,7 +521,7 @@ func (meta ResponseMeta) trailerJSON() ([]byte, error) {
 	}
 	if meta.HasCacheSavedUSD {
 		m["cache_saved_usd"] = meta.CacheSavedUSD
-		// Same figure under the OmniRoute name, so a stream
+		// Same figure under the the reference router name, so a stream
 		// trailer reader sees the same saving as a header
 		// reader (cache hits are non-streaming in practice,
 		// but the trailer is the same meta).

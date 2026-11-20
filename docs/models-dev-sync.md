@@ -5,7 +5,7 @@ block in the config file), the router fetches the public models.dev
 catalog (`https://models.dev/api.json`) and fills in **prices** (USD
 per 1M tokens) and **context windows** for the (provider, model)
 pairs it serves — but only where the operator has not set a value
-themselves. OmniRoute syncs the same data; this is the parity piece,
+themselves. the reference router syncs the same data; this is the parity piece,
 with the operator-wins rule made explicit.
 
 ## Opt-in, never phoning home

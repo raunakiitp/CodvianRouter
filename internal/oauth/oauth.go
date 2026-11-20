@@ -94,8 +94,11 @@ type Client struct {
 }
 
 // ClientView is the public shape of a client: no secret material.
+// The identifier serializes as "client_id" (RFC 7591 §3.2), matching
+// the client_id the authorize/token endpoints consume — a create
+// response that said "id" forced every caller to rename it by hand.
 type ClientView struct {
-	ID           string    `json:"id"`
+	ID           string    `json:"client_id"`
 	Name         string    `json:"name"`
 	RedirectURIs []string  `json:"redirect_uris"`
 	Scopes       []string  `json:"scopes"`

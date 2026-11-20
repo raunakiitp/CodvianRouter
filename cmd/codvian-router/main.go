@@ -1183,7 +1183,7 @@ func buildAutoRouter(cfg *config.Config, reg *provider.Registry, priceBook *conf
 	// internal/modelsync) and is false otherwise, never guessed
 	// from the model id. Economic tier is classified from the
 	// real price via scoring.ClassifyPriceTier — free at $0,
-	// cheap at <= $1/M input, premium above (OmniRoute's
+	// cheap at <= $1/M input, premium above (the reference router's
 	// tierResolver thresholds, verified against the reference);
 	// the input leg decides when known, else the blended price
 	// as a proxy. Billing, overage hard-stop and
@@ -1592,6 +1592,25 @@ func modelsDevApplyStateWindows(syncer *modelsync.Syncer, reg *provider.Registry
 			fmt.Fprintf(os.Stderr, "codvian-router: models.dev sync: cannot apply saved vision flag for %s/%s: %v\n", e.Provider, e.Model, err)
 		}
 	}
+	// Audio / video (B3-24 modality bridges): re-apply persisted
+	// audio/video flags at startup, same only-true contract as
+	// vision — a false entry may predate modality reporting, and
+	// clearing a live flag from stale state would be wrong.
+	for key, e := range st.Entries {
+		if _, ok := current[key]; !ok {
+			continue // provider/model gone
+		}
+		if e.Audio {
+			if err := reg.ApplySyncedAudio(e.Provider, e.Model, true, true); err != nil {
+				fmt.Fprintf(os.Stderr, "codvian-router: models.dev sync: cannot apply saved audio flag for %s/%s: %v\n", e.Provider, e.Model, err)
+			}
+		}
+		if e.Video {
+			if err := reg.ApplySyncedVideo(e.Provider, e.Model, true, true); err != nil {
+				fmt.Fprintf(os.Stderr, "codvian-router: models.dev sync: cannot apply saved video flag for %s/%s: %v\n", e.Provider, e.Model, err)
+			}
+		}
+	}
 }
 
 // applySyncPlan installs one sync plan from either price
@@ -1622,6 +1641,22 @@ func applySyncPlan(st *stack, srv *server.Server, syncer *modelsync.Syncer, sour
 		// flag; an unreported model leaves the flag alone.
 		if u.VisionReported {
 			if err := st.reg.ApplySyncedVision(u.Provider, u.Model, u.Vision, u.VisionReported); err != nil {
+				return err
+			}
+		}
+		// Audio / video (B3-24 modality bridges): the same
+		// table reported audio/video input (or its absence)
+		// for this model — apply it in memory only, like
+		// vision. A reported-without-audio/video clears a
+		// previously synced flag; an unreported model leaves
+		// the flag alone.
+		if u.AudioReported {
+			if err := st.reg.ApplySyncedAudio(u.Provider, u.Model, u.Audio, u.AudioReported); err != nil {
+				return err
+			}
+		}
+		if u.VideoReported {
+			if err := st.reg.ApplySyncedVideo(u.Provider, u.Model, u.Video, u.VideoReported); err != nil {
 				return err
 			}
 		}
@@ -1889,6 +1924,27 @@ func guardrailResponseMode(cfg *config.Config) string {
 		return cfg.Guardrails.ResponseGuardMode
 	}
 	return "redact"
+}
+
+// reversiblePIIVault builds the reversible PII token vault
+// (B3-19, parity tracker:782) from the config flag: nil when the
+// flag is off, otherwise a vault sealing under the router's
+// master-key vault and persisting to pii_vault.json in the data
+// dir. A corrupt vault file fails startup loudly — silently
+// dropping sealed PII would strand tokens the provider already
+// echoed back.
+func reversiblePIIVault(cfg *config.Config, cv *crypto.Vault) (*guardrails.Vault, error) {
+	if cfg == nil || cfg.Guardrails == nil || !cfg.Guardrails.ReversibleVault {
+		return nil, nil
+	}
+	if cv == nil {
+		return nil, fmt.Errorf("reversible PII vault needs the master-key vault")
+	}
+	v := guardrails.NewVault(cv, filepath.Join(cfg.DataDir, "pii_vault.json"))
+	if err := v.Load(); err != nil {
+		return nil, err
+	}
+	return v, nil
 }
 
 // buildPluginRegistry builds the in-process plugin registry from
@@ -2611,7 +2667,7 @@ func openStack(opts options) (*stack, error) {
 		// spends against. The upstream window reset is when
 		// the current window's remaining budget is replaced,
 		// so it IS the deadline for that remaining quota
-		// (OmniRoute's own deadline is the window reset).
+		// (the reference router's own deadline is the window reset).
 		// The overlay runs on BOTH return paths below (the
 		// live-stats early return and the probe fallback), so
 		// no path ships a signal without it. No entry — or an
@@ -3309,6 +3365,8 @@ func openStack(opts options) (*stack, error) {
 		RelaySummariser:        relaySummariser,
 		VisionCapability:       router.VisionCapabilityFunc(reg),
 		VisionPool:             router.VisionPoolFunc(reg),
+		ModalityCapability:     router.ModalityCapabilityFunc(reg),
+		ModalityPool:           router.ModalityPoolFunc(reg),
 		StrategyHook:           strategy.HookFactory(signalsFn, customWeights),
 		StrategyHookForRequest: strategy.HookFactoryWithCacheAffinity(signalsFn, customWeights, warmthSnap.warmth),
 		// LKGP failure-clear (RT-2): a hard failure against
@@ -3459,7 +3517,7 @@ func openStack(opts options) (*stack, error) {
 		// reloads the fresh ones at startup below.
 		RateLimitStore: led,
 	}
-	// Breaker persistence (G11 Area 2, PARITY.md:524): the
+	// Breaker persistence (G11 Area 2, parity tracker:524): the
 	// consecutive-breaker state persists to DataDir on every
 	// state change and reloads at engine start, so a restart no
 	// longer forgets every trip — the store machinery in
@@ -4797,6 +4855,14 @@ func runServe(opts options) int {
 	// doShutdown is set after httpSrv exists; the server's shutdown
 	// hook (POST /admin/shutdown) calls it through the closure above.
 	var doShutdown func()
+	// Reversible PII token vault (B3-19, parity tracker:782): nil
+	// unless the config flag is on; a corrupt vault file fails
+	// startup loudly (see reversiblePIIVault).
+	piiVault, err := reversiblePIIVault(st.cfg, st.vault)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "codvian-router: %v\n", err)
+		return 1
+	}
 	srv := server.New(st.serving,
 		server.WithVersion(Version),
 		server.WithHeadless(opts.headless),
@@ -4976,6 +5042,9 @@ func runServe(opts options) int {
 		server.WithRequestRewrite(st.cfg.Guardrails != nil && st.cfg.Guardrails.RequestRewrite),
 		server.WithResponseSanitization(st.cfg.Guardrails != nil && st.cfg.Guardrails.ResponseSanitization),
 		server.WithResponseGuardMode(guardrails.ResponseGuardMode(guardrailResponseMode(st.cfg))),
+		// Reversible PII token vault (B3-19): nil when the flag
+		// is off — the rewrite then uses plain placeholders.
+		server.WithReversibleVault(piiVault),
 		// Responses session token cap (CHECKLIST 263–264):
 		// read from config at startup; 0 (unset) means
 		// counting-only — turns are counted and reported,

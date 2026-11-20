@@ -1,6 +1,6 @@
 # TEST-VERDICTS — Codvian Router Testing Department
 
-Coordinator: Testing Department (midnight target 2026-11-19 12:00 IST, M1–M11 100% vs OmniRoute).
+Coordinator: Testing Department (midnight target 2026-11-19 12:00 IST, M1–M11 100% vs the reference router).
 Rule: a PASS verdict is earned only by a test actually run. Verify-only — no code edits, no merges, no commits.
 Per-agent raw verdicts: `docs/test-verdicts/T<NN>-<topic>.md`. This file is the consolidated ledger.
 

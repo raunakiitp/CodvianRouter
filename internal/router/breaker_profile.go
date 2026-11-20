@@ -1,22 +1,22 @@
-// Breaker auth profiles (M4.2, OmniRoute open-sse/config/constants.ts
+// Breaker auth profiles (M4.2, the reference router open-sse/config/constants.ts
 // PROVIDER_PROFILES, verified 2026-11-18).
 //
-// OmniRoute trips its circuit breaker per auth profile, not
+// the reference router trips its circuit breaker per auth profile, not
 // uniformly: an OAuth session tolerates more failures before
 // opening (8) but rests longer (60 s); an API-key provider opens
 // at 12 and rests 30 s; a local backend opens at 2 and rests 15 s.
-// The numbers below are OmniRoute's verbatim, including the
+// The numbers below are the reference router's verbatim, including the
 // DEGRADED entry thresholds (5 / 7), the backoff-escalation
 // ceilings (reset x8 OAuth / x4 API-key, escalating after 2 / 3
 // open cycles), and the provider-level failure-window breaker
 // (10 failures / 15 min / 5 min cooldown for OAuth; 15 / 30 min /
 // 10 min for API-key; 2 / 5 min / 1 min for local).
 //
-// Local has no DEGRADED threshold or backoff ceiling in OmniRoute
+// Local has no DEGRADED threshold or backoff ceiling in the reference router
 // ("Not yet wired into getProviderProfile()"): ours-only defaults
 // are degrade 1 (any failure degrades), escalation x2 after 2
 // open cycles, documented as such below — never presented as
-// OmniRoute's numbers.
+// the reference router's numbers.
 //
 // The profile table governs when Config.BreakerThreshold /
 // BreakerOpenFor are unset (0). An operator who sets them
@@ -46,7 +46,7 @@ const (
 )
 
 // BreakerProfile is one auth profile's breaker numbers (all
-// OmniRoute PROVIDER_PROFILES values unless marked ours-only).
+// the reference router PROVIDER_PROFILES values unless marked ours-only).
 type BreakerProfile struct {
 	// DegradeThreshold is the consecutive-failure count that
 	// enters DEGRADED (still serving, flagged unhealthy).
@@ -75,7 +75,7 @@ type BreakerProfile struct {
 	ProviderCooldown time.Duration
 }
 
-// DefaultBreakerProfiles is the OmniRoute PROVIDER_PROFILES table
+// DefaultBreakerProfiles is the the reference router PROVIDER_PROFILES table
 // (local degrade/escalation are ours-only defaults, see above).
 func DefaultBreakerProfiles() map[AuthProfile]BreakerProfile {
 	return map[AuthProfile]BreakerProfile{
@@ -100,7 +100,7 @@ func DefaultBreakerProfiles() map[AuthProfile]BreakerProfile {
 			ProviderCooldown:         10 * time.Minute,
 		},
 		AuthProfileLocal: {
-			// Ours-only: OmniRoute leaves local unwired.
+			// Ours-only: the reference router leaves local unwired.
 			DegradeThreshold:         1,
 			OpenThreshold:            2,
 			ResetTimeout:             15 * time.Second,

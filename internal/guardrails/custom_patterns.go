@@ -1,5 +1,5 @@
 // G18 Area 7 — custom regex patterns: the engine half of the
-// custom-patterns row (OmniRoute: up to 20, safe-regex validated,
+// custom-patterns row (the reference router: up to 20, safe-regex validated,
 // test endpoint in piiCustomPatterns.ts).
 //
 // What this file does: a store of up to MaxCustomPatterns
@@ -52,7 +52,7 @@ import (
 )
 
 // MaxCustomPatterns is the operator pattern cap: 20, matching
-// OmniRoute's cap.
+// the reference router's cap.
 const MaxCustomPatterns = 20
 
 // MaxCustomPatternLen caps one pattern at 500 bytes.

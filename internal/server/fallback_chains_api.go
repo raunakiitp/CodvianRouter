@@ -1,8 +1,8 @@
 // Declarative per-model fallback chains CRUD API (G11 Area 2,
-// PARITY.md Area 2 row "Declarative per-model fallback chains API",
+// parity tracker Area 2 row "Declarative per-model fallback chains API",
 // shared with §14b).
 //
-// OmniRoute's evidence is src/domain/fallbackPolicy.ts (register /
+// the reference router's evidence is src/domain/fallbackPolicy.ts (register /
 // resolve / remove / get-all, backed by SQLite) and the
 // GET/POST/DELETE /api/fallback/chains surface. Ours is the same
 // shape in our own code: the store lives on the routing engine
@@ -27,9 +27,9 @@
 //
 // POST body: {"model": "gpt-4o", "entries": [{"provider": "a",
 // "model": "", "priority": 0, "enabled": true}]}. "enabled"
-// defaults to true when omitted (OmniRoute's default); "model"
+// defaults to true when omitted (the reference router's default); "model"
 // defaults to the request-time model when omitted. POST is both
-// create and update (like OmniRoute's registerFallback): 201 when
+// create and update (like the reference router's registerFallback): 201 when
 // the model had no chain, 200 when it replaced one.
 //
 // Persistence: in-memory only in this slice (the engine store).
@@ -77,7 +77,7 @@ func (s *Server) fallbackChainStoreOf() (fallbackChainStore, bool) {
 }
 
 // fallbackChainEntryRequest is one POSTed chain step. Enabled is
-// a pointer so an omitted field defaults to true (OmniRoute's
+// a pointer so an omitted field defaults to true (the reference router's
 // default) instead of Go's false.
 type fallbackChainEntryRequest struct {
 	Provider string `json:"provider"`

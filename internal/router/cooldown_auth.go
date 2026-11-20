@@ -1,7 +1,7 @@
-// Connection-cooldown hardening (G11 Area 2, PARITY.md Area 2 row
+// Connection-cooldown hardening (G11 Area 2, parity tracker Area 2 row
 // "Connection cooldown (one key/account)").
 //
-// OmniRoute's evidence is settings.ts:105-116 (per-auth-profile
+// the reference router's evidence is settings.ts:105-116 (per-auth-profile
 // transient cooldown bases) and PROVIDER_PROFILES.transientCooldown
 // (open-sse/config/constants.ts:296-344): OAuth 5 s, API-key 3 s,
 // Local 2 s. Ours had one hard 5 s base for every profile (the soft
@@ -35,7 +35,7 @@
 // admission-only: the dashboard feed (CooldownTargets) still
 // reports the nominal end, and the sleep-then-retry path (which
 // clears the cooldown before re-attempting) is unaffected.
-// Deliberate divergence from OmniRoute: OmniRoute has no such
+// Deliberate divergence from the reference router: the reference router has no such
 // guard at all — the stagger is ours, added because a local router
 // with two or three keys re-admitting in the same millisecond is
 // exactly the thundering herd the cooldown exists to prevent.
@@ -47,7 +47,7 @@ import (
 )
 
 // CooldownBaseFor returns the transient-cooldown base for one auth
-// profile (OmniRoute PROVIDER_PROFILES.transientCooldown, verbatim:
+// profile (the reference router PROVIDER_PROFILES.transientCooldown, verbatim:
 // OAuth 5 s — "session tokens, short recovery"; API-key 3 s —
 // "API providers recover faster"; Local 2 s — "local, very fast
 // recovery"). Unknown profiles take the API-key base, the same

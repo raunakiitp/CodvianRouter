@@ -229,7 +229,7 @@ const (
 	// prefer the lowest-latency candidate among viable ones, with
 	// cost/quality/quota kept as small tiebreakers only. It is the
 	// weight set behind strategy "latency-aware" (G10 Area 12 row 9).
-	// Our own weights — NOT OmniRoute's 16-factor latencyInv
+	// Our own weights — NOT the reference router's 16-factor latencyInv
 	// (0.1143): latency 0.70, success 0.15, cost 0.05, quality
 	// 0.05, quota 0.05. It differs from ModeFast (latency 0.55,
 	// still a general-purpose fast mode) and from least-latency
@@ -514,7 +514,7 @@ func Rank(candidates []Candidate, signals map[Candidate]Signals, mode Mode) []Ca
 // in [0, w.Latency]. It is 0 when the latencies are equal or when
 // neither candidate has a latency sample (unknown latency never
 // wins a draw on latency alone — the draw then falls back to the
-// full weighted score). It is deliberately NOT OmniRoute's
+// full weighted score). It is deliberately NOT the reference router's
 // getP2CTargetScore (successRate/100 + 1/log10(avgLatencyMs+10)):
 // ours reuses the same 1/(1+ms/1000) normalisation the rest of the
 // scorer uses, so the term is directly comparable with the latency
@@ -668,7 +668,7 @@ func RankModelsByBestPair(models []string, offers func(model string) []Candidate
 // for one pair; the caller leaves MaxLatencyMs / MaxCostPer1M /
 // MaxStdDevMs unset (<= 0) and this function fills them from the
 // pool maxima over every pair of every model, exactly like
-// OmniRoute's computePoolMaxima: the pool-relative factors are
+// the reference router's computePoolMaxima: the pool-relative factors are
 // meaningless against any other maxima. A pair's inputs are read
 // once per model (the maxima pass) and reused for scoring. The
 // result is a permutation of the input; ties keep input order.
@@ -741,7 +741,7 @@ func RankModelsByBestPair16(models []string, offers func(model string) []Candida
 // HookWithWeights, so 11 of the 16 factors never voted on the
 // default path. This section is that default scorer: the
 // signal->inputs converter plus the 16-factor chain hook under
-// OmniRoute's DEFAULT_WEIGHTS. Wiring it in as the default hook
+// the reference router's DEFAULT_WEIGHTS. Wiring it in as the default hook
 // is one case in strategy.wiringHook (StrategyBalanced ->
 // Hook16Default) — a follow-up in the strategy lane, NOT done
 // here, because wiring.go belongs to another Stage 1 builder.
@@ -892,7 +892,7 @@ func Inputs16FromSignals(s Signals) SixteenInputs {
 //     must be cheap and non-blocking — the hook runs on the
 //     request path), pool maxima are computed from the chain's
 //     own signals (costInv/latencyInv are pool-relative, exactly
-//     like OmniRoute's computePoolMaxima), each attempt scores
+//     like the reference router's computePoolMaxima), each attempt scores
 //     by Score16, and the ranked order is returned. The hook
 //     never drops or duplicates an attempt: the output is a
 //     permutation of the input; ties keep declared order
@@ -955,7 +955,7 @@ func Hook16(signals SignalsFunc, w Weights16) func(chain []router.Attempt) []rou
 	}
 }
 
-// Hook16Default is Hook16 under OmniRoute's DEFAULT_WEIGHTS
+// Hook16Default is Hook16 under the reference router's DEFAULT_WEIGHTS
 // (DefaultWeights16): the default 16-factor chain hook. This is
 // the scorer the "balanced" default strategy must use —
 // B2-10 (DEFAULT_WEIGHTS), B2-11 (default strategy rules) and

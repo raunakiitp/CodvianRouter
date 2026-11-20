@@ -155,7 +155,7 @@ func TestPrefixFreezeBounded(t *testing.T) {
 func TestResolveCacheAwareStrategy(t *testing.T) {
 	// Caching provider: aggressive/ultra downgrade, prefix
 	// skipped, deterministic only — even with no cache_control
-	// marker (OmniRoute #3955: automatic prefix caching).
+	// marker (the reference router #3955: automatic prefix caching).
 	for _, tc := range []struct {
 		in, want string
 	}{

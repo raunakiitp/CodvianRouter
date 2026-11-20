@@ -2,7 +2,7 @@
 //
 // Every management route is classified into one of three static tiers,
 // evaluated before any other auth branch runs (the same shape as
-// OmniRoute's route-guard tiers in its ROUTE_GUARD_TIERS doc — the
+// the reference router's route-guard tiers in its ROUTE_GUARD_TIERS doc — the
 // pattern was studied there, the code here is original):
 //
 //   - Tier 1 LOCAL_ONLY — routes that spawn processes, execute runtime
@@ -15,7 +15,7 @@
 //   - Tier 3 MANAGEMENT — default: auth required unless explicitly off
 //     (the dashboard feeds are explicitly off: they carry no secrets).
 //
-// Two deliberate differences from OmniRoute, both stricter:
+// Two deliberate differences from the reference router, both stricter:
 //   - No manage-scope bypass: there is no carve-out that lets a
 //     non-loopback caller with a privileged key reach a LOCAL_ONLY
 //     route. Strict loopback, no exceptions.
@@ -297,7 +297,7 @@ var guardRouteTable = []GuardRoute{
 	// required to fetch the card itself, even if the agent's A2A
 	// endpoint requires authentication"); gating it would break
 	// discovery for exactly the clients it exists to inform.
-	// OmniRoute's card route is the same shape — a bare GET that
+	// the reference router's card route is the same shape — a bare GET that
 	// builds and returns the card with no auth check in the
 	// route (src/app/.well-known/agent.json/route.ts). There is
 	// nothing to protect here anyway: the card carries only the
@@ -305,10 +305,10 @@ var guardRouteTable = []GuardRoute{
 	// capabilities, the six skill descriptors) — no task data,
 	// no keys, no provider details — and the task endpoint
 	// itself (POST /a2a) stays gateway-key authed. One
-	// deliberate divergence from OmniRoute: our card's url is
+	// deliberate divergence from the reference router: our card's url is
 	// built from the server's configured listen address (see
 	// agentCardBaseURL in server.go), never from the request —
-	// OmniRoute derives its base URL from the request, which
+	// the reference router derives its base URL from the request, which
 	// trusts Host headers a caller can forge.
 	{Method: "GET", Path: "/.well-known/agent.json", Tier: TierManagement, Description: "A2A agent card (discovery document for the POST /a2a task interface): name, description, url, version, input/output modes, capabilities and the six skill descriptors — public, no auth; no task data, no keys, no provider details.", AuthExempt: true},
 	{Method: "POST", Path: "/v1/embeddings", Tier: TierManagement, Description: "Embeddings — OpenAI-compatible, routed through the same engine as chat completions (budgets, guardrails, ledger, route trace) but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.", Scopes: []string{"chat"}},
@@ -322,11 +322,11 @@ var guardRouteTable = []GuardRoute{
 	// and /v1/images/upscale is not an OpenAI endpoint).
 	{Method: "POST", Path: "/v1/images/generations", Tier: TierManagement, Description: "Images generations — OpenAI-compatible, routed through the same engine as chat completions (budgets, guardrails, ledger, route trace) but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/images/edits", Tier: TierManagement, Description: "Images edits — OpenAI-compatible multipart/form-data, forwarded verbatim (never decoded and rebuilt), routed through the same engine as chat completions but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.", Scopes: []string{"chat"}},
-	// M8.6 audio (canonical ops + OmniRoute alias names).
+	// M8.6 audio (canonical ops + the reference router alias names).
 	{Method: "POST", Path: "/v1/audio/speech", Tier: TierManagement, Description: "Audio speech (text-to-speech) — OpenAI-compatible, routed through the same engine as chat completions but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.", Scopes: []string{"chat"}},
-	{Method: "POST", Path: "/v1/audio/text-to-speech", Tier: TierManagement, Description: "Alias of POST /v1/audio/speech — not an OpenAI endpoint; OmniRoute route name, same handler and operation. Gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "POST", Path: "/v1/audio/text-to-speech", Tier: TierManagement, Description: "Alias of POST /v1/audio/speech — not an OpenAI endpoint; gateway route name, same handler and operation. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/audio/transcriptions", Tier: TierManagement, Description: "Audio transcriptions (speech-to-text) — OpenAI-compatible multipart upload, replay-exempt: exactly one upstream attempt. Gateway-key auth required.", Scopes: []string{"chat"}},
-	{Method: "POST", Path: "/v1/audio/speech-to-text", Tier: TierManagement, Description: "Alias of POST /v1/audio/transcriptions — not an OpenAI endpoint; OmniRoute route name, same handler and operation. Gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "POST", Path: "/v1/audio/speech-to-text", Tier: TierManagement, Description: "Alias of POST /v1/audio/transcriptions — not an OpenAI endpoint; gateway route name, same handler and operation. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/audio/translations", Tier: TierManagement, Description: "Audio translations (translate audio to English) — OpenAI-compatible multipart upload, replay-exempt: exactly one upstream attempt. Gateway-key auth required.", Scopes: []string{"chat"}},
 	// M8.9 moderations (local guardrails only; scope "chat" per
 	// reviewer verdict — "models" is read-only listings only).
@@ -365,9 +365,9 @@ var guardRouteTable = []GuardRoute{
 	{Method: "DELETE", Path: "/v1/batches/{id}", Tier: TierManagement, Description: "Delete one terminal batch record; non-terminal batches answer 409, unknown or foreign ids answer 404.", Scopes: []string{"chat"}},
 	{Method: "DELETE", Path: "/v1/batches/delete-completed", Tier: TierManagement, Description: "Delete all of the caller's terminal (completed/cancelled/failed/expired) batch records; in-progress batches are never deleted.", Scopes: []string{"chat"}},
 	{Method: "GET", Path: "/v1/me/status", Tier: TierManagement, Description: "Authenticated gateway-key introspection: the caller's key id/fingerprint, created/expiry, spend this period, budget remaining, traffic limits and live usage — never the key value itself. Gateway-key auth required; an expired key answers 401 naming the expiry."},
-	{Method: "GET", Path: "/v1/me/sessions", Tier: TierManagement, Description: "List agent (Responses) sessions opened by the calling API key: one row per session root (no previous_response_id) with turns, cumulative tokens and the list-price cost of its requests; unpricedCount counts turns with no known catalog price. Every row is filtered to the calling key — other keys' sessions are never listed. Gateway-key auth required."},
+	{Method: "GET", Path: "/v1/me/sessions", Tier: TierManagement, Description: "List agent sessions opened by the calling API key: Responses chains (one row per session root, no previous_response_id, with turns, cumulative tokens and the list-price cost of its requests) plus ledger agent sessions (one row per coding-agent session, with request/error counts, token split and record-time cost). unpricedCount counts turns/requests with no known catalog price. Every row is filtered to the calling key — other keys' sessions are never listed. Gateway-key auth required."},
 	// M8.11 session detail + pre-flight quota check.
-	{Method: "GET", Path: "/v1/me/sessions/{id}", Tier: TierManagement, Description: "One agent (Responses) session of the calling API key: the session root's turns, cumulative tokens and list-price cost, plus the per-turn detail; unknown ids, other keys' sessions and keyless records answer 404. Gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "GET", Path: "/v1/me/sessions/{id}", Tier: TierManagement, Description: "One agent session of the calling API key: a Responses session (the session root's turns, cumulative tokens and list-price cost, plus the per-turn detail) or a ledger agent session (request/error counts, token split, record-time cost, no per-turn detail); unknown ids, other keys' sessions and keyless records answer 404. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/quotas/check", Tier: TierManagement, Description: "Pre-flight quota/budget check for one (provider, model, estimated tokens) request: allowed plus the budget, token-limit and price numbers the verdict was judged against, from the same ledger machinery that enforces live requests. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "GET", Path: "/v1/auto-combo/{channel}/candidates", Tier: TierManagement, Description: "Auto-combo candidate pool for one auto/* channel: live tier models with per-key connections and breaker/cooldown state — a read-only transparency listing, never a dispatch preview. Gateway-key auth required.", Scopes: []string{"models"}},
 	// M8.14 combos / chains CRUD (one shared ComboStore; GETs are
@@ -518,7 +518,7 @@ func (s *Server) requireAuthUnlessRelaxed(next http.HandlerFunc) http.HandlerFun
 }
 
 // spawnCapablePatterns is the regex companion to guardRouteTable
-// (OmniRoute's SPAWN_CAPABLE_PATTERNS, research-log entry 143):
+// (the reference router's SPAWN_CAPABLE_PATTERNS, research-log entry 143):
 // the path shapes that can spawn a process, execute code, or open
 // a login/tunnel flow. The table classifies exact routes; the
 // patterns classify whole PREFIXES, so a future route with a
@@ -917,7 +917,7 @@ type settingsExportProvider struct {
 
 // settingsExportConfirm is the exact phrase the caller must type
 // (and send in the JSON body) to export settings. This is the
-// operator-credential second check (OmniRoute's credential-export
+// operator-credential second check (the reference router's credential-export
 // boundary, research-log entry 143): the export redacts secrets
 // AND still demands a typed confirmation, so a stolen gateway key
 // alone cannot silently exfiltrate the full config — and so a

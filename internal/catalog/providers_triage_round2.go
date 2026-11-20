@@ -2,11 +2,11 @@
 //
 // The 227–228 audit (docs/catalog-audit-2026-11-18.md) found 228
 // models.dev providers absent from the catalog; round 1
-// (docs/catalog-triage-2026-11-18.md) triaged the top 46. This file
+// (internal catalog triage record) triaged the top 46. This file
 // lands the second batch: the next 46 candidates by models.dev
 // model count (outerlabs … infomaniak). The full per-provider
 // record (triaged / added / rejected, with probe codes and
-// reasons) is docs/catalog-triage-2026-11-18-round2.md.
+// reasons) is internal catalog triage record.
 //
 // Rules this file follows (same as round 1):
 //   - A new provider is added ONLY when models.dev lists it AND a

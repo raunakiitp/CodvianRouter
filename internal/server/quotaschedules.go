@@ -5,7 +5,7 @@
 // The gate runs right after the fair-share pool gate (a refused
 // request consumes no traffic slot): for every pool the caller's
 // key belongs to, the ledger decides (see
-// internal/ledger/schedule.go — OmniRoute's checkSchedules). A
+// internal/ledger/schedule.go — the reference router's checkSchedules). A
 // block is a 429 + Retry-After when the reopen time is known,
 // error type "key_pool_schedule". Every block also fires the
 // "quota.exceeded" webhook, best-effort, never blocking the
@@ -67,7 +67,7 @@ func (s *Server) checkQuotaSchedules(w http.ResponseWriter, r *http.Request) boo
 }
 
 // notifyQuotaExceeded fires the "quota.exceeded" webhook for a
-// schedule block (OmniRoute notifyQuotaExceeded). Best-effort:
+// schedule block (the reference router notifyQuotaExceeded). Best-effort:
 // a nil dispatcher (no webhooks configured) is a no-op, and the
 // dispatcher itself never blocks or returns errors.
 func (s *Server) notifyQuotaExceeded(keyID, poolID string, block *ledger.ScheduleBlock) {

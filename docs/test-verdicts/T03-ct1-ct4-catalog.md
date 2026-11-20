@@ -1,7 +1,7 @@
 # T03 — CT-1 to CT-4 catalog gap fixes (GAP-TRACK §11) — VERIFY-ONLY verdict
 
 - Date: 2026-11-19 ~19:14 IST (HEAD `6831302`, dirty tree; no commits/pushes made by this tester)
-- Scope: verify-only. No code or doc edits except this file. No changes to CHECKLIST.md / PARITY.md / TEST-VERDICTS.md.
+- Scope: verify-only. No code or doc edits except this file. No changes to CHECKLIST.md / parity tracker / TEST-VERDICTS.md.
 - Commands run (all with `export PATH=$HOME/go/bin:$PATH`, `TMPDIR=$HOME/.tmp`):
   - `go test -count=1 -run 'TestG19IsRemoved|TestCT2|TestRegistryLoadRemoved|TestCheckRemoved|TestIsRemoved' ./internal/provider/ ./internal/catalog/` → **ok** (provider 0.888s, catalog 0.320s)
   - `go test -count=1 -run 'TestG7|TestCT3|TestModelHasCapability|TestCheckRemoved|TestIsRemoved' ./internal/catalog/ ./internal/autorouter/` → **ok** (catalog 0.411s, autorouter 0.021s)
@@ -66,7 +66,7 @@ Evidence:
 
 ## Fallback slice — PARITY rows 588 / 582 / 583 / 579 stale-text corrections
 
-Rows are `docs/PARITY.md` line numbers (Area 3 table). Verdict here is on **whether each row's current text matches tree reality**, not a status flip (the coordinator owns flips).
+Rows are `internal parity tracker` line numbers (Area 3 table). Verdict here is on **whether each row's current text matches tree reality**, not a status flip (the coordinator owns flips).
 
 | PARITY row (line) | Row text today | Verdict on the text |
 |---|---|---|

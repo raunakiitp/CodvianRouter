@@ -1,5 +1,5 @@
 // G13 — OpenRouter prompt-cache markers via the OpenAI wire
-// (PARITY.md Area 6 row "Provider prompt-cache markers").
+// (parity tracker Area 6 row "Provider prompt-cache markers").
 //
 // Mock-only verification: no live upstream verification exists
 // in this repo for any prompt-cache marker (M6.9c). These tests

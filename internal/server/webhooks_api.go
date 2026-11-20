@@ -9,7 +9,7 @@
 //   - GET    /api/webhooks       list registrations
 //   - GET    /api/webhooks/{id}  one registration
 //   - PUT    /api/webhooks/{id}  update a registration (M8.19
-//     merge follow-up — partial update, OmniRoute semantics:
+//     merge follow-up — partial update, the reference router semantics:
 //     every field optional, only provided fields change)
 //   - DELETE /api/webhooks/{id}  remove a registration
 //
@@ -418,7 +418,7 @@ func (s *Server) handleWebhookByID(w http.ResponseWriter, r *http.Request) {
 }
 
 // webhookUpdateRequest is the PUT /api/webhooks/{id} body.
-// Partial update, OmniRoute's PUT semantics (src/app/api/
+// Partial update, the reference router's PUT semantics (src/app/api/
 // webhooks/[id]/route.ts: updateWebhookSchema — every field
 // optional, only provided fields change): a nil pointer means
 // "keep the stored value". URL, when provided, must be a
@@ -427,7 +427,7 @@ func (s *Server) handleWebhookByID(w http.ResponseWriter, r *http.Request) {
 // when provided, replaces the stored secret — an explicitly
 // empty string clears it. The id is never updatable (it is in
 // the path, and a client-supplied id is rejected as an unknown
-// field). OmniRoute also accepts kind / description / enabled
+// field). the reference router also accepts kind / description / enabled
 // / metadata on PUT; this gateway's WebhookConfig carries none
 // of those fields, so they are not accepted here — adding them
 // needs a config-model extension, not a handler change.

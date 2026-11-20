@@ -14,7 +14,7 @@
 // exactly like responses.json keeps the Responses chains — no
 // restart-loss gap, no separate persistence file to drift.
 //
-// Keying (mirrors OmniRoute's agent_sessions, migration 229):
+// Keying (mirrors the reference router's agent_sessions, migration 229):
 // one row per gateway key + client session id when the usage row
 // carries one (Usage.SessionID, set from request metadata with
 // Usage.WithAttribution); otherwise one row per gateway key +
@@ -37,7 +37,7 @@
 // an empty one, never the reverse. Branch has no producer yet:
 // no request field carries it today, so the column stays empty
 // until a slice wires a carrier through (see the remainder in
-// docs/GAP-TRACK.md §14 AK-3). Nothing here invents one.
+// internal gap tracker §14 AK-3). Nothing here invents one.
 //
 // Rows with no gateway key are never rolled up: an unkeyed row
 // belongs to no caller, and GET /v1/me/sessions lists only the
@@ -60,7 +60,7 @@ import (
 // agentSessionIdleWindow is the idle gap that closes a session
 // for traffic with no client session id: a request more than
 // this long after the session's last request starts a new
-// session. 30 minutes, matching OmniRoute's agent_sessions
+// session. 30 minutes, matching the reference router's agent_sessions
 // idle window.
 const agentSessionIdleWindow = 30 * time.Minute
 

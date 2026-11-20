@@ -13,7 +13,7 @@ import (
 
 // M7.9 (a): a base64 data URI pasted inside a TEXT string must not
 // be BPE-counted in full. Image PARTS were already skipped; only
-// the in-text-string case was missing (PARITY Area 10 "Base64
+// the in-text-string case was missing (parity tracker Area 10 "Base64
 // image data-URI exclusion", PARTIAL). The URI is deleted before
 // counting, so the count equals the count of the surrounding text
 // with the URI removed — never the ~thousands of tokens a pasted
@@ -237,7 +237,7 @@ func TestMemoAuditMeasured(t *testing.T) {
 	}
 }
 
-// M7.9 (c): runtime calibration. Parameters match OmniRoute's
+// M7.9 (c): runtime calibration. Parameters match the reference router's
 // published calibration (estimatorCalibration.ts #14931): EMA
 // α=0.25 per (provider, model, tools) bucket, factor applies at
 // ≥3 samples, clamped [0.15, 2.0]. The calibrator is built and

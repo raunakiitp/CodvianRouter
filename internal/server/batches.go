@@ -1,6 +1,6 @@
 // Batch API store + worker (M8.8 — POST/GET/DELETE /v1/batches,
 // [id], [id]/cancel, delete-completed; Area 14 §14a "Batches"
-// row, PARITY.md row 1072).
+// row, parity tracker row 1072).
 //
 // OpenAI-compatible Batch objects backed by a local disk index
 // (<data-dir>/batches/batches.json, atomic temp+rename writes,
@@ -30,7 +30,7 @@
 //     (OwnerKeyID, foreign ids answer 404).
 //   - Pricing: lines execute through engine.Chat, so the ledger
 //     records them at the SYNC rate, exactly like a sync chat
-//     call. The 50% batch rate (OmniRoute costEstimator:
+//     call. The 50% batch rate (the reference router costEstimator:
 //     batchCost = syncCost * 0.5) is NOT applied to ledger rows:
 //     applying it needs a batch flag threaded through
 //     provider.ChatRequest → router.Attempt → attemptCost, a
@@ -103,7 +103,7 @@ type batchRequestCounts struct {
 
 // batchLineError is one input-validation failure: 1-based line
 // number, a short reason, and the offending field when known.
-// At most 50 are reported per batch (OmniRoute validateJsonl
+// At most 50 are reported per batch (the reference router validateJsonl
 // shape); duplicate custom_ids report at most the first 10.
 type batchLineError struct {
 	Line   int    `json:"line_number"`
@@ -611,7 +611,7 @@ type batchValidLine struct {
 
 // batchMaxLineErrors caps the reported per-line validation
 // failures at 50; batchMaxDuplicateIDs caps duplicate-custom_id
-// reports at the first 10 (OmniRoute validateJsonl shape).
+// reports at the first 10 (the reference router validateJsonl shape).
 const (
 	batchMaxLineErrors    = 50
 	batchMaxDuplicateIDs  = 10

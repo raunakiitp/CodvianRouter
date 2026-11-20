@@ -5,12 +5,12 @@ import (
 	"testing"
 )
 
-// G7 — Area 3 catalog gaps (PARITY.md Area 3). One test per row.
+// G7 — Area 3 catalog gaps (parity tracker Area 3). One test per row.
 // Exact counts below are the catalog as measured 2026-11-19; a
 // deliberate catalog change (triage round, new provider) must
 // update them here, never silently.
 
-// TestVerifiedOverlayPreservesReferenceFreeTier — PARITY.md:518,
+// TestVerifiedOverlayPreservesReferenceFreeTier — parity tracker:518,
 // WRONG row: All() replaced the whole entry with the verified one,
 // dropping HasFreeTier for 11 providers. The overlay now merges:
 // verified facts win, reference-only facts (free tier, notes)
@@ -65,7 +65,7 @@ func TestVerifiedOverlayPreservesReferenceFreeTier(t *testing.T) {
 	}
 }
 
-// TestBaseURLCoverage — PARITY.md:500, PARTIAL row: 380/614 entries
+// TestBaseURLCoverage — parity tracker:500, PARTIAL row: 380/614 entries
 // have a base URL. The coverage API is the honest measurement:
 // routable (concrete) vs template-only vs absent, with the real
 // gap isolated as API-capable providers without a base URL.
@@ -121,7 +121,7 @@ func TestProviderRoutable(t *testing.T) {
 	}
 }
 
-// TestStaticModelsField — PARITY.md:503, PARTIAL row: no static
+// TestStaticModelsField — parity tracker:503, PARTIAL row: no static
 // per-provider model list existed. The field, accessor and
 // deep-copy now exist; the seed data itself is still empty
 // (populating it needs a models.dev snapshot import — a data
@@ -148,7 +148,7 @@ func TestStaticModelsField(t *testing.T) {
 	}
 }
 
-// TestFreeTierProviders — PARITY.md:511, PARTIAL row: HasFreeTier
+// TestFreeTierProviders — parity tracker:511, PARTIAL row: HasFreeTier
 // existed but was surfaced nowhere. The catalog side now exposes
 // the free-tier set; server/dashboard surfacing is a follow-up
 // (server files are another builder's, dashboard is M10).
@@ -163,7 +163,7 @@ func TestFreeTierProviders(t *testing.T) {
 	}
 }
 
-// TestFreeTierPoolsAndRanking — PARITY.md:512, MISSING row: no
+// TestFreeTierPoolsAndRanking — parity tracker:512, MISSING row: no
 // pools, no budget aggregation, no rankings. Pools group the
 // verified free-tier set by category and the ranking orders it by
 // evidence strength (docs-verified first). No token budget is
@@ -208,9 +208,9 @@ func TestFreeTierPoolsAndRanking(t *testing.T) {
 	}
 }
 
-// TestKeyCreationURLs — PARITY.md:513, MISSING row: no field, no
+// TestKeyCreationURLs — parity tracker:513, MISSING row: no field, no
 // API exposure. The field exists now, seeded with 18 key pages
-// from OmniRoute reference hints (see keycreation.go); the rest
+// from the reference router reference hints (see keycreation.go); the rest
 // need per-provider research, and API/dashboard exposure is a
 // follow-up (server is another builder's, dashboard is M10).
 func TestKeyCreationURLs(t *testing.T) {

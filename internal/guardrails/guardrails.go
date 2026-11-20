@@ -309,8 +309,9 @@ const (
 	// groups touch, e.g. "(123) 4567890").
 	digitShapePhone = 1
 	// digitShapeCard: a card match is four groups of 4 digits with
-	// 0–1 separator chars between groups: either one run of ≥16
-	// digits, or two consecutive runs of ≥4 digits with gap ≤1.
+	// 0–1 separator chars between groups, or a 15-digit Amex
+	// (34/37, 4-6-5 groups): either one run of ≥15 digits, or
+	// two consecutive runs of ≥4 digits with gap ≤1.
 	digitShapeCard = 2
 	// digitShapeAadhaar: an Aadhaar match is three runs of exactly
 	// 4 digits separated by exactly one whitespace char each:
@@ -374,7 +375,11 @@ func scanDigitShapes(text string) digitShapes {
 		out.hasDigit = true
 		// Evaluate the shapes against the window (runs are
 		// maximal, so a longer run can only help a ≥ test).
-		if runLen >= 16 {
+		// ≥15, not ≥16: a bare 15-digit Amex run must reach the
+		// card rule — the regex + Luhn validator still decide
+		// whether it is a card, so a shorter run costs only one
+		// regex run, never a false redaction.
+		if runLen >= 15 {
 			out.card = true
 		}
 		if runLen >= 10 {
@@ -579,7 +584,12 @@ var redactRules = []redactRule{
 	{KindPII, "pl-pesel", "[REDACTED:PESEL]", mustCompile(`\b\d{11}\b`), nil, nil, true},
 	{KindPII, "de-steuer-id", "[REDACTED:DE_TAX_ID]", mustCompile(`\b\d{11}\b`), nil, nil, true},
 	{KindPII, "za-tax-ref", "[REDACTED:ZA_TAX_REF]", mustCompile(`\b\d{10}\b`), nil, nil, true},
-	{KindPII, "card", "[REDACTED:CARD]", mustCompile(`\b\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b`), nil, nil, true},
+	// Amex alternative: 15 digits starting 34/37, in 4-6-5
+	// groups ("3782 822463 10005") or bare ("378282246310005").
+	// validCardLuhn already accepts 13–19 digits, so the old
+	// 16-digit-only extraction was the only thing keeping Amex
+	// out of the validator.
+	{KindPII, "card", "[REDACTED:CARD]", mustCompile(`\b(?:\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}|3[47]\d{2}[\s\-]?\d{6}[\s\-]?\d{5})\b`), nil, nil, true},
 	{KindPII, "aadhaar", "[REDACTED:AADHAAR]", mustCompile(`\b\d{4}\s\d{4}\s\d{4}\b`), nil, nil, true},
 }
 
@@ -852,8 +862,18 @@ func needlePresence(folded string) [2]uint64 {
 }
 
 func scan(text string) (string, []Finding) {
+	out, findings, _ := scanVault(text, nil)
+	return out, findings
+}
+
+// scanVault is scan with an optional reversible vault: with a
+// non-nil vault, PII-kind matches are minted into tokens instead
+// of dead placeholders (see RedactWithVault); secrets and
+// injections are never minted. It returns the rewritten text,
+// the findings, and how many tokens were minted.
+func scanVault(text string, vault *Vault) (string, []Finding, int) {
 	if text == "" {
-		return "", nil
+		return "", nil, 0
 	}
 	// One folded copy + one digit-shape pass + one needle pass
 	// serve every rule's prefilter; a clean prompt then runs zero
@@ -868,6 +888,7 @@ func scan(text string) (string, []Finding) {
 	}
 	found := needlePresence(folded)
 	var findings []Finding
+	minted := 0
 	out := text
 	// Whole-block PEM redaction (M1.7): a private-key block is
 	// redacted as one span — header, base64 body and END footer —
@@ -894,7 +915,15 @@ func scan(text string) (string, []Finding) {
 		// survive untouched.
 		if v := patternValidators[r.pattern]; v != nil {
 			var n int
-			out, n = replaceValidated(out, r.re, v, r.placeholder)
+			if vault != nil && r.kind == KindPII {
+				var m int
+				out, n, m = replaceValidatedVault(out, r.re, v, func(match string) (string, bool) {
+					return vault.tokenFor(r.pattern, match, r.placeholder)
+				})
+				minted += m
+			} else {
+				out, n = replaceValidated(out, r.re, v, r.placeholder)
+			}
 			if n == 0 {
 				continue
 			}
@@ -906,7 +935,17 @@ func scan(text string) (string, []Finding) {
 			continue
 		}
 		findings = append(findings, Finding{Kind: r.kind, Pattern: r.pattern, Count: len(matches)})
-		out = r.re.ReplaceAllString(out, r.placeholder)
+		if vault != nil && r.kind == KindPII {
+			out = r.re.ReplaceAllStringFunc(out, func(match string) string {
+				tok, ok := vault.tokenFor(r.pattern, match, r.placeholder)
+				if ok {
+					minted++
+				}
+				return tok
+			})
+		} else {
+			out = r.re.ReplaceAllString(out, r.placeholder)
+		}
 	}
 	// Generic-token shape rule (CHECKLIST 245, LiteLLM #48968):
 	// log redaction must match secret SHAPES, not just named
@@ -936,7 +975,7 @@ func scan(text string) (string, []Finding) {
 		// scan of a megabyte prompt is unbounded regex work on
 		// the hot path. The deliberate divergence from the old
 		// behaviour is that an injection phrase past 16 KB is
-		// now unchecked (same bound OmniRoute uses); PII and
+		// now unchecked (same bound the reference router uses); PII and
 		// secret redaction above still scan the full text, so
 		// a key or an address past 16 KB is still redacted.
 		head, tail := injectionHead(out)
@@ -947,7 +986,7 @@ func scan(text string) (string, []Finding) {
 		findings = append(findings, Finding{Kind: KindInjection, Pattern: r.pattern, Count: len(matches)})
 		out = r.re.ReplaceAllString(head, "[REDACTED:INJECTION]") + tail
 	}
-	return out, findings
+	return out, findings, minted
 }
 
 // replaceValidated replaces only the regex matches that pass
@@ -977,6 +1016,42 @@ func replaceValidated(s string, re *regexp.Regexp, valid func(string) bool, plac
 	}
 	b.WriteString(s[last:])
 	return b.String(), n
+}
+
+// replaceValidatedVault is replaceValidated with a per-match
+// replacer: only matches passing valid are rewritten, and the
+// replacement comes from replace, which reports whether the
+// replacement is a vault token (true) or a fallback placeholder
+// (false). It returns the rewritten string, how many matches
+// were replaced, and how many of those are vault tokens.
+func replaceValidatedVault(s string, re *regexp.Regexp, valid func(string) bool, replace func(string) (string, bool)) (string, int, int) {
+	locs := re.FindAllStringIndex(s, -1)
+	if len(locs) == 0 {
+		return s, 0, 0
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	last := 0
+	n := 0
+	minted := 0
+	for _, loc := range locs {
+		if !valid(s[loc[0]:loc[1]]) {
+			continue
+		}
+		rep, ok := replace(s[loc[0]:loc[1]])
+		b.WriteString(s[last:loc[0]])
+		b.WriteString(rep)
+		last = loc[1]
+		n++
+		if ok {
+			minted++
+		}
+	}
+	if n == 0 {
+		return s, 0, 0
+	}
+	b.WriteString(s[last:])
+	return b.String(), n, minted
 }
 
 // redactGenericTokens masks token-shaped runs in *s: maximal runs

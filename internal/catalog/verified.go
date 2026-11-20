@@ -10,7 +10,7 @@ const AnthropicVersion = "2026-10-21"
 // verifiedProviders holds the providers whose base URL, auth scheme,
 // and wire format were checked against the provider's own official
 // documentation in the 2026-11-17 auth research pass
-// (research_notes/omniroute-site-crawl-auth-20261117-1245/report.md).
+// (internal research notes, site-crawl auth report, 2026-11-17).
 //
 // These entries OVERLAY the reference entries with the same ID in All():
 // the verified facts replace the reference metadata, and the entry's

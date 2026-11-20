@@ -1,7 +1,7 @@
 // Breaker must never trip on 4xx (CHECKLIST 151): a bad key (401),
 // a bad request (400/422) or a forbidden (403) is a property of
 // the request or the operator's key — never a provider-health
-// signal. OmniRoute's RESILIENCE_GUIDE trips the breaker only on
+// signal. the reference router's RESILIENCE_GUIDE trips the breaker only on
 // 408/5xx; LiteLLM's reliability docs agree. These tests use fake
 // clients (no network) and the real Engine.
 package router

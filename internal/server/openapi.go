@@ -4,7 +4,7 @@
 // source of truth the route guard enforces — so it cannot drift
 // from the routes the server actually serves. Every operation
 // carries the guard tier as a vendor extension, exactly as
-// OmniRoute's OpenAPI consistency check does (research-log entry
+// the reference router's OpenAPI consistency check does (research-log entry
 // 143): x-loopback-only for Tier 1 (LOCAL_ONLY) and
 // x-always-protected for Tier 2 (ALWAYS_PROTECTED); Tier 3
 // operations carry neither. TestOpenAPIConsistency is the

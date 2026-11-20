@@ -1,8 +1,8 @@
 // G13 — persistent reasoning cache (SQLite).
 //
 // PersistentReasoningCache is the DB tier for the M6.6 reasoning
-// replay cache (PARITY.md Area 6 row "Reasoning cache (2 h)":
-// OmniRoute reads memory first, DB fallback). It follows the
+// replay cache (parity tracker Area 6 row "Reasoning cache (2 h)":
+// the reference router reads memory first, DB fallback). It follows the
 // existing cache persistence pattern exactly
 // (internal/cache/persist.go, semantic_persist.go — same driver,
 // modernc.org/sqlite, no cgo; same conventions):

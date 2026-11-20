@@ -1654,7 +1654,7 @@
     "path": "/v1/audio/text-to-speech",
     "tier": "MANAGEMENT",
     "spawn_capable": false,
-    "description": "Alias of POST /v1/audio/speech \u2014 not an OpenAI endpoint; OmniRoute route name, same handler and operation. Gateway-key auth required.",
+    "description": "Alias of POST /v1/audio/speech \u2014 not an OpenAI endpoint; gateway route name, same handler and operation. Gateway-key auth required.",
     "auth_exempt": false,
     "scopes": [
       "chat"
@@ -1678,7 +1678,7 @@
     "path": "/v1/audio/speech-to-text",
     "tier": "MANAGEMENT",
     "spawn_capable": false,
-    "description": "Alias of POST /v1/audio/transcriptions \u2014 not an OpenAI endpoint; OmniRoute route name, same handler and operation. Gateway-key auth required.",
+    "description": "Alias of POST /v1/audio/transcriptions \u2014 not an OpenAI endpoint; gateway route name, same handler and operation. Gateway-key auth required.",
     "auth_exempt": false,
     "scopes": [
       "chat"

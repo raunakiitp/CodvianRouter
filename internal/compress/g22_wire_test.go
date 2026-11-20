@@ -8,7 +8,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/provider"
 )
 
-// G22 wire-only tests (PARITY.md Area 10 rows :848/:865/:866/:867/
+// G22 wire-only tests (parity tracker Area 10 rows :848/:865/:866/:867/
 // :868/:869). Each test is a TOGGLE proof: the asserted behaviour
 // must change when the wire it proves is removed — a test that
 // passes with the wire deleted is marked as such and does not

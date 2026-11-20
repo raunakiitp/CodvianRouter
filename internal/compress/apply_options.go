@@ -1,4 +1,4 @@
-// Package compress — ApplyOptions (G22, PARITY.md Area 10 rows
+// Package compress — ApplyOptions (G22, parity tracker Area 10 rows
 // :848/:865/:866/:867/:868/:869).
 //
 // Apply (compress.go) keeps its original signature and behaviour

@@ -110,7 +110,7 @@ No full-suite or `-race` run (per task instruction; VM loaded). No commits, no p
 
 ## Fallback — PARITY row 589 FULL-flip evidence — PASS-WITH-NITS
 
-**Row:** `docs/PARITY.md:589` — "Verified-overlay data preservation": "Overlay replaces whole entry, dropping HasFreeTier for 11 providers (cerebras, cloudflare-ai, deepseek, fireworks, gemini, groq, mistral, nvidia, ollama-cloud, openrouter, vertex)" — currently marked `WRONG-BEHAVIOUR | internal/catalog/verified.go | UNVERIFIED` in the file. The evidence below supports flipping it to FULL; the flip itself is the coordinator's to apply (this tester does not edit PARITY.md).
+**Row:** `internal parity tracker:589` — "Verified-overlay data preservation": "Overlay replaces whole entry, dropping HasFreeTier for 11 providers (cerebras, cloudflare-ai, deepseek, fireworks, gemini, groq, mistral, nvidia, ollama-cloud, openrouter, vertex)" — currently marked `WRONG-BEHAVIOUR | internal/catalog/verified.go | UNVERIFIED` in the file. The evidence below supports flipping it to FULL; the flip itself is the coordinator's to apply (this tester does not edit parity tracker).
 
 **What was verified (code read):**
 - `mergeVerified` exists at `internal/catalog/catalog.go:579-624` (task cited `:507-556`; line numbers shifted by sibling edits — the call site is `:507-527` in `allIncludingRetired`, the function itself is `:559-624`). Doc comment at `:559-578` states the OR-merge rule explicitly.
@@ -127,4 +127,4 @@ No full-suite or `-race` run (per task instruction; VM loaded). No commits, no p
 **Evidence:**
 - `internal/catalog/catalog.go:559-578` (merge rule doc), `:579-624` (`mergeVerified`), `:621-622` (OR-merges), `:507-528` (call site).
 - `internal/catalog/g7_test.go:20` (test pin), `:13-19` (row reference comment).
-- `docs/PARITY.md:589` (row text, still WRONG-BEHAVIOUR/UNVERIFIED in file — flip pending coordinator).
+- `internal parity tracker:589` (row text, still WRONG-BEHAVIOUR/UNVERIFIED in file — flip pending coordinator).

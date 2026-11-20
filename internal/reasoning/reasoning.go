@@ -1,7 +1,7 @@
 // Package reasoning is the router's provider replay state for
 // reasoning (thinking-mode) content.
 //
-// Problem (OmniRoute docs/routing/REASONING_REPLAY.md, GoModel
+// Problem (the reference router docs/routing/REASONING_REPLAY.md, GoModel
 // research-log entry 145 as supporting): several thinking-mode
 // providers reject a follow-up turn unless the previous assistant
 // message carries the original reasoning back — Anthropic requires
@@ -30,7 +30,7 @@
 //   - OpenAI wire: reasoning text becomes the assistant message's
 //     reasoning_content — but only for models that accept it
 //     (DeepSeek reasoner/R1, QwQ, Qwen/GLM think models, Kimi K,
-//     Mimo — the OmniRoute replay list). Any other OpenAI-wire
+//     Mimo — the the reference router replay list). Any other OpenAI-wire
 //     model has no reasoning field, so the hop fails honestly.
 //   - Bedrock Converse: reasoningContent blocks replay verbatim
 //     (reasoningText with its signature, redactedContent as-is).
@@ -485,13 +485,13 @@ func checkBedrock(s *State) (Status, string, error) {
 }
 
 // replayModelPatterns is the model list that accepts
-// reasoning_content on the OpenAI wire, taken from OmniRoute's
+// reasoning_content on the OpenAI wire, taken from the reference router's
 // requiresReasoningReplay model patterns
 // (docs/routing/REASONING_REPLAY.md): DeepSeek reasoner/R1,
 // DeepSeek V4 Flash/Pro, Kimi K, QwQ, Qwen/GLM think models,
 // Mimo. The patterns are unanchored (a "provider/model" id
 // still matches) except Mimo, which is anchored like
-// OmniRoute's. OpenAI's own reasoning models (o1/o3/o4/gpt-5)
+// the reference router's. OpenAI's own reasoning models (o1/o3/o4/gpt-5)
 // are deliberately NOT here: chat completions takes no
 // reasoning_content for them — their reasoning travels on the
 // Responses API, which this router does not replay.

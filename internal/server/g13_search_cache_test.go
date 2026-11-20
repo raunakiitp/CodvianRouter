@@ -1,4 +1,4 @@
-// G13 — POST /v1/search cache wiring tests (PARITY.md Area 6 row
+// G13 — POST /v1/search cache wiring tests (parity tracker Area 6 row
 // "Search cache (60 s)"): the SearchCache is wired into the live
 // search path (internal/server/media_verify.go), so a repeated
 // identical search inside the 60 s TTL is served without a second

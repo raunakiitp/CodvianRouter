@@ -62,7 +62,7 @@ It does not differ except for whose loopback it is.
   `--listen` / `--config`), use that port instead and note it.
   The default is 20128; a Settings-page port field hard-coded to
   `8080` in the page is a known wrong value
-  (`docs/GAP-INVENTORY.md:651`, `docs/PARITY.md:812`) — do NOT
+  (`internal gap inventory:651`, `internal parity tracker:812`) — do NOT
   use 8080.
 - **UNCONFIRMED:** whether his machine already has an initialized
   router (config + gateway key) or needs a fresh `init`. If fresh,
@@ -287,7 +287,7 @@ IS the pass (never invent data):
 | 10 | Usage | Usage & Cost loads |
 | 11 | Benchmark | See Step 5 |
 | 12 | Verification | Verification view loads |
-| 13 | Settings | Loads. **Known bug — do NOT "fix" by clicking:** the Port input is hard-coded `value="8080"` (wrong — real default is 20128) and the Listen select has no handler (`docs/PARITY.md:812`). Screenshot it as-is and record it; changing it is fleet work, not this session. |
+| 13 | Settings | Loads. **Known bug — do NOT "fix" by clicking:** the Port input is hard-coded `value="8080"` (wrong — real default is 20128) and the Listen select has no handler (`internal parity tracker:812`). Screenshot it as-is and record it; changing it is fleet work, not this session. |
 | 14 | Combos / Cache / Resilience / Health / Webhooks / Analytics / Batch / Responses / Activity / Audit | Each view loads without a blank page or console error |
 
 **Item 297's specific ids to confirm present** (from CHECKLIST.md:308):

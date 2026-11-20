@@ -3,7 +3,7 @@
 // (the coordinator wires it into Apply at merge — this file is the
 // post-pass only, it does not call itself from Apply).
 //
-// OmniRoute's hardBudget.ts ("compress to ≤ N cl100k tokens", study
+// the reference router's hardBudget.ts ("compress to ≤ N cl100k tokens", study
 // only, never copied) distributes the aggregate budget
 // proportionally per message, drops the lowest-saliency sentences
 // first, never drops preserve-anchored units (digits, URLs, errors,

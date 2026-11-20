@@ -1,4 +1,4 @@
-// B4-28 — Ionizer (PARITY.md:1082): tabular row sampling,
+// B4-28 — Ionizer (parity tracker:1082): tabular row sampling,
 // LOSSY, stackPriority 13.
 //
 // A JSON table with more than ionizerMaxRows rows is sampled: the

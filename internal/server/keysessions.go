@@ -7,7 +7,7 @@ import (
 )
 
 // Concurrent in-flight sessions per gateway key (M5.10,
-// OmniRoute's maxSessions — stored but unenforced for gateway
+// the reference router's maxSessions — stored but unenforced for gateway
 // keys in the current checkout; see keyaccess.go). The cap
 // counts requests that have passed every refusal gate and are
 // inside the engine call: a request past the cap is refused

@@ -1,24 +1,24 @@
 # M3 Residual Design — Area 1: the 4 MISSING rows + headroom / expiry-first data sources
 
 - Status: DESIGN ONLY. No code was written for this document; no code file,
-  `CHECKLIST.md`, `PARITY.md`, or `PLAN.md` was modified.
+  `CHECKLIST.md`, `parity tracker`, or `PLAN.md` was modified.
 - Date / as-read: 2026-11-19 ~13:30 IST. Worktree `~/workspace/codvian-router/`,
   HEAD `035d1ed` (M9 merge wave). The worktree is DIRTY at the time of writing
   (concurrent M9 builders have uncommitted changes, including in
   `internal/router/router.go` and `internal/router/autodispatch.go`), so every
   `file:line` below is as-read at that time. Builders MUST re-verify line
   numbers at build time; file names and symbol names are the stable part.
-- Scope: PARITY Area 1 (Strategies / combos / auto scoring), 63 rows,
+- Scope: parity tracker Area 1 (Strategies / combos / auto scoring), 63 rows,
   FULL 34 / PARTIAL 25 / MISSING 4 / WRONG 0; strict 54.0%, weighted 73.8%
-  (`docs/PARITY.md:361`). The M3 exit gate is Area 1 ≥ 80% weighted
-  (`docs/PLAN.md:184-191`).
-- OmniRoute reference: `~/workspace/omniroute-reference`, study ONLY. No code
-  copied, no bug copied. Every OmniRoute claim below cites a reference
+  (`internal parity tracker:361`). The M3 exit gate is Area 1 ≥ 80% weighted
+  (`internal plan:184-191`).
+- the reference router reference: `the local reference clone`, study ONLY. No code
+  copied, no bug copied. Every the reference router claim below cites a reference
   `file:line`; every Codvian claim cites a worktree `file:line`.
 
 ## The headline finding (read this before building anything)
 
-**All four MISSING rows are already built in code. PARITY.md is stale, not the
+**All four MISSING rows are already built in code. parity tracker is stale, not the
 code.** What is actually missing is smaller, and different from what the
 PARITY table says:
 
@@ -26,8 +26,8 @@ PARITY table says:
 |---|---|---|
 | 388 account-level fallback subset | Built: 9 values, wired in `orderAttempts` | File-config surface (global + per-provider override) is never plumbed into `router.Config`; production always runs the `fill-first` default. 10th value (`expiry-first`) genuinely absent — blocked on a per-key expiry source. |
 | 394 sla-aware | Built: `internal/sla` scorer + `sla-aware`/`sla` hook, wired per-request | File-config surface for the SLO policy is missing; production always runs the defaults. Breaker-OPEN candidates are not filtered/demoted by the hook. True p95 and latency-stddev signals do not exist yet. |
-| 396 nadir | Built: `nadirSelect` + `auto/nadir` dispatch, fail-closed, tested | File-config surface is missing AND the endpoint is never set, so in production nadir is **dead code**: every `auto/nadir` request takes the unconfigured fallback. No failure cooldown (OmniRoute has one). |
-| 425 preferred / reserve accounts | Built end-to-end: key roles, reserve-last partition, auto-combo path, opt-in response-start failover | Almost nothing for the row as written. The only genuine gap is OmniRoute's *per-request* preferred-connection list (`preferredConnectionIds`), which is a different concept from our static key role — that needs a product decision, not a build. |
+| 396 nadir | Built: `nadirSelect` + `auto/nadir` dispatch, fail-closed, tested | File-config surface is missing AND the endpoint is never set, so in production nadir is **dead code**: every `auto/nadir` request takes the unconfigured fallback. No failure cooldown (the reference router has one). |
+| 425 preferred / reserve accounts | Built end-to-end: key roles, reserve-last partition, auto-combo path, opt-in response-start failover | Almost nothing for the row as written. The only genuine gap is the reference router's *per-request* preferred-connection list (`preferredConnectionIds`), which is a different concept from our static key role — that needs a product decision, not a build. |
 
 **Arithmetic that matters.** Weighted parity = (FULL + 0.5 × PARTIAL) / 63.
 Today: (34 + 12.5) / 63 = 73.8%. Flipping only the four rows MISSING → FULL
@@ -58,7 +58,7 @@ that work is FULLY LANDED, not half-landed. `internal/router/nadir.go`
 anymore; the live call site is `router.go:2269`.
 
 **How to read the slices.** Each section follows the required five parts:
-(1) what OmniRoute does, (2) what we have today, (3) the exact data source,
+(1) what the reference router does, (2) what we have today, (3) the exact data source,
 (4) the concrete builder slice, (5) deliberate divergence. §7 gives the
 ordered build sequence and a go/no-go per slice. "GO" means: build now, no
 prior decision needed. "NO-GO" means: do not build until the named decision
@@ -69,7 +69,7 @@ is made — the slice section says exactly what decision and who must make it
 
 ## S1 — Account-level fallback subset (PARITY row 388)
 
-### (1) What OmniRoute actually does
+### (1) What the reference router actually does
 
 - The value set is `ACCOUNT_FALLBACK_STRATEGY_VALUES`:
   `priority, fill-first, round-robin, p2c, random, least-used,
@@ -84,7 +84,7 @@ is made — the slice section says exactly what decision and who must make it
   providers/models. `fill-first` drains the first account before the next;
   `expiry-first` orders accounts by soonest-expiring quota (see §D2 for its
   data source, `open-sse/services/combo/quotaStrategies.ts:721-800`).
-- Note the value set has NO `weighted`. OmniRoute's account level cannot do a
+- Note the value set has NO `weighted`. the reference router's account level cannot do a
   weighted draw; its weighted draw lives at chain level only.
 
 ### (2) What our code has today
@@ -183,29 +183,29 @@ is made — the slice section says exactly what decision and who must make it
   a config file (not just in a unit test that constructs `router.Config`
   by hand); evidence pack lists the test names + the config snippet used.
   Coordinator then flips PARITY row 388 MISSING → FULL, citing this design
-  (§S1) and the evidence pack. Builders do NOT edit `PARITY.md` themselves.
+  (§S1) and the evidence pack. Builders do NOT edit `parity tracker` themselves.
 
-### (5) Deliberate divergence from OmniRoute
+### (5) Deliberate divergence from the reference router
 
-- **We have `weighted`, OmniRoute does not (at account level).** Ours draws
+- **We have `weighted`, the reference router does not (at account level).** Ours draws
   one leading account uniformly (no weight source). Keep it: it is a superset
   that degrades honestly to uniform, and removing it would break the
   9-value symmetry with the chain-level `weighted`. Document in SCHEMA.md
   that it is uniform until a per-account weight source exists.
-- **We reject `expiry-first`, OmniRoute accepts it.** Ours is the honest side
-  of this divergence: OmniRoute can compute it because its domain quota cache
+- **We reject `expiry-first`, the reference router accepts it.** Ours is the honest side
+  of this divergence: the reference router can compute it because its domain quota cache
   carries per-connection quota windows; we have no per-key expiry anywhere,
   so accepting the name would silently order on nothing. Keep rejecting
   until §D2 lands.
 - **No behavioural divergence otherwise.** Default `fill-first`, per-provider
   override, grouping by `(provider, model)`, skip under explicit client
-  order — all match OmniRoute's shape.
+  order — all match the reference router's shape.
 
 ---
 
 ## S2 — Router strategy sla-aware / sla (PARITY row 394)
 
-### (1) What OmniRoute actually does
+### (1) What the reference router actually does
 
 - `SLAStrategyImpl`, name `"sla-aware"`, alias `"sla"`
   (`open-sse/services/autoCombo/routerStrategy.ts:286-294,394-403`).
@@ -229,7 +229,7 @@ is made — the slice section says exactly what decision and who must make it
 - **Unknowns score as perfect in the reference**: a candidate with p95 0
   scores 1 on latency (`scoreAtOrBelowThreshold` with value clamped to
   0.000001), and a missing cost scores 1 via `inverseNormalized`
-  (`:247-260`). That is OmniRoute treating "no measurement" as "meets the
+  (`:247-260`). That is the reference router treating "no measurement" as "meets the
   SLO" — see divergence below.
 
 ### (2) What our code has today
@@ -267,7 +267,7 @@ is made — the slice section says exactly what decision and who must make it
      and the `StrategyHookContext` doc, `:318-330`). The pure `sla.Policy`
      supports zero-tolerance (`sla.go: scoreAtOrBelowThreshold`); the
      config path destroys it.
-  3. The hook does NOT filter or demote breaker-OPEN candidates. OmniRoute
+  3. The hook does NOT filter or demote breaker-OPEN candidates. the reference router
      filters OPEN before scoring (`routerStrategy.ts:294-295`). Our
      `orderAttempts` does not remove OPEN providers before the hook either
      (only zero-quota is filtered, `filterZeroQuota`, `router.go:2106-2115`;
@@ -305,7 +305,7 @@ is made — the slice section says exactly what decision and who must make it
   demote OPEN inside `orderAttempts` before the hook; do not do that —
   it would change ordering for every strategy, not just sla-aware.
   With the field, the sla-aware hook filters OPEN candidates first
-  (falling back to the full pool when all are OPEN, exactly like OmniRoute),
+  (falling back to the full pool when all are OPEN, exactly like the reference router),
   and scores the rest.
 - **p95 and stddev (NOT this slice):** no source exists. A latency histogram
   (per-provider p50/p95/stddev from measured attempt latencies) is a
@@ -330,7 +330,7 @@ is made — the slice section says exactly what decision and who must make it
      case exactly as the existing `Load`/`Attempts` blocks do).
   3. `internal/strategy/wiring.go` — `StrategySLAAware` case: filter
      positively-OPEN candidates before scoring (all-OPEN → score the full
-     pool, OmniRoute's rule); leave the scoring math untouched.
+     pool, the reference router's rule); leave the scoring math untouched.
   4. `internal/sla/sla.go` — only if the pointer-policy design needs it:
      no change expected; `Policy.Resolve` already distinguishes negative
      (default) from 0 (zero-tolerance). Keep it.
@@ -376,9 +376,9 @@ is made — the slice section says exactly what decision and who must make it
   but the builder must say so in the evidence, not silently keep the old
   mapping while claiming the config surface is complete.
 
-### (5) Deliberate divergence from OmniRoute
+### (5) Deliberate divergence from the reference router
 
-- **Unknown signals score NEUTRAL (0.5), never perfect.** OmniRoute gives
+- **Unknown signals score NEUTRAL (0.5), never perfect.** the reference router gives
   an unmeasured candidate a perfect latency/cost score
   (`routerStrategy.ts:247-260` — p95 0 scores 1; missing cost scores 1).
   Ours scores unknown as 0.5 and adds no violation (`internal/sla/sla.go`
@@ -387,14 +387,14 @@ is made — the slice section says exactly what decision and who must make it
   and in a local-first router with cold starts it would systematically
   prefer never-tried providers. The reference's behaviour here is a bug
   shape (it rewards the absence of telemetry); do not "fix" ours to match.
-- **Health is observed serving health, not breaker state.** OmniRoute reads
+- **Health is observed serving health, not breaker state.** the reference router reads
   breaker state; our hook inputs do not carry it today (this slice adds it
   for the OPEN filter, but the 0.15 health *score* stays observed-serving:
   1 = served successfully, 0 = every observed attempt failed, 0.5 =
   unobserved). Keep: breaker state is a liveness gate, not a quality score.
-- **Stability neutral until a stddev source exists.** OmniRoute has measured
+- **Stability neutral until a stddev source exists.** the reference router has measured
   stddev; we do not. Neutral 0.5, documented, not a guessed value.
-- **Fallback on total failure:** OmniRoute's SLA strategy throws when no
+- **Fallback on total failure:** the reference router's SLA strategy throws when no
   candidates exist; ours never throws from the hook — an empty chain stays
   empty and the engine fails honestly upstream. Keep.
 
@@ -402,7 +402,7 @@ is made — the slice section says exactly what decision and who must make it
 
 ## S3 — Router strategy nadir (PARITY row 396)
 
-### (1) What OmniRoute actually does
+### (1) What the reference router actually does
 
 - `NadirStrategyImpl`, name `"nadir"`
   (`open-sse/services/autoCombo/nadirStrategy.ts:2-16,153-177`), registered
@@ -414,7 +414,7 @@ is made — the slice section says exactly what decision and who must make it
   The decision picks the model; the fallback strategy picks the CONNECTION
   serving it. Nadir never picks an account.
 - Config: combo `config.nadir = { apiKey, baseUrl, timeoutMs }`, with env
-  fallbacks `OMNIROUTE_NADIR_API_KEY` / `OMNIROUTE_NADIR_BASE_URL`
+  fallbacks `NADIR_API_KEY` / `NADIR_BASE_URL`
   (`nadirStrategy.ts:25-38,183-185,216`). Default base URL is hardcoded:
   `NADIR_DEFAULT_BASE_URL = "https://api.getnadir.com"` (`:58`).
   Timeout default 2000 ms, max 30000 ms (`:59-60`).
@@ -460,13 +460,13 @@ is made — the slice section says exactly what decision and who must make it
      sets them. In production, nadir is therefore permanently unconfigured
      and every `auto/nadir` request takes the fail-closed fallback. The
      feature is built, tested, and dead.
-  2. **No failure cooldown.** OmniRoute skips the network for 30 s after a
+  2. **No failure cooldown.** the reference router skips the network for 30 s after a
      failure (`nadirStrategy.ts:61,201`). Ours has no cooldown field or
      logic: a down endpoint costs a full timeout (up to 30 s of configured
      timeout, default 2 s) on EVERY `auto/nadir` request until it recovers.
      At default timeout that is 2 s of added latency per request, unbounded
      in count.
-  3. The fallback is priority (catalog) order. OmniRoute falls back to its
+  3. The fallback is priority (catalog) order. the reference router falls back to its
      `rules` strategy (its default scorer). See divergence below.
 
 ### (3) The exact data source to add
@@ -484,15 +484,15 @@ is made — the slice section says exactly what decision and who must make it
     through and `Validate` rejects negatives).
   - `CODVIAN_ROUTER_NADIR_API_KEY` env var (optional; empty = no header
     sent — keyless calls land on the provider's anonymous tier, as in
-    OmniRoute). Do NOT add an env fallback for the endpoint: OmniRoute's
-    `OMNIROUTE_NADIR_BASE_URL` env fallback is a footgun in a local-first
+    the reference router). Do NOT add an env fallback for the endpoint: the reference router's
+    `NADIR_BASE_URL` env fallback is a footgun in a local-first
     router — an env var set in one shell would silently point every
     request's prompt at a third party. The endpoint must be an explicit
     config-file choice, visible in the file the operator reviews.
 - **Failure cooldown (the slice):** no new external data. Cooldown state is
   local and in-memory: last-failure timestamp + endpoint identity, held on
   the engine (same shape as the existing per-key cooldown state). 30 s,
-  matching OmniRoute's `NADIR_FAILURE_COOLDOWN_MS`. While cooling down,
+  matching the reference router's `NADIR_FAILURE_COOLDOWN_MS`. While cooling down,
   `nadirSelect` returns the fallback immediately with a note naming the
   cooldown (no network call). A successful call clears it. The cooldown is
   per endpoint (if the operator reconfigures the endpoint, the old
@@ -530,7 +530,7 @@ is made — the slice section says exactly what decision and who must make it
      <time>").
   5. `internal/router/router.go` — only if the cooldown state needs a
      `Config` knob (e.g. a test seam): prefer a fixed 30 s constant in
-     `nadir.go` (matching OmniRoute) with no config knob. Do not add a
+     `nadir.go` (matching the reference router) with no config knob. Do not add a
      knob without a reason.
 - Tests required:
   - config round-trip: nadir block survives load; invalid endpoint / bad
@@ -554,9 +554,9 @@ is made — the slice section says exactly what decision and who must make it
   row 396 → FULL on that evidence. Until the config surface lands, the row
   MUST NOT flip: a tested-but-unreachable feature is not FULL.
 
-### (5) Deliberate divergence from OmniRoute
+### (5) Deliberate divergence from the reference router
 
-- **Fail-CLOSED, not fail-open, on missing configuration.** OmniRoute has a
+- **Fail-CLOSED, not fail-open, on missing configuration.** the reference router has a
   hardcoded default endpoint (`https://api.getnadir.com`) and even an
   unconfigured combo calls it, sending the user's prompt to a third party
   the operator never chose (`nadirStrategy.ts:58,183-185`). Ours has NO
@@ -565,11 +565,11 @@ is made — the slice section says exactly what decision and who must make it
   `router.go:583-591`). This is the most important divergence in this
   document. A local-first router must not exfiltrate prompts by default.
   Keep it unconditionally — no future slice may add a default endpoint.
-- **No env fallback for the endpoint.** OmniRoute reads
-  `OMNIROUTE_NADIR_BASE_URL` (`nadirStrategy.ts:183`). Ours reads the
+- **No env fallback for the endpoint.** the reference router reads
+  `NADIR_BASE_URL` (`nadirStrategy.ts:183`). Ours reads the
   endpoint from the config file only (see §3). Same reasoning: the egress
   destination must be a reviewed, visible choice.
-- **Fallback is priority order, not the `rules` scorer.** OmniRoute falls
+- **Fallback is priority order, not the `rules` scorer.** the reference router falls
   back to its rules strategy (`routerStrategy.ts:406`). Ours falls back to
   catalog/priority order. Keep for this slice: priority is our default
   strategy (M1.11), it is what the chain hook does for `nadir` anyway, and
@@ -578,7 +578,7 @@ is made — the slice section says exactly what decision and who must make it
   strategy (i.e. "fall back to the chain's own configured strategy instead
   of priority") — that is a product decision, not part of this slice.
 - **Failure cooldown is per-endpoint, in-memory, 30 s** — same number as
-  OmniRoute, own implementation. Keep the number; do not copy the
+  the reference router, own implementation. Keep the number; do not copy the
   per-base-URL map shape blindly — one endpoint is configured at a time,
   so one cooldown slot is enough.
 
@@ -586,11 +586,11 @@ is made — the slice section says exactly what decision and who must make it
 
 ## S4 — Preferred / reserve accounts for auto combos (PARITY row 425)
 
-### (1) What OmniRoute actually does
+### (1) What the reference router actually does
 
 - The deep-study records it as: "preferred and reserve accounts for Auto
   combos; opt-in preferred-account response-start failover"
-  (`~/workspace/goals/codvian-router/hidden_files/omniroute-deep-study-2026-11-18.md:26`,
+  (`the internal deep-study report`,
   §1.1). The reference itself splits the concept in two places, and the
   split matters:
   1. **Per-API-key soft preference list:** `pickPreferredConnection` over
@@ -645,8 +645,8 @@ is made — the slice section says exactly what decision and who must make it
   byte, pre-commit only, breaker-neutral. File-config surface EXISTS for
   this half: `routing.preferred_failover_after_ms`
   (`internal/config/config.go:1006-1011`), wired in `main.go:2739`.
-  PARITY Area 2 already records it FULL
-  (`docs/PARITY.md:471`, tests `TestPreferredFailover*`).
+  parity tracker Area 2 already records it FULL
+  (`internal parity tracker:471`, tests `TestPreferredFailover*`).
 - **Tests:** `internal/router/keypool_test.go` (10 tests: preferred
   401/429/quota failover to the second key, per-key cooldown isolation,
   reserve-only-when-exhausted incl. reserve-listed-first-still-sorts-last,
@@ -657,7 +657,7 @@ is made — the slice section says exactly what decision and who must make it
   Live smoke 26/26 recorded in `docs/slice-175-176-keypool-report.md`.
 - **What is genuinely missing:** only concept (1) above — a *per-request*
   preferred-connection list. Our "preferred" is a static role on the key;
-  OmniRoute's is a soft preference carried by the API key / request. We
+  the reference router's is a soft preference carried by the API key / request. We
   have no per-request preference input anywhere (no API-key preference
   field, no routing-contract field for it).
 
@@ -701,15 +701,15 @@ is made — the slice section says exactly what decision and who must make it
 - Definition-of-Done: the verification commands above pass on the current
   tree; the evidence note exists with exact test names and smoke output.
   Coordinator flips row 425 MISSING → FULL on that evidence, and tightens
-  the row's OmniRoute citation (deep-study §1.1 + `preferredConnectionFailover.ts`
+  the row's the reference router citation (deep-study §1.1 + `preferredConnectionFailover.ts`
   + `auth.ts:1930-1945`) at flip time. If verification FAILS anywhere, the
   row stays MISSING, the failure is reported verbatim, and a fix slice is
   written — no flip on a failed verification.
 
-### (5) Deliberate divergence from OmniRoute
+### (5) Deliberate divergence from the reference router
 
 - **Preferred/reserve is a static key role, not a per-request list.** Ours
-  is set by the operator on the key and persists; OmniRoute's preferred
+  is set by the operator on the key and persists; the reference router's preferred
   connection is chosen per request from the API key's preference list.
   Ours is simpler, auditable (the role is visible on the key), and needs no
   auth/settings surface. The cost is real: a caller cannot say "for THIS
@@ -717,20 +717,20 @@ is made — the slice section says exactly what decision and who must make it
   per-request list is a named follow-up (§7, NO-GO until decided).
 - **Reserve-last runs even under an explicit contract order.**
   (`router.go:2148-2170` comment: the contract names providers, never keys,
-  so it cannot have ordered a reserve key first on purpose.) OmniRoute's
+  so it cannot have ordered a reserve key first on purpose.) the reference router's
   failover file excludes forced pins/combo steps from rotation; ours
   partitions reserve last regardless. Keep: it is the safer reading — a
   reserve key is by definition held back, and no contract in our schema can
   name a key.
 - **Failover rotates to one sibling, pre-commit only, breaker-neutral.**
-  Matches OmniRoute's shape; the 20 s default matches exactly. No
+  Matches the reference router's shape; the 20 s default matches exactly. No
   divergence beyond the static-role point above.
 
 ---
 
 ## D1 — Data source: per-pair limit for headroom (PARITY row: headroom, PARTIAL)
 
-### (1) What OmniRoute actually does
+### (1) What the reference router actually does
 
 - Formula: `headroom = 1 − max(util5h, util7d)`, most free capacity first
   (`open-sse/services/combo/headroomRanking.ts:54`, `computeHeadroom`;
@@ -751,7 +751,7 @@ is made — the slice section says exactly what decision and who must make it
   fetchers fail open to 0 for every candidate and headroom cannot tell
   accounts apart), and ranks. Targets without a connection get full
   headroom. Any unexpected failure leaves the order unchanged.
-- Key honesty point: OmniRoute's utilisation is a **measured fraction
+- Key honesty point: the reference router's utilisation is a **measured fraction
   against a provider-reported limit** (OAuth plan windows, quota fetchers).
   It is not spend divided by a guessed cap.
 
@@ -760,7 +760,7 @@ is made — the slice section says exactly what decision and who must make it
 - Pure ordering: `Headroom` / `OrderHeadroom`
   (`internal/strategy/quota.go:186-210`, `Headroom` at `:186`); constants
   mirror the reference. Missing utilisation is treated as 0 (full headroom)
-  — OmniRoute's own fail-open (`quota.go` header + `clampUtil`).
+  — the reference router's own fail-open (`quota.go` header + `clampUtil`).
 - Wiring: `StrategyHeadroom` case in `wiring.go` via `toQuotaSnapshots`
   (feeds `s.Util5h` / `s.Util7d` from `scoring.Signals`).
 - The signal is always unknown: `Ledger.PairQuota`
@@ -772,7 +772,7 @@ is made — the slice section says exactly what decision and who must make it
   passes the -1 through. `scoring.Signals.Util5h/Util7d`
   (`internal/scoring/scoring.go:84-97`) document -1 as unknown.
 - Consequence: today every target scores headroom 1 and the strategy is a
-  no-op that preserves declared order. That is OmniRoute's fail-open, but
+  no-op that preserves declared order. That is the reference router's fail-open, but
   it is not headroom ranking — the row is PARTIAL for exactly this reason.
 - Tests: `TestHeadroomOrder` (`internal/strategy/quota_test.go`) proves the
   pure ordering given known utils; no test can prove production ranking
@@ -788,7 +788,7 @@ candidate denominators must NOT be confused:
 | Gateway-key budgets (`key_budgets`: rolling 5h USD cap; `budgets`: cap with opaque period) | INVALID. A gateway key's spend spans providers; its limit cannot be attributed to one `(provider, model)` pair (`quotaquery.go` header). Dividing pair spend by a key limit would understate utilisation for every pair on that key. |
 | Quota pools (`internal/ledger/pool.go`, `EffectiveLimit`) | INVALID as a pair limit. A pool limit is a pool/key concept, not a pair concept. Do not reuse it. |
 | Operator-declared per-pair limit (new config) | VALID, local, no network. `routing.pair_limits: {"provider/model": {"limit_usd_5h": N, "limit_usd_7d": M}}`. Spend is already measured (`PairQuota.Spent5h/Spent7d`, priced USD, lower bound when unpriced usage exists). `Utilisation(spent, limit)` already exists. This is the smallest honest source. |
-| Provider quota fetchers (OmniRoute-faithful) | VALID, but large. Per-provider fetchers against upstream usage endpoints (OAuth usage, quota APIs), with credentials, a 30 s TTL cache, bounded concurrency, and fail-open to -1 (NOT 0 — see divergence). Needs a fetcher registry, credential threading (OmniRoute #6379 lesson), and per-provider work. A multi-slice project, not one builder slice. |
+| Provider quota fetchers (reference-faithful) | VALID, but large. Per-provider fetchers against upstream usage endpoints (OAuth usage, quota APIs), with credentials, a 30 s TTL cache, bounded concurrency, and fail-open to -1 (NOT 0 — see divergence). Needs a fetcher registry, credential threading (the reference router #6379 lesson), and per-provider work. A multi-slice project, not one builder slice. |
 
 - **Recommended decision (for Raunak): option 3 first** — operator-declared
   per-pair limits in the config file. It makes headroom real for the pairs
@@ -847,12 +847,12 @@ candidate denominators must NOT be confused:
   leaving it PARTIAL indefinitely — but that is a coordinator + Raunak call,
   not a builder call.
 
-### (5) Deliberate divergence from OmniRoute
+### (5) Deliberate divergence from the reference router
 
 - **Unknown utilisation must stay unknown (-1), and the fail-open must be
-  visible, not silent.** OmniRoute's `getSaturation` fails open to 0 and
+  visible, not silent.** the reference router's `getSaturation` fails open to 0 and
   `rankByHeadroom` ranks unknown as full headroom — the same numeric
-  outcome as ours today, but OmniRoute usually HAS a measurement, so the
+  outcome as ours today, but the reference router usually HAS a measurement, so the
   fail-open rarely fires. Ours fires always. Keep the -1 sentinel in
   `Signals`/`PairQuota` (it already exists) so that logs, the decision
   header, and any future dashboard can distinguish "measured 0% utilised"
@@ -860,7 +860,7 @@ candidate denominators must NOT be confused:
   — changing it to "unknown sorts last" would be a different strategy, not
   headroom.
 - **When fetchers land, fail-open must be to -1 (unknown), not 0.**
-  OmniRoute's fetchers return 0 on error, which then ranks a broken fetcher
+  the reference router's fetchers return 0 on error, which then ranks a broken fetcher
   as "most free capacity" — the exact account a failing fetcher hides is
   the one headroom would then prefer. Our `Utilisation` already returns -1
   for a missing limit; a fetcher error must produce -1 too, and the
@@ -872,7 +872,7 @@ candidate denominators must NOT be confused:
 
 ## D2 — Data source: quota expiry for expiry-first (PARITY rows: expiry-first PARTIAL; account-fallback expiry-first BLOCKED)
 
-### (1) What OmniRoute actually does
+### (1) What the reference router actually does
 
 - Score: `scoreExpiryFirstQuota`
   (`open-sse/services/combo/quotaScoring.ts:542-640`): "how much quota it
@@ -929,8 +929,8 @@ candidate denominators must NOT be confused:
 
 ### (3) The exact data source to add — decision required (NO-GO until decided)
 
-- **What "expiry" means here must be decided first, because OmniRoute's
-  own word is misleading.** In OmniRoute, "expiry-first" is really
+- **What "expiry" means here must be decided first, because the reference router's
+  own word is misleading.** In the reference router, "expiry-first" is really
   "reset-first for the longest window": the deadline is a window reset, and
   a true grant-expiry timestamp is never the input. Our `ExpiresAt` field
   name bakes in the grant-expiry reading, which has no source. The design
@@ -942,11 +942,11 @@ candidate denominators must NOT be confused:
      Source: config file → `PairQuota` gains an `ExpiresAt` (and ideally a
      measured remaining fraction, replacing the booleanised `QuotaHint`
      for this strategy — see below).
-  2. **Provider quota fetchers (OmniRoute-faithful).** Per-connection quota
+  2. **Provider quota fetchers (reference-faithful).** Per-connection quota
      windows with `percentUsed` + `resetAt`, from upstream usage endpoints.
      This is the same fetcher project as §D1 option 4, and it delivers the
-     *reset* deadlines OmniRoute actually uses — at which point our
-     `ExpiryFirstScore` should adopt OmniRoute's longer-window deadline rule
+     *reset* deadlines the reference router actually uses — at which point our
+     `ExpiryFirstScore` should adopt the reference router's longer-window deadline rule
      (see divergence below) instead of the single-`ResetAt` fallback.
   3. **Per-key expiry for the account-level value.** Same two options, but
      keyed by `(provider, key)`, not by pair. Needed before account-level
@@ -1021,22 +1021,22 @@ candidate denominators must NOT be confused:
   fetcher design must also adopt the longer-window deadline rule (§5) and
   the tie-band rotation, which are NOT in our `quota.go` today.
 
-### (5) Deliberate divergence from OmniRoute — and one divergence to FIX
+### (5) Deliberate divergence from the reference router — and one divergence to FIX
 
-- **FIX (when a real deadline source lands): adopt OmniRoute's
+- **FIX (when a real deadline source lands): adopt the reference router's
   longer-window deadline rule.** Our `ExpiryFirstScore` today uses a single
-  `ResetAt` — the 5h roll-off — as the deadline. OmniRoute explicitly
+  `ResetAt` — the 5h roll-off — as the deadline. the reference router explicitly
   warns against exactly this (#18541): a session reset is not where quota
   is lost; using it makes accounts trade places every few hours and ignores
   weekly resets days apart. When §D1/§D2 deliver per-window resets (or the
   operator declares a grant expiry), the scorer must take the LONGEST
   window's reset (or the declared grant expiry, which is by definition the
   longest horizon) as the deadline, and use the session/5h reset only when
-  it is the sole window. This is a case where OmniRoute is RIGHT and our
+  it is the sole window. This is a case where the reference router is RIGHT and our
   single-`ResetAt` fallback is a simplification that must not survive the
   arrival of real data. The fix belongs in the same slice that lands the
   source — do not land the source and leave the wrong deadline rule.
-- **Tie-band rotation is missing (ours: stable sort only).** OmniRoute
+- **Tie-band rotation is missing (ours: stable sort only).** the reference router
   rotates leading ties within 5% (`rotateLeadingTies`,
   `quotaStrategies.ts:788-792`) so tied accounts share the lead over time.
   Ours keeps declared order on ties (`quota.go` header documents the
@@ -1045,7 +1045,7 @@ candidate denominators must NOT be confused:
   with the fetcher slice, where per-connection scores actually tie often
   enough for it to matter. Record the choice; do not present stable-sort
   ties as rotation.
-- **Burn projection is out of scope.** OmniRoute's metric-aware score
+- **Burn projection is out of scope.** the reference router's metric-aware score
   subtracts observed burn (`quotaScoring.ts:561-570`). We have no burn-rate
   signal (spend rate per window could be derived from the ledger later,
   but it is not a source today). The legacy score (`usable / hours`) is
@@ -1104,7 +1104,7 @@ with any of them. D1 and D2 both touch `PairQuota` / `signalsFn` /
    (`account_fallback.go: orderAccountP2C` + `accountP2CScore`), so the
    score ties unless breaker state changes between the two reads. Per-key
    latency/success signals do not exist. This is documented in the code and
-   in §S1.3; it is not a blocker for the row flip (OmniRoute's account p2c
+   in §S1.3; it is not a blocker for the row flip (the reference router's account p2c
    has the same shape — its per-connection scores come from its quota
    cache, which we do not have), but a builder must not claim p2c "picks
    the better account" in evidence. It picks a random account, guarded by
@@ -1119,7 +1119,7 @@ with any of them. D1 and D2 both touch `PairQuota` / `signalsFn` /
    `main.go`). Every slice must re-verify its file:line citations at build
    time and rebase onto the current HEAD before testing. A test that passes
    against a stale checkout proves nothing.
-5. **OmniRoute's "expiry" is a reset (see §D2.1).** Any builder who reads
+5. **the reference router's "expiry" is a reset (see §D2.1).** Any builder who reads
    the row name literally and hunts for a grant-expiry timestamp in the
    reference will conclude the feature is unimplementable. The reference's
    deadline is a window reset; our design must carry that reading, and the
@@ -1131,7 +1131,7 @@ with any of them. D1 and D2 both touch `PairQuota` / `signalsFn` /
    summariser / quota-use signal / cross-request session store for
    context-relay, candidate-pool exclusions, billing-class / premium
    classification for the 4-tier cascade and auto/thrifty — all named in
-  `docs/PLAN.md:184-191` as residual data-source gaps, all outside the four
+  `internal plan:184-191` as residual data-source gaps, all outside the four
    rows + two data sources this design was asked for. A builder must not
    expand scope into them from this document; each needs its own design
   with its own sources.
@@ -1151,9 +1151,9 @@ with any of them. D1 and D2 both touch `PairQuota` / `signalsFn` /
   `internal/router/preferred.go`, `internal/router/autodispatch.go`,
   `internal/ledger/quotaquery.go`, `internal/scoring/scoring.go`,
   `internal/config/config.go` (RoutingConfig), `cmd/codvian-router/main.go`
-  (`signalsFn`, `engCfg`, `attemptsForProvider`), `docs/PARITY.md` Area 1,
-  `docs/PLAN.md` M3 section); every OmniRoute citation was read in
-  `~/workspace/omniroute-reference` (`src/shared/constants/routingStrategies.ts`,
+  (`signalsFn`, `engCfg`, `attemptsForProvider`), `internal parity tracker` Area 1,
+  `internal plan` M3 section); every the reference router citation was read in
+  `the local reference clone` (`src/shared/constants/routingStrategies.ts`,
   `src/sse/services/auth.ts`, `open-sse/services/autoCombo/routerStrategy.ts`,
   `open-sse/services/autoCombo/nadirStrategy.ts`,
   `open-sse/services/combo/headroomRanking.ts`,
@@ -1161,7 +1161,7 @@ with any of them. D1 and D2 both touch `PairQuota` / `signalsFn` /
   `open-sse/services/combo/quotaStrategies.ts`,
   `src/lib/quota/saturationSignals.ts`,
   `src/sse/services/preferredConnectionFailover.ts`).
-- Honest gaps in this document itself: (a) no direct OmniRoute file:line
+- Honest gaps in this document itself: (a) no direct the reference router file:line
   was found for a "reserve account" in auto combos — row 425's citation
   rests on the deep-study summary plus the failover file (see §S4.1);
   (b) `headroomRanking.ts:54` is cited per PARITY and confirmed by reading

@@ -1,6 +1,6 @@
 package router
 
-// 200-OK body validation in the streaming preread path (PARITY.md
+// 200-OK body validation in the streaming preread path (parity tracker
 // Area 2 row "200-OK body validation predicate → failover";
 // BURNDOWN Tier 1): a stream whose leading content already fails
 // the predicate fails over pre-commit, exactly like a failed

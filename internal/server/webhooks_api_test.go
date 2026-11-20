@@ -359,7 +359,7 @@ func TestM819BudgetWarningFiresOnThresholdCrossing(t *testing.T) {
 	}
 }
 
-// TestM819UpdatePartial: PUT is a partial update (OmniRoute
+// TestM819UpdatePartial: PUT is a partial update (the reference router
 // semantics) — only provided fields change, the rest are kept,
 // and the secret is never echoed (has_secret is the observable).
 func TestM819UpdatePartial(t *testing.T) {

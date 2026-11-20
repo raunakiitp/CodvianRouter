@@ -389,25 +389,26 @@ func (e *Engine) chainForDispatch(model string, ordered []string) []Attempt {
 }
 
 // maybeBridgeModality implements the modality bridges (B3-24):
-// an image-bearing request whose chain head is CONFIRMED
-// non-vision is rerouted to the first pool model confirmed
-// vision-capable, rebuilding the chain for it (same ordered /
-// effort treatment as the original chain, so auto resolutions
-// and intent efforts survive the reroute). The target model for
-// the capability check is the chain head — the concrete
+// a media-bearing request whose chain head is CONFIRMED
+// incapable of a required modality is rerouted to the first pool
+// model confirmed capable of it, rebuilding the chain for it
+// (same ordered / effort treatment as the original chain, so auto
+// resolutions and intent efforts survive the reroute). The target
+// model for the capability check is the chain head — the concrete
 // (provider, model) the request would actually dial — and its
-// capability comes from the live VisionCapability hook, never
-// from a guessed model id. Every fail-open applies: no media in
-// the request, an empty chain, a missing pool hook, an unknown
-// capability, or no capable alternative all return the chain and
-// request untouched (the upstream then refuses honestly, exactly
-// as before the bridge existed). A rebuilt chain that comes back
-// empty (the alternative's provider has no client) also falls
-// back to the original chain. Only vision can trigger a reroute
-// today: audio/video detection exists, but no capability source
-// reports them, so they never block.
+// capability comes from the live ModalityCapability hook (full
+// Vision/Audio/Video record), never from a guessed model id.
+// Callers that wire only the vision-only VisionCapability /
+// VisionPool hooks get the legacy vision-only decision (same
+// target and pool as before). Every fail-open applies: no media
+// in the request, an empty chain, no pool hook of either kind, an
+// unknown capability, or no capable alternative all return the
+// chain and request untouched (the upstream then refuses honestly,
+// exactly as before the bridge existed). A rebuilt chain that
+// comes back empty (the alternative's provider has no client)
+// also falls back to the original chain.
 func (e *Engine) maybeBridgeModality(chain []Attempt, req provider.ChatRequest, ordered []string, intentEffort string) ([]Attempt, provider.ChatRequest) {
-	if len(chain) == 0 || e.cfg.VisionPool == nil {
+	if len(chain) == 0 {
 		return chain, req
 	}
 	required := modality.Detect(req.Messages)
@@ -415,12 +416,23 @@ func (e *Engine) maybeBridgeModality(chain []Attempt, req provider.ChatRequest, 
 		return chain, req
 	}
 	first := chain[0]
-	capable, known := e.modelVisionCapable(first.ProviderID, first.Model)
 	// The decision needs the target as a provider.Model; the
 	// struct is populated from the live hook above, never
 	// invented — ID included so the row is traceable.
-	target := provider.Model{ID: first.Model, Vision: capable, VisionKnown: known}
-	decision, alt := modality.Decide(target, required, e.cfg.VisionPool())
+	var target provider.Model
+	var pool []modality.Candidate
+	if e.cfg.ModalityPool != nil {
+		target, _ = e.modelModalityCapable(first.ProviderID, first.Model)
+		pool = e.cfg.ModalityPool()
+	} else if e.cfg.VisionPool != nil {
+		capable, known := e.modelVisionCapable(first.ProviderID, first.Model)
+		target = provider.Model{ID: first.Model, Vision: capable, VisionKnown: known}
+		pool = e.cfg.VisionPool()
+	} else {
+		return chain, req
+	}
+	target.ID = first.Model
+	decision, alt := modality.Decide(target, required, pool)
 	if decision != modality.Reroute {
 		return chain, req
 	}

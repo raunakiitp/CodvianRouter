@@ -44,7 +44,7 @@ import (
 // handlers run only when the analytics endpoint itself is hit,
 // and they read rows the router already recorded.
 //
-// HONESTY RULES (the OmniRoute failures this slice must not
+// HONESTY RULES (the the reference router failures this slice must not
 // repeat):
 //   - Unpriced usage is UNKNOWN cost, never $0. ledger.Summary
 //     sums cost_usd, and a row with no configured price records

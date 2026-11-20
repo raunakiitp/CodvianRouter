@@ -1,12 +1,12 @@
 package server
 
-// Dashboard operator login (PARITY.md:669, B3-04): the dashboard
+// Dashboard operator login (parity tracker:669, B3-04): the dashboard
 // had no login, session, or password of any kind — protection was
 // loopback-bind only. This file adds a genuine operator login:
 //
 //   - One operator password, stored ONLY as an Argon2id hash in
 //     <data-dir>/dashboard_password.json (0600, atomic rename).
-//     There is NO default password — OmniRoute's CHANGEME default
+//     There is NO default password — the reference router's CHANGEME default
 //     is on the must-never-copy list, so a fresh install has no
 //     password at all until the operator sets one.
 //   - Set the first password with POST /dashboard/auth/setup,

@@ -1,6 +1,6 @@
 // Account-level fallback strategies (M3 Area 1, PARITY row 388).
 //
-// OmniRoute's ACCOUNT_FALLBACK_STRATEGY_VALUES
+// the reference router's ACCOUNT_FALLBACK_STRATEGY_VALUES
 // (src/shared/constants/routingStrategies.ts:56-65, studied, not
 // copied) names the per-provider setting that orders the
 // ACCOUNTS (connections / keys) of one provider when a request
@@ -22,7 +22,7 @@
 //     Individual accounts at their measured per-key cap now
 //     sink to the tail via orderAccountCapCheck (B2-09), so
 //     the drain skips exhausted keys instead of retrying them
-//     until they fail (OmniRoute's own wording: "preserves
+//     until they fail (the reference router's own wording: "preserves
 //     priority order; the drain is enforced by retrying the
 //     first target until it fails" — the cap check is the
 //     stricter local form).
@@ -50,11 +50,11 @@
 //     reshuffles with last-of-cycle != first-of-next.
 //   - weighted: per-account weight draw. No per-account weight
 //     source exists, so every account weighs 1 and the draw is
-//     uniform (OmniRoute's own fall-back when the total weight
+//     uniform (the reference router's own fall-back when the total weight
 //     is <= 0); the drawn account leads, the rest keep declared
 //     order.
 //
-// Quota-share cap (B2-09; OmniRoute #20561): after the strategy
+// Quota-share cap (B2-09; the reference router #20561): after the strategy
 // orders a group, orderAccountCapCheck moves accounts whose
 // measured per-key remaining is 0 to the tail
 // (LearnedKeyQuotaHint, learned from real upstream rate-limit
@@ -141,7 +141,7 @@ func ParseAccountFallbackStrategy(s string) (AccountFallbackStrategy, bool) {
 
 // accountFallbackStrategyFor resolves the account fallback
 // strategy for one provider: the per-provider override, then
-// the global setting, then the "fill-first" default (OmniRoute's
+// the global setting, then the "fill-first" default (the reference router's
 // default). An unknown or empty value at either level falls
 // through to the next.
 func (e *Engine) accountFallbackStrategyFor(providerID string) AccountFallbackStrategy {
@@ -223,7 +223,7 @@ func (e *Engine) orderAccountAttempts(chain []Attempt) []Attempt {
 			group[j] = chain[i]
 		}
 		ordered := e.orderAccountGroup(group)
-		// Quota-share cap (B2-09; OmniRoute #20561 checks
+		// Quota-share cap (B2-09; the reference router #20561 checks
 		// Quota Share caps on in-request account rotation):
 		// accounts whose measured per-key remaining is 0 sink
 		// to the tail of the group, so rotation prefers
@@ -238,7 +238,7 @@ func (e *Engine) orderAccountAttempts(chain []Attempt) []Attempt {
 }
 
 // orderAccountCapCheck is the quota-share cap on in-request
-// account rotation (B2-09; OmniRoute #20561 checks Quota Share
+// account rotation (B2-09; the reference router #20561 checks Quota Share
 // caps on in-request account rotation). It is a stable
 // partition, applied AFTER the group's fallback strategy has
 // ordered the accounts: accounts under their cap keep their
@@ -258,7 +258,7 @@ func (e *Engine) orderAccountAttempts(chain []Attempt) []Attempt {
 // a provider that reports no rate-limit headers teaches
 // nothing, and rotation must not invent a cap for it.
 //
-// Divergence from OmniRoute (deliberate, recorded): OmniRoute's
+// Divergence from the reference router (deliberate, recorded): the reference router's
 // cap is a configured absolute cap_value per allocation row
 // (the operator sets it; unconfigured keys have no cap) and
 // the capped key is blocked. Ours needs no operator
@@ -372,7 +372,7 @@ func (e *Engine) accountP2CScore(providerID string) float64 {
 }
 
 // orderAccountP2C draws two distinct accounts uniformly at
-// random (OmniRoute's draw: first = Intn(n), second =
+// random (the reference router's draw: first = Intn(n), second =
 // Intn(n-1) bumped past first), puts the better-scoring one
 // first, and keeps every other account in declared order
 // behind it. A tie keeps the first-drawn account.

@@ -247,7 +247,7 @@ func TestRunStackedInvalidRTKLevelSkipped(t *testing.T) {
 
 func TestRunStackedDefaults(t *testing.T) {
 	// Empty levels default to RTK standard / Caveman full
-	// (OmniRoute's stacked default): same output as explicit.
+	// (the reference router's stacked default): same output as explicit.
 	msgs := stackedFixture()
 	def := RunStacked(msgs, StackedConfig{Availability: allEngines()})
 	exp := RunStacked(msgs, StackedConfig{

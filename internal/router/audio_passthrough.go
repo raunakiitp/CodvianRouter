@@ -26,7 +26,7 @@
 //     multipart file + model, returns JSON {"text": ...}.
 //
 // /v1/audio/speech-to-text and /v1/audio/text-to-speech are NOT
-// OpenAI endpoints: they are descriptive names (OmniRoute uses
+// OpenAI endpoints: they are descriptive names (the reference router uses
 // them as its own route names). This slice serves them as ALIASES
 // of the canonical operations — speech-to-text is transcriptions,
 // text-to-speech is speech — one handler each, no second

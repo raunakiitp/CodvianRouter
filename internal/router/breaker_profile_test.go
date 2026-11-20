@@ -11,9 +11,9 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/provider"
 )
 
-// TestBreakerProfilesMatchOmniRoute: the profile table is OmniRoute's
+// TestBreakerProfilesMatchReference: the profile table is the reference router's
 // PROVIDER_PROFILES verbatim (open-sse/config/constants.ts).
-func TestBreakerProfilesMatchOmniRoute(t *testing.T) {
+func TestBreakerProfilesMatchReference(t *testing.T) {
 	oauth := BreakerProfileFor(AuthProfileOAuth)
 	if oauth.OpenThreshold != 8 || oauth.ResetTimeout != 60*time.Second || oauth.DegradeThreshold != 5 ||
 		oauth.MaxBackoffMultiplier != 8 || oauth.BackoffEscalationCount != 2 ||

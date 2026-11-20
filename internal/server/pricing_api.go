@@ -1,6 +1,6 @@
 // Pricing management API (M8.15 — GET / PATCH /api/pricing).
 //
-// OmniRoute parity, Area 14 §14b "Pricing" (PARTIAL): OmniRoute has a
+// the reference router parity, Area 14 §14b "Pricing" (PARTIAL): the reference router has a
 // pricing/sync surface incl. PATCH /api/pricing; we had only the
 // GET /dashboard/prices feed. This file adds the management API for
 // the same price table — the effective table the ledger actually

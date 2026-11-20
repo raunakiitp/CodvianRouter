@@ -74,13 +74,13 @@ func order16(cands []Candidate, inputs map[Candidate]SixteenInputs, w Weights16)
 
 // --- weights ---------------------------------------------------------------
 
-func TestSixteenDefaultWeightsAreOmniRouteRescaledForLiveFactors(t *testing.T) {
-	// G19 Area 1, gap-track RT-4: OmniRoute's DEFAULT_WEIGHTS
+func TestSixteenDefaultWeightsAreRescaledForLiveFactors(t *testing.T) {
+	// G19 Area 1, gap-track RT-4: the reference router's DEFAULT_WEIGHTS
 	// (scoring.ts) with cacheAffinity, resetWindowAffinity and
 	// reliability given real weights (0.0476 / 0.0476 / 0.03 —
 	// the sibling factors' weights) and the other thirteen
 	// rescaled proportionally (×0.8748), so the set still sums
-	// to 1.0. The verbatim OmniRoute table is deliberately NOT
+	// to 1.0. The verbatim the reference router table is deliberately NOT
 	// preserved here: the three factors are now fed from live
 	// signals (ledger cache warmth, ledger reset roll-off,
 	// observed success rate), and zeroing them would throw
@@ -99,7 +99,7 @@ func TestSixteenDefaultWeightsAreOmniRouteRescaledForLiveFactors(t *testing.T) {
 }
 
 func TestClassifyPriceTierThresholds(t *testing.T) {
-	// OmniRoute tierResolver.ts / tierConfig.ts defaults:
+	// the reference router tierResolver.ts / tierConfig.ts defaults:
 	// free <= $0/M input, cheap <= $1.00/M input, premium above.
 	cases := []struct {
 		input, blended float64
@@ -131,7 +131,7 @@ func TestSixteenWeightsSumToOne(t *testing.T) {
 	}
 	for _, name := range ModePackNames {
 		raw := ModePacks[name]
-		// OmniRoute's own tables sum to 0.9999 (rounding in the
+		// the reference router's own tables sum to 0.9999 (rounding in the
 		// reference); the EFFECTIVE weights Score16 applies are the
 		// normalised ones and must sum to 1.0 within 1e-9.
 		if s := raw.Sum(); math.Abs(s-0.9999) > 1e-9 {
@@ -321,7 +321,7 @@ func TestFactorHealth(t *testing.T) {
 }
 
 func TestFactorCostInv(t *testing.T) {
-	// Pool-relative, OmniRoute style: 1 - cost/maxCost.
+	// Pool-relative, the reference router style: 1 - cost/maxCost.
 	in := sixteenBase()
 	in.CostPer1M = 0
 	if got := FactorCostInv(in); got != 1.0 {
@@ -428,7 +428,7 @@ func TestFactorStability(t *testing.T) {
 }
 
 func TestFactorTierPriority(t *testing.T) {
-	// OmniRoute calculateTierScore: ultra 1.0, pro 0.67, standard 0.33,
+	// the reference router calculateTierScore: ultra 1.0, pro 0.67, standard 0.33,
 	// free 0.0, unknown 0.33; base*0.8 + resetBonus*0.2, resetBonus =
 	// max(0, 1 - secs/2592000).
 	cases := []struct {
@@ -460,7 +460,7 @@ func TestFactorTierPriority(t *testing.T) {
 }
 
 func TestFactorTierAffinity(t *testing.T) {
-	// OmniRoute calculateTierAffinity: same tier 1.0, adjacent 0.7,
+	// the reference router calculateTierAffinity: same tier 1.0, adjacent 0.7,
 	// two apart 0.3, no hint 0.5.
 	cases := []struct {
 		model, min ModelTier
@@ -493,7 +493,7 @@ func TestFactorTierAffinity(t *testing.T) {
 }
 
 func TestFactorSpecificityMatch(t *testing.T) {
-	// OmniRoute calculateSpecificityMatch: free <=15 -> 0.9 else 0.2;
+	// the reference router calculateSpecificityMatch: free <=15 -> 0.9 else 0.2;
 	// cheap 15<s<=50 -> 0.9 else 0.4; premium >50 -> 0.9 else 0.3.
 	cases := []struct {
 		tier ModelTier
@@ -642,7 +642,7 @@ func TestFactorResetWindowAffinity(t *testing.T) {
 }
 
 func TestFactorConnectionDensity(t *testing.T) {
-	// OmniRoute: (poolSize-1)/10 clamped; unknown pool -> neutral 0.5.
+	// the reference router: (poolSize-1)/10 clamped; unknown pool -> neutral 0.5.
 	in := sixteenBase()
 	in.ConnectionCount = 1
 	if got := FactorConnectionDensity(in); got != 0.0 {
@@ -712,7 +712,7 @@ func TestFactorReliability(t *testing.T) {
 // TestSixteenMissingInputsAreNeutral: every factor with all of its
 // inputs missing degrades to neutral (0.5), except quality, which
 // reuses the package's existing unknown-quality convention (0.45),
-// and tierPriority, whose OmniRoute default for an unknown tier is
+// and tierPriority, whose the reference router default for an unknown tier is
 // the standard-tier base (0.264).
 func TestSixteenMissingInputsAreNeutral(t *testing.T) {
 	empty := SixteenInputs{
@@ -746,7 +746,7 @@ func TestSixteenMissingInputsAreNeutral(t *testing.T) {
 		t.Fatalf("quality with missing inputs = %v, want %v (package convention)", f.Quality, UnknownQualityScore)
 	}
 	if math.Abs(f.TierPriority-0.264) > 1e-9 {
-		t.Fatalf("tierPriority with unknown tier = %v, want 0.264 (OmniRoute unknown-tier base)", f.TierPriority)
+		t.Fatalf("tierPriority with unknown tier = %v, want 0.264 (the reference router unknown-tier base)", f.TierPriority)
 	}
 	if got := Score16(sixteenCand("x"), empty, DefaultWeights16); got < 0 || got > 1 {
 		t.Fatalf("Score16(all unknown) = %v, want within [0,1]", got)

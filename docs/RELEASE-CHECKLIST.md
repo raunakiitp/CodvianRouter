@@ -4,7 +4,7 @@
 > carved in stone **before** the bulk push and the first public
 > release (CHECKLIST items 261–262, research-log entries 233 +
 > 235). The first release happens only when the router is 10x ahead
-> of OmniRoute, on the maintainer's call — and when it happens, it
+> of the reference router, on the maintainer's call — and when it happens, it
 > happens by this checklist, not by memory.
 >
 > The lesson it encodes is LiteLLM v1.107.0 (Oct 2026): a key

@@ -1,12 +1,12 @@
 // M9.3 — routing/combo tools.
 //
-// Shape studied from OmniRoute for reference only (never copied):
-// MCP-SERVER.md: omniroute_list_combos [read:combos],
-// omniroute_get_combo_metrics [read:combos], omniroute_switch_combo
-// [write:combos], omniroute_create_combo [write:combos],
-// omniroute_simulate_route [read:health, read:combos],
-// omniroute_set_routing_strategy [write:combos],
-// omniroute_best_combo_for_task [read:combos, read:health].
+// Shape studied from the reference router for reference only (never copied):
+// MCP-SERVER.md: list_combos [read:combos],
+// get_combo_metrics [read:combos], switch_combo
+// [write:combos], create_combo [write:combos],
+// simulate_route [read:health, read:combos],
+// set_routing_strategy [write:combos],
+// best_combo_for_task [read:combos, read:health].
 // Our scopes are our own M9.1 set (see the scope choice below).
 //
 // SCOPE CHOICE (option (b) — the task's option b): the 9-scope set

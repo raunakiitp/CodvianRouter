@@ -1,5 +1,5 @@
 // Package compress — M7.8 stacked pipeline RTK → Caveman
-// (PARITY.md Area 10, "Stacked pipeline RTK → Caveman", MISSING).
+// (parity tracker Area 10, "Stacked pipeline RTK → Caveman", MISSING).
 //
 // This file is the EXECUTION of the stacked pipeline: it runs the
 // engines in order and accounts for every stage. It does NOT wire
@@ -7,7 +7,7 @@
 // Nothing here calls a model, does network I/O, or reads config
 // files.
 //
-// What was read in OmniRoute (study only — no code copied):
+// What was read in the reference router (study only — no code copied):
 //
 //   - open-sse/services/compression/types.ts —
 //     DEFAULT_COMPRESSION_CONFIG: enabled false, defaultMode
@@ -20,7 +20,7 @@
 //     by stackPriority.
 //   - open-sse/services/compression/engineCatalog.ts —
 //     stackPriority: rtk 10, caveman 20 (RTK runs before Caveman
-//     in OmniRoute's order).
+//     in the reference router's order).
 //   - open-sse/services/compression/compressionWorker.ts /
 //     compressionWorkerPool.ts / compressionWorkerProtocol.ts —
 //     the worker-thread pool (see workerpool.go).
@@ -28,7 +28,7 @@
 // Stage order HERE is lossless-first, then RTK, then Caveman:
 // the M7.6 modes decision (modes.go ResolveMode, ModeStacked)
 // runs the lossless steps first and only then RTK → Caveman.
-// That is a DELIBERATE DIVERGENCE from OmniRoute's RTK →
+// That is a DELIBERATE DIVERGENCE from the reference router's RTK →
 // Caveman order, and this pipeline matches modes.go — the
 // coordinator must not "fix" it back silently. The lossless
 // stage reuses the exported Normalise seam from compress.go
@@ -86,7 +86,7 @@ const (
 const defaultStackedModel = "gpt-4o"
 
 // StackedConfig tunes RunStacked. Zero values take the defaults:
-// Model "gpt-4o", RTK standard, Caveman full (OmniRoute's stacked
+// Model "gpt-4o", RTK standard, Caveman full (the reference router's stacked
 // default), lossless stage on, availability from
 // DefaultAvailability().
 type StackedConfig struct {
@@ -96,7 +96,7 @@ type StackedConfig struct {
 	// RTKLevel is the RTK intensity. "" means RTKLevelStandard.
 	RTKLevel RTKLevel
 	// CavemanLevel is the Caveman intensity. "" means LevelFull
-	// (OmniRoute's stacked default). Any other value than
+	// (the reference router's stacked default). Any other value than
 	// LevelFull behaves as lite inside the Caveman engine.
 	CavemanLevel Level
 	// SkipLossless omits the lossless stage (Normalise). False
@@ -116,7 +116,7 @@ type StackedConfig struct {
 }
 
 // DefaultStackedConfig returns the default stacked config:
-// OmniRoute's stacked default (RTK standard, Caveman full),
+// the reference router's stacked default (RTK standard, Caveman full),
 // lossless first, model default, availability unset (→
 // DefaultAvailability()).
 func DefaultStackedConfig() StackedConfig {

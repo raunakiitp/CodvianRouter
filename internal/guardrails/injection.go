@@ -44,7 +44,7 @@ import (
 )
 
 // InjectionScanLimit is the injection scan bound: 16 KB, the
-// same bound OmniRoute uses. Only the first 16 KB of a text is
+// same bound the reference router uses. Only the first 16 KB of a text is
 // scanned for injection patterns.
 const InjectionScanLimit = 16 * 1024
 

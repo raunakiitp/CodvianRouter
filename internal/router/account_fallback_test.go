@@ -69,7 +69,7 @@ func TestParseAccountFallbackStrategy(t *testing.T) {
 func TestAccountFallbackStrategyFor(t *testing.T) {
 	eng := NewEngine(nil, nil, Config{})
 	if got := eng.accountFallbackStrategyFor("prov"); got != AccountFallbackFillFirst {
-		t.Errorf("default strategy = %q, want fill-first (OmniRoute default)", got)
+		t.Errorf("default strategy = %q, want fill-first (the reference router default)", got)
 	}
 	eng = NewEngine(nil, nil, Config{AccountFallbackStrategy: "least-used"})
 	if got := eng.accountFallbackStrategyFor("prov"); got != AccountFallbackLeastUsed {

@@ -2,7 +2,7 @@
 //
 // A key budget caps what ONE gateway key may spend in the last 5
 // hours — a rolling window, not a calendar day, so spend ages out
-// continuously instead of resetting at midnight (the OmniRoute
+// continuously instead of resetting at midnight (the the reference router
 // v3.8.54 pattern). The window is computed from usage_events, the
 // source of truth: only priced spend counts toward the cap, and
 // budgets live in the ledger database, so they survive a restart
@@ -145,7 +145,7 @@ type KeyBudgetWindowStatus struct {
 // M5.1: MonthClosed names the monthly variant — a model without a
 // price was used earlier in the current calendar month, so the
 // monthly cap cannot be enforced and the month is closed for ALL
-// models until it ends (OmniRoute keyQuota.ts). LimitUSD is then
+// models until it ends (the reference router keyQuota.ts). LimitUSD is then
 // the monthly cap and SpentUSD the month's priced spend.
 //
 // B2: the same closed-period rule applies to the daily and weekly
@@ -591,7 +591,7 @@ func newKeyBudgetStatus(keyID string, now time.Time) KeyBudgetStatus {
 }
 
 // activeKeyBudgetLimit selects the calendar window the STATUS
-// reports as active (M5.1, OmniRoute costRules.ts
+// reports as active (M5.1, the reference router costRules.ts
 // getActiveBudgetLimit): monthly → the monthly limit, falling
 // back to the daily limit when unset; weekly → the weekly limit,
 // falling back to daily; daily (and anything else) → the daily
@@ -927,7 +927,7 @@ func enforceKeyBudgetCaps(st KeyBudgetStatus, b KeyBudget, extra float64) error 
 func enforceKeyBudgetUnpriced(ctx context.Context, l *Ledger, keyID string, models []string, priced func(string) bool, now time.Time, b KeyBudget, st KeyBudgetStatus) error {
 	_ = now
 	// B2 closed-period fail-closed (M5.1 did this for the month
-	// only, OmniRoute keyQuota.ts isMonthClosedByUnpricedUsage;
+	// only, the reference router keyQuota.ts isMonthClosedByUnpricedUsage;
 	// B2 extends it to every set window): when a daily, weekly,
 	// or monthly cap is set, any unpriced usage in that window's
 	// current UTC period closes the period for ALL models under

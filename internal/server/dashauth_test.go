@@ -1,4 +1,4 @@
-// Dashboard operator login tests (PARITY.md:669, B3-04).
+// Dashboard operator login tests (parity tracker:669, B3-04).
 //
 // The feature is built (commit 8f572dc): Argon2id password in
 // <data-dir>/dashboard_password.json (0600), setup/login/change/

@@ -110,7 +110,7 @@ func TestFusionAllEmptyIsError(t *testing.T) {
 }
 
 func TestFusionSingleTargetDirect(t *testing.T) {
-	// OmniRoute fusion.ts: a single-model panel answers directly, no judge.
+	// the reference router fusion.ts: a single-model panel answers directly, no judge.
 	targets := []Attempt{panelAtt("prov-a", "only")}
 	call := fakePanelCaller(map[string]string{"only": "direct answer"}, nil)
 	res, err := RunFusion(context.Background(), "prompt", targets, call, FusionConfig{})

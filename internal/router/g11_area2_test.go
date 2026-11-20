@@ -1,5 +1,5 @@
 // G11 Area 2 failover residuals — tests for the 7 PARTIAL rows
-// (PARITY.md Area 2). Every test uses fake clients (no network)
+// (parity tracker Area 2). Every test uses fake clients (no network)
 // and the real Engine.
 package router
 

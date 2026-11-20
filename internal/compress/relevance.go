@@ -1,4 +1,4 @@
-// B4-29 — Relevance (PARITY.md:1083): extractive sentence
+// B4-29 — Relevance (parity tracker:1083): extractive sentence
 // scoring, LOSSY, stackPriority 18, preserve-regex.
 //
 // Sentences are scored by term frequency across the message:

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# parity.sh — Master Prompt v2 §5.1. Mechanical parity count from docs/PARITY.md.
+# parity.sh — Mechanical parity count from the internal parity tracker
+# (kept outside the repo at $HOME/workspace/goals/codvian-router/hidden_files/internal/PARITY.md).
 # Rule: sum the per-area tallies in the section headers (### Area N — ... FULL x,
 # PARTIAL y, MISSING z, WRONG w). For Area 14 use the four sub-area headers
 # (#### 14a–14d) instead of the Area 14 rollup header, because the rollup
@@ -8,7 +9,7 @@
 # and exits 1 on mismatch. First-run target: 238/191/216/7, 36.5%/51.2%.
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-F="$ROOT/docs/PARITY.md"
+F="${PARITY_FILE:-$HOME/workspace/goals/codvian-router/hidden_files/internal/PARITY.md}"
 read -r MF MP MM MW COMP STRICT WEIGHTED <<EOF2
 $(python3 - "$F" <<'PYEOF'
 import re, sys

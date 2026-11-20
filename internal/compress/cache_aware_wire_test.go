@@ -7,7 +7,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/provider"
 )
 
-// Cache-aware PrefixFreeze wiring (PARITY.md Area 10 row :939,
+// Cache-aware PrefixFreeze wiring (parity tracker Area 10 row :939,
 // BURNDOWN.md Tier 1 row 8). Each test is a TOGGLE proof: the
 // asserted behaviour must change when the wire it proves is
 // removed — a test that passes with the wire deleted is marked

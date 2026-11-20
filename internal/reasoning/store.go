@@ -11,7 +11,7 @@ import (
 // Store is the router's provider replay state: the reasoning of
 // each served assistant turn, keyed by the conversation transcript
 // up to that turn, so the next turn can restore it even when the
-// client replays its history without it (OmniRoute's hybrid
+// client replays its history without it (the reference router's hybrid
 // memory/SQLite cache, memory half only — see the limits below).
 //
 // Scope: the key digests the gateway-key ID (CallerID) plus the
@@ -26,7 +26,7 @@ import (
 // Limits, stated honestly: the store is in-memory only, so a
 // process restart loses it (a later turn then misses and the hop
 // proceeds without restored reasoning — a miss, never a wrong
-// replay). TTL is 2h and the cap is 200 entries, OmniRoute's
+// replay). TTL is 2h and the cap is 200 entries, the reference router's
 // defaults; eviction is oldest-created first. A lookup miss is
 // not an error: the hop simply carries no restored reasoning.
 const (

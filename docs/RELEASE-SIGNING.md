@@ -3,7 +3,7 @@
 > **Status:** the pipeline is configured and verified locally (items
 > 209–210 for the release blobs, items 221–222 for the Docker image),
 > but **no release has been published yet**. The first release
-> happens only when the router is 10x ahead of OmniRoute, on the
+> happens only when the router is 10x ahead of the reference router, on the
 > maintainer's call. Until a tag is pushed, nothing here can be
 > exercised against a live release — the tamper proofs below used
 > local test files and a local test image, not a GitHub release. Items 223–224 (2026-11-18) closed

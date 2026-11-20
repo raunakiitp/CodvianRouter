@@ -9,7 +9,7 @@
 // is complete: 228 of 228 triaged, 0 untouched. No candidate was
 // rejected and none is pending in this round. The full per-provider
 // record (triaged / added / rejected / pending, with probe codes and
-// reasons) is docs/catalog-triage-2026-11-18-round5.md.
+// reasons) is internal catalog triage record.
 //
 // Rules this file follows (same as rounds 1–4):
 //   - A new provider is added ONLY when models.dev lists it AND a

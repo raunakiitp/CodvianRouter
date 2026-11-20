@@ -1,4 +1,4 @@
-// B4-51 own-cache tokens_saved accounting (PARITY.md:1115): a
+// B4-51 own-cache tokens_saved accounting (parity tracker:1115): a
 // proactive own-cache hit must record one ledger row carrying the
 // avoided call's measured usage and the tokens saved — prompt+
 // completion for an exact hit, prompt only for a semantic hit —

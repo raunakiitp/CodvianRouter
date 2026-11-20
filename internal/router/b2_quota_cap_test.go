@@ -1,5 +1,5 @@
-// B2-09 (PARITY.md:509): quota-share cap on account rotation
-// (OmniRoute #20561, equal-first). The cap is MEASURED, not
+// B2-09 (parity tracker:509): quota-share cap on account rotation
+// (the reference router #20561, equal-first). The cap is MEASURED, not
 // configured: learnRateLimit records the per-key remaining fraction
 // from real upstream rate-limit headers, and orderAccountCapCheck
 // sinks at-cap accounts (measured remaining 0, live entry) to the

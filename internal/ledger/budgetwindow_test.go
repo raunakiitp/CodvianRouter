@@ -1,4 +1,4 @@
-// M5.1 window math: BudgetWindowFor mirrors OmniRoute
+// M5.1 window math: BudgetWindowFor mirrors the reference router
 // costRules.ts getBudgetWindow (verified 2026-11-18) — daily /
 // weekly (Monday) / monthly (1st), all UTC, boundary shifted by
 // resetTime.

@@ -1,7 +1,7 @@
 # A2A Task Retention Design (M9.8 follow-up, bug-hunt finding 4 — MEDIUM)
 
 - Status: DESIGN ONLY. No code was written for this document; no Go/JS file,
-  `CHECKLIST.md`, `PARITY.md`, or `PLAN.md` was modified.
+  `CHECKLIST.md`, `parity tracker`, or `PLAN.md` was modified.
 - Date / as-read: 2026-11-19 ~14:20 IST. Worktree `~/workspace/codvian-router/`,
   HEAD `035d1ed` (M9 merge wave). The worktree is DIRTY at the time of writing
   (concurrent M9 builders have uncommitted changes), so every `file:line`
@@ -339,9 +339,9 @@ in the store beyond what the prune itself does internally. Reasons:
 - **No product need.** Retention (§1) + cap eviction (§3) already remove
   every task that needs removing, automatically. The only caller-visible
   operations are create, poll (`tasks/get`), and cancel — the exact method
-  set OmniRoute ships (`message/send`, `message/stream`, `tasks/get`,
+  set the reference router ships (`message/send`, `message/stream`, `tasks/get`,
   `tasks/cancel`; see `internal/server/a2a.go:1`–`20`). A delete method
-  would be new protocol surface with no OmniRoute counterpart and no caller
+  would be new protocol surface with no the reference router counterpart and no caller
   asking for it.
 - **A delete API would weaken the owner-isolation story.** Every existing
   method is owner-scoped with "wrong owner = not found"
@@ -503,7 +503,7 @@ list-all in the store. Reasons:
   eviction, the three `a2a.*` config keys, and the fact that an evicted
   task answers `tasks/get` as "not found". One paragraph + the config
   snippet from §4; do not write a new doc file.
-- Do NOT touch `docs/PLAN.md`, `docs/PARITY.md`, or `CHECKLIST.md` — the
+- Do NOT touch `internal plan`, `internal parity tracker`, or `CHECKLIST.md` — the
   coordinator flips rows after reviewing evidence.
 
 ### Definition-of-Done (all must hold; no partial credit)
