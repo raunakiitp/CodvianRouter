@@ -1379,12 +1379,25 @@ func ApplyWithEngines(model string, msgs []provider.Message, req *provider.Compr
 		out, applied = reg.Run(out, pre, ctx)
 	}
 	out, res := applyWithOptions(model, out, req, losslessModels, prior, ApplyOptions{})
-	if res.Applied {
+	if len(applied) > 0 {
+		res.Applied = true
 		for _, id := range applied {
 			step := engineStepName(id)
 			if !contains(res.Steps, step) {
 				res.Steps = append(res.Steps, step)
 			}
+		}
+		if res.BeforeTokens == 0 {
+			if bc, err := tokencount.CountPrompt(model, msgs); err == nil {
+				res.BeforeTokens = bc.Tokens
+			}
+		}
+		if ac, err := tokencount.CountPrompt(model, out); err == nil {
+			res.AfterTokens = ac.Tokens
+		}
+		res.SavedTokens = res.BeforeTokens - res.AfterTokens
+		if res.SavedTokens < 0 {
+			res.SavedTokens = 0
 		}
 	}
 	return out, res
