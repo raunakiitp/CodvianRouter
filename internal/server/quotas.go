@@ -214,6 +214,28 @@ func (s *Server) handleMeSessionDetail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "session id is required")
 		return
 	}
+	// Ledger agent sessions (AK-3): an "as_" id is a rollup
+	// row, resolved from the ledger — AgentSessions is already
+	// key-scoped, so another key's row can never match. A ledger
+	// row has no per-turn records, so the detail is the list row
+	// with an empty turns_detail. A miss (or a ledger read
+	// failure) falls through to the Responses walk, which 404s
+	// as today — never a partial session.
+	if s.ledger != nil && strings.HasPrefix(id, "as_") {
+		if sessions, err := s.ledger.AgentSessions(r.Context(), keyID, 1000); err == nil {
+			for _, sess := range sessions {
+				if sess.ID == id {
+					writeJSON(w, http.StatusOK, meSessionDetailResponse{
+						meSessionRow:         meSessionRowFromLedger(sess),
+						Object:               "session",
+						TurnsDetail:          []meSessionTurn{},
+						TurnsDetailTruncated: false,
+					})
+					return
+				}
+			}
+		}
+	}
 	root, ok := s.meSessionRoot(id)
 	if !ok {
 		writeError(w, http.StatusNotFound, "unknown session "+id)
