@@ -42,3 +42,11 @@ Each entry: date, decision, reason, alternatives rejected.
 
 ---
 
+## 2026-11-20 ~17:36 IST — Fix async race condition in TestG21BatchAllowedModelAcceptedAndExecutes
+
+**Decision:** In `TestG21BatchAllowedModelAcceptedAndExecutes`, verify `chatCalls <= 2` instead of `== 0` prior to `waitBatchStatus`.
+
+**Reason:** The background batch worker launches asynchronously upon batch creation. Under race detection scheduling on Linux CI, the 2 batch lines can finish before the subsequent 429 assertion, yielding `chatCalls = 2`. The test's actual invariant is that the 429 request never reaches the engine (which would make `chatCalls` exceed 2 and end at 3).
+
+---
+
