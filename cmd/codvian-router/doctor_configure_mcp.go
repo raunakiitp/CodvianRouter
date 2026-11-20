@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -201,6 +202,28 @@ func runDoctorTo(opts options, out io.Writer) int {
 					add("WARN", "dashboard", fmt.Sprintf("%s answered HTTP %d", dashboardURL, resp.StatusCode))
 				}
 			}
+		}
+	}
+
+	// Agent integration check (CodeVN)
+	codevnConfigPath := os.Getenv("CODEVN_CONFIG_PATH")
+	if codevnConfigPath == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			codevnConfigPath = filepath.Join(home, ".codevn", "config.json")
+		}
+	}
+	if codevnConfigPath != "" {
+		if data, err := os.ReadFile(codevnConfigPath); err == nil {
+			var cvn map[string]any
+			if json.Unmarshal(data, &cvn) == nil {
+				endpoint, _ := cvn["api_endpoint"].(string)
+				model, _ := cvn["model"].(string)
+				add("PASS", "agent integration (CodeVN)", fmt.Sprintf("configured at %s (endpoint: %s, model: %s)", codevnConfigPath, endpoint, model))
+			} else {
+				add("WARN", "agent integration (CodeVN)", fmt.Sprintf("%s exists but has invalid JSON", codevnConfigPath))
+			}
+		} else {
+			add("WARN", "agent integration (CodeVN)", "not configured yet (run `codvian-router setup codevn` to integrate)")
 		}
 	}
 

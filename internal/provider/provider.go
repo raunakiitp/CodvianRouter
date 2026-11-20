@@ -158,7 +158,9 @@ type Model struct {
 	// (internal/router) skips only confirmed-incapable models
 	// and fails open on unknown — an unknown model is tried,
 	// never assumed incapable.
-	Tools          *bool   `json:"tools,omitempty"`
+	Tools *bool `json:"tools,omitempty"`
+	// Reasoning reports whether the model is a reasoning/thinking model
+	Reasoning      bool    `json:"reasoning,omitempty"`
 	InputPriceUSD  float64 `json:"input_price_usd,omitempty"`
 	OutputPriceUSD float64 `json:"output_price_usd,omitempty"`
 	Deprecated     bool    `json:"deprecated,omitempty"`

@@ -1497,6 +1497,40 @@ func (r *Registry) ApplySyncedVideo(providerID, model string, video, known bool)
 	return fmt.Errorf("provider: model %q not offered by provider %q", model, providerID)
 }
 
+// ApplySyncedReasoning sets one model's reasoning capability in memory.
+func (r *Registry) ApplySyncedReasoning(providerID, model string, reasoning bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.providers[providerID]
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrProviderNotFound, providerID)
+	}
+	for i := range p.Models {
+		if p.Models[i].ID == model {
+			p.Models[i].Reasoning = reasoning
+			return nil
+		}
+	}
+	return fmt.Errorf("provider: model %q not offered by provider %q", model, providerID)
+}
+
+// ApplySyncedTools sets one model's tools capability in memory.
+func (r *Registry) ApplySyncedTools(providerID, model string, tools bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.providers[providerID]
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrProviderNotFound, providerID)
+	}
+	for i := range p.Models {
+		if p.Models[i].ID == model {
+			p.Models[i].Tools = &tools
+			return nil
+		}
+	}
+	return fmt.Errorf("provider: model %q not offered by provider %q", model, providerID)
+}
+
 // ApplySyncedContextWindow sets one model's context window from
 // the opt-in models.dev sync (CHECKLIST 179), in memory ONLY —
 // it deliberately does NOT persist: the sync state file

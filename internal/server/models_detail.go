@@ -67,7 +67,18 @@ func (s *Server) m810ListModels(ctx context.Context, includeDeprecated bool) ([]
 	}
 	if s.autoRouter != nil {
 		for _, name := range autorouter.VirtualModels {
-			models = append(models, Model{ID: name, Object: "model", OwnedBy: "codvian-router"})
+			vm := Model{ID: name, Object: "model", OwnedBy: "codvian-router"}
+			switch name {
+			case "auto/best-coding":
+				vm.Capabilities = []string{"code"}
+			case "auto/best-vision":
+				vm.Capabilities = []string{"vision"}
+				vm.Vision = true
+			case "auto/best-reasoning":
+				vm.Capabilities = []string{"reasoning"}
+				vm.Reasoning = true
+			}
+			models = append(models, vm)
 		}
 		for _, name := range autorouter.IntentVirtualModelNames() {
 			models = append(models, Model{ID: name, Object: "model", OwnedBy: "codvian-router"})
@@ -208,23 +219,75 @@ func (s *Server) m810FreeTierOnly(m Model) bool {
 	return false
 }
 
+// isValidCapability reports whether the capability name is one of the supported capabilities.
+func isValidCapability(c string) bool {
+	switch strings.ToLower(strings.TrimSpace(c)) {
+	case "tools", "tool", "function_calling",
+		"vision", "image", "image_input",
+		"audio", "audio_input", "speech",
+		"video", "video_input",
+		"reasoning", "thinking",
+		"json_schema", "json", "structured_output",
+		"code", "coding":
+		return true
+	default:
+		return false
+	}
+}
+
+// catalogHasCapabilityData checks if any model in the catalog records capability flags.
+func catalogHasCapabilityData(models []Model) bool {
+	for _, m := range models {
+		if m.Vision || m.Audio || m.Video || m.Reasoning || (m.Tools != nil) || len(m.Capabilities) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// modelMatchesCapability checks if a model matches the requested capability.
+func modelMatchesCapability(m Model, cap string) bool {
+	cNorm := strings.ToLower(strings.TrimSpace(cap))
+	for _, c := range m.Capabilities {
+		if strings.EqualFold(c, cNorm) {
+			return true
+		}
+	}
+	switch cNorm {
+	case "vision", "image", "image_input":
+		return m.Vision
+	case "tools", "tool", "function_calling":
+		return m.Tools != nil && *m.Tools
+	case "audio", "audio_input", "speech":
+		return m.Audio
+	case "video", "video_input":
+		return m.Video
+	case "reasoning", "thinking":
+		return m.Reasoning
+	case "json_schema", "json", "structured_output":
+		return m.Tools != nil && *m.Tools
+	case "code", "coding":
+		id := strings.ToLower(m.ID)
+		return strings.Contains(id, "coder") || strings.Contains(id, "code")
+	}
+	return false
+}
+
 // handleModelsQuery serves GET /v1/models/query: the catalog
 // filtered by ?provider= (provider id or display name,
-// case-insensitive, as on GET /v1/models) and
-// ?free-tier-only=true. ?capability= is rejected with 400: the
-// catalog records no per-model capability flags, so the filter
-// cannot be honoured — the 400 names the gap instead of silently
-// returning everything. A malformed free-tier-only answers 400
-// naming the parameter. An unknown provider matches nothing (an
-// empty list), exactly as on GET /v1/models.
+// case-insensitive, as on GET /v1/models), ?free-tier-only=true,
+// and ?capability= (e.g. tools, vision, audio, video, reasoning, code).
+// When the catalog records no per-model capability flags, capability
+// queries answer 400 naming the gap.
 func (s *Server) handleModelsQuery(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	q := r.URL.Query()
-	if cap := strings.TrimSpace(q.Get("capability")); cap != "" {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("capability filter %q is not supported: the catalog records no per-model capability flags (tools/JSON/vision), so no model can be matched by capability", cap))
+	capParam := strings.TrimSpace(q.Get("capability"))
+	if capParam != "" && !isValidCapability(capParam) {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid capability %q: valid capabilities are tools, vision, audio, video, json_schema, reasoning, code", capParam))
 		return
 	}
 	freeOnly := false
@@ -245,12 +308,21 @@ func (s *Server) handleModelsQuery(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, http.StatusBadGateway, "upstream provider error")
 		return
 	}
+
+	if capParam != "" && !catalogHasCapabilityData(models) {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("capability filter %q is not supported: the catalog records no per-model capability flags (tools/JSON/vision), so no model can be matched by capability", capParam))
+		return
+	}
+
 	out := make([]modelDetailResponse, 0, len(models))
 	for _, m := range models {
 		if provider != "" && !strings.EqualFold(m.ProviderID, provider) && !strings.EqualFold(m.OwnedBy, provider) {
 			continue
 		}
 		if freeOnly && !s.m810FreeTierOnly(m) {
+			continue
+		}
+		if capParam != "" && !modelMatchesCapability(m, capParam) {
 			continue
 		}
 		out = append(out, s.m810Detail(ctx, m))

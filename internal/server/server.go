@@ -377,6 +377,19 @@ type Model struct {
 	// A stale list may be missing new models or still naming
 	// delisted ones. False is omitted.
 	ModelsStale bool `json:"models_stale,omitempty"`
+	// Capabilities records the structured capability tags for the model
+	// (e.g. "tools", "vision", "audio", "video", "reasoning", "code", "json_schema").
+	Capabilities []string `json:"capabilities,omitempty"`
+	// Tools is the tri-state tool/function-calling capability flag (CT-1).
+	Tools *bool `json:"tools,omitempty"`
+	// Vision reports whether the model accepts visual/image input.
+	Vision bool `json:"vision,omitempty"`
+	// Audio reports whether the model accepts audio input.
+	Audio bool `json:"audio,omitempty"`
+	// Video reports whether the model accepts video input.
+	Video bool `json:"video,omitempty"`
+	// Reasoning reports whether the model has deep reasoning/thinking capability.
+	Reasoning bool `json:"reasoning,omitempty"`
 }
 
 // ModelRegistry lists the models the gateway may serve. When no registry
@@ -454,6 +467,22 @@ func (a providerRegistryAdapter) Models(_ context.Context) ([]Model, error) {
 				continue
 			}
 			seen[m.ID] = struct{}{}
+			var caps []string
+			if m.Tools != nil && *m.Tools {
+				caps = append(caps, "tools")
+			}
+			if m.Vision {
+				caps = append(caps, "vision")
+			}
+			if m.Audio {
+				caps = append(caps, "audio")
+			}
+			if m.Video {
+				caps = append(caps, "video")
+			}
+			if m.Reasoning {
+				caps = append(caps, "reasoning")
+			}
 			out = append(out, Model{
 				ID: m.ID, Object: "model", OwnedBy: p.Name,
 				Deprecated:      m.Deprecated || isCatalogDeprecatedModel(m.ID),
@@ -464,6 +493,12 @@ func (a providerRegistryAdapter) Models(_ context.Context) ([]Model, error) {
 				OutputPriceUSD:  m.OutputPriceUSD,
 				ModelsFetchedAt: fetchedAtPtr(p.ModelsFetchedAt),
 				ModelsStale:     p.ModelsListStale(time.Now()),
+				Capabilities:    caps,
+				Tools:           m.Tools,
+				Vision:          m.Vision,
+				Audio:           m.Audio,
+				Video:           m.Video,
+				Reasoning:       m.Reasoning,
 			})
 		}
 	}

@@ -107,6 +107,11 @@ func buildRunEnv(baseURL, rawKey, model string) []string {
 		"CODVIAN_ROUTER_BASE_URL=" + baseURL,
 		"CODVIAN_ROUTER_API_KEY=" + rawKey,
 		"CODVIAN_ROUTER_MODEL=" + model,
+		"CODEVN_API_ENDPOINT=" + baseURL,
+		"CODEVN_API_KEY=" + rawKey,
+		"CODEVN_MODEL=" + model,
+		"ANTHROPIC_BASE_URL=" + baseURL,
+		"ANTHROPIC_API_KEY=" + rawKey,
 	}
 }
 
