@@ -37,6 +37,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"net/url"
 	"os"
 	"os/signal"
@@ -93,6 +94,8 @@ type options struct {
 	// lowEnd enables the low-end GC profile for serve: GOGC=off plus a
 	// memory limit (see internal/gctune). Same as CODVIAN_ROUTER_LOWEND=1.
 	lowEnd bool
+	// pprofAddr is the loopback listener address for net/http/pprof (e.g. 127.0.0.1:6060).
+	pprofAddr string
 	// headless enables serve --headless (CHECKLIST 197-198): the
 	// gateway as a pure API process — no dashboard server — and it
 	// refuses to start without a gateway key configured.
@@ -357,6 +360,19 @@ func parseArgs(args []string) (options, []string, error) {
 			opts.releaseDownloadBaseURL = args[i]
 		case strings.HasPrefix(a, "--download-base-url="):
 			opts.releaseDownloadBaseURL = strings.TrimPrefix(a, "--download-base-url=")
+		case a == "--pprof":
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
+				i++
+				opts.pprofAddr = args[i]
+			} else {
+				opts.pprofAddr = "127.0.0.1:6060"
+			}
+		case strings.HasPrefix(a, "--pprof="):
+			val := strings.TrimPrefix(a, "--pprof=")
+			if val == "" || val == "true" {
+				val = "127.0.0.1:6060"
+			}
+			opts.pprofAddr = val
 		case a == "--low-end":
 			opts.lowEnd = true
 		case strings.HasPrefix(a, "--low-end="):
@@ -4715,6 +4731,22 @@ func runServe(opts options) int {
 	// printed honestly — profile, limit, detection source, GOGC state.
 	// See internal/gctune and docs/gc-tuning.md.
 	fmt.Println(gctune.Apply(gctune.ApplyOptions{LowEndFlag: opts.lowEnd}).LogLine())
+
+	// Operator live pprof HTTP server (hot-path diagnosis, off by default):
+	// --pprof [addr] or CODVIAN_PPROF_ADDR starts a loopback HTTP listener
+	// serving net/http/pprof endpoints.
+	pprofAddr := opts.pprofAddr
+	if pprofAddr == "" {
+		pprofAddr = os.Getenv("CODVIAN_PPROF_ADDR")
+	}
+	if pprofAddr != "" {
+		go func() {
+			fmt.Printf("pprof: listening on http://%s/debug/pprof/\n", pprofAddr)
+			if err := http.ListenAndServe(pprofAddr, nil); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				fmt.Fprintf(os.Stderr, "codvian-router: pprof listener failed: %v\n", err)
+			}
+		}()
+	}
 
 	// Operator CPU profiling (hot-path diagnosis, off by default):
 	// CODVIAN_CPU_PROFILE=<path> writes a pprof CPU profile of the

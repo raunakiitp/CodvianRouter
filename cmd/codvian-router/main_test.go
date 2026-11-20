@@ -48,6 +48,30 @@ func TestParseArgsLowEnd(t *testing.T) {
 	}
 }
 
+func TestParseArgsPprof(t *testing.T) {
+	opts, pos, err := parseArgs([]string{"serve", "--pprof"})
+	if err != nil {
+		t.Fatalf("parseArgs: %v", err)
+	}
+	if opts.pprofAddr != "127.0.0.1:6060" || len(pos) != 1 || pos[0] != "serve" {
+		t.Fatalf("opts.pprofAddr = %q, want 127.0.0.1:6060", opts.pprofAddr)
+	}
+	opts, _, err = parseArgs([]string{"serve", "--pprof=127.0.0.1:6061"})
+	if err != nil {
+		t.Fatalf("parseArgs: %v", err)
+	}
+	if opts.pprofAddr != "127.0.0.1:6061" {
+		t.Fatalf("opts.pprofAddr = %q, want 127.0.0.1:6061", opts.pprofAddr)
+	}
+	opts, _, err = parseArgs([]string{"serve", "--pprof", "127.0.0.1:6062"})
+	if err != nil {
+		t.Fatalf("parseArgs: %v", err)
+	}
+	if opts.pprofAddr != "127.0.0.1:6062" {
+		t.Fatalf("opts.pprofAddr = %q, want 127.0.0.1:6062", opts.pprofAddr)
+	}
+}
+
 func TestParseArgsSubcommandsAndFlags(t *testing.T) {
 	opts, pos, err := parseArgs([]string{"--config", "/tmp/c.json", "--port=20199", "serve"})
 	if err != nil {
