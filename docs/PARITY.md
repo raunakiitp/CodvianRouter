@@ -25,14 +25,14 @@ verified file:line or test name, this file writes UNVERIFIED — never invent on
 
 691 rows (M6 mechanical recount 688 + M7 gate wave 1 row + M8.2 split
 of the lumped classify/explain/segment row into three rows).
-FULL 285, PARTIAL 150, MISSING 214, WRONG 1, AHEAD 28, DIVERGENCE 12,
+FULL 288, PARTIAL 150, MISSING 212, WRONG 0, AHEAD 28, DIVERGENCE 12,
 plus 1 unclassified claims row (Area 14) and 1 row unaccounted inside
 Area 8b's own header (its verdicts sum to 138 against 139 claimed).
 Comparable total 650 (rows − AHEAD − DIVERGENCE − unclassified).
-Strict parity 43.8%. Weighted parity 55.4%.
+Strict parity 44.3%. Weighted parity 55.8%.
 
-- Strict parity (FULL/comparable): 285/650 = **43.8%**
-- Weighted parity ((FULL + 0.5×PARTIAL)/comparable): (285 + 75)/650 = **55.4%**
+- Strict parity (FULL/comparable): 288/650 = **44.3%**
+- Weighted parity ((FULL + 0.5×PARTIAL)/comparable): (288 + 75)/650 = **55.8%**
 
 - M4 note (2026-11-18): the headline naive sum above is STALE — it still
   carries the pre-M4 Area 2 counts. M4 flipped 19 Area 2 rows → FULL, 3 →
@@ -638,7 +638,7 @@ all 394 OmniRoute IDs present).
 | Deprecated / retired handling | providerRetirement.ts + REMOVED_PROVIDERS.md (5 removals) + blocklist test; deprecated ×4 | DeprecatedModels seed table, 16 entries (all OpenAI); /v1/models hides them by default; no provider-removal blocklist / takedown process | PARTIAL | internal/catalog/deprecated.go | UNVERIFIED |
 | Verified-overlay data preservation | n/a | Overlay now calls mergeVerified: reference HasFreeTier and FreeTierNote survive for all 11 providers (cerebras, cloudflare-ai, deepseek, fireworks, gemini, groq, mistral, nvidia, ollama-cloud, openrouter, vertex); a verified entry can only add, never drop, the reference free-tier flag. V: pass 2026-11-20 00:32 IST (V-8; toggle-check proven) | FULL | internal/catalog/catalog.go:591,643-692 | TestVerifiedOverlayPreservesReferenceFreeTier |
 
-### Area 4 — Auth, keys, scopes, route guards (32 total: FULL 18, PARTIAL 2, MISSING 3, WRONG 0, AHEAD 9; comparable 23; strict 78.3%, weighted 82.6%)
+### Area 4 — Auth, keys, scopes, route guards (32 total: FULL 20, PARTIAL 2, MISSING 1, WRONG 0, AHEAD 9; comparable 23; strict 87.0%, weighted 91.3%)
 
 Guard table: 89 rows — Tier 1: 9, Tier 2: 14, Tier 3: 66. 54 routes AuthExempt,
 including 8 POSTs that mutate live state.
@@ -674,8 +674,8 @@ including 8 POSTs that mutate live state.
 | Encryption at rest | AES-256-GCM (encryption.ts:28-30, prior report) | FULL: AES-256-GCM via Argon2id-derived key, master.key 0600 | FULL | internal/crypto | UNVERIFIED |
 | Per-key guardrails allowlist | MISSING: no per-key guardrail scoping in their key policy | FULL: per-key Guardrails allowlist, unknown names fail loudly, enforced per request | AHEAD | internal/config/gatewaykey.go:41-55; internal/server/guardrail_scope_277.go | UNVERIFIED |
 | Self-service key introspection | GET /v1/me/status + GET /v1/me/sessions | PARTIAL: GET /v1/me/status is FULL and richer on budget/traffic; GET /v1/me/sessions EXISTS (list + detail, guard.go:368, mesessions.go:51, quotas.go:59) and is tested (TestMeSessions* 4/4 PASS cold on PC), but serves from the in-memory Responses store, not Ledger.AgentSessions — AK-3 unwired (AgentSessions has zero production callers), so the ledger-backed session rollup is not what the endpoint returns. Toggle-proven: handler forced empty → TestMeSessions FAILs. V: pass 2026-11-20 12:35 IST | PARTIAL | internal/server/keystatus.go:57-143 | TestMeSessions, TestMeSessionsEmpty, TestMeSessionsRequiresKey, TestMeSessionsRouteExists |
-| Key creation via API / dashboard | Dashboard "Create API Key" flow + API creation | MISSING: no POST /admin/keys create route; dashboard "+ New router key" button explicitly unwired | MISSING | web/index.html:5676-5680 | UNVERIFIED |
-| OAuth / JWT gateway auth | OAuth 2.0 PKCE + JWT + 32 OAuth providers | MISSING: gateway clients use gateway keys only; OAuth/JWT exist solely as upstream provider auth | MISSING | internal/provider/vertex_client.go:309+ | UNVERIFIED |
+| Key creation via API / dashboard | Dashboard "Create API Key" flow + API creation | FULL: POST /admin/keys live — 201, `gateway_key` crk_ 36 chars, persisted_to_config=true; newly created key routes /v1/chat/completions 200 via mock upstream and /v1/me/status 200 (raw key never echoed). Dashboard "+ New router key" wired (index.html:1889, handler :8666-8712: fetch POST /admin/keys, raw key shown once, list reloads) — code-verified, not browser-click-tested. Toggle handleKeyCreate→503: 3 tests FAIL + probe 503; restore hash-matched, all PASS. V: pass 2026-11-20 ~15:52 IST | FULL | internal/server/keystatus.go:1087; internal/server/server.go:1799; internal/server/guard.go:409; web/index.html:1889,8666-8712 | TestKeyCreateDefaultsAndBudgetAlias, TestKeyCreateRoundTrip, TestKeyCreateTemplateValidation |
+| OAuth / JWT gateway auth | OAuth 2.0 PKCE + JWT + 32 OAuth providers | FULL: OAuth 2.0 PKCE (S256, RFC 7636 vector) + HS256 JWT gateway auth — authorize/code/token/refresh/revoke funnel live; JWT Bearer gates /v1/chat/completions and /v1/models with scope enforcement; temp e2e funnel PASS cold on PC (client create 201 → authorize 302 → token 200 → chat 200 via engine, refresh rotates, revoke 401s, tampered JWT 401s); toggle wrong-HMAC-key → 7 oauth FAILs + e2e FAIL, restore hash-matched. V: pass 2026-11-20 ~15:42 IST. Note: create-client response names the client "id", not "client_id" (follow-up); routed request used the in-process fake engine (standard test bar), not a live upstream. | FULL | internal/oauth/jwt.go, internal/oauth/oauth.go; internal/server/oauth_api.go, internal/server/server.go:1976,2025,2070,2111; internal/server/guard.go:410-429 | TestSignJWTVerifyRoundTrip, TestVerifyJWT*, TestIssuerAuthorizeExchangeVerifyRoundTrip, TestIssuerRefreshRotates, TestIssuerRevokeAccessToken, TestOAuthJWTEndToEndFunnelVerify (temp, PC) |
 | Per-key schedule / sessions / throttle | accessSchedule, maxSessions, throttleDelayMs, maxRequestsPerDay/Minute, rateLimits[] (apiKeys.ts:126-134) | FULL — accessSchedule enforced first (403), throttle delay, max-sessions cap; RPD + generic {limit, window} rules alongside RPM/TPM (Area 5 row, same feature — see there for the full evidence) | FULL | internal/server/keyaccess.go:42; internal/server/keytraffic.go:213 | TestKeyAccessScheduleGateBlocksChat, TestKeyTrafficLimiterRPD |
 
 ### Area 5 — Budgets, rate limits, quota (30 total: FULL 27, PARTIAL 0, MISSING 0, WRONG 0, AHEAD 2, DIVERGENCE 1; strict 100.0%, weighted 100.0% — comparable 27)
@@ -1390,11 +1390,11 @@ do require auth).
 | MCP plugin tools | 8 plugin-management tools over MCP (tools/pluginTools.ts) | None | MISSING | — | UNVERIFIED |
 | Dashboard page | /dashboard/plugins (marketplace + installs) | GET /dashboard/plugins (live registry snapshot, honest zero state; no install UI) | PARTIAL (no install UI) | internal/server/server.go | UNVERIFIED |
 
-#### 14d. Docs / README (7 rows: FULL 3, PARTIAL 1, MISSING 1, WRONG 1, UNVERIFIED 1)
+#### 14d. Docs / README (7 rows: FULL 4, PARTIAL 1, MISSING 1, WRONG 0, UNVERIFIED 1)
 
 | Claim / item | Finding | Verdict | File:line | Test |
 |---|---|---|---|---|
-| "README rewritten to 593 lines in README.v2.md, in OmniRoute's structure" | WRONG on count: README.v2.md is 260 lines, README.md is 179 lines (measured 2026-11-19). Structure claim partly true: both files follow OmniRoute's order; v2 adds three sections OmniRoute lacks an equivalent for. Depth ~1/7th of OmniRoute's README (1,844 lines, 76 headings vs ours 11 headings each) | WRONG (line count) / PARTIAL (structure) — counted once as WRONG | README.v2.md; README.md | UNVERIFIED |
+| "README rewritten to 593 lines in README.v2.md, in OmniRoute's structure" | CORRECTED 2026-11-20: README.md rewritten to 206 lines in OmniRoute's shape (hero, badges, short promise, growth table, quick start, short feature tables, mermaid diagram) — commit e425e34; README.v2.md deleted (537df3a), detail in docs/. The 593-line claim was false (v2 was 260 lines, README.md 179). | FULL | README.md | VERIFIED 2026-11-20 |
 | Test headline "1,919 test events pass, 0 fail, 38 packages" | UNVERIFIED fresh (no Go toolchain in this env to re-run). Internally consistent: 1,515 top-level + 404 subtests = 1,919; cited gates check arithmetically (1,131+305=1,436; 1,133+293=1,426). "1,436 headline found false" is stale/misframed — 1,436 is a genuine per-slice recount, never the headline. Current headline is 1,919. The headline itself still needs one independent re-run | UNVERIFIED | — | UNVERIFIED |
 | SSE "3 tokens / 8 ms" batching claim | Bounds TRUE in code: sseBatchMaxTokens = 3, sseBatchMaxDelay = 8 ms. Scope correction: NOT only in handleChatStream — also in Responses streaming; /v1/messages streaming does NOT batch. README frames it honestly as a throughput trade, not a latency win | FULL (with scope correction) | internal/server/sse_batch.go; internal/server/responses.go:1372; internal/server/server.go:5292 | UNVERIFIED |
 | Benchmark numbers in README | Latest attempt-3 clean pass shown as missed (latency 0.855 ms vs <0.5 ms; RPS 1,079 vs >3,000), with polluted/clean distinction, 502-rate and cache-hit caveats. Honest | FULL | README.md | UNVERIFIED |
