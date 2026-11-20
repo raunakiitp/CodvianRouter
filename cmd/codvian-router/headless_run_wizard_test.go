@@ -116,6 +116,11 @@ func TestBuildRunEnv(t *testing.T) {
 		"CODVIAN_ROUTER_BASE_URL": "http://127.0.0.1:20128/v1",
 		"CODVIAN_ROUTER_API_KEY":  "crk_testkey",
 		"CODVIAN_ROUTER_MODEL":    "gpt-4o",
+		"CODEVN_API_ENDPOINT":     "http://127.0.0.1:20128/v1",
+		"CODEVN_API_KEY":          "crk_testkey",
+		"CODEVN_MODEL":            "gpt-4o",
+		"ANTHROPIC_BASE_URL":      "http://127.0.0.1:20128/v1",
+		"ANTHROPIC_API_KEY":       "crk_testkey",
 	}
 	if len(env) != len(want) {
 		t.Fatalf("env = %v, want %d entries", env, len(want))

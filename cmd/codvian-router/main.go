@@ -156,6 +156,9 @@ type options struct {
 	updateTag    string
 	updateCheck  bool
 	updateYes    bool
+	// setup flags.
+	dryRun bool
+	revert bool
 }
 
 // parseArgs extracts every registered --flag (in "--flag value"
@@ -561,6 +564,22 @@ func parseArgs(args []string) (options, []string, error) {
 				return opts, nil, fmt.Errorf("--yes must be true or false: %w", err)
 			}
 			opts.updateYes = v
+		case a == "--dry-run":
+			opts.dryRun = true
+		case strings.HasPrefix(a, "--dry-run="):
+			v, err := strconv.ParseBool(strings.TrimPrefix(a, "--dry-run="))
+			if err != nil {
+				return opts, nil, fmt.Errorf("--dry-run must be true or false: %w", err)
+			}
+			opts.dryRun = v
+		case a == "--revert" || a == "--rollback":
+			opts.revert = true
+		case strings.HasPrefix(a, "--revert="):
+			v, err := strconv.ParseBool(strings.TrimPrefix(a, "--revert="))
+			if err != nil {
+				return opts, nil, fmt.Errorf("--revert must be true or false: %w", err)
+			}
+			opts.revert = v
 		case a == "-h" || a == "--help" || a == "help":
 			positional = append(positional, "help")
 		case a == "-v" || a == "--version":
@@ -620,6 +639,8 @@ func run(args []string) int {
 		return runDoctor(opts)
 	case "configure":
 		return runConfigure(opts)
+	case "setup":
+		return runSetup(opts, positional[1:])
 	case "mcp":
 		return runMCP(opts)
 	case "provider":
@@ -688,6 +709,8 @@ Usage:
   codvian-router [--config PATH] doctor              check config, keys, providers, ports, dashboard
   codvian-router [--config PATH] [--port PORT] configure
                                                 first-run setup (interactive, or --provider ID --api-key KEY)
+  codvian-router [--config PATH] setup [agent] [--model M] [--endpoint E] [--dry-run] [--revert]
+                                                one-command guided setup for AI coding agents (default: codevn; also claude, continue)
   codvian-router [--config PATH] mcp                MCP server on stdio (tools: router_status, provider_list, model_list)
   codvian-router [--config PATH] provider list        list configured providers
   codvian-router [--config PATH] provider add <base-url> <api-key> [--name NAME]

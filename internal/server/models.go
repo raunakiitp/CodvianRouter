@@ -56,6 +56,7 @@ import (
 type modelFilter struct {
 	Provider      string
 	Category      string
+	Capability    string
 	MaxPrice      *float64
 	MinContext    *int
 	ShortlistOnly bool
@@ -69,6 +70,7 @@ func parseModelFilters(r *http.Request) (modelFilter, error) {
 	q := r.URL.Query()
 	f.Provider = strings.TrimSpace(q.Get("provider"))
 	f.Category = strings.ToLower(strings.TrimSpace(q.Get("category")))
+	f.Capability = strings.TrimSpace(q.Get("capability"))
 	if v := strings.TrimSpace(q.Get("max_price")); v != "" {
 		p, err := strconv.ParseFloat(v, 64)
 		if err != nil || p < 0 {
@@ -161,6 +163,9 @@ func (s *Server) filterV1Models(models []Model, f modelFilter) []Model {
 				continue
 			}
 		}
+		if f.Capability != "" && !modelMatchesCapability(m, f.Capability) {
+			continue
+		}
 		m.Shortlisted = s.isShortlisted(m.ProviderID, m.ID)
 		if f.ShortlistOnly && !m.Shortlisted {
 			continue
@@ -171,6 +176,25 @@ func (s *Server) filterV1Models(models []Model, f modelFilter) []Model {
 		return out[i].Shortlisted && !out[j].Shortlisted
 	})
 	return out
+}
+
+func dashboardModelMatchesCapability(m dashboardModel, cap string) bool {
+	cNorm := strings.ToLower(strings.TrimSpace(cap))
+	switch cNorm {
+	case "tools", "tool", "function_calling", "json_schema", "json", "structured_output":
+		return m.Tools != nil && *m.Tools
+	case "code", "coding":
+		id := strings.ToLower(m.ID)
+		return strings.Contains(id, "coder") || strings.Contains(id, "code")
+	case "reasoning", "thinking":
+		id := strings.ToLower(m.ID)
+		return strings.Contains(id, "reasoner") || strings.Contains(id, "o1") || strings.Contains(id, "o3") || strings.Contains(id, "r1")
+	case "vision", "image", "image_input":
+		id := strings.ToLower(m.ID)
+		return strings.Contains(id, "vision") || strings.Contains(id, "vl") || strings.Contains(id, "4o")
+	default:
+		return false
+	}
 }
 
 // filterDashboardModels applies the same filters to dashboard feed
@@ -194,6 +218,9 @@ func (s *Server) filterDashboardModels(models []dashboardModel, f modelFilter) [
 			if m.ContextWindow <= 0 || m.ContextWindow < *f.MinContext {
 				continue
 			}
+		}
+		if f.Capability != "" && !dashboardModelMatchesCapability(m, f.Capability) {
+			continue
 		}
 		m.Shortlisted = s.isShortlisted(m.ProviderID, m.ID)
 		if f.ShortlistOnly && !m.Shortlisted {
