@@ -7008,6 +7008,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 		respRedactor = s.guardrails.NewResponseStreamRedactor("")
 		redactor = respRedactor
 	}
+	vaultRestorer := guardrails.NewStreamRestorer(s.reversibleVault)
 	// Stream tool-call guardrail (B3-22, Stage 1): tool-call
 	// argument fragments arrive split across chunks, so a
 	// secret split across two fragments matches neither — the
@@ -7087,6 +7088,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 	// content was withheld still opens with a proper chunk.
 	emitTail := func() {
 		tail := redactor.Flush()
+		if tail != "" {
+			tail = vaultRestorer.WriteChunk(tail)
+		}
+		tail += vaultRestorer.Flush()
 		if tail == "" {
 			return
 		}
@@ -7120,6 +7125,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 			s.setStreamDecisionHeader(w, req.Model)
 		}
 		content := redactor.WriteChunk(chunk.Content)
+		content = vaultRestorer.WriteChunk(content)
 		// Response sanitization cut (B3-22, block mode): the
 		// redactor withheld the first line carrying a finding,
 		// so nothing further may be emitted. Returning the

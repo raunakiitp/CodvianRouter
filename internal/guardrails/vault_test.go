@@ -292,3 +292,146 @@ func TestRedactWithVaultCleanText(t *testing.T) {
 		t.Fatalf("Count = %d after clean text, want 0", got)
 	}
 }
+
+func TestStreamRestorerSplitToken(t *testing.T) {
+	v := NewVault(newTestSealer(), "")
+	tok, err := v.Mint("email", "alice@example.com")
+	if err != nil {
+		t.Fatalf("Mint: %v", err)
+	}
+	full := "reach me at " + tok + " please"
+	r := NewStreamRestorer(v)
+	cut1 := strings.Index(full, tok) + len("[VAULT:ema")
+	cut2 := strings.Index(full, tok) + len(tok) - 8
+	var out strings.Builder
+	out.WriteString(r.WriteChunk(full[:cut1]))
+	out.WriteString(r.WriteChunk(full[cut1:cut2]))
+	out.WriteString(r.WriteChunk(full[cut2:]))
+	out.WriteString(r.Flush())
+	if got := out.String(); got != "reach me at alice@example.com please" {
+		t.Fatalf("streamed restore = %q, want %q", got, "reach me at alice@example.com please")
+	}
+	if got := r.Restored(); got != 1 {
+		t.Fatalf("Restored = %d, want 1", got)
+	}
+}
+
+func TestStreamRestorerSplitMarker(t *testing.T) {
+	v := NewVault(newTestSealer(), "")
+	tok, err := v.Mint("email", "alice@example.com")
+	if err != nil {
+		t.Fatalf("Mint: %v", err)
+	}
+	full := "mail " + tok + "!"
+	i := strings.Index(full, tok)
+	r := NewStreamRestorer(v)
+	var out strings.Builder
+	out.WriteString(r.WriteChunk(full[:i+3]))
+	out.WriteString(r.WriteChunk(full[i+3:]))
+	out.WriteString(r.Flush())
+	if got := out.String(); got != "mail alice@example.com!" {
+		t.Fatalf("split marker restore = %q, want %q", got, "mail alice@example.com!")
+	}
+	if got := r.Restored(); got != 1 {
+		t.Fatalf("Restored = %d, want 1", got)
+	}
+}
+
+func TestStreamRestorerWholeTokenPerChunk(t *testing.T) {
+	v := NewVault(newTestSealer(), "")
+	tok, err := v.Mint("email", "alice@example.com")
+	if err != nil {
+		t.Fatalf("Mint: %v", err)
+	}
+	r := NewStreamRestorer(v)
+	if got := r.WriteChunk("mail " + tok); got != "mail alice@example.com" {
+		t.Fatalf("WriteChunk whole token = %q, want restored", got)
+	}
+	if got := r.Flush(); got != "" {
+		t.Fatalf("Flush after whole token = %q, want empty", got)
+	}
+	if got := r.Restored(); got != 1 {
+		t.Fatalf("Restored = %d, want 1", got)
+	}
+}
+
+func TestStreamRestorerUnknownTokenSplitUntouched(t *testing.T) {
+	v := NewVault(newTestSealer(), "")
+	forged := "[VAULT:email:0123456789abcdef0123456789abcdef]"
+	full := "contact " + forged + " now"
+	r := NewStreamRestorer(v)
+	cut := len("contact [VAULT:email:012345")
+	var out strings.Builder
+	out.WriteString(r.WriteChunk(full[:cut]))
+	out.WriteString(r.WriteChunk(full[cut:]))
+	out.WriteString(r.Flush())
+	if got := out.String(); got != full {
+		t.Fatalf("forged split token = %q, want unchanged %q", got, full)
+	}
+	if got := r.Restored(); got != 0 {
+		t.Fatalf("Restored = %d, want 0", got)
+	}
+}
+
+func TestStreamRestorerLiteralPrefixReleased(t *testing.T) {
+	v := NewVault(newTestSealer(), "")
+	r := NewStreamRestorer(v)
+	if got := r.WriteChunk("see [VAULT: note"); got != "see " {
+		t.Fatalf("WriteChunk literal prefix = %q, want %q", got, "see ")
+	}
+	if got := r.Flush(); got != "[VAULT: note" {
+		t.Fatalf("Flush literal prefix = %q, want %q", got, "[VAULT: note")
+	}
+	long := "[VAULT:" + strings.Repeat("x", 200)
+	if got := r.WriteChunk(long); got != long {
+		t.Fatalf("WriteChunk overlong prefix = %q, want released unchanged", got)
+	}
+	if got := r.Flush(); got != "" {
+		t.Fatalf("Flush after overlong prefix = %q, want empty", got)
+	}
+}
+
+func TestStreamRestorerNilVault(t *testing.T) {
+	r := NewStreamRestorer(nil)
+	text := "mail [VAULT:email:0123456789abcdef0123456789abcdef]!"
+	if got := r.WriteChunk(text); got != text {
+		t.Fatalf("nil-vault WriteChunk = %q, want pass-through", got)
+	}
+	if got := r.Flush(); got != "" {
+		t.Fatalf("nil-vault Flush = %q, want empty", got)
+	}
+	if got := r.Restored(); got != 0 {
+		t.Fatalf("nil-vault Restored = %d, want 0", got)
+	}
+	if got := (*StreamRestorer)(nil).WriteChunk("x"); got != "x" {
+		t.Fatalf("nil-restorer WriteChunk = %q, want %q", got, "x")
+	}
+	if got := (*StreamRestorer)(nil).Flush(); got != "" {
+		t.Fatalf("nil-restorer Flush = %q, want empty", got)
+	}
+}
+
+func TestStreamRestorerMultipleTokens(t *testing.T) {
+	v := NewVault(newTestSealer(), "")
+	a, err := v.Mint("email", "alice@example.com")
+	if err != nil {
+		t.Fatalf("Mint a: %v", err)
+	}
+	b, err := v.Mint("email", "bob@example.com")
+	if err != nil {
+		t.Fatalf("Mint b: %v", err)
+	}
+	full := "a=" + a + " b=" + b + " end"
+	r := NewStreamRestorer(v)
+	cut := strings.Index(full, b) + 20
+	var out strings.Builder
+	out.WriteString(r.WriteChunk(full[:cut]))
+	out.WriteString(r.WriteChunk(full[cut:]))
+	out.WriteString(r.Flush())
+	if got := out.String(); got != "a=alice@example.com b=bob@example.com end" {
+		t.Fatalf("multiple tokens = %q, want %q", got, "a=alice@example.com b=bob@example.com end")
+	}
+	if got := r.Restored(); got != 2 {
+		t.Fatalf("Restored = %d, want 2", got)
+	}
+}

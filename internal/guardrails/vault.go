@@ -235,6 +235,121 @@ func (v *Vault) Restore(text string) (string, int) {
 	return b.String(), restored
 }
 
+// maxStreamTokenLen bounds the trailing fragment a
+// StreamRestorer holds for the next chunk: a vault token is
+// "[VAULT:" + kind + ":" + 32 hex + "]", and kind labels are
+// short PII labels ("email", "phone-intl", ...), so a real token
+// is under 64 bytes; 128 leaves wide headroom. A "[VAULT:"
+// fragment longer than this without a closing bracket cannot
+// be a token, so it is released instead of buffering the rest
+// of the stream behind a literal "[VAULT:".
+const maxStreamTokenLen = 128
+
+// StreamRestorer reassembles vault tokens split across streamed
+// chunks and restores them on the fly (B3-19, :782 follow-up).
+//
+// A token minted pre-call can arrive split across SSE chunk
+// boundaries — even inside the "[VAULT:" marker itself — so
+// restoring each chunk in isolation would leave the token text
+// in the delivered stream. The restorer holds a trailing
+// partial token (or a trailing partial "[VAULT:" marker) for
+// the next chunk and restores complete tokens as they close.
+// An unknown id, an unsealable entry, or a fragment that never
+// completes is emitted unchanged by Flush, never dropped.
+//
+// One StreamRestorer serves one stream; it is not safe for
+// concurrent use. A nil vault passes text through unchanged.
+type StreamRestorer struct {
+	v        *Vault
+	buf      string // held trailing text: partial token or marker
+	restored int
+}
+
+// NewStreamRestorer returns a StreamRestorer for one stream
+// bound to v. A nil v (vault off) yields a pass-through.
+func NewStreamRestorer(v *Vault) *StreamRestorer {
+	return &StreamRestorer{v: v}
+}
+
+// WriteChunk feeds one stream delta and returns the text safe to
+// emit now: complete tokens are restored, and a trailing partial
+// token (or partial "[VAULT:" marker) is held for the next
+// chunk.
+func (r *StreamRestorer) WriteChunk(chunk string) string {
+	if chunk == "" {
+		return ""
+	}
+	if r == nil || r.v == nil {
+		return chunk
+	}
+	text := r.buf + chunk
+	r.buf = ""
+	hold := streamHoldLen(text)
+	if hold == 0 {
+		restored, n := r.v.Restore(text)
+		r.restored += n
+		return restored
+	}
+	head, tail := text[:len(text)-hold], text[len(text)-hold:]
+	restored, n := r.v.Restore(head)
+	r.restored += n
+	r.buf = tail
+	return restored
+}
+
+// Flush ends the stream: any held tail is restored if it
+// completed (or emitted unchanged if it never did — an
+// unknown/incomplete token is left in place, never dropped)
+// and returned. Call exactly once, after the last WriteChunk.
+func (r *StreamRestorer) Flush() string {
+	if r == nil || r.buf == "" {
+		return ""
+	}
+	tail := r.buf
+	r.buf = ""
+	if r.v == nil {
+		return tail
+	}
+	restored, n := r.v.Restore(tail)
+	r.restored += n
+	return restored
+}
+
+// Restored reports how many tokens this restorer has restored so
+// far, including any restored by Flush.
+func (r *StreamRestorer) Restored() int {
+	if r == nil {
+		return 0
+	}
+	return r.restored
+}
+
+// streamHoldLen returns how many trailing bytes of text must be
+// held for the next chunk because they may be the start of a
+// vault token: either a "[VAULT:" fragment with no closing
+// bracket yet (short enough to be a real token), or a trailing
+// partial "[VAULT:" marker. Zero means the whole text is safe
+// to restore and emit now.
+func streamHoldLen(text string) int {
+	const marker = "[VAULT:"
+	if i := strings.LastIndex(text, marker); i >= 0 {
+		tail := text[i:]
+		if !strings.Contains(tail, "]") && len(tail) <= maxStreamTokenLen {
+			return len(tail)
+		}
+	}
+	max := len(marker) - 1
+	if len(text) < max {
+		max = len(text)
+	}
+	for k := max; k > 0; k-- {
+		if strings.HasPrefix(marker, text[len(text)-k:]) {
+			return k
+		}
+	}
+	return 0
+}
+
 // Count reports how many tokens the vault holds (persisted
 // entries included). It never unseals anything.
 func (v *Vault) Count() int {
