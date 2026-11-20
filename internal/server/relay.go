@@ -1192,26 +1192,84 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 		}
 		return
 	}
+	// Stream redaction (B3-26 / :798): the verbatim relay copies
+	// the upstream SSE byte-for-byte, so the response checks that
+	// cover the engine paths never ran on it. Run the same
+	// per-stream redactor over the copied bytes: PEM-only by
+	// default, the store-wired ResponseStreamRedactor when
+	// response sanitization is on (redact/warn/block per the
+	// store's mode). Clean bytes pass through unchanged — the
+	// redactor withholds only a suspected PEM block or a
+	// finding-carrying line — and a block-mode cut stops the
+	// copy and ends the stream with the Anthropic terminal
+	// refusal event, like the async cut below. One redactor
+	// per stream (not safe for concurrent use).
+	var respRedactor *guardrails.ResponseStreamRedactor
+	var redactor streamChunkRedactor = guardrails.NewStreamRedactor()
+	if s.responseSanitization {
+		respRedactor = s.guardrails.NewResponseStreamRedactor("")
+		redactor = respRedactor
+	}
 	if flusher, ok := w.(http.Flusher); ok {
 		// Copy in chunks and flush after each, so a streaming SSE
 		// response reaches the client event by event instead of
 		// only when the upstream finishes.
 		buf := make([]byte, 32*1024)
+		redactionCut := false
 		for {
 			n, err := resp.Body.Read(buf)
 			if n > 0 {
-				if _, werr := w.Write(buf[:n]); werr != nil {
-					return
+				safe := redactor.WriteChunk(string(buf[:n]))
+				// Response sanitization cut (B3-22, block
+				// mode): the redactor withheld the first line
+				// carrying a finding, so nothing further may
+				// be emitted. Stop the copy here; the
+				// terminal refusal event is written after
+				// the loop below.
+				if respRedactor != nil && respRedactor.Blocked() {
+					redactionCut = true
+					break
 				}
-				// The first byte is out — a BLOCK verdict landing
-				// after this point can no longer withhold the
-				// response, only cut the stream.
-				asyncRun.MarkDelivered()
-				flusher.Flush()
+				if safe != "" {
+					if _, werr := w.Write([]byte(safe)); werr != nil {
+						return
+					}
+					// The first byte is out — a BLOCK verdict landing
+					// after this point can no longer withhold the
+					// response, only cut the stream.
+					asyncRun.MarkDelivered()
+					flusher.Flush()
+				}
 			}
 			if err != nil {
 				break
 			}
+		}
+		// Response sanitization cut (B3-22, block mode): end
+		// the stream with the Anthropic terminal refusal
+		// event — never [DONE], never message_stop. The
+		// withheld tail is never emitted (Flush returns ""
+		// once cut). A policy refusal, never an upstream
+		// failure: no upstream-failure count, no failover.
+		if redactionCut {
+			kind := "secret"
+			if f := respRedactor.Findings(); len(f) > 0 {
+				kind = f[0].Kind
+			}
+			_, _ = w.Write(anthropicPolicyRefusalEvent(kind))
+			flusher.Flush()
+			s.logger.Printf("guardrail: response sanitization blocked messages relay stream (kind=%s); stream cut, terminal refusal event", kind)
+			return
+		}
+		// Stream redaction (M1.7): emit the redactor's
+		// withheld tail — an unclosed PEM block as one
+		// placeholder, plus any event bytes that followed
+		// it in the last read — before the terminal
+		// checks below, so the client still sees the
+		// upstream's own message_stop.
+		if tail := redactor.Flush(); tail != "" {
+			_, _ = w.Write([]byte(tail))
+			flusher.Flush()
 		}
 		// Async cut (CHECKLIST 203): the upstream call ended
 		// because the verdict cancelled it (or the stream ended on
@@ -1239,7 +1297,42 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 		}
 		return
 	}
-	_, _ = io.Copy(w, resp.Body)
+	// No flusher (not a live SSE stream): copy in chunks
+	// through the same redactor, so the checks cover this
+	// path too.
+	buf := make([]byte, 32*1024)
+	redactionCut := false
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			safe := redactor.WriteChunk(string(buf[:n]))
+			if respRedactor != nil && respRedactor.Blocked() {
+				redactionCut = true
+				break
+			}
+			if safe != "" {
+				if _, werr := w.Write([]byte(safe)); werr != nil {
+					return
+				}
+				asyncRun.MarkDelivered()
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	if redactionCut {
+		kind := "secret"
+		if f := respRedactor.Findings(); len(f) > 0 {
+			kind = f[0].Kind
+		}
+		_, _ = w.Write(anthropicPolicyRefusalEvent(kind))
+		s.logger.Printf("guardrail: response sanitization blocked messages relay stream (kind=%s); stream cut, terminal refusal event", kind)
+		return
+	}
+	if tail := redactor.Flush(); tail != "" {
+		_, _ = w.Write([]byte(tail))
+	}
 	if res, blocked := asyncBlocked(asyncRun); blocked {
 		// No flusher (not a live SSE stream): the terminal frame
 		// is still written — the client reads it as the last

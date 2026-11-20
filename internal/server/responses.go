@@ -62,6 +62,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/raunakiitp/codvian-router/internal/guardrails"
 	"github.com/raunakiitp/codvian-router/internal/ledger"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/responses"
@@ -1644,6 +1645,22 @@ func (s *Server) handleResponsesStream(w http.ResponseWriter, ctx context.Contex
 	itemAdded := false
 	decisionSet := false
 
+	// Stream redaction (B3-26 / :798): the Responses stream
+	// calls the engine directly, not handleChatStream, so the
+	// response checks never ran on its deltas. Same per-stream
+	// redactor as handleChatStream: PEM-only by default, the
+	// store-wired ResponseStreamRedactor when response
+	// sanitization is on — and in block mode it cuts the
+	// stream at the first line carrying a finding (see the
+	// cut check after the engine call). One redactor per
+	// stream (not safe for concurrent use).
+	var respRedactor *guardrails.ResponseStreamRedactor
+	var redactor streamChunkRedactor = guardrails.NewStreamRedactor()
+	if s.responseSanitization {
+		respRedactor = s.guardrails.NewResponseStreamRedactor("")
+		redactor = respRedactor
+	}
+
 	onChunk := func(chunk provider.StreamChunk) error {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -1675,14 +1692,30 @@ func (s *Server) handleResponsesStream(w http.ResponseWriter, ctx context.Contex
 			}
 		}
 		if chunk.Content != "" {
-			if err := writeEvent("response.output_text.delta", map[string]any{
-				"type": "response.output_text.delta", "item_id": msgID,
-				"output_index": 0, "content_index": 0, "delta": chunk.Content,
-			}); err != nil {
-				return err
+			content := redactor.WriteChunk(chunk.Content)
+			// Response sanitization cut (B3-22, block mode):
+			// the redactor withheld the first line carrying
+			// a finding, so nothing further may be emitted.
+			// Returning the sentinel stops the engine loop;
+			// the terminal refusal is written by the cut
+			// check after the engine call below. Without
+			// this return the stream would keep running
+			// silently and close with a normal completed
+			// event, as if the response had been delivered
+			// in full.
+			if respRedactor != nil && respRedactor.Blocked() {
+				return errResponseGuardrailBlocked
 			}
-			full.WriteString(chunk.Content)
-			sent.WriteString(chunk.Content)
+			if content != "" {
+				if err := writeEvent("response.output_text.delta", map[string]any{
+					"type": "response.output_text.delta", "item_id": msgID,
+					"output_index": 0, "content_index": 0, "delta": content,
+				}); err != nil {
+					return err
+				}
+				full.WriteString(content)
+				sent.WriteString(content)
+			}
 		}
 		for _, tc := range chunk.ToolCalls {
 			idx := tc.Index
@@ -1736,6 +1769,37 @@ func (s *Server) handleResponsesStream(w http.ResponseWriter, ctx context.Contex
 		resp, err = s.engine.ChatStream(ctx, chat, onDelta)
 	}
 	s.logPanicError(err)
+	// Response sanitization cut (B3-22, block mode): the
+	// ResponseStreamRedactor cut the stream at the first line
+	// carrying a finding. This check does NOT require err !=
+	// nil: an engine that ignores the onChunk error returns
+	// nil, and the stream must still end with a refusal,
+	// never a normal completed event. The decision uses the
+	// redactor's flag, not the error value, so it holds
+	// either way. The withheld tail is never emitted (Flush
+	// returns "" once cut). Like the chat path, this is a
+	// policy refusal, never an upstream failure: the record
+	// keeps the partial output actually delivered, and the
+	// client gets the 403 / -32001 refusal — as a plain JSON
+	// refusal when nothing was sent yet, as an SSE refusal
+	// event + [DONE] once content was committed.
+	if respRedactor != nil && respRedactor.Blocked() {
+		kind := "secret"
+		if f := respRedactor.Findings(); len(f) > 0 {
+			kind = f[0].Kind
+		}
+		finishFailed(full.String(), toolCalls)
+		s.logger.Printf("guardrail: response sanitization blocked responses stream (kind=%s); stream cut, terminal refusal -32001", kind)
+		if sent.Len() == 0 && !headersSent {
+			writePolicyRefusal(w, kind, "response")
+		} else {
+			payload, _ := json.Marshal(errorBody{Error: errorDetail{Message: "guardrail blocked stream: " + kind, Type: "policy_refusal", Code: guardrails.PolicyRefusalCode, Reason: kind}})
+			_ = writeSSENow("data: " + string(payload) + "\n\n")
+			_ = writeSSENow("data: [DONE]\n\n")
+		}
+		s.recordTelemetry(ctx, s.responseMeta(ctx, chat, resp, start), http.StatusForbidden)
+		return errResponseGuardrailBlocked
+	}
 	if err != nil {
 		if sent.Len() == 0 && !headersSent {
 			// Nothing delivered: a plain JSON error is still
@@ -1801,6 +1865,22 @@ func (s *Server) handleResponsesStream(w http.ResponseWriter, ctx context.Contex
 		}); err != nil {
 			return err
 		}
+	}
+	// Stream redaction (M1.7): emit the redactor's withheld
+	// tail — an unclosed PEM block as one placeholder — as a
+	// final text delta before output_text.done, so no secret
+	// reaches the client in any chunking. Withheld text was
+	// never sent, so it joins the authoritative streamed
+	// text (full) like any other delta.
+	if tail := redactor.Flush(); tail != "" {
+		if err := writeEvent("response.output_text.delta", map[string]any{
+			"type": "response.output_text.delta", "item_id": msgID,
+			"output_index": 0, "content_index": 0, "delta": tail,
+		}); err != nil {
+			return err
+		}
+		full.WriteString(tail)
+		sent.WriteString(tail)
 	}
 	if err := writeEvent("response.output_text.done", map[string]any{
 		"type": "response.output_text.done", "item_id": msgID,

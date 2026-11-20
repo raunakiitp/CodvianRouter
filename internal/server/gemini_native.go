@@ -77,6 +77,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/raunakiitp/codvian-router/internal/guardrails"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/reasoning"
 	"github.com/raunakiitp/codvian-router/internal/router"
@@ -1249,6 +1250,43 @@ func (s *Server) geminiGenerateStream(w http.ResponseWriter, ctx context.Context
 		})
 	}
 
+	// Stream redaction (B3-26 / :798): the Gemini stream calls
+	// the engine directly, not handleChatStream, so the response
+	// checks never ran on its deltas. Same per-stream redactor
+	// as handleChatStream: PEM-only by default, the store-wired
+	// ResponseStreamRedactor when response sanitization is on —
+	// and in block mode it cuts the stream at the first line
+	// carrying a finding (see the cut checks after the engine
+	// call). One redactor per stream (not safe for concurrent
+	// use).
+	var respRedactor *guardrails.ResponseStreamRedactor
+	var redactor streamChunkRedactor = guardrails.NewStreamRedactor()
+	if s.responseSanitization {
+		respRedactor = s.guardrails.NewResponseStreamRedactor("")
+		redactor = respRedactor
+	}
+	// cutBySanitization ends a stream cut by the response
+	// sanitization stage in block mode (B3-22): the Gemini
+	// error envelope at 403 / PERMISSION_DENIED — a policy
+	// refusal, never an upstream failure. Called from two
+	// sites: inside the streamErr block (the engine
+	// propagated the callback sentinel) and after it (the
+	// engine ignored the callback error and returned nil) —
+	// the decision uses the redactor's flag, not the error
+	// value, so it holds either way.
+	cutBySanitization := func() {
+		kind := "secret"
+		if f := respRedactor.Findings(); len(f) > 0 {
+			kind = f[0].Kind
+		}
+		s.logger.Printf("guardrail: response sanitization blocked gemini stream (kind=%s); stream cut, terminal refusal", kind)
+		payload, _ := json.Marshal(newGeminiErrorEnvelope(http.StatusForbidden, "PERMISSION_DENIED", "guardrail blocked stream: "+kind))
+		_, _ = io.WriteString(w, "data: "+string(payload)+"\n\n")
+		if flusher != nil {
+			flusher.Flush()
+		}
+	}
+
 	var finalResp *provider.ChatResponse
 	var streamErr error
 	if ce, ok := s.engine.(chunkEngine); ok {
@@ -1256,17 +1294,42 @@ func (s *Server) geminiGenerateStream(w http.ResponseWriter, ctx context.Context
 			if chunk.Content == "" {
 				return nil
 			}
-			return emitText(chunk.Content)
+			content := redactor.WriteChunk(chunk.Content)
+			// Response sanitization cut (B3-22, block mode):
+			// the redactor withheld the first line carrying
+			// a finding, so nothing further may be emitted.
+			// Returning the sentinel stops the engine loop;
+			// the terminal refusal is written by the cut
+			// check after the engine call below.
+			if respRedactor != nil && respRedactor.Blocked() {
+				return errResponseGuardrailBlocked
+			}
+			if content == "" {
+				return nil
+			}
+			return emitText(content)
 		})
 	} else {
 		finalResp, streamErr = s.engine.ChatStream(ctx, req, func(delta string) error {
 			if delta == "" {
 				return nil
 			}
-			return emitText(delta)
+			content := redactor.WriteChunk(delta)
+			if respRedactor != nil && respRedactor.Blocked() {
+				return errResponseGuardrailBlocked
+			}
+			if content == "" {
+				return nil
+			}
+			return emitText(content)
 		})
 	}
 	if streamErr != nil {
+		if respRedactor != nil && respRedactor.Blocked() {
+			cutBySanitization()
+			s.recordMetrics(ctx, req, nil, errResponseGuardrailBlocked, start)
+			return
+		}
 		_, _ = io.WriteString(w, string(geminiStreamErrorEvent(streamErr)))
 		if flusher != nil {
 			flusher.Flush()
@@ -1281,6 +1344,28 @@ func (s *Server) geminiGenerateStream(w http.ResponseWriter, ctx context.Context
 		}
 		s.recordMetrics(ctx, req, nil, errNilUpstreamResponse, start)
 		return
+	}
+	// Response sanitization cut (B3-22, block mode): the engine
+	// ignored the callback sentinel and returned nil, so the
+	// stream must still end with a refusal, never the terminal
+	// event. The decision uses the redactor's flag, not the
+	// error value, so it holds either way. The withheld tail
+	// is never emitted (Flush returns "" once cut).
+	if respRedactor != nil && respRedactor.Blocked() {
+		cutBySanitization()
+		s.recordMetrics(ctx, req, finalResp, errResponseGuardrailBlocked, start)
+		return
+	}
+	// Stream redaction (M1.7): emit the redactor's withheld
+	// tail — an unclosed PEM block as one placeholder — as a
+	// final text delta before the terminal event, so no secret
+	// reaches the client in any chunking. The terminal event
+	// does not repeat the text, so the tail must go out here.
+	if tail := redactor.Flush(); tail != "" {
+		if err := emitText(tail); err != nil {
+			s.recordMetrics(ctx, req, finalResp, err, start)
+			return
+		}
 	}
 	terminal, err := geminiTerminalEvent(finalResp, req.Model)
 	if err != nil {
