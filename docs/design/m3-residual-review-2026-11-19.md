@@ -17,7 +17,7 @@
   re-verify line numbers at build time.
 - Method: read the design doc fully; re-read/grepped every cited worktree
   file; ran targeted tests with `~/go/bin/go test` (see §6); spot-checked
-  9 OmniRoute reference files in `~/workspace/omniroute-reference` (see §4).
+  9 the reference router reference files in `the local reference clone` (see §4).
 - Scope of this review: validation only. No code file, no PARITY/CHECKLIST/
   PLAN edit, no push. One new file: this review.
 
@@ -44,7 +44,7 @@
 3. **Everything else in the design verified as written.** S1, S2 (except
    the Describe point), S4, D1, D2 gaps are real, with the cited code in
    the cited shape; all four PARITY rows (388/394/396/425) are still
-   MISSING in `docs/PARITY.md` and their Codvian-status cells are now
+   MISSING in `internal parity tracker` and their Codvian-status cells are now
    factually stale (see §5); the 80.2% gate arithmetic checks out.
    The strategies count is 33 (`internal/strategy/strategy.go`: 33
    `Strategy =` constants in the `:100-240` block), consistent with the
@@ -147,13 +147,13 @@ Gap is real — three missing pieces, all confirmed:
 
 The design's §S3.2.2 is **STALE/WRONG** against the current tree:
 
-- Design claim (quoted): "**No failure cooldown.** OmniRoute skips the
+- Design claim (quoted): "**No failure cooldown.** the reference router skips the
   network for 30 s after a failure (`nadirStrategy.ts:61,201`). Ours has
   no cooldown field or logic: a down endpoint costs a full timeout … on
   EVERY `auto/nadir` request until it recovers."
 - Contradicting evidence (current tree):
   - `internal/router/nadir.go:33-35` (file header): "After such a failure
-    the endpoint is cooled down for 30 s (OmniRoute's
+    the endpoint is cooled down for 30 s (the reference router's
     `NADIR_FAILURE_COOLDOWN_MS`, same number, own code)".
   - `nadir.go:75-79`: `NadirFailureCooldownMs = 30000`.
   - `nadir.go:82-93`: `nadirFailureCooldown` var (test-shrinkable) +
@@ -234,9 +234,9 @@ that work has not been done yet:
   `preferredConnectionIds` counterpart in `internal/` or `cmd/`,
   non-test code). The design's NO-GO for S5 stands.
 - PARITY inconsistency to flag to the coordinator: row 425 still reads
-  "No preferred/reserve account concept | MISSING" (`docs/PARITY.md:425`)
+  "No preferred/reserve account concept | MISSING" (`internal parity tracker:425`)
   while row 487 records the same concept as FULL
-  (`docs/PARITY.md:487`, "preferred first, reserve sorted last, never
+  (`internal parity tracker:487`, "preferred first, reserve sorted last, never
   hedge targets"). The S4 flip should also reconcile row 425's status cell
   with row 487; the design's flip instruction does not mention this.
 
@@ -303,9 +303,9 @@ that work has not been done yet:
 | S5 | Per-request preferred list | NO-GO — product decision | **NO-GO (unchanged)** | — |
 | S6 | Latency histogram | NO-GO — sequencing decision | **NO-GO (unchanged)** | — |
 
-## §4 — OmniRoute citation spot-check (9 files)
+## §4 — the reference router citation spot-check (9 files)
 
-Every citation below was read in `~/workspace/omniroute-reference` at
+Every citation below was read in `the local reference clone` at
 review time. Verdicts: CONFIRMED means the cited file:lines say what the
 design claims; NOT-RECHECKED means the substance was verified nearby but
 the exact lines were not re-read — the design's citation is plausible and
@@ -316,7 +316,7 @@ uncontradicted.
 | 1 | `routingStrategies.ts:56-65` (9 account values, no `weighted`); `:40-51` (auto values incl. `sla-aware`/`sla`) | `ACCOUNT_FALLBACK_STRATEGY_VALUES` = priority, fill-first, round-robin, p2c, random, least-used, cost-optimized, expiry-first, strict-random (9, no weighted); `AUTO_ROUTING_STRATEGY_VALUES` = rules, score, cost, eco, latency, fast, sla-aware, sla, lkgp, nadir | CONFIRMED |
 | 2 | `auth.ts:1924,1930` (per-provider override, default `fill-first`); `:~1937` (`preferredConnectionIds`) | `providerOverride.fallbackStrategy \|\| settings.fallbackStrategy \|\| "fill-first"`; `options.preferredConnectionIds` → `pickPreferredConnection(...)` in the same function | CONFIRMED |
 | 3 | `routerStrategy.ts:286-294,394-403` (SLA impl + registry); `:231-236,300-306` (defaults 2000/0.05); `:294-295` (OPEN pre-filter); `:262-266` (health); `:313-330` (weights) | `DEFAULT_SLA_TARGET_P95_MS = 2_000`, `DEFAULT_SLA_MAX_ERROR_RATE = 0.05`; `HALF_OPEN → 0.5` health; violation `OPEN ? 1 : 0` + overruns; `healthy = pool.filter(c => c.circuitBreakerState !== "OPEN"); candidates = healthy.length > 0 ? healthy : pool`; registry sets `"sla-aware"` and `"sla"` to the same impl | CONFIRMED (substance; exact line numbers drifted a few lines, e.g. the pre-filter sits at the `select` head, not literally `:294-295` in this clone) |
-| 4 | `nadirStrategy.ts:2-16,153-177` (impl); `:58` (default base URL); `:59-60` (timeout 2000/max 30000); `:61` (30 s cooldown); `:25-38,183-185,216` (config + env fallbacks) | Header `:16-23` states opt-in, fail-open, bounded + cooldown, minimal egress; `NADIR_DEFAULT_BASE_URL = "https://api.getnadir.com"`; `NADIR_DEFAULT_TIMEOUT_MS = 2000`, `NADIR_MAX_TIMEOUT_MS = 30_000`; `NADIR_FAILURE_COOLDOWN_MS = 30_000`; per-base-URL cooldown map `:161`, check `:190`, arm `:198`; env fallbacks `OMNIROUTE_NADIR_API_KEY` / `OMNIROUTE_NADIR_BASE_URL`; menu cap 100, prompt cap 16,000 | CONFIRMED |
+| 4 | `nadirStrategy.ts:2-16,153-177` (impl); `:58` (default base URL); `:59-60` (timeout 2000/max 30000); `:61` (30 s cooldown); `:25-38,183-185,216` (config + env fallbacks) | Header `:16-23` states opt-in, fail-open, bounded + cooldown, minimal egress; `NADIR_DEFAULT_BASE_URL = "https://api.getnadir.com"`; `NADIR_DEFAULT_TIMEOUT_MS = 2000`, `NADIR_MAX_TIMEOUT_MS = 30_000`; `NADIR_FAILURE_COOLDOWN_MS = 30_000`; per-base-URL cooldown map `:161`, check `:190`, arm `:198`; env fallbacks `NADIR_API_KEY` / `NADIR_BASE_URL`; menu cap 100, prompt cap 16,000 | CONFIRMED |
 | 5 | `headroomRanking.ts:54` (`computeHeadroom`) | `computeHeadroom = 1 − max(util5h, util7d)`; `rankByHeadroom` most-free-first, missing entry → full headroom (fail-open), stable ties | CONFIRMED |
 | 6 | `quotaStrategies.ts:721-800` (expiry-first orderer); `:824-900` (headroom orderer); `:872-883` (credential threading, #6379) | `orderTargetsByExpiryFirst` (~`:721`, domain-quota-cache only, no network); `orderTargetsByHeadroom` (~`:824`, bounded-concurrency saturation fetch, fail-open to 0, order unchanged on failure) | CONFIRMED (orderers; the `:872-883` threading comment was NOT re-read line-exact) |
 | 7 | `quotaScoring.ts:542-640` (expiry-first score); `:413-430` (defaults minHours 0.25, exhausted floor 1%, tie band 5%) | `EXPIRY_FIRST_DEFAULTS` + `resolveExpiryFirstConfig` with `minHours`/`tieBand`/`exhaustedFloor: 1%`; score doc: "usable / hoursUntilDeadline", burn projection, and the longer-window deadline rule verbatim — "Taking the session reset as the deadline made two subscription accounts trade places every few hours and ignore weekly resets two days apart" | CONFIRMED |
@@ -329,27 +329,27 @@ Not re-checked line-exact (noted honestly, none contradicted): design's
 read is consistent (0.001 clamps for maxCost/maxStdDev) but those exact
 lines were not re-read; design's `quotaStrategies.ts:872-883` threading
 comment; the failover file's min-500 ms / max-64-overrides lines.
-The design's own honest-gap note (§S4.1: no direct OmniRoute file:line for
+The design's own honest-gap note (§S4.1: no direct the reference router file:line for
 a "reserve account" in auto combos) is confirmed — no such citation was
 found in this review either; row 425's citation still rests on the
 deep-study summary + the failover file.
 
 ## §5 — PARITY / gate arithmetic re-check
 
-- Area 1 header confirmed: `docs/PARITY.md:361` — 63 rows, FULL 34 /
+- Area 1 header confirmed: `internal parity tracker:361` — 63 rows, FULL 34 /
   PARTIAL 25 / MISSING 4 / WRONG 0; strict 54.0%, weighted 73.8%.
 - All four rows still MISSING, and all four Codvian-status cells are now
   factually stale (the design itself says so; this review confirms it
   against the code):
-  - Row 388 (`PARITY.md:388`): "No per-account fallback-strategy
+  - Row 388 (`parity tracker:388`): "No per-account fallback-strategy
     concept" — wrong; 9 values built + wired (`router.go:2269`).
     Stale citation `router.go:1203,1211` points at nothing relevant.
-  - Row 394 (`PARITY.md:394`): "No SLA concept anywhere" — wrong;
+  - Row 394 (`parity tracker:394`): "No SLA concept anywhere" — wrong;
     `internal/sla` scorer + `sla-aware` hook built + wired.
-  - Row 396 (`PARITY.md:396`): "No external decision API" — wrong;
+  - Row 396 (`parity tracker:396`): "No external decision API" — wrong;
     `nadirSelect` + `auto/nadir` dispatch built + tested (config surface
     is the missing half, not the API).
-  - Row 425 (`PARITY.md:425`): "No preferred/reserve account concept" —
+  - Row 425 (`parity tracker:425`): "No preferred/reserve account concept" —
     wrong; roles + reserve-last + failover built, and row 487 already
     records the same concept FULL.
 - Gate arithmetic confirmed: (34 + 12.5)/63 = 73.8% today;
@@ -431,7 +431,7 @@ Builders must use the review-time lines below, re-verified at build time:
   (mapping at `:2294-2304`).
 - `routerStrategy.ts` SLA pre-filter: design `:294-295` → a few lines off
   in this reference clone (same `select` head).
-- `PARITY.md:388` stale citation `router.go:1203,1211` → live call site
+- `parity tracker:388` stale citation `router.go:1203,1211` → live call site
   `router.go:2269`.
 - Confirmed line-exact (no drift): `router.go:2269`
   (`orderAccountAttempts`), `router.go:550-570` (account-fallback Config),
@@ -449,7 +449,7 @@ Builders must use the review-time lines below, re-verified at build time:
 - Stale/wrong design claims: **2 material** (S3 "no failure cooldown";
   S2 "`Describe` still discloses p50/neutral-stability") + line-number
   drift in ~6 citations (non-material, §8).
-- OmniRoute citations spot-checked: **9 files, all confirmed** (3 with
+- the reference router citations spot-checked: **9 files, all confirmed** (3 with
   minor exact-line caveats noted in §4).
 - Go/no-go re-graded: S3 scope reduced (cooldown struck); all other calls
   unchanged — GO: S4, S1, S2, S3-reduced; NO-GO: D1, D2, S5, S6.

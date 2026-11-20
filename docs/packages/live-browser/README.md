@@ -23,7 +23,7 @@
   click-through happened. The `screenshots/` folder in this package is empty on
   purpose — it is the destination for the future run's captures.
 - **Scope guard:** this package creates new files only. It edits no code, no
-  dashboard file, and not `CHECKLIST.md` / `PARITY.md` / `PLAN.md`. Closing items
+  dashboard file, and not `CHECKLIST.md` / `parity tracker` / `PLAN.md`. Closing items
   110/128/297 in the checklist is the coordinator's job, after the results template
   in this package is filled in from a real run.
 

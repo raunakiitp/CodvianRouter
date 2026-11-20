@@ -62,7 +62,7 @@ Mixed states fail as a whole: any fatal block makes the hop
 Drops are recorded in the detail string; detail names only block
 kinds, wires, and counts — never reasoning or prompt text.
 
-**OpenAI replay models** follow OmniRoute's list
+**OpenAI replay models** follow the reference router's list
 (`docs/routing/REASONING_REPLAY.md`, v3.8.40): deepseek-r1,
 deepseek-reasoner, deepseek-chat, deepseek-v4-flash/pro,
 (deepseek|zen/deepseek)-v4, kimi-k\d, qwq, qwen.*think,
@@ -75,7 +75,7 @@ dropping it.
 ### The store: capture and restore
 
 `reasoning.Store` is in-memory only, TTL 2h, cap 200 entries
-(oldest-created eviction) — OmniRoute's defaults. Keys are
+(oldest-created eviction) — the reference router's defaults. Keys are
 SHA-256 digests of the canonical transcript (`caller id` + turns:
 role, text, tool calls) — the reasoning state itself is
 deliberately NOT part of the key, so capture and injection meet.

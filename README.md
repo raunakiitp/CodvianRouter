@@ -16,9 +16,9 @@ about which model is up, which is cheapest, or what to do when one goes down.
 </div>
 
 > **Honest status — 20 Nov 2026.** This is active development, not a finished
-> product. Every number below was measured, not claimed. Parity is tracked
-> row-by-row in [docs/PARITY.md](docs/PARITY.md) — 44.2% of the comparison
-> is fully matched today, and the rest is the work in progress.
+> product. Every number below was measured, not claimed. Our target feature
+> set is tracked row-by-row in an internal tracker — 44.2% of it is fully
+> matched today, and the rest is the work in progress.
 
 ## At a glance
 
@@ -39,7 +39,7 @@ about which model is up, which is cheapest, or what to do when one goes down.
 | Run it in 5 minutes | [Quick start](#quick-start) |
 | See what it can do | [What it does](#what-it-does) |
 | Know how fast it is | [Performance](#performance) |
-| Read the honest status | [docs/PARITY.md](docs/PARITY.md) |
+| Read the honest status | See the note above |
 | Install it properly | [docs/INSTALL.md](docs/INSTALL.md) |
 | Build on it | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 
@@ -183,7 +183,6 @@ Requires Go 1.27+ to build. Runs on Linux, macOS, and Windows.
 | Doc | What it is |
 |---|---|
 | [docs/INSTALL.md](docs/INSTALL.md) | Install, verify, troubleshoot |
-| [docs/PARITY.md](docs/PARITY.md) | Row-by-row status vs the best-known router — the truth file |
 | [docs/BENCHMARK.md](docs/BENCHMARK.md) | How speed is measured, and every result |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the router is put together |
 | [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | The API, endpoint by endpoint |
@@ -194,8 +193,8 @@ Requires Go 1.27+ to build. Runs on Linux, macOS, and Windows.
 
 Issues and pull requests are welcome. The bar is high on purpose: every
 change needs a test that fails without it, and the full gate must stay green.
-See [docs/PARITY.md](docs/PARITY.md) before adding a feature — if the
-comparison says it's missing, that's the queue.
+Check the internal tracker before adding a feature — if it
+says the feature is missing, that's the queue.
 
 ## License
 

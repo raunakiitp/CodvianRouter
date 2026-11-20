@@ -600,11 +600,11 @@ idle memory — but the machines differ (see caveats), so this is a
 rough placement, not a ranking.
 
 **Deliberate divergence — EQUAL ≠ COPY (2026-11-19, CHECKLIST G2):**
-OmniRoute-style marketing presents gateway benchmarks as head-to-head
+reference-style marketing presents gateway benchmarks as head-to-head
 tables; we do not. Our numbers are measurements on this shared
 1.5-vCPU VM only, and any cross-machine comparison is labelled a rough
 placement, never a ranking — presenting it as a ranking would be a
-misleading claim, and matching OmniRoute's capability/standard does not
+misleading claim, and matching the reference router's capability/standard does not
 mean copying its claims. Where our numbers miss the Geekflare targets,
 the miss is shown as a miss (the verdict tables in this file and the
 README benchmark section), never softened into a win.

@@ -640,7 +640,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `chat` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Alias of POST /v1/audio/speech — not an OpenAI endpoint; OmniRoute route name, same handler and operation. Gateway-key auth required.
+- **Description:** Alias of POST /v1/audio/speech — not an OpenAI endpoint; gateway route name, same handler and operation. Gateway-key auth required.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -672,7 +672,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `chat` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Alias of POST /v1/audio/transcriptions — not an OpenAI endpoint; OmniRoute route name, same handler and operation. Gateway-key auth required.
+- **Description:** Alias of POST /v1/audio/transcriptions — not an OpenAI endpoint; gateway route name, same handler and operation. Gateway-key auth required.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 

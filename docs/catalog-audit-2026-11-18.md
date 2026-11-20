@@ -17,7 +17,7 @@ Source: [https://models.dev/api.json](https://models.dev/api.json), fetched live
 | models.dev models | 9981 (863 deprecated) |
 | Reachability probed | 940 (917 reachable, 23 unreachable, 234 skipped — no base URL, 7 loopback skipped — local runtimes, unprobable from here) |
 
-## Triage 2026-11-18 (committed record: `docs/catalog-triage-2026-11-18-round5.md`)
+## Triage 2026-11-18 (committed record: `internal catalog triage record`)
 
 | | Count |
 |---|---|

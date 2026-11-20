@@ -139,7 +139,7 @@ upstream answering in 50 ms — **not** a public benchmark, real-world
 numbers depend on upstream latency):
 
 - 429 failover: **52.4–55.8 ms** (~1–2 ms router overhead vs 51.2 ms direct)
-- Failover switch time (dead-429 response → fallback dispatch, NOT end-to-end): **0.6–1.0 ms** (measured 2026-11-20, VM localhost mocks, 3 runs, TestChatCompletionsFailoverSwitchTime — PARITY.md Area 12 row 18 evidence)
+- Failover switch time (dead-429 response → fallback dispatch, NOT end-to-end): **0.6–1.0 ms** (measured 2026-11-20, VM localhost mocks, 3 runs, TestChatCompletionsFailoverSwitchTime — parity tracker Area 12 row 18 evidence)
 - Slow provider (2,000 ms) hedged at 150 ms: **203.9–204.4 ms**
 - Startup to healthz-ready: **73 ms**; idle memory: **~32 MB**;
   single binary: **16.9 MB**
