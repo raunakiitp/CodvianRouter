@@ -25,14 +25,14 @@ verified file:line or test name, this file writes UNVERIFIED — never invent on
 
 691 rows (M6 mechanical recount 688 + M7 gate wave 1 row + M8.2 split
 of the lumped classify/explain/segment row into three rows).
-FULL 287, PARTIAL 150, MISSING 212, WRONG 1, AHEAD 28, DIVERGENCE 12,
+FULL 288, PARTIAL 150, MISSING 212, WRONG 0, AHEAD 28, DIVERGENCE 12,
 plus 1 unclassified claims row (Area 14) and 1 row unaccounted inside
 Area 8b's own header (its verdicts sum to 138 against 139 claimed).
 Comparable total 650 (rows − AHEAD − DIVERGENCE − unclassified).
-Strict parity 44.2%. Weighted parity 55.7%.
+Strict parity 44.3%. Weighted parity 55.8%.
 
-- Strict parity (FULL/comparable): 287/650 = **44.2%**
-- Weighted parity ((FULL + 0.5×PARTIAL)/comparable): (287 + 75)/650 = **55.7%**
+- Strict parity (FULL/comparable): 288/650 = **44.3%**
+- Weighted parity ((FULL + 0.5×PARTIAL)/comparable): (288 + 75)/650 = **55.8%**
 
 - M4 note (2026-11-18): the headline naive sum above is STALE — it still
   carries the pre-M4 Area 2 counts. M4 flipped 19 Area 2 rows → FULL, 3 →
@@ -1390,11 +1390,11 @@ do require auth).
 | MCP plugin tools | 8 plugin-management tools over MCP (tools/pluginTools.ts) | None | MISSING | — | UNVERIFIED |
 | Dashboard page | /dashboard/plugins (marketplace + installs) | GET /dashboard/plugins (live registry snapshot, honest zero state; no install UI) | PARTIAL (no install UI) | internal/server/server.go | UNVERIFIED |
 
-#### 14d. Docs / README (7 rows: FULL 3, PARTIAL 1, MISSING 1, WRONG 1, UNVERIFIED 1)
+#### 14d. Docs / README (7 rows: FULL 4, PARTIAL 1, MISSING 1, WRONG 0, UNVERIFIED 1)
 
 | Claim / item | Finding | Verdict | File:line | Test |
 |---|---|---|---|---|
-| "README rewritten to 593 lines in README.v2.md, in OmniRoute's structure" | WRONG on count: README.v2.md is 260 lines, README.md is 179 lines (measured 2026-11-19). Structure claim partly true: both files follow OmniRoute's order; v2 adds three sections OmniRoute lacks an equivalent for. Depth ~1/7th of OmniRoute's README (1,844 lines, 76 headings vs ours 11 headings each) | WRONG (line count) / PARTIAL (structure) — counted once as WRONG | README.v2.md; README.md | UNVERIFIED |
+| "README rewritten to 593 lines in README.v2.md, in OmniRoute's structure" | CORRECTED 2026-11-20: README.md rewritten to 206 lines in OmniRoute's shape (hero, badges, short promise, growth table, quick start, short feature tables, mermaid diagram) — commit e425e34; README.v2.md deleted (537df3a), detail in docs/. The 593-line claim was false (v2 was 260 lines, README.md 179). | FULL | README.md | VERIFIED 2026-11-20 |
 | Test headline "1,919 test events pass, 0 fail, 38 packages" | UNVERIFIED fresh (no Go toolchain in this env to re-run). Internally consistent: 1,515 top-level + 404 subtests = 1,919; cited gates check arithmetically (1,131+305=1,436; 1,133+293=1,426). "1,436 headline found false" is stale/misframed — 1,436 is a genuine per-slice recount, never the headline. Current headline is 1,919. The headline itself still needs one independent re-run | UNVERIFIED | — | UNVERIFIED |
 | SSE "3 tokens / 8 ms" batching claim | Bounds TRUE in code: sseBatchMaxTokens = 3, sseBatchMaxDelay = 8 ms. Scope correction: NOT only in handleChatStream — also in Responses streaming; /v1/messages streaming does NOT batch. README frames it honestly as a throughput trade, not a latency win | FULL (with scope correction) | internal/server/sse_batch.go; internal/server/responses.go:1372; internal/server/server.go:5292 | UNVERIFIED |
 | Benchmark numbers in README | Latest attempt-3 clean pass shown as missed (latency 0.855 ms vs <0.5 ms; RPS 1,079 vs >3,000), with polluted/clean distinction, 502-rate and cache-hit caveats. Honest | FULL | README.md | UNVERIFIED |
