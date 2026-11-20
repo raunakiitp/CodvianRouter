@@ -176,10 +176,10 @@ func (s *Server) handleKeyBudgetWindow(w http.ResponseWriter, r *http.Request) {
 		setWindowLimit(k, id, "monthly", req.MonthlyUSD)
 		s.persistConfig()
 		writeJSON(w, http.StatusOK, map[string]any{
-			"id":           id,
-			"daily_usd":    getWindowLimit(id, "daily"),
-			"weekly_usd":   getWindowLimit(id, "weekly"),
-			"monthly_usd":  getWindowLimit(id, "monthly"),
+			"id":          id,
+			"daily_usd":   getWindowLimit(id, "daily"),
+			"weekly_usd":  getWindowLimit(id, "weekly"),
+			"monthly_usd": getWindowLimit(id, "monthly"),
 		})
 		return
 	}

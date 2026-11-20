@@ -283,7 +283,7 @@ func (s *Server) handleAccountFallback(w http.ResponseWriter, r *http.Request) {
 		globalAccountFallback.mu.RLock()
 		defer globalAccountFallback.mu.RUnlock()
 		writeJSON(w, http.StatusOK, map[string]any{
-			"strategy":          globalAccountFallback.strategy,
+			"strategy":         globalAccountFallback.strategy,
 			"valid_strategies": validAccountFallbackStrategies,
 		})
 	case http.MethodPatch:

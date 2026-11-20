@@ -429,15 +429,15 @@ func (s *Server) handleLogExportJSON(w http.ResponseWriter, r *http.Request) {
 		if events, err := s.ledger.RecentEvents(ctx, limit, ""); err == nil {
 			for _, e := range events {
 				rows = append(rows, map[string]any{
-					"id":            e.ID,
-					"timestamp":          e.TS,
-					"model":              e.Model,
-					"provider":           e.Provider,
-					"prompt_tokens":      e.PromptTokens,
-					"completion_tokens":  e.CompletionTokens,
-					"cost_usd":           e.CostUSD,
-					"duration_ms":        e.LatencyMS,
-					"ok":                 e.OK,
+					"id":                e.ID,
+					"timestamp":         e.TS,
+					"model":             e.Model,
+					"provider":          e.Provider,
+					"prompt_tokens":     e.PromptTokens,
+					"completion_tokens": e.CompletionTokens,
+					"cost_usd":          e.CostUSD,
+					"duration_ms":       e.LatencyMS,
+					"ok":                e.OK,
 				})
 			}
 		}
