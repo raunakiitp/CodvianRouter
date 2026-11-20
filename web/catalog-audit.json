@@ -1,38 +1,38 @@
 {
-  "generated_at": "2026-11-20T23:00:19Z",
+  "generated_at": "2026-11-18T07:32:11Z",
   "source_url": "https://models.dev/api.json",
   "catalog": {
-    "total": 610,
+    "total": 614,
     "verified_from_docs": 65,
-    "reference_only": 541,
+    "reference_only": 545,
     "unverified": 4,
-    "no_base_url": 231,
+    "no_base_url": 234,
     "templated_base_url": 9,
-    "tos_grey": 43
+    "tos_grey": 38
   },
   "remote": {
     "providers": 324,
-    "models": 10024,
-    "deprecated_models": 870
+    "models": 9981,
+    "deprecated_models": 863
   },
   "counts_by_kind": {
     "base_url_differs": 2,
     "base_url_missing_in_catalog": 1,
     "base_url_missing_in_modelsdev": 10,
     "base_url_path_differs": 3,
-    "base_url_unreachable": 5,
-    "missing_in_catalog": 38,
-    "missing_in_modelsdev": 324,
+    "base_url_unreachable": 6,
+    "missing_in_catalog": 37,
+    "missing_in_modelsdev": 327,
     "possible_rename": 7,
     "renamed": 19,
     "verified_base_unreachable": 1,
-    "website_unreachable": 12
+    "website_unreachable": 17
   },
   "reachability": {
-    "checked": 934,
+    "checked": 940,
     "reachable": 917,
-    "unreachable": 17,
-    "skipped": 231,
+    "unreachable": 23,
+    "skipped": 234,
     "loopback_skipped": 7
   },
   "findings": [
@@ -292,7 +292,7 @@
       "catalog_id": "kilo-gateway",
       "remote_id": "kilo",
       "name": "Kilo Gateway",
-      "detail": "catalog ID \"kilo-gateway\" but models.dev lists the same name under ID \"kilo\" (466 models) — possible rename, needs a human to confirm",
+      "detail": "catalog ID \"kilo-gateway\" but models.dev lists the same name under ID \"kilo\" (465 models) — possible rename, needs a human to confirm",
       "source": "https://kilo.ai"
     },
     {
@@ -363,7 +363,7 @@
       "catalog_id": "vercel-ai-gateway",
       "remote_id": "vercel",
       "name": "Vercel AI Gateway",
-      "detail": "catalog ID \"vercel-ai-gateway\" but models.dev lists the same name under ID \"vercel\" (417 models) — possible rename, needs a human to confirm",
+      "detail": "catalog ID \"vercel-ai-gateway\" but models.dev lists the same name under ID \"vercel\" (416 models) — possible rename, needs a human to confirm",
       "source": "https://github.com/vercel/ai/tree/5eb85cc45a259553501f535b8ac79a77d0e79223/packages/gateway"
     },
     {
@@ -711,6 +711,13 @@
       "source": "https://console.groq.com/docs/models"
     },
     {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "blackbox",
+      "name": "Blackbox AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://blackbox.ai"
+    },
+    {
       "kind": "base_url_missing_in_modelsdev",
       "catalog_id": "xai",
       "remote_id": "xai",
@@ -748,6 +755,13 @@
       "name": "Meta Llama API",
       "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
       "source": "https://llama.developer.meta.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "galadriel",
+      "name": "Galadriel",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://galadriel.com"
     },
     {
       "kind": "missing_in_modelsdev",
@@ -935,6 +949,13 @@
       "name": "Predibase",
       "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
       "source": "https://predibase.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "bytez",
+      "name": "Bytez",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://bytez.com"
     },
     {
       "kind": "missing_in_modelsdev",
@@ -2578,7 +2599,7 @@
       "catalog_id": "prime-intellect",
       "remote_id": "prime",
       "name": "Prime Inference",
-      "detail": "catalog ID \"prime-intellect\" but models.dev lists the same name under ID \"prime\" (73 models) — possible rename, needs a human to confirm",
+      "detail": "catalog ID \"prime-intellect\" but models.dev lists the same name under ID \"prime\" (70 models) — possible rename, needs a human to confirm",
       "source": "https://docs.primeintellect.ai/inference/overview"
     },
     {
@@ -2632,14 +2653,6 @@
     },
     {
       "kind": "missing_in_catalog",
-      "remote_id": "ai21",
-      "name": "AI21 Labs",
-      "detail": "listed by models.dev with 2 model(s) but absent from the catalog",
-      "source": "https://docs.ai21.com/docs/jamba-foundation-models",
-      "models_dev_models": 2
-    },
-    {
-      "kind": "missing_in_catalog",
       "remote_id": "alibaba-coding-plan",
       "name": "Alibaba Coding Plan",
       "detail": "listed by models.dev with 10 model(s) but absent from the catalog",
@@ -2666,25 +2679,25 @@
       "kind": "missing_in_catalog",
       "remote_id": "amazon-bedrock",
       "name": "Amazon Bedrock",
-      "detail": "listed by models.dev with 214 model(s) but absent from the catalog",
+      "detail": "listed by models.dev with 208 model(s) but absent from the catalog",
       "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html",
-      "models_dev_models": 214
+      "models_dev_models": 208
     },
     {
       "kind": "missing_in_catalog",
       "remote_id": "azure",
       "name": "Azure",
-      "detail": "listed by models.dev with 99 model(s) but absent from the catalog",
+      "detail": "listed by models.dev with 97 model(s) but absent from the catalog",
       "source": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models",
-      "models_dev_models": 99
+      "models_dev_models": 97
     },
     {
       "kind": "missing_in_catalog",
       "remote_id": "azure-cognitive-services",
       "name": "Azure Cognitive Services",
-      "detail": "listed by models.dev with 99 model(s) but absent from the catalog",
+      "detail": "listed by models.dev with 97 model(s) but absent from the catalog",
       "source": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models",
-      "models_dev_models": 99
+      "models_dev_models": 97
     },
     {
       "kind": "missing_in_catalog",
@@ -2706,25 +2719,25 @@
       "kind": "missing_in_catalog",
       "remote_id": "friendli",
       "name": "Friendli",
-      "detail": "listed by models.dev with 4 model(s) but absent from the catalog",
+      "detail": "listed by models.dev with 5 model(s) but absent from the catalog",
       "source": "https://friendli.ai/docs/guides/serverless_endpoints/introduction",
-      "models_dev_models": 4
+      "models_dev_models": 5
     },
     {
       "kind": "missing_in_catalog",
       "remote_id": "google",
       "name": "Google",
-      "detail": "listed by models.dev with 39 model(s) but absent from the catalog",
+      "detail": "listed by models.dev with 38 model(s) but absent from the catalog",
       "source": "https://ai.google.dev/gemini-api/docs/models",
-      "models_dev_models": 39
+      "models_dev_models": 38
     },
     {
       "kind": "missing_in_catalog",
       "remote_id": "google-vertex",
       "name": "Vertex",
-      "detail": "listed by models.dev with 65 model(s) but absent from the catalog",
+      "detail": "listed by models.dev with 64 model(s) but absent from the catalog",
       "source": "https://cloud.google.com/vertex-ai/generative-ai/docs/models",
-      "models_dev_models": 65
+      "models_dev_models": 64
     },
     {
       "kind": "missing_in_catalog",
@@ -2746,9 +2759,9 @@
       "kind": "missing_in_catalog",
       "remote_id": "llmgateway-providers",
       "name": "LLM Gateway",
-      "detail": "listed by models.dev with 505 model(s) but absent from the catalog",
+      "detail": "listed by models.dev with 501 model(s) but absent from the catalog",
       "source": "https://llmgateway.io/docs",
-      "models_dev_models": 505
+      "models_dev_models": 501
     },
     {
       "kind": "missing_in_catalog",
@@ -2802,9 +2815,9 @@
       "kind": "missing_in_catalog",
       "remote_id": "ofox",
       "name": "Ofox",
-      "detail": "listed by models.dev with 157 model(s) but absent from the catalog",
+      "detail": "listed by models.dev with 154 model(s) but absent from the catalog",
       "source": "https://ofox.ai/docs",
-      "models_dev_models": 157
+      "models_dev_models": 154
     },
     {
       "kind": "missing_in_catalog",
@@ -2936,38 +2949,59 @@
     },
     {
       "kind": "base_url_unreachable",
-      "catalog_id": "llm-kiwi",
-      "name": "LLM.Kiwi",
-      "detail": "catalog base URL \"https://api.llm.kiwi/v1\" gave no HTTP response (timeout: Get \"https://api.llm.kiwi/v1\": context deadline exceeded)",
-      "source": "https://api.llm.kiwi/v1"
+      "catalog_id": "speka",
+      "name": "Speka AI",
+      "detail": "catalog base URL \"https://speka.me/v1\" gave no HTTP response (connect: Get \"https://speka.me/v1\": EOF)",
+      "source": "https://speka.me/v1"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "speka",
+      "name": "Speka AI",
+      "detail": "catalog website \"https://speka.me\" gave no HTTP response (connect: Get \"https://speka.me\": EOF)",
+      "source": "https://speka.me"
     },
     {
       "kind": "website_unreachable",
       "catalog_id": "llamagate",
       "name": "LlamaGate",
-      "detail": "catalog website \"https://llamagate.ai\" gave no HTTP response (dns: Get \"https://llamagate.ai\": dial tcp: lookup llamagate.ai: no such host)",
+      "detail": "catalog website \"https://llamagate.ai\" gave no HTTP response (connect: Get \"https://llamagate.ai\": EOF)",
       "source": "https://llamagate.ai"
     },
     {
       "kind": "website_unreachable",
       "catalog_id": "thebai",
       "name": "TheB.AI",
-      "detail": "catalog website \"https://theb.ai\" gave no HTTP response (dns: Get \"https://theb.ai\": dial tcp: lookup theb.ai: no such host)",
+      "detail": "catalog website \"https://theb.ai\" gave no HTTP response (connect: Get \"https://theb.ai\": EOF)",
       "source": "https://theb.ai"
     },
     {
       "kind": "base_url_unreachable",
       "catalog_id": "empower",
       "name": "Empower",
-      "detail": "catalog base URL \"https://app.empower.dev/api/v1\" gave no HTTP response (timeout: Get \"https://app.empower.dev/api/v1\": context deadline exceeded)",
+      "detail": "catalog base URL \"https://app.empower.dev/api/v1\" gave no HTTP response (connect: Get \"https://app.empower.dev/api/v1\": EOF)",
       "source": "https://app.empower.dev/api/v1"
     },
     {
       "kind": "website_unreachable",
       "catalog_id": "empower",
       "name": "Empower",
-      "detail": "catalog website \"https://docs.empower.dev\" gave no HTTP response (timeout: Get \"https://docs.empower.dev\": context deadline exceeded)",
+      "detail": "catalog website \"https://docs.empower.dev\" gave no HTTP response (connect: Get \"https://docs.empower.dev\": EOF)",
       "source": "https://docs.empower.dev"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "nara",
+      "name": "NaraRouter",
+      "detail": "catalog website \"https://bynara.id\" gave no HTTP response (timeout: Get \"https://bynara.id\": context deadline exceeded)",
+      "source": "https://bynara.id"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "void-ai",
+      "name": "Void AI",
+      "detail": "catalog website \"https://voidai.app\" gave no HTTP response (connect: Get \"https://voidai.app\": EOF)",
+      "source": "https://voidai.app"
     },
     {
       "kind": "website_unreachable",
@@ -2978,59 +3012,80 @@
     },
     {
       "kind": "website_unreachable",
+      "catalog_id": "meta-llama",
+      "name": "Meta Llama API",
+      "detail": "catalog website \"https://llama.developer.meta.com\" gave no HTTP response (connect: Get \"https://dev.meta.ai/\": Forbidden)",
+      "source": "https://llama.developer.meta.com"
+    },
+    {
+      "kind": "website_unreachable",
       "catalog_id": "monsterapi",
       "name": "MonsterAPI",
-      "detail": "catalog website \"https://monsterapi.ai\" gave no HTTP response (dns: Get \"https://monsterapi.ai\": dial tcp: lookup monsterapi.ai: no such host)",
+      "detail": "catalog website \"https://monsterapi.ai\" gave no HTTP response (connect: Get \"https://monsterapi.ai\": EOF)",
       "source": "https://monsterapi.ai"
     },
     {
       "kind": "base_url_unreachable",
       "catalog_id": "clarifai",
       "name": "Clarifai",
-      "detail": "catalog base URL \"https://api.clarifai.com/v2/ext/openai/v1\" gave no HTTP response (dns: Get \"https://api.clarifai.com/v2/ext/openai/v1\": dial tcp: lookup api.clarifai.com: no such host)",
+      "detail": "catalog base URL \"https://api.clarifai.com/v2/ext/openai/v1\" gave no HTTP response (connect: Get \"https://api.clarifai.com/v2/ext/openai/v1\": EOF)",
       "source": "https://api.clarifai.com/v2/ext/openai/v1"
     },
     {
       "kind": "website_unreachable",
       "catalog_id": "clarifai",
       "name": "Clarifai",
-      "detail": "catalog website \"https://docs.clarifai.com\" gave no HTTP response (dns: Get \"https://docs.clarifai.com\": dial tcp: lookup docs.clarifai.com: no such host)",
+      "detail": "catalog website \"https://docs.clarifai.com\" gave no HTTP response (connect: Get \"https://docs.clarifai.com\": EOF)",
       "source": "https://docs.clarifai.com"
-    },
-    {
-      "kind": "website_unreachable",
-      "catalog_id": "qianfan",
-      "name": "Baidu Qianfan",
-      "detail": "catalog website \"https://cloud.baidu.com/product-s/qianfan_home\" gave no HTTP response (connect: Get \"https://cloud.baidu.com/product-s/qianfan_home\": read tcp 192.168.1.3:59340-\u003e182.61.200.180:443: wsarecv: An existing connection was forcibly closed by the remote host.)",
-      "source": "https://cloud.baidu.com/product-s/qianfan_home"
     },
     {
       "kind": "website_unreachable",
       "catalog_id": "codebuddy-intl",
       "name": "CodeBuddy Intl",
-      "detail": "catalog website \"https://www.codebuddy.ai\" gave no HTTP response (connect: Get \"https://www.codebuddy.ai\": dial tcp: lookup www.codebuddy.ai: getaddrinfow: The requested name is valid, but no data of the requested type was found.)",
+      "detail": "catalog website \"https://www.codebuddy.ai\" gave no HTTP response (connect: Get \"https://www.codebuddy.ai\": EOF)",
       "source": "https://www.codebuddy.ai"
     },
     {
       "kind": "website_unreachable",
-      "catalog_id": "workbuddy",
-      "name": "WorkBuddy",
-      "detail": "catalog website \"https://www.workbuddy.ai\" gave no HTTP response (connect: Get \"https://www.workbuddy.ai\": dial tcp: lookup www.workbuddy.ai: getaddrinfow: The requested name is valid, but no data of the requested type was found.)",
-      "source": "https://www.workbuddy.ai"
+      "catalog_id": "muse-code",
+      "name": "Muse Code (Meta)",
+      "detail": "catalog website \"https://ai.developer.meta.com/docs/muse-code/auth\" gave no HTTP response (connect: Get \"https://dev.meta.ai/docs/muse-code/auth\": Forbidden)",
+      "source": "https://ai.developer.meta.com/docs/muse-code/auth"
     },
     {
       "kind": "website_unreachable",
       "catalog_id": "playht",
       "name": "PlayHT",
-      "detail": "catalog website \"https://play.ht\" gave no HTTP response (dns: Get \"https://play.ht\": dial tcp: lookup play.ht: no such host)",
+      "detail": "catalog website \"https://play.ht\" gave no HTTP response (connect: Get \"https://play.ht\": EOF)",
       "source": "https://play.ht"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "muse-spark-web",
+      "name": "Muse Spark Web (Meta AI)",
+      "detail": "catalog website \"https://www.meta.ai\" gave no HTTP response (connect: Get \"https://www.meta.ai\": Forbidden)",
+      "source": "https://www.meta.ai"
     },
     {
       "kind": "website_unreachable",
       "catalog_id": "routing-run",
       "name": "routing.run",
-      "detail": "catalog website \"https://docs.routing.run/api-reference/models\" gave no HTTP response (dns: Get \"https://docs.routing.run/api-reference/models\": dial tcp: lookup docs.routing.run: no such host)",
+      "detail": "catalog website \"https://docs.routing.run/api-reference/models\" gave no HTTP response (connect: Get \"https://docs.routing.run/api-reference/models\": EOF)",
       "source": "https://docs.routing.run/api-reference/models"
+    },
+    {
+      "kind": "base_url_unreachable",
+      "catalog_id": "claudinio",
+      "name": "Claudinio",
+      "detail": "catalog base URL \"https://api.claudin.io/v1\" gave no HTTP response (connect: Get \"https://api.claudin.io/v1\": EOF)",
+      "source": "https://api.claudin.io/v1"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "claudinio",
+      "name": "Claudinio",
+      "detail": "catalog website \"https://claudin.io\" gave no HTTP response (connect: Get \"https://claudin.io\": EOF)",
+      "source": "https://claudin.io"
     },
     {
       "kind": "base_url_unreachable",
@@ -3050,14 +3105,14 @@
       "kind": "base_url_unreachable",
       "catalog_id": "kluster",
       "name": "Kluster.ai",
-      "detail": "catalog base URL \"https://api.kluster.ai/v1\" gave no HTTP response (dns: Get \"https://api.kluster.ai/v1\": dial tcp: lookup api.kluster.ai: no such host)",
+      "detail": "catalog base URL \"https://api.kluster.ai/v1\" gave no HTTP response (connect: Get \"https://api.kluster.ai/v1\": EOF)",
       "source": "https://api.kluster.ai/v1"
     },
     {
       "kind": "website_unreachable",
       "catalog_id": "kluster",
       "name": "Kluster.ai",
-      "detail": "catalog website \"https://www.kluster.ai\" gave no HTTP response (dns: Get \"https://www.kluster.ai\": dial tcp: lookup www.kluster.ai: no such host)",
+      "detail": "catalog website \"https://www.kluster.ai\" gave no HTTP response (connect: Get \"https://www.kluster.ai\": EOF)",
       "source": "https://www.kluster.ai"
     }
   ],
@@ -3067,5 +3122,41 @@
     "A base URL that differs from models.dev's `api` field is drift, not proof the catalog is wrong: models.dev stores the bare host where the catalog stores the /v1 base, and either side can be stale. A fix needs the provider's own docs as the cited source.",
     "Reachability is a transport fact, not a correctness verdict: a host that answers 401/404 exists; a host that times out once may be a transient failure, not a dead provider.",
     "Reachability is probed from the machine running the audit, through whatever egress it has: in this VM that is a shared egress proxy, which refuses some hosts outright and is slow for others, so a connect/EOF/timeout here is a re-check signal, not proof the provider is dead. Loopback base URLs (localhost / 127.0.0.0/8 / ::1 — local runtimes such as Ollama, LocalAI, Jan, GPT4All) are never probed: they can only be checked on the operator's own machine."
-  ]
+  ],
+  "triage": {
+    "date": "2026-11-18",
+    "doc": "internal catalog triage record",
+    "audit_before": {
+      "missing_in_catalog": 81,
+      "base_url_missing_in_catalog": 1,
+      "renamed": 19,
+      "possible_rename": 7,
+      "catalog_total": 570
+    },
+    "candidates": {
+      "total": 228,
+      "triaged": 228,
+      "added": 191,
+      "added_verified_from_docs": 17,
+      "added_reference_only": 174,
+      "rejected": 30,
+      "pending": 7,
+      "untouched": 0
+    },
+    "base_urls": {
+      "missing_before": 44,
+      "filled": 43,
+      "skipped": 1
+    },
+    "renames": {
+      "total": 21,
+      "applied": 4,
+      "rejected": 17
+    },
+    "possible_renames": {
+      "total": 12,
+      "applied": 5,
+      "pending_human": 7
+    }
+  }
 }
