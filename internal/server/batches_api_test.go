@@ -611,6 +611,16 @@ func TestBatchesRestartMarksRunningFailed(t *testing.T) {
 	// Clean up the first server's still-blocked worker so the
 	// test process does not leak a goroutine.
 	_, _ = oldSt.cancelBatch(created.ID, "")
+	for i := 0; i < 100; i++ {
+		oldSt.mu.Lock()
+		b := oldSt.byID[created.ID]
+		terminal := b != nil && batchTerminal(b.Status)
+		oldSt.mu.Unlock()
+		if terminal {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // TestBatchesLiveSmoke goes through the real registered mux

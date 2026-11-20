@@ -89,7 +89,7 @@ func TestBreakerStaleDegradedPersistsAcrossReload(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "breakers.json")
 	cfg := Config{
 		HedgeDelay:       -1,
-		BreakerOpenFor:   50 * time.Millisecond,
+		BreakerOpenFor:   250 * time.Millisecond,
 		BreakerStorePath: path,
 		AuthProfileFor:   func(providerID string) AuthProfile { return AuthProfileOAuth },
 	}
@@ -101,7 +101,7 @@ func TestBreakerStaleDegradedPersistsAcrossReload(t *testing.T) {
 	if st := breakerStatesByID(eng2)["a"]; st.State != BreakerDegraded || st.ConsecutiveFailures != 5 {
 		t.Fatalf("after reload (fresh): %+v, want DEGRADED with 5 failures", st)
 	}
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(400 * time.Millisecond)
 	eng3 := NewEngine(map[string]provider.Client{"a": okClient("aye")}, nil, cfg)
 	if st := breakerStatesByID(eng3)["a"]; st.State != BreakerClosed {
 		t.Fatalf("after reload (stale): %+v, want CLOSED (lastFailureAt survived the restart, so the decay still applies)", st)
