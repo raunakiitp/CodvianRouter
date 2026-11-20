@@ -415,6 +415,23 @@ func TestCatalogFeed(t *testing.T) {
 	if groq.Name != "Groq" || groq.Verification != "verified-from-docs" || !groq.HasBaseURL || groq.ToSGrey {
 		t.Errorf("groq entry = %+v, want Groq/verified-from-docs/has-base-url/not-grey", groq)
 	}
+	if !groq.Routable {
+		t.Errorf("groq entry = %+v, want routable=true", groq)
+	}
+	if !groq.HasFreeTier {
+		t.Errorf("groq entry = %+v, want has_free_tier=true", groq)
+	}
+	if az, ok := byID["azure-openai"]; ok {
+		if !az.TemplatedBaseURL || az.Routable {
+			t.Errorf("azure-openai entry = %+v, want templated=true, routable=false", az)
+		}
+	}
+	if feed.FreeTier.Total != catalog.FreeTierCount() {
+		t.Errorf("feed free_tier total = %d, want %d", feed.FreeTier.Total, catalog.FreeTierCount())
+	}
+	if len(feed.FreeTier.PoolList) != len(catalog.FreeTierPools()) {
+		t.Errorf("feed free_tier pool count = %d, want %d", len(feed.FreeTier.PoolList), len(catalog.FreeTierPools()))
+	}
 	web, ok := byID["chatgpt-web"]
 	if !ok {
 		t.Fatal("catalog feed has no chatgpt-web entry")
