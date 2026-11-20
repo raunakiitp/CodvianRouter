@@ -1003,6 +1003,18 @@ type GuardrailsConfig struct {
 	// "redact" (default), "warn" or "block". Empty means
 	// "redact". Any other value fails config load.
 	ResponseGuardMode string `json:"response_guard_mode,omitempty"`
+	// ReversibleVault mints reversible PII tokens in the
+	// request rewrite instead of dead placeholders (B3-19,
+	// PARITY.md:782 — the capability behind OmniRoute's
+	// PII_REVERSIBLE_VAULT_ENABLED). Off by default. It
+	// only takes effect when RequestRewrite is also on:
+	// the tokens are minted by the rewrite, pre-call, and
+	// restored from the vault at exit; a response that
+	// echoes a token gets its original value back. The
+	// vault file lives in the data dir (pii_vault.json),
+	// sealed under the router's master key; secrets are
+	// never minted, only PII.
+	ReversibleVault bool `json:"reversible_vault,omitempty"`
 }
 
 // CustomPatternConfig is the persisted shape of one operator
