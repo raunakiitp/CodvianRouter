@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-cost-report",
+  "fixture": true,
+  "transport": "sse",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + fixed test gateway keys + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger for the routing-reader and cost-reader keys, prices a $10/$30 and c $5/$15 per 1M, routing group fast; memory seeded with one fixed entry for the destructive memory key) over httptest (loopback) via GET /api/mcp/sse (endpoint event) + POST /api/mcp/sse?session_id= with a test gateway key; message-event data captured verbatim. Recorded data only, no live provider call.",
+  "key": "cost-reader",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 10,
+    "method": "tools/call",
+    "params": {
+      "name": "cost_report",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 10,
+    "result": {
+      "content": [
+        {
+          "text": "{\"cost_report\":{\"key_id\":\"gk_0000000000000008\",\"days\":0,\"window_start\":\"0001-01-01T00:00:00Z\",\"window_end\":\"2026-11-19T13:30:36.311885768Z\",\"requests\":2,\"ok\":2,\"errors\":0,\"prompt_tokens\":1100,\"completion_tokens\":500,\"total_tokens\":1600,\"cost_usd\":0.025500000000000002,\"cost_known\":true,\"unpriced_tokens\":0,\"by_model\":[{\"provider\":\"p1\",\"model\":\"a\",\"requests\":1,\"prompt_tokens\":1000,\"completion_tokens\":500,\"total_tokens\":1500,\"cost_usd\":0.025,\"price_known\":true,\"unpriced_tokens\":0},{\"provider\":\"p2\",\"model\":\"c\",\"requests\":1,\"prompt_tokens\":100,\"completion_tokens\":0,\"total_tokens\":100,\"cost_usd\":0.0005,\"price_known\":true,\"unpriced_tokens\":0}],\"sampled\":true,\"note\":\"cost_usd is the full-window spend for this key; requests, tokens and by_model are sampled from the most recent 500 ledger events (the ledger has no per-key aggregate query).\"}}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "cost_report": {
+          "key_id": "gk_0000000000000008",
+          "days": 0,
+          "window_start": "0001-01-01T00:00:00Z",
+          "window_end": "2026-11-19T13:30:36.311885768Z",
+          "requests": 2,
+          "ok": 2,
+          "errors": 0,
+          "prompt_tokens": 1100,
+          "completion_tokens": 500,
+          "total_tokens": 1600,
+          "cost_usd": 0.025500000000000002,
+          "cost_known": true,
+          "unpriced_tokens": 0,
+          "by_model": [
+            {
+              "provider": "p1",
+              "model": "a",
+              "requests": 1,
+              "prompt_tokens": 1000,
+              "completion_tokens": 500,
+              "total_tokens": 1500,
+              "cost_usd": 0.025,
+              "price_known": true,
+              "unpriced_tokens": 0
+            },
+            {
+              "provider": "p2",
+              "model": "c",
+              "requests": 1,
+              "prompt_tokens": 100,
+              "completion_tokens": 0,
+              "total_tokens": 100,
+              "cost_usd": 0.0005,
+              "price_known": true,
+              "unpriced_tokens": 0
+            }
+          ],
+          "sampled": true,
+          "note": "cost_usd is the full-window spend for this key; requests, tokens and by_model are sampled from the most recent 500 ledger events (the ledger has no per-key aggregate query)."
+        }
+      }
+    }
+  },
+  "recorded_http_status": 202,
+  "assert": {
+    "id": 10,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.cost_report.by_model.0.cost_usd": 0.025,
+      "result.structuredContent.cost_report.by_model.0.model": "a",
+      "result.structuredContent.cost_report.by_model.1.cost_usd": 0.0005,
+      "result.structuredContent.cost_report.by_model.1.model": "c",
+      "result.structuredContent.cost_report.cost_known": true,
+      "result.structuredContent.cost_report.cost_usd": null,
+      "result.structuredContent.cost_report.key_id": "gk_0000000000000008",
+      "result.structuredContent.cost_report.requests": 2
+    },
+    "http_status": 202
+  },
+  "notes": "cost_report with no key_id covers the caller's own usage only: 2 requests, $0.0255 — never the other keys' rows. key_id is the cost-reader's fixed id."
+}

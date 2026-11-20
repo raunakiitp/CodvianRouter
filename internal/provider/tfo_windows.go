@@ -18,6 +18,15 @@ const (
 	tfoOption = 15
 )
 
+// tfoSetSocketOption enables client TFO on an already-open socket fd
+// (the RawConn fd from the dialer's Control hook). On Windows the
+// fd is a SOCKET handle, and syscall.SetsockoptInt takes a
+// syscall.Handle — NOT an int, as on Unix — so the conversion here
+// is Handle(fd); passing int(fd) does not compile on Windows.
+func tfoSetSocketOption(fd uintptr) error {
+	return syscall.SetsockoptInt(syscall.Handle(fd), tfoLevel, tfoOption, 1)
+}
+
 func probeTFO() TFOState {
 	st := TFOState{Platform: runtime.GOOS + "/" + runtime.GOARCH}
 	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, 0)

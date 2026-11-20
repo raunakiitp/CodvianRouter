@@ -1,24 +1,51 @@
-name: CI
+# Codvian Router — continuous-integration gate.
+#
+# Runs scripts/ci.sh (gofmt, go build ./..., go vet ./...,
+# go test ./... -race -count=1) on every push and every pull
+# request, so broken code fails here — before any release. Before
+# this workflow existed, the first automated test run was inside
+# the release job, after publish (see .github/workflows/release.yml,
+# items 307-308). This workflow publishes nothing, deploys
+# nothing, and needs no secrets: it is a read-only gate.
+#
+# PINNING POLICY (mirrors release.yml, items 223-224): every tool
+# in this file is pinned to an exact version — no `latest`, no
+# floating major tag, no floating runner image. Each `uses:` entry
+# is pinned to the full 40-char commit SHA of a tagged release
+# (the SHA is the checksum for the action's code: GitHub checks
+# out exactly that commit, so a moved tag or a compromised repo
+# cannot silently substitute different code), with the
+# human-readable version in a comment next to it. Go is pinned
+# to the exact patch release.yml pins (1.27.4); the runner is
+# pinned to ubuntu-24.04. A pin bump is a deliberate change, not
+# a side effect of a re-run, and must be reviewed like any other
+# pipeline change. To bump a pin: pick the new tag, resolve its
+# commit SHA with
+#   git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>
+# (annotated tags need the `^{}` dereference to reach the commit),
+# and update the SHA + the version comment together.
+
+name: ci
+
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
+
+permissions:
+  contents: read
+
 jobs:
-  sanity:
-    name: Repo sanity check
-    runs-on: ubuntu-latest
+  ci:
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out
-        uses: actions/checkout@v4
-      - name: Required files exist
-        run: |
-          set -e
-          for f in LICENSE README.md SECURITY.md CONTRIBUTING.md; do
-            if [ ! -f "$f" ]; then
-              echo "Missing required file: $f"
-              exit 1
-            fi
-            echo "OK: $f"
-          done
-          echo "All required files present."
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.27.4"
+          cache: true
+
+      - name: Run the CI gate
+        run: bash scripts/ci.sh

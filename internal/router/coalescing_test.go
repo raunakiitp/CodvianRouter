@@ -359,3 +359,62 @@ func TestEngineCoalescingUnkeyableRequestRunsUncoalesced(t *testing.T) {
 		t.Fatalf("coalescing requests = %d, want 0", got)
 	}
 }
+
+// TestEngineCoalescesIsolatedPerTenant (M6.10 wiring proof): 5
+// concurrent identical requests under tenant A + 5 under tenant B
+// produce exactly 2 upstream calls (one flight per tenant) — never
+// 1 shared flight. The wiring is router.go RequestKeyForTenant(req,
+// req.CallerID); CallerID is the gateway-key id the server sets
+// after auth (provider.ChatRequest.CallerID).
+func TestEngineCoalescesIsolatedPerTenant(t *testing.T) {
+	led := &sharedLedger{}
+	met := &fakeCoalescingMetrics{}
+	fc := &fakeClient{chatFn: func(ctx context.Context, req provider.ChatRequest) (*provider.ChatResponse, error) {
+		time.Sleep(200 * time.Millisecond)
+		return &provider.ChatResponse{Content: "shared answer", Usage: provider.Usage{PromptTokens: 10, CompletionTokens: 5, TotalTokens: 15}}, nil
+	}}
+	eng := NewEngine(map[string]provider.Client{"p1": fc}, led, Config{})
+	eng.SetCoalescingMetrics(met)
+
+	const perTenant = 5
+	tenants := []string{"gwkey-aaa", "gwkey-bbb"}
+	n := perTenant * len(tenants)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	resps := make([]*provider.ChatResponse, n)
+	errs := make([]error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			req := coalesceReq("hello")
+			req.CallerID = tenants[i/perTenant]
+			resps[i], errs[i] = eng.Chat(context.Background(), req)
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	if got := fc.chatCalls(); got != 2 {
+		t.Fatalf("upstream chat calls = %d, want exactly 2 (one flight per tenant)", got)
+	}
+	for i := 0; i < n; i++ {
+		if errs[i] != nil {
+			t.Fatalf("caller %d got error: %v", i, errs[i])
+		}
+		if resps[i] == nil || resps[i].Content != "shared answer" {
+			t.Fatalf("caller %d got wrong response: %+v", i, resps[i])
+		}
+	}
+	stats := eng.CoalescingStats()
+	if stats.Requests != uint64(n) || stats.Flights != 2 || stats.Shared != uint64(n-2) {
+		t.Fatalf("stats = %+v, want requests=%d flights=2 shared=%d", stats, n, n-2)
+	}
+	if got := led.count(); got != 2 {
+		t.Fatalf("ledger billed attempts = %d, want 2 (one leader per tenant)", got)
+	}
+	if got := led.sharedCount(); got != n-2 {
+		t.Fatalf("ledger shared rows = %d, want %d", got, n-2)
+	}
+}

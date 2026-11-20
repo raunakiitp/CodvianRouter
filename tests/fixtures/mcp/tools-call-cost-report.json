@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-cost-report",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 15,
+    "method": "tools/call",
+    "params": {
+      "name": "cost_report",
+      "arguments": {
+        "key_id": "key-1",
+        "days": 7
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 15,
+    "result": {
+      "content": [
+        {
+          "text": "{\"cost_report\":{\"key_id\":\"key-1\",\"days\":7,\"window_start\":\"2026-11-12T00:00:00Z\",\"window_end\":\"2026-11-19T00:00:00Z\",\"requests\":14,\"ok\":13,\"errors\":1,\"prompt_tokens\":1400,\"completion_tokens\":700,\"total_tokens\":2100,\"cost_usd\":0.012,\"cost_known\":false,\"unpriced_tokens\":600,\"unpriced_models\":[\"chat-model\"],\"by_model\":[{\"provider\":\"p1\",\"model\":\"coder-model\",\"requests\":10,\"prompt_tokens\":1000,\"completion_tokens\":500,\"total_tokens\":1500,\"cost_usd\":0.012,\"price_known\":true,\"unpriced_tokens\":0},{\"provider\":\"p2\",\"model\":\"chat-model\",\"requests\":4,\"prompt_tokens\":400,\"completion_tokens\":200,\"total_tokens\":600,\"cost_usd\":0,\"price_known\":false,\"unpriced_tokens\":600}],\"sampled\":false,\"note\":\"Cost is a lower bound: 600 tokens are unpriced (chat-model) — unpriced usage is UNKNOWN, never $0.\"}}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "cost_report": {
+          "key_id": "key-1",
+          "days": 7,
+          "window_start": "2026-11-12T00:00:00Z",
+          "window_end": "2026-11-19T00:00:00Z",
+          "requests": 14,
+          "ok": 13,
+          "errors": 1,
+          "prompt_tokens": 1400,
+          "completion_tokens": 700,
+          "total_tokens": 2100,
+          "cost_usd": 0.012,
+          "cost_known": false,
+          "unpriced_tokens": 600,
+          "unpriced_models": [
+            "chat-model"
+          ],
+          "by_model": [
+            {
+              "provider": "p1",
+              "model": "coder-model",
+              "requests": 10,
+              "prompt_tokens": 1000,
+              "completion_tokens": 500,
+              "total_tokens": 1500,
+              "cost_usd": 0.012,
+              "price_known": true,
+              "unpriced_tokens": 0
+            },
+            {
+              "provider": "p2",
+              "model": "chat-model",
+              "requests": 4,
+              "prompt_tokens": 400,
+              "completion_tokens": 200,
+              "total_tokens": 600,
+              "cost_usd": 0,
+              "price_known": false,
+              "unpriced_tokens": 600
+            }
+          ],
+          "sampled": false,
+          "note": "Cost is a lower bound: 600 tokens are unpriced (chat-model) — unpriced usage is UNKNOWN, never $0."
+        }
+      }
+    }
+  },
+  "assert": {
+    "id": 15,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.cost_report"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.cost_report.by_model.0.cost_usd": 0.012,
+      "result.structuredContent.cost_report.by_model.0.model": "coder-model",
+      "result.structuredContent.cost_report.by_model.0.price_known": true,
+      "result.structuredContent.cost_report.by_model.1.model": "chat-model",
+      "result.structuredContent.cost_report.by_model.1.price_known": false,
+      "result.structuredContent.cost_report.by_model.1.unpriced_tokens": 600,
+      "result.structuredContent.cost_report.cost_known": false,
+      "result.structuredContent.cost_report.cost_usd": 0.012,
+      "result.structuredContent.cost_report.days": 7,
+      "result.structuredContent.cost_report.errors": 1,
+      "result.structuredContent.cost_report.key_id": "key-1",
+      "result.structuredContent.cost_report.ok": 13,
+      "result.structuredContent.cost_report.requests": 14,
+      "result.structuredContent.cost_report.sampled": false,
+      "result.structuredContent.cost_report.total_tokens": 2100,
+      "result.structuredContent.cost_report.unpriced_models.0": "chat-model",
+      "result.structuredContent.cost_report.unpriced_tokens": 600,
+      "result.structuredContent.cost_report.window_end": "2026-11-19T00:00:00Z",
+      "result.structuredContent.cost_report.window_start": "2026-11-12T00:00:00Z"
+    }
+  },
+  "notes": "cost_report for key-1 over 7 days: 14 requests, $0.012 priced — a LOWER BOUND, cost_known=false, because chat-model's 600 tokens are unpriced (UNKNOWN, never $0). Fixed window ending at the fixture clock."
+}

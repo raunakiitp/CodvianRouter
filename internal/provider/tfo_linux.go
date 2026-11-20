@@ -20,6 +20,13 @@ const (
 	tfoOption = 30
 )
 
+// tfoSetSocketOption enables client TFO on an already-open socket fd
+// (the RawConn fd from the dialer's Control hook). On Unix the fd is
+// an int descriptor, so it converts directly.
+func tfoSetSocketOption(fd uintptr) error {
+	return syscall.SetsockoptInt(int(fd), tfoLevel, tfoOption, 1)
+}
+
 // probeTFO checks whether client TFO can be attempted on this Linux
 // host: the setsockopt must succeed on a scratch socket, and the
 // sysctl bitmap must have the client bit (0x1) set. Either failing

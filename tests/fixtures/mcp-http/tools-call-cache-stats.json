@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-cache-stats",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; no ledger wired) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "cache",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 25,
+    "method": "tools/call",
+    "params": {
+      "name": "cache_stats",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 25,
+    "result": {
+      "content": [
+        {
+          "text": "{\"exact\":{\"present\":false,\"entries\":0,\"bytes\":0},\"semantic\":{\"present\":false,\"entries\":0,\"bytes\":0},\"persistent\":{\"present\":false,\"entries\":0,\"bytes\":0},\"note\":\"persistent tier is the same store as the exact layer in this process; its on-disk rows are reported by the stdio server's disk read, not double-counted here\"}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "exact": {
+          "present": false,
+          "entries": 0,
+          "bytes": 0
+        },
+        "semantic": {
+          "present": false,
+          "entries": 0,
+          "bytes": 0
+        },
+        "persistent": {
+          "present": false,
+          "entries": 0,
+          "bytes": 0
+        },
+        "note": "persistent tier is the same store as the exact layer in this process; its on-disk rows are reported by the stdio server's disk read, not double-counted here"
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 25,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.exact.present": false,
+      "result.structuredContent.persistent.present": false,
+      "result.structuredContent.semantic.present": false
+    },
+    "http_status": 200
+  },
+  "notes": "cache_stats with the cache key: no cache is wired on this server, so every layer honestly reports present=false, never zero-filled."
+}

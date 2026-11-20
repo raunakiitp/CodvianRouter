@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -142,7 +143,9 @@ func TestMasterSecretFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("master.key was not created: %v", err)
 	}
-	if info.Mode().Perm() != 0o600 {
+	// Windows has no Unix permission bits (files report 0666), so
+	// the exact mode is only asserted off Windows.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Errorf("master.key perms = %o, want 0600", info.Mode().Perm())
 	}
 	secret, err := os.ReadFile(path)
@@ -283,7 +286,9 @@ func TestPassphraseVaultRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o600 {
+	// Windows has no Unix permission bits (files report 0666), so
+	// the exact mode is only asserted off Windows.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Errorf("kdf.salt perms = %o, want 0600", info.Mode().Perm())
 	}
 	// No master.key in passphrase mode.

@@ -33,7 +33,9 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/raunakiitp/codvian-router/internal/adaptive"
 	"github.com/raunakiitp/codvian-router/internal/wire"
 )
 
@@ -80,7 +82,7 @@ func mapGeminiError(err error) error {
 	var ge *wire.GeminiError
 	if errors.As(err, &ge) {
 		if ge.IsRateLimit() {
-			return &RateLimitError{RetryAfter: ge.RetryAfter, Body: ge.Message}
+			return &RateLimitError{RetryAfter: ge.RetryAfter, RetryAfterPresent: ge.RetryAfterPresent, Body: ge.Message}
 		}
 		if ge.Status == "PERMISSION_DENIED" && isQuotaBody(ge.Message) ||
 			ge.StatusCode == http.StatusPaymentRequired ||
@@ -107,6 +109,26 @@ func mapGeminiError(err error) error {
 	return err
 }
 
+// applyGeminiThinkingBudget stamps the operator-declared thinking
+// budget onto a converted Gemini request (CHECKLIST 285-286).
+// The budget arrives on ChatRequest.ThinkingBudget, resolved by
+// the engine from config `reasoning.effort_budgets` for the
+// attempt's effective effort. A zero budget sends no
+// thinkingConfig at all — no default is invented, and the
+// provider default applies. The generationConfig block is created
+// when absent: ConvertGeminiRequest only builds one when a
+// sampling parameter is set, and the thinking budget must not
+// depend on one being present.
+func applyGeminiThinkingBudget(gemReq *wire.GeminiRequest, req ChatRequest) {
+	if gemReq == nil || req.ThinkingBudget <= 0 {
+		return
+	}
+	if gemReq.GenerationConfig == nil {
+		gemReq.GenerationConfig = &wire.GeminiGenerationConfig{}
+	}
+	gemReq.GenerationConfig.ThinkingConfig = &wire.GeminiThinkingConfig{ThinkingBudget: req.ThinkingBudget}
+}
+
 func (c *geminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
 	if req.Model == "" {
 		return nil, errors.New("chat request model is empty")
@@ -118,6 +140,7 @@ func (c *geminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	if err != nil {
 		return nil, mapGeminiError(err)
 	}
+	applyGeminiThinkingBudget(gemReq, req)
 	payload, err := json.Marshal(gemReq)
 	if err != nil {
 		return nil, fmt.Errorf("encoding gemini request: %w", err)
@@ -131,6 +154,7 @@ func (c *geminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		return nil, err
 	}
 	defer resp.Body.Close()
+	signals := adaptive.ParseRateLimitHeaders(resp.Header, time.Now())
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
 		return nil, fmt.Errorf("reading gemini response: %w", err)
@@ -149,7 +173,12 @@ func (c *geminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	if converted.Model == "" {
 		converted.Model = req.Model
 	}
-	return fromWireResponse(converted)
+	out, err := fromWireResponse(converted)
+	if err != nil {
+		return nil, err
+	}
+	out.RateLimit = &signals
+	return out, nil
 }
 
 // ChatStream is the text-only streaming entry point; see ChatStreamChunks.
@@ -184,6 +213,7 @@ func (c *geminiClient) ChatStreamChunks(ctx context.Context, req ChatRequest, on
 	if err != nil {
 		return nil, mapGeminiError(err)
 	}
+	applyGeminiThinkingBudget(gemReq, req)
 	payload, err := json.Marshal(gemReq)
 	if err != nil {
 		return nil, fmt.Errorf("encoding gemini request: %w", err)
@@ -200,11 +230,21 @@ func (c *geminiClient) ChatStreamChunks(ctx context.Context, req ChatRequest, on
 		return nil, err
 	}
 	defer resp.Body.Close()
+	streamSignals := adaptive.ParseRateLimitHeaders(resp.Header, time.Now())
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 		return nil, mapGeminiError(wire.MapGeminiError(resp.StatusCode, resp.Header, body))
 	}
 	emit := func(wc wire.ChatChunk) error {
+		// Same cancel rule as the OpenAI/Anthropic clients
+		// (CHECKLIST 190/205): readSSE buffers whole events in
+		// the scanner, so an event read before the abort could
+		// otherwise be translated and delivered after it.
+		// ctx.Err() passes through mapGeminiError unwrapped,
+		// so the router still recognises the cancellation.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		chunk := StreamChunk{}
 		if len(wc.Choices) > 0 {
 			d := wc.Choices[0].Delta
@@ -226,6 +266,8 @@ func (c *geminiClient) ChatStreamChunks(ctx context.Context, req ChatRequest, on
 				PromptTokens:     wc.Usage.PromptTokens,
 				CompletionTokens: wc.Usage.CompletionTokens,
 				TotalTokens:      wc.Usage.TotalTokens,
+				CachedTokens:     wc.Usage.CachedTokens,
+				ReasoningTokens:  wc.Usage.ReasoningTokens,
 			}
 		}
 		return onChunk(chunk)
@@ -239,10 +281,12 @@ func (c *geminiClient) ChatStreamChunks(ctx context.Context, req ChatRequest, on
 	}
 	return &ChatResponse{
 		Content:      res.Content,
-		Usage:        Usage{PromptTokens: res.Usage.PromptTokens, CompletionTokens: res.Usage.CompletionTokens, TotalTokens: res.Usage.TotalTokens},
+		Usage:        Usage{PromptTokens: res.Usage.PromptTokens, CompletionTokens: res.Usage.CompletionTokens, TotalTokens: res.Usage.TotalTokens, CachedTokens: res.Usage.CachedTokens, ReasoningTokens: res.Usage.ReasoningTokens},
 		Model:        res.Model,
 		ToolCalls:    res.ToolCalls,
 		FinishReason: res.FinishReason,
+		Reasoning:    res.Reasoning,
+		RateLimit:    &streamSignals,
 	}, nil
 }
 

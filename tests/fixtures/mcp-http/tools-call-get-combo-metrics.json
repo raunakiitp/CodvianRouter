@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-get-combo-metrics",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger, prices a $10/$30 and c $5/$15 per 1M, routing group fast) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "wide",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 14,
+    "method": "tools/call",
+    "params": {
+      "name": "get_combo_metrics",
+      "arguments": {
+        "name": "fast"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 14,
+    "result": {
+      "content": [
+        {
+          "text": "{\"metrics\":{\"name\":\"fast\",\"requests\":3,\"ok\":3,\"errors\":0,\"success_rate\":1,\"prompt_tokens\":2100,\"completion_tokens\":1000,\"total_tokens\":3100,\"cost_usd\":0.0505,\"cost_known\":true,\"unpriced_tokens\":0,\"mean_latency_ms\":110,\"latency_known\":true,\"latency_events\":3,\"window\":\"all_time\"}}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "metrics": {
+          "name": "fast",
+          "requests": 3,
+          "ok": 3,
+          "errors": 0,
+          "success_rate": 1,
+          "prompt_tokens": 2100,
+          "completion_tokens": 1000,
+          "total_tokens": 3100,
+          "cost_usd": 0.0505,
+          "cost_known": true,
+          "unpriced_tokens": 0,
+          "mean_latency_ms": 110,
+          "latency_known": true,
+          "latency_events": 3,
+          "window": "all_time"
+        }
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 14,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.metrics.latency_known": true,
+      "result.structuredContent.metrics.mean_latency_ms": 110,
+      "result.structuredContent.metrics.requests": 3
+    },
+    "http_status": 200
+  },
+  "notes": "get_combo_metrics aggregates the ledger over combo fast: 3 requests, mean latency 110 ms."
+}

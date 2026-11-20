@@ -16,6 +16,13 @@ const (
 	tfoOption = 0x105
 )
 
+// tfoSetSocketOption enables client TFO on an already-open socket fd
+// (the RawConn fd from the dialer's Control hook). On Unix the fd is
+// an int descriptor, so it converts directly.
+func tfoSetSocketOption(fd uintptr) error {
+	return syscall.SetsockoptInt(int(fd), tfoLevel, tfoOption, 1)
+}
+
 func probeTFO() TFOState {
 	st := TFOState{Platform: runtime.GOOS + "/" + runtime.GOARCH}
 	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, 0)

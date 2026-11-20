@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "error-call-filtered-tool-max-5",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call. Filtered server (max-5): MaxTools cap of 5.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 108,
+    "method": "tools/call",
+    "params": {
+      "name": "check_quota",
+      "arguments": {
+        "key_id": "key-1"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 108,
+    "error": {
+      "code": -32602,
+      "message": "unknown tool: check_quota"
+    }
+  },
+  "assert": {
+    "id": 108,
+    "expect_error": true,
+    "error_code": -32602,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32602,
+      "error.message": "unknown tool: check_quota",
+      "jsonrpc": "2.0"
+    }
+  },
+  "notes": "Calling check_quota (6th in Tools() order, past the MaxTools-5 cap) is -32602 unknown tool — the cap hides the tail of the list, not just its announcement."
+}

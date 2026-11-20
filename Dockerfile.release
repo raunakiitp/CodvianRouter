@@ -1,0 +1,106 @@
+# Codvian Router — release image (GoReleaser dockers_v2).
+#
+# This Dockerfile is ONLY for the release pipeline: GoReleaser builds
+# the router binary for every platform first (see `builds` in
+# .goreleaser.yml) and hands this file a temporary build context that
+# contains the pre-built binaries, laid out per platform:
+#   linux/amd64/codvian-router
+#   linux/arm64/codvian-router
+# There are NO source files in that context, so this file must not
+# `COPY . .`, `go mod download`, or build the router — it only copies
+# the binary in, exactly like the binary that ships in the release
+# archives (same bytes, same checksums.txt entry family). The local
+# development image is `Dockerfile`, which DOES build from source.
+#
+# The one exception is the healthcheck helper: GoReleaser does not
+# build it (it is not a `builds` entry), so it is compiled here from
+# the same inline source as in `Dockerfile` — keep the two copies in
+# sync. It is tiny, has no dependencies, and is built for $TARGETARCH
+# by the builder stage, which runs on $BUILDPLATFORM.
+#
+# Built by GoReleaser (see `dockers_v2` in .goreleaser.yml):
+#   goreleaser release --snapshot --clean   # local test build, no push
+#                                           # (per-platform tags, --load)
+# The runtime image is identical in shape to `Dockerfile`'s: distroless
+# nonroot, CA certs, healthcheck, same ENTRYPOINT/CMD/EXPOSE.
+
+ARG BUILDPLATFORM
+ARG TARGETPLATFORM
+
+# ---------------------------------------------------------------------------
+# Healthcheck builder (runs on the build machine, cross-compiles)
+# ---------------------------------------------------------------------------
+FROM --platform=$BUILDPLATFORM golang:1.27.4-bookworm AS healthcheck-builder
+
+ARG TARGETARCH
+
+# Tiny healthcheck helper. Distroless has no shell, curl, or wget, so the
+# HEALTHCHECK needs a real binary. It GETs http://127.0.0.1:20128/healthz
+# (unauthenticated) and exits 0 only on HTTP 200.
+RUN mkdir -p /tmp/healthcheck && cat > /tmp/healthcheck/main.go <<'EOF'
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"os"
+	"time"
+)
+
+func main() {
+	port := os.Getenv("CODVIAN_ROUTER_PORT")
+	if port == "" {
+		port = "20128"
+	}
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:" + port + "/healthz")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "healthcheck: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "healthcheck: unexpected status %s\n", resp.Status)
+		os.Exit(1)
+	}
+}
+EOF
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath -ldflags "-s -w" \
+      -o /out/codvian-router-healthcheck /tmp/healthcheck/main.go
+
+# ---------------------------------------------------------------------------
+# Runtime
+# ---------------------------------------------------------------------------
+FROM gcr.io/distroless/static-debian12:nonroot
+
+ARG TARGETPLATFORM
+
+# CA certificates (copied from the builder; distroless/static has no
+# package manager) so the router can reach upstream providers over TLS.
+COPY --from=healthcheck-builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+# The GoReleaser-built binary for this platform. $TARGETPLATFORM is
+# e.g. linux/amd64 and matches the context layout GoReleaser creates.
+COPY $TARGETPLATFORM/codvian-router /usr/local/bin/codvian-router
+COPY --from=healthcheck-builder /out/codvian-router-healthcheck /usr/local/bin/codvian-router-healthcheck
+
+# The nonroot user (uid 65532) in distroless has HOME /home/nonroot.
+# The router's default data dir is $HOME/.local/share/codvian-router
+# (ledger.db, vault master secret); the config lives in
+# $HOME/.config/codvian-router/config.json. Persist both with volumes —
+# losing the data dir loses the vault secret and the ledger; losing the
+# config dir loses the gateway key created by `init` (PKG-1).
+ENV HOME=/home/nonroot
+VOLUME ["/home/nonroot/.local/share/codvian-router", "/home/nonroot/.config/codvian-router"]
+
+USER nonroot:nonroot
+
+EXPOSE 20128
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD ["/usr/local/bin/codvian-router-healthcheck"]
+
+# ENTRYPOINT + CMD so `docker run <image> init` / `keygen` work too;
+# the default is `serve` on 127.0.0.1:20128 with auth ON.
+ENTRYPOINT ["/usr/local/bin/codvian-router"]
+CMD ["serve"]

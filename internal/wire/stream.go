@@ -8,6 +8,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/raunakiitp/codvian-router/internal/reasoning"
 )
 
 // ---------------------------------------------------------------------------
@@ -56,6 +58,10 @@ type ChatChunk struct {
 
 // StreamResult is the reassembled result of a translated stream: the
 // full text, the completed tool calls, the finish reason, and usage.
+// Reasoning carries the reasoning state captured from the stream
+// (thinking deltas, signature deltas, redacted blocks), when any
+// arrived — the same router-internal field as on
+// ChatCompletionResponse.
 type StreamResult struct {
 	ID           string
 	Model        string
@@ -63,6 +69,7 @@ type StreamResult struct {
 	ToolCalls    []ToolCall
 	FinishReason string
 	Usage        Usage
+	Reasoning    *reasoning.State
 }
 
 // sseEvent is one parsed server-sent event.
@@ -139,6 +146,8 @@ type anthropicStreamEvent struct {
 		Type        string `json:"type"` // "text_delta" | "input_json_delta" | "thinking_delta" | "signature_delta"
 		Text        string `json:"text,omitempty"`
 		PartialJSON string `json:"partial_json,omitempty"`
+		Thinking    string `json:"thinking,omitempty"`
+		Signature   string `json:"signature,omitempty"`
 		StopReason  string `json:"stop_reason,omitempty"`
 	} `json:"delta,omitempty"`
 	// message_delta.
@@ -151,11 +160,21 @@ type anthropicStreamEvent struct {
 }
 
 // streamBlock tracks one open content block while streaming.
+// Thinking blocks accumulate their two halves: thinkBuf for the
+// thinking_delta text, sigBuf for the signature_delta signature;
+// redacted thinking arrives whole in content_block_start and is
+// kept in redacted. For Bedrock, reasoning marks a block whose
+// deltas carry reasoningContent: thinkBuf accumulates its text
+// fragments and sigBuf keeps the last non-empty signature.
 type streamBlock struct {
-	kind     string // "text" | "tool_use" | "ignored"
-	toolID   string
-	toolName string
-	jsonBuf  strings.Builder
+	kind      string // "text" | "tool_use" | "thinking" | "redacted_thinking"
+	toolID    string
+	toolName  string
+	jsonBuf   strings.Builder
+	thinkBuf  strings.Builder
+	sigBuf    strings.Builder
+	redacted  string
+	reasoning bool
 }
 
 // TranslateStream reads an Anthropic SSE stream (the body of a
@@ -164,7 +183,8 @@ type streamBlock struct {
 // reassembled result once message_stop arrives.
 //
 //   - ping events are ignored; thinking_delta / signature_delta are
-//     dropped (internal reasoning, no OpenAI equivalent).
+//     captured into StreamResult.Reasoning (internal reasoning, never
+//     emitted as content) so the engine can replay them next turn.
 //   - text_delta becomes a content delta; input_json_delta fragments
 //     become tool-call argument deltas, validated as JSON when the
 //     block closes (fragments are not valid JSON on their own).
@@ -183,6 +203,13 @@ func TranslateStream(r io.Reader, emit func(ChatChunk) error) (StreamResult, err
 	var res StreamResult
 	created := time.Now().Unix()
 	blocks := make(map[int]*streamBlock)
+	var state *reasoning.State
+	captureReasoning := func(b reasoning.Block) {
+		if state == nil {
+			state = &reasoning.State{SourceWire: reasoning.WireAnthropic}
+		}
+		state.Add(b)
+	}
 	// toolIndex maps an Anthropic content-block index to the
 	// sequential OpenAI tool-call index (0, 1, 2, ... in order of
 	// first appearance). Anthropic block indices count text blocks
@@ -234,6 +261,16 @@ func TranslateStream(r io.Reader, emit func(ChatChunk) error) (StreamResult, err
 				res.ID = parsed.Message.ID
 				res.Model = parsed.Message.Model
 				res.Usage.PromptTokens = parsed.Message.Usage.InputTokens
+				res.Usage.CachedTokens = parsed.Message.Usage.CacheReadInputTokens
+				res.Usage.CacheWriteTokens = parsed.Message.Usage.CacheCreationInputTokens
+				// M6.9b: the cache-write tier split rides in
+				// message_start's usage.cache_creation (the
+				// message_delta usage carries only output
+				// tokens, never a cache_creation object), so
+				// this is the only place a streamed split can
+				// come from. Absent object -> tiers 0, the
+				// legacy total-only case.
+				res.Usage.CacheWriteTokens5m, res.Usage.CacheWriteTokens1h = parsed.Message.Usage.CacheWriteTiers()
 			}
 			// OpenAI streams open with a role-only chunk.
 			return emitChunk(ChunkDelta{Role: "assistant"}, nil, nil)
@@ -266,7 +303,14 @@ func TranslateStream(r io.Reader, emit func(ChatChunk) error) (StreamResult, err
 					return err
 				}
 			case "thinking", "redacted_thinking":
-				blk.kind = "ignored"
+				// Internal reasoning: captured, never emitted
+				// as content. The thinking text arrives in
+				// thinking_delta events and its signature in
+				// signature_delta events; redacted thinking
+				// arrives whole in this start event.
+				if kind == "redacted_thinking" {
+					blk.redacted = parsed.ContentBlock.Data
+				}
 			default:
 				return unrep("streamed content block type %q has no OpenAI equivalent", kind)
 			}
@@ -277,7 +321,7 @@ func TranslateStream(r io.Reader, emit func(ChatChunk) error) (StreamResult, err
 			if !ok {
 				return fmt.Errorf("wire: content_block_delta for unknown block index %d", parsed.Index)
 			}
-			if blk.kind == "ignored" || parsed.Delta == nil {
+			if parsed.Delta == nil {
 				return nil
 			}
 			switch parsed.Delta.Type {
@@ -305,7 +349,21 @@ func TranslateStream(r io.Reader, emit func(ChatChunk) error) (StreamResult, err
 					},
 				}}}, nil, nil)
 			case "thinking_delta", "signature_delta":
-				return nil // internal reasoning, dropped
+				// Reasoning capture (CHECKLIST 163): the
+				// thinking text and its signature arrive in
+				// separate delta events; both are accumulated
+				// and assembled into one thinking block when
+				// the block closes. Nothing is emitted to the
+				// client — reasoning never becomes content.
+				if blk.kind != "thinking" {
+					return fmt.Errorf("wire: %s for non-thinking block index %d", parsed.Delta.Type, parsed.Index)
+				}
+				if parsed.Delta.Type == "thinking_delta" {
+					blk.thinkBuf.WriteString(parsed.Delta.Thinking)
+				} else {
+					blk.sigBuf.WriteString(parsed.Delta.Signature)
+				}
+				return nil
 			default:
 				return fmt.Errorf("wire: unknown delta type %q", parsed.Delta.Type)
 			}
@@ -331,6 +389,13 @@ func TranslateStream(r io.Reader, emit func(ChatChunk) error) (StreamResult, err
 						Arguments: args,
 					},
 				})
+			}
+			if blk.kind == "thinking" {
+				captureReasoning(reasoning.Block{Kind: reasoning.KindThinking, Text: blk.thinkBuf.String(), Signature: blk.sigBuf.String()})
+			}
+			if blk.kind == "redacted_thinking" {
+				data, _ := json.Marshal(blk.redacted)
+				captureReasoning(reasoning.Block{Kind: reasoning.KindRedactedThinking, Data: data})
 			}
 			return nil
 		case "message_delta":
@@ -372,6 +437,10 @@ func TranslateStream(r io.Reader, emit func(ChatChunk) error) (StreamResult, err
 	res.Content = content.String()
 	res.FinishReason = MapFinishReason(stopReason)
 	res.Usage.TotalTokens = res.Usage.PromptTokens + res.Usage.CompletionTokens
+	if state != nil {
+		state.SourceModel = res.Model
+		res.Reasoning = state
+	}
 	fr := res.FinishReason
 	usage := res.Usage
 	if err := emitChunk(ChunkDelta{}, &fr, &usage); err != nil {

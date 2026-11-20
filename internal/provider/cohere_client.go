@@ -34,7 +34,9 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/raunakiitp/codvian-router/internal/adaptive"
 	"github.com/raunakiitp/codvian-router/internal/wire"
 )
 
@@ -70,7 +72,7 @@ func mapCohereError(err error) error {
 	var ce *wire.CohereError
 	if errors.As(err, &ce) {
 		if ce.IsRateLimit() {
-			return &RateLimitError{RetryAfter: ce.RetryAfter, Body: ce.Message}
+			return &RateLimitError{RetryAfter: ce.RetryAfter, RetryAfterPresent: ce.RetryAfterPresent, Body: ce.Message}
 		}
 		if ce.StatusCode == http.StatusPaymentRequired ||
 			(ce.StatusCode == http.StatusBadRequest && isQuotaBody(ce.Message)) {
@@ -122,6 +124,7 @@ func (c *cohereClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		return nil, err
 	}
 	defer resp.Body.Close()
+	signals := adaptive.ParseRateLimitHeaders(resp.Header, time.Now())
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
 		return nil, fmt.Errorf("reading cohere response: %w", err)
@@ -140,7 +143,12 @@ func (c *cohereClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	if converted.Model == "" {
 		converted.Model = req.Model
 	}
-	return fromWireResponse(converted)
+	out, err := fromWireResponse(converted)
+	if err != nil {
+		return nil, err
+	}
+	out.RateLimit = &signals
+	return out, nil
 }
 
 // ChatStream is the text-only streaming entry point; see ChatStreamChunks.
@@ -192,11 +200,21 @@ func (c *cohereClient) ChatStreamChunks(ctx context.Context, req ChatRequest, on
 		return nil, err
 	}
 	defer resp.Body.Close()
+	streamSignals := adaptive.ParseRateLimitHeaders(resp.Header, time.Now())
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 		return nil, mapCohereError(wire.MapCohereError(resp.StatusCode, resp.Header, body))
 	}
 	emit := func(wc wire.ChatChunk) error {
+		// Same cancel rule as the OpenAI/Anthropic clients
+		// (CHECKLIST 190/205): readSSE buffers whole events in
+		// the scanner, so an event read before the abort could
+		// otherwise be translated and delivered after it.
+		// ctx.Err() passes through mapCohereError unwrapped,
+		// so the router still recognises the cancellation.
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		chunk := StreamChunk{}
 		if len(wc.Choices) > 0 {
 			d := wc.Choices[0].Delta
@@ -235,6 +253,8 @@ func (c *cohereClient) ChatStreamChunks(ctx context.Context, req ChatRequest, on
 		Model:        res.Model,
 		ToolCalls:    res.ToolCalls,
 		FinishReason: res.FinishReason,
+		Reasoning:    res.Reasoning,
+		RateLimit:    &streamSignals,
 	}, nil
 }
 

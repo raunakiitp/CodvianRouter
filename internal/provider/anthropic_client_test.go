@@ -337,10 +337,9 @@ func TestAnthropicListModels(t *testing.T) {
 func TestNewClientWireFallback(t *testing.T) {
 	// An unimplemented wire format falls back to the OpenAI client
 	// instead of breaking ClientFor for providers added before
-	// native transports existed. (Gemini and Cohere used to be the
-	// examples here; they have their own clients now, so
-	// bedrock-converse — still unimplemented — is the fallback
-	// case.)
+	// native transports existed. (Anthropic, Gemini, Cohere and
+	// Bedrock all have their own clients now, so "ollama" — still
+	// unimplemented — is the fallback case.)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" {
 			w.WriteHeader(http.StatusNotFound)
@@ -350,9 +349,9 @@ func TestNewClientWireFallback(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "k", WithWireFormat("bedrock-converse"))
+	c, err := NewClient(srv.URL, "k", WithWireFormat("ollama"))
 	if err != nil {
-		t.Fatalf("NewClient bedrock-converse: %v", err)
+		t.Fatalf("NewClient ollama: %v", err)
 	}
 	resp, err := c.Chat(context.Background(), ChatRequest{Model: "m", Messages: []Message{{Role: "user", Content: "x"}}})
 	if err != nil {

@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-list-allow-3",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call. Filtered server (allow-3): allow-list router_status, provider_list, model_list.",
+  "method": "tools/list",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 101,
+    "method": "tools/list"
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 101,
+    "result": {
+      "tools": [
+        {
+          "name": "router_status",
+          "description": "Live Codvian Router status: listen address, provider/model counts, gateway-key count, whether the auto-router is configured, and uptime when known.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          }
+        },
+        {
+          "name": "provider_list",
+          "description": "List the providers configured in the router (id, name, wire format, enabled, models, catalog id, verification). Never includes base URLs or API keys.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          }
+        },
+        {
+          "name": "model_list",
+          "description": "List every model offered by the configured providers (id, provider id, provider name). Virtual auto/* models are listed when the auto-router is configured.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          }
+        }
+      ]
+    }
+  },
+  "assert": {
+    "id": 101,
+    "expect_error": false,
+    "required_fields": [
+      "result.tools"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.tools.0.inputSchema": null,
+      "result.tools.0.name": "router_status",
+      "result.tools.1.inputSchema": null,
+      "result.tools.1.name": "provider_list",
+      "result.tools.2.inputSchema": null,
+      "result.tools.2.name": "model_list"
+    },
+    "json_lengths": {
+      "result.tools": 3
+    }
+  },
+  "notes": "tools/list under an exclusive allow-list of the 3 built-ins: only router_status, provider_list, model_list are announced — the other 21 tools are invisible, not listed-then-denied. The json_lengths pin (result.tools = 3) fails if a 4th tool leaks in or one goes missing."
+}

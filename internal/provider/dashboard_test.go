@@ -109,3 +109,51 @@ func TestRegistryDashboardProvidersEmpty(t *testing.T) {
 		t.Fatalf("DashboardProviders = %d providers, want 0", len(got))
 	}
 }
+
+// TestRegistryDashboardProvidersKeyCreationURL proves the dashboard
+// summary carries the catalog entry's key-creation page
+// (PARITY Area 3, "Key-creation links"): a catalog provider whose
+// entry records one exposes it, a custom provider reports none.
+// The URL is a public key page, never a credential or base URL.
+func TestRegistryDashboardProvidersKeyCreationURL(t *testing.T) {
+	srv, _ := newRecordingServer(t)
+	defer srv.Close()
+	srv2, _ := newRecordingServer(t)
+	defer srv2.Close()
+	reg, _ := newCatalogTestRegistry(t)
+	ctx := context.Background()
+
+	// BeatAPI's catalog entry is seeded with a key page
+	// (internal/catalog/keycreation.go).
+	beat, err := reg.AddCatalogWithOptions(ctx, "beatapi", "sk-beatapi-test",
+		CatalogAddOptions{BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("AddCatalog beatapi: %v", err)
+	}
+	custom, err := reg.AddContext(ctx, "My Custom", srv2.URL, "sk-custom-test")
+	if err != nil {
+		t.Fatalf("Add custom: %v", err)
+	}
+
+	got := reg.DashboardProviders()
+	if len(got) != 2 {
+		t.Fatalf("DashboardProviders = %d providers, want 2", len(got))
+	}
+	byID := map[string]DashboardProvider{}
+	for _, d := range got {
+		byID[d.ID] = d
+	}
+
+	b := byID[beat.ID]
+	if b.CatalogID != "beatapi" {
+		t.Errorf("beatapi catalog_id = %q, want beatapi", b.CatalogID)
+	}
+	if b.KeyCreationURL != "https://beatapi.io/dashboard/apikeys" {
+		t.Errorf("beatapi key_creation_url = %q, want https://beatapi.io/dashboard/apikeys", b.KeyCreationURL)
+	}
+
+	c := byID[custom.ID]
+	if c.KeyCreationURL != "" {
+		t.Errorf("custom key_creation_url = %q, want empty", c.KeyCreationURL)
+	}
+}

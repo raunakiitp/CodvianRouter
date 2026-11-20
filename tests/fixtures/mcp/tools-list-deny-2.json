@@ -1,0 +1,397 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-list-deny-2",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call. Filtered server (deny-2): deny-list cache_stats, db_stats.",
+  "method": "tools/list",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 109,
+    "method": "tools/list"
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 109,
+    "result": {
+      "tools": [
+        {
+          "name": "router_status",
+          "description": "Live Codvian Router status: listen address, provider/model counts, gateway-key count, whether the auto-router is configured, and uptime when known.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          }
+        },
+        {
+          "name": "provider_list",
+          "description": "List the providers configured in the router (id, name, wire format, enabled, models, catalog id, verification). Never includes base URLs or API keys.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          }
+        },
+        {
+          "name": "model_list",
+          "description": "List every model offered by the configured providers (id, provider id, provider name). Virtual auto/* models are listed when the auto-router is configured.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          }
+        },
+        {
+          "name": "best_combo_for_task",
+          "description": "Recommend a combo for a task, ranked on measured ledger metrics (success rate, cost per request, mean latency) and the task's strategy preference (coding tasks prefer code, fast tasks fastest, cheap tasks cheapest). A combo with no history ranks on strategy match alone and is reported as metrics-unknown. A cost/latency constraint a combo cannot be checked against (unknown price, no latency) does not exclude it — the result reports the constraint as not applied for that combo.",
+          "inputSchema": {
+            "properties": {
+              "max_cost_usd": {
+                "description": "Optional maximum estimated cost per request in USD (0 or omitted = no cap).",
+                "type": "number"
+              },
+              "max_latency_ms": {
+                "description": "Optional maximum mean latency in milliseconds (0 or omitted = no cap).",
+                "type": "number"
+              },
+              "task": {
+                "description": "Task description, e.g. \"coding\", \"fast chat\", \"cheapest summarisation\".",
+                "type": "string"
+              }
+            },
+            "required": [
+              "task"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "cache_flush",
+          "description": "DESTRUCTIVE: evict the caller's own cached entries only. The tenant is the authenticated caller, never an argument — other tenants' entries are untouched. Requires mcp:manage:cache AND mcp:destructive.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          }
+        },
+        {
+          "name": "check_quota",
+          "description": "Quota position for one gateway key from the real ledger: the rolling 5-hour budget (limit, priced spend, remaining, at-limit) plus the daily/weekly/monthly calendar windows and the unpriced-usage policy. A key with no budget is unlimited (has_budget=false, no invented cap). A gateway-key caller may only check its own key id (omit it, or pass your own id — another key's id is rejected).",
+          "inputSchema": {
+            "properties": {
+              "key_id": {
+                "description": "Gateway key id to check. The local operator must supply it; a gateway-key caller may omit it (its own key is used) but may not name another key.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "name": "cost_report",
+          "description": "Cost report from the real ledger and price book: requests, tokens, and priced cost over a window, per model. Usage whose price is unknown is reported as UNKNOWN (cost_known=false, unpriced tokens/models listed), never as $0. The local operator may omit key_id for all keys or name any key; a gateway-key caller may only report on its own key id (omit it, or pass your own id — another key's id is rejected).",
+          "inputSchema": {
+            "properties": {
+              "days": {
+                "description": "Optional window in days (integer 1-365). 0 or omitted = all time.",
+                "type": "number"
+              },
+              "key_id": {
+                "description": "Optional gateway key id to report on. Omit for all keys (local operator only); a gateway-key caller reports on its own key only.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "name": "create_combo",
+          "description": "Create a routing combo: a named ordered list of providers (members may carry a reasoning effort as \"provider@effort\") with a routing strategy. The combo is written to the config routing groups (and the chain-strategy mirror) and persisted to the config file. Members must be configured providers; the strategy must be a known strategy name or a combo execution mode (fusion, pipeline, jev).",
+          "inputSchema": {
+            "properties": {
+              "members": {
+                "description": "Ordered provider ids, optionally \"provider@effort\". At least one.",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "name": {
+                "description": "Combo name: non-empty, no \":\" or \"/\" (routing-group name rule).",
+                "type": "string"
+              },
+              "strategy": {
+                "description": "Routing strategy (default \"priority\"). A strategy name, or a combo execution mode: fusion, pipeline, jev.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "members"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "db_health",
+          "description": "Health of the router's data-dir databases (ledger, feedback, persistent cache): whether each file exists, opens, and its known tables count cleanly.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          }
+        },
+        {
+          "name": "explain_route",
+          "description": "Explain how a model would be routed: the effective strategy and its rule, and the attempt order over the providers offering the model (declared order). Dry run — no provider is called. Strategies that re-rank do so at request time from live signals this tool does not observe; the result says so. Optionally restrict the order to one combo's members.",
+          "inputSchema": {
+            "properties": {
+              "combo": {
+                "description": "Optional combo name: restrict the attempt order to that combo's members. When omitted, the session-active combo (set by switch_combos) applies when one is set; otherwise all providers are shown.",
+                "type": "string"
+              },
+              "model": {
+                "description": "Model id to explain routing for.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "model"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "get_combo_metrics",
+          "description": "Measured ledger history for one combo's member providers (all time): requests, successes, errors, success rate, tokens, cost, and mean latency over recent successful events (at most the 500 most recent events — older events do not affect the mean). Cost is a lower bound when any of the combo's tokens are unpriced (cost_known=false) — unpriced usage is never reported as $0.",
+          "inputSchema": {
+            "properties": {
+              "name": {
+                "description": "Combo name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "heartbeat",
+          "description": "Live liveness snapshot: server uptime, announced tool count, protocol version, and audit-log state (enabled/disabled). Read-only; calls no provider.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          }
+        },
+        {
+          "name": "list_combos",
+          "description": "List every configured routing combo (config routing groups) with its members, strategy, and whether it is the session-active combo. Read-only.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          }
+        },
+        {
+          "name": "memory_add",
+          "description": "Store a free-text memory under the caller's own namespace in the local file-backed memory store. No embeddings, no external service — the text is stored as written.",
+          "inputSchema": {
+            "properties": {
+              "text": {
+                "description": "Free-text memory to store (non-empty, at most 10000 characters).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "memory_clear",
+          "description": "DESTRUCTIVE: delete all of the caller's own stored memories. Other callers' memories are untouched. Requires mcp:manage:memory AND mcp:destructive.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          }
+        },
+        {
+          "name": "memory_search",
+          "description": "Search the caller's own stored memories by case-insensitive substring match. Results are ranked by occurrence count, then recency — the returned matches field is the raw occurrence count, not a relevance score.",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "description": "Substring to search the caller's memories for (non-empty).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "pick_fastest_model",
+          "description": "Pick the fastest model by MEASURED mean latency over recent successful ledger events. With no measured latency it errors honestly instead of guessing from prices or catalog order; when the latency backend itself is unavailable, the error says the backend is unavailable. Optionally restrict to one provider.",
+          "inputSchema": {
+            "properties": {
+              "min_requests": {
+                "description": "Optional minimum measured requests a model needs to be eligible (integer \u003e= 1, default 1).",
+                "type": "number"
+              },
+              "provider": {
+                "description": "Optional provider id to restrict the choice to.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "name": "set_budget_guard",
+          "description": "Set a budget guard for one gateway key in the real ledger: a rolling 5-hour USD cap (limit_usd, required, \u003e= 0), optional calendar daily/weekly/monthly USD caps, and the unpriced-usage policy (fail_closed by default — a capped key refuses unpriced models; count_as_zero lets them through counting $0). The guard applies to spend from the moment it is set; existing usage history is untouched. A gateway-key caller may only guard its own key id (omit it, or pass your own id — another key's id is rejected).",
+          "inputSchema": {
+            "properties": {
+              "daily_limit_usd": {
+                "description": "Optional calendar daily USD cap (\u003e= 0).",
+                "type": "number"
+              },
+              "key_id": {
+                "description": "Gateway key id to guard. The local operator must supply it; a gateway-key caller may omit it (its own key is used) but may not name another key.",
+                "type": "string"
+              },
+              "limit_usd": {
+                "description": "Rolling 5-hour USD cap (\u003e= 0; 0 = no spend allowed).",
+                "type": "number"
+              },
+              "monthly_limit_usd": {
+                "description": "Optional calendar monthly USD cap (\u003e= 0).",
+                "type": "number"
+              },
+              "unpriced_policy": {
+                "description": "Unpriced-usage policy: \"fail_closed\" (default) or \"count_as_zero\".",
+                "type": "string"
+              },
+              "weekly_limit_usd": {
+                "description": "Optional calendar weekly USD cap (\u003e= 0).",
+                "type": "number"
+              }
+            },
+            "required": [
+              "limit_usd"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "set_routing_strategy",
+          "description": "Set the routing strategy: globally (no chain) or for one chain (a model id, or a combo/group name). The strategy must be a known strategy name. The change is written to the config and persisted to the config file.",
+          "inputSchema": {
+            "properties": {
+              "chain": {
+                "description": "Chain to set the strategy for (a model id or combo name). Empty or omitted sets the global strategy.",
+                "type": "string"
+              },
+              "strategy": {
+                "description": "Canonical strategy name (e.g. priority, cheapest, fastest, most-reliable, weighted, lkgp). Aliases are accepted.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "strategy"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "simulate_route",
+          "description": "Dry-run a route for a model: the fallback tree (one attempt per target, in order, with what happens when each fails) and the first-attempt prompt-cost estimate from the real price book when prompt_tokens is given. No provider is called. Completion cost is never estimated (the completion length is unknown before the call). Unpriced targets report cost_known=false, never $0.",
+          "inputSchema": {
+            "properties": {
+              "combo": {
+                "description": "Optional combo name: restrict the fallback tree to that combo's members. When omitted, the session-active combo (set by switch_combos) applies when one is set; otherwise all providers are shown.",
+                "type": "string"
+              },
+              "model": {
+                "description": "Model id to simulate routing for.",
+                "type": "string"
+              },
+              "prompt_tokens": {
+                "description": "Optional prompt-token count to price the first attempt at (integer \u003e= 0). Without it no cost is estimated.",
+                "type": "number"
+              }
+            },
+            "required": [
+              "model"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "switch_combos",
+          "description": "Set the session-active combo (the default combo the routing tools report). The serving router has no single active combo — every group is always addressable — so this selects the MCP session's default only; it never changes what the serving router routes. Pass active=false to clear the active selection.",
+          "inputSchema": {
+            "properties": {
+              "active": {
+                "description": "True (default) to activate the combo; false to clear the active selection when it names the active combo.",
+                "type": "boolean"
+              },
+              "name": {
+                "description": "Combo name to activate.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "name": "tool_search",
+          "description": "Search the registered MCP tool catalog by name or description substring; returns matching tools with their descriptions and required scopes. An empty query returns the full catalog.",
+          "inputSchema": {
+            "properties": {
+              "query": {
+                "description": "Case-insensitive substring to match against tool names and descriptions. Empty or absent returns the full catalog.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        }
+      ]
+    }
+  },
+  "assert": {
+    "id": 109,
+    "expect_error": false,
+    "required_fields": [
+      "result.tools"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.tools.0.inputSchema": null,
+      "result.tools.0.name": "router_status",
+      "result.tools.1.inputSchema": null,
+      "result.tools.1.name": "provider_list",
+      "result.tools.2.inputSchema": null,
+      "result.tools.2.name": "model_list",
+      "result.tools.21.inputSchema": null,
+      "result.tools.21.name": "tool_search",
+      "result.tools.3.inputSchema": null,
+      "result.tools.3.name": "best_combo_for_task",
+      "result.tools.4.inputSchema": null,
+      "result.tools.4.name": "cache_flush",
+      "result.tools.5.inputSchema": null,
+      "result.tools.5.name": "check_quota",
+      "result.tools.8.inputSchema": null,
+      "result.tools.8.name": "db_health",
+      "result.tools.9.inputSchema": null,
+      "result.tools.9.name": "explain_route"
+    },
+    "json_lengths": {
+      "result.tools": 22
+    }
+  },
+  "notes": "tools/list with cache_stats and db_stats denied: 22 tools remain and the survivors shift up — check_quota moves to index 5 (was 6), db_health to 8 (was 9), tool_search is last at 21 (was 23). The denied tools leave no gap. The json_lengths pin (result.tools = 22) fails if a denied tool leaks back in or a survivor goes missing."
+}

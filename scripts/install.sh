@@ -18,12 +18,23 @@
 #      or the latest GitHub release)
 #   3. downloads the release tarball + checksums.txt from
 #      https://github.com/raunakiitp/CodvianRouter/releases
-#   4. verifies the tarball's SHA-256 against checksums.txt when that
-#      file is available (a missing checksum file prints a loud warning
-#      and continues — see below)
-#   5. installs the binary, then prints the next steps.
+#   4. verifies the Sigstore cosign keyless signature over checksums.txt
+#      when cosign is installed (and refuses the install when the
+#      signature check fails — a checksums file without a valid signature
+#      proves nothing, since anyone who can swap the tarball can swap
+#      the checksums too). Without cosign it warns loudly and continues
+#      with checksum-only verification, unless
+#      CODVIAN_ROUTER_REQUIRE_SIGNATURE=1 is set (then it refuses).
+#      Verify the release fully BEFORE installing with
+#      scripts/verify-release.sh — see docs/RELEASE-SIGNING.md.
+#   5. verifies the tarball's SHA-256 against checksums.txt, which is
+#      retried (3 attempts, backoff) and then FAILS CLOSED: a release
+#      whose manifest cannot be fetched is never installed unverified.
+#   6. installs the binary, then prints the next steps.
 #
 # Requires: curl, tar, and sha256sum (Linux) or shasum (macOS).
+# Recommended: cosign (https://docs.sigstore.dev/cosign/installation/)
+# for the signature check in step 4.
 # Refuses to run on unsupported platforms instead of installing the
 # wrong binary. Never writes outside $PREFIX/bin.
 
@@ -98,7 +109,12 @@ case "$VERSION" in
 esac
 
 ASSET="codvian-router_${TAG#v}_${GOOS}_${GOARCH}.tar.gz"
-BASE_URL="https://github.com/$REPO/releases/download/$TAG"
+# CODVIAN_ROUTER_DOWNLOAD_BASE_URL is testing-only (used by the
+# bin/codvian-router.test.js harness to point the installer at a local
+# server serving controlled artifacts). Whatever it points at is still
+# signature- + checksum-verified exactly as a GitHub download would be.
+DOWNLOAD_BASE="${CODVIAN_ROUTER_DOWNLOAD_BASE_URL:-https://github.com/$REPO/releases/download}"
+BASE_URL="$DOWNLOAD_BASE/$TAG"
 
 # --- download --------------------------------------------------------------
 TMPDIR="$(mktemp -d)"
@@ -110,23 +126,64 @@ curl -fsSL -o "$TMPDIR/$ASSET" "$BASE_URL/$ASSET" \
 
 # --- checksum verification --------------------------------------------------
 # checksums.txt is published by GoReleaser alongside every release.
-# When it is present, the tarball MUST match or installation aborts.
-# When it cannot be fetched, installation continues only after a loud
-# warning — a release without checksums is unexpected and should be
-# reported, but blocking install entirely would strand users if GitHub
-# serves a transient error for that one file.
-if curl -fsSL -o "$TMPDIR/checksums.txt" "$BASE_URL/checksums.txt" 2>/dev/null; then
-    EXPECTED="$(grep "  $ASSET\$" "$TMPDIR/checksums.txt" | awk '{print $1}')"
-    [ -n "$EXPECTED" ] || die "checksums.txt does not list $ASSET — refusing to install an unverified binary."
-    ACTUAL="$(cd "$TMPDIR" && $SHA256 "$ASSET" | awk '{print $1}')"
-    if [ "$ACTUAL" != "$EXPECTED" ]; then
-        die "SHA-256 MISMATCH for $ASSET (expected $EXPECTED, got $ACTUAL). The download may be corrupt or tampered with — refusing to install."
+# The tarball MUST match it or installation aborts. The manifest is
+# retried (3 attempts, backoff) and then the install FAILS CLOSED: a
+# release whose checksums cannot be fetched is never installed
+# unverified. A transient GitHub error is absorbed by the retries; a
+# persistently missing manifest means the release cannot be
+# authenticated, so refusing is the only safe answer.
+# --- signature verification (Sigstore cosign, keyless) -------------------
+# A checksum only proves the tarball matches checksums.txt; it says
+# nothing about who wrote checksums.txt. The cosign signature over
+# checksums.txt is what binds the manifest to this project's release
+# workflow for this exact tag (see docs/RELEASE-SIGNING.md). It runs
+# BEFORE the tarball's hash is trusted, so a failed signature aborts
+# before any checksum comparison.
+#
+# If cosign is not installed, the install continues with checksum-only
+# verification and a loud warning — except when
+# CODVIAN_ROUTER_REQUIRE_SIGNATURE=1, which refuses instead. The
+# recommended path is to verify the release first with
+# scripts/verify-release.sh, which always requires cosign.
+# The manifest download is retried (3 attempts, 2s/4s backoff) and
+# then the install FAILS CLOSED — see the comment above.
+MANIFEST_OK=0
+ATTEMPT=1
+while [ "$ATTEMPT" -le 3 ]; do
+    if curl -fsSL -o "$TMPDIR/checksums.txt" "$BASE_URL/checksums.txt" 2>/dev/null; then
+        MANIFEST_OK=1
+        break
     fi
-    printf 'Checksum verified (sha256).\n'
+    if [ "$ATTEMPT" -lt 3 ]; then
+        printf 'Could not download checksums.txt (attempt %s/3) — retrying in %s seconds...\n' "$ATTEMPT" "$((ATTEMPT * 2))" >&2
+        sleep $((ATTEMPT * 2))
+    fi
+    ATTEMPT=$((ATTEMPT + 1))
+done
+[ "$MANIFEST_OK" = "1" ] || die "could not download checksums.txt for $TAG after 3 attempts — refusing to install a release whose manifest cannot be checked. Retry later, or report it at https://github.com/$REPO/issues."
+
+if command -v cosign >/dev/null 2>&1; then
+    curl -fsSL -o "$TMPDIR/checksums.txt.sigstore.json" "$BASE_URL/checksums.txt.sigstore.json" \
+        || die "could not download checksums.txt.sigstore.json for $TAG — refusing to install a release whose signature cannot be checked."
+    cosign verify-blob \
+        --certificate-identity "https://github.com/$REPO/.github/workflows/release.yml@refs/tags/$TAG" \
+        --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+        --bundle "$TMPDIR/checksums.txt.sigstore.json" "$TMPDIR/checksums.txt" >/dev/null \
+        || die "cosign signature verification FAILED for checksums.txt — the manifest is not from the Codvian Router release workflow for $TAG. Refusing to install."
+    printf 'Signature verified (Sigstore cosign, keyless).\n'
+elif [ "${CODVIAN_ROUTER_REQUIRE_SIGNATURE:-0}" = "1" ]; then
+    die "CODVIAN_ROUTER_REQUIRE_SIGNATURE=1 is set but cosign is not installed. Install cosign (https://docs.sigstore.dev/cosign/installation/) and re-run, or unset the variable to fall back to checksum-only verification."
 else
-    printf 'WARNING: could not download checksums.txt for %s — installing WITHOUT checksum verification.\n' "$TAG"
-    printf 'This is unexpected; please report it at https://github.com/%s/issues.\n' "$REPO"
+    printf 'WARNING: cosign not found — installing with checksum-only verification (the checksums.txt itself is unverified).\n'
+    printf 'To verify the release signature first, install cosign and run: sh scripts/verify-release.sh %s\n' "$TAG"
 fi
+EXPECTED="$(grep "  $ASSET\$" "$TMPDIR/checksums.txt" | awk '{print $1}')"
+[ -n "$EXPECTED" ] || die "checksums.txt does not list $ASSET — refusing to install an unverified binary."
+ACTUAL="$(cd "$TMPDIR" && $SHA256 "$ASSET" | awk '{print $1}')"
+if [ "$ACTUAL" != "$EXPECTED" ]; then
+    die "SHA-256 MISMATCH for $ASSET (expected $EXPECTED, got $ACTUAL). The download may be corrupt or tampered with — refusing to install."
+fi
+printf 'Checksum verified (sha256).\n'
 
 # --- install ---------------------------------------------------------------
 tar -xzf "$TMPDIR/$ASSET" -C "$TMPDIR" \

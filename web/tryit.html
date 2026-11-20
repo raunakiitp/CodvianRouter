@@ -1,0 +1,2827 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<title>Codvian Router — API Try-It</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* Design tokens copied from web/index.html (same design system):
+     light #FFFFFF / dark #000000, dark-lime palette, Plus Jakarta Sans /
+     JetBrains Mono, pill buttons, 26px card corners. Content is new. */
+  :root{
+    color-scheme: light;
+    --bg:#FFFFFF; --surface:#FFFFFF; --surface-2:#FFFFFF;
+    --grid:rgba(0,0,0,.08); --ring:rgba(0,0,0,.10);
+    --border:transparent; --text:#000000; --text-2:#4A4A4A; --text-3:#9A9A9A;
+    --blue:#3F6212; --blue-bg:#F2F7E3;
+    --green:#3F6212; --green-bg:#EFF6DC; --green-dot:#65A30D;
+    --amber:#171717; --amber-bg:#FFFFFF; --amber-dot:#171717;
+    --red:#8C1D18; --red-bg:#FFFFFF; --red-dot:#8C1D18;
+    --btn:#000000; --btn-text:#FFFFFF;
+    --shadow:0 1px 2px rgba(0,0,0,.05), 0 10px 24px -12px rgba(0,0,0,.12), 0 24px 44px -24px rgba(0,0,0,.14), inset 0 1px 0 rgba(255,255,255,.9);
+    --radius:26px; --radius-sm:15px;
+  }
+  html[data-theme="dark"]{
+    color-scheme: dark;
+    --bg:#000000; --surface:#000000; --surface-2:#000000;
+    --grid:rgba(255,255,255,.09); --ring:rgba(255,255,255,.14);
+    --border:transparent; --text:#FFFFFF; --text-2:#B5B5B5; --text-3:#767676;
+    --blue:#BEF264; --blue-bg:#1E2A08;
+    --green:#BEF264; --green-bg:#1E2A08; --green-dot:#A3E635;
+    --amber:#FFFFFF; --amber-bg:#000000; --amber-dot:#FFFFFF;
+    --red:#F0A8A2; --red-bg:#000000; --red-dot:#E0655C;
+    --btn:#FFFFFF; --btn-text:#000000;
+    --shadow:inset 0 0 0 1px rgba(255,255,255,.09), 0 14px 30px -12px rgba(0,0,0,.75), 0 30px 56px -28px rgba(0,0,0,.85);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:"Plus Jakarta Sans",-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  button{font-family:inherit;cursor:pointer;min-height:36px}
+  input,select,textarea{min-height:36px;font-family:inherit}
+  .wrap{max-width:1020px;margin:0 auto;padding:28px 20px 64px}
+  header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:8px}
+  h1{font-size:26px;line-height:1.2;margin:0;letter-spacing:-.02em}
+  .sub{color:var(--text-2);margin:4px 0 20px;max-width:720px}
+  .pill{display:inline-block;border-radius:999px;padding:6px 14px;background:var(--btn);color:var(--btn-text);border:0;font-weight:700;font-size:13px}
+  .ghost{background:var(--surface);color:var(--text);box-shadow:inset 0 0 0 1px var(--ring)}
+  .card{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin:0 0 16px}
+  .card h2{font-size:16px;margin:0 0 6px}
+  .card p{color:var(--text-2);margin:0 0 12px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .row label{font-weight:600;font-size:13px}
+  input[type=text],input[type=password],select{flex:1;min-width:180px;border-radius:999px;border:0;box-shadow:inset 0 0 0 1px var(--ring);background:var(--surface);color:var(--text);padding:8px 14px}
+  textarea{width:100%;border-radius:var(--radius-sm);border:0;box-shadow:inset 0 0 0 1px var(--ring);background:var(--surface);color:var(--text);padding:12px;font-family:"JetBrains Mono",monospace;font-size:12.5px;line-height:1.5;resize:vertical}
+  .method{display:inline-block;min-width:64px;text-align:center;border-radius:999px;padding:3px 10px;font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:600}
+  .m-GET{background:var(--green-bg);color:var(--green)}
+  .m-POST{background:var(--blue-bg);color:var(--blue)}
+  .m-DELETE{background:var(--red-bg);color:var(--red)}
+  .badge{display:inline-block;border-radius:999px;padding:2px 9px;font-size:11.5px;font-weight:600;box-shadow:inset 0 0 0 1px var(--ring)}
+  .path{font-family:"JetBrains Mono",monospace;font-size:13px;word-break:break-all}
+  .desc{color:var(--text-2);margin:8px 0 12px}
+  .meta{color:var(--text-3);font-size:12.5px;margin:0 0 12px}
+  .resp{white-space:pre-wrap;word-break:break-word;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--ring);border-radius:var(--radius-sm);padding:12px;font-family:"JetBrains Mono",monospace;font-size:12.5px;max-height:420px;overflow:auto;margin-top:12px}
+  .status{font-weight:700}
+  .warn{background:var(--amber-bg);color:var(--amber);box-shadow:inset 0 0 0 1px var(--ring);border-radius:var(--radius-sm);padding:12px 14px;margin:0 0 16px}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .filters button{border-radius:999px;border:0;padding:8px 14px;background:var(--surface);color:var(--text);box-shadow:inset 0 0 0 1px var(--ring);font-weight:600;font-size:13px}
+  .filters button.on{background:var(--btn);color:var(--btn-text);box-shadow:none}
+  details{margin-top:12px}
+  summary{cursor:pointer;font-weight:600}
+  .hint{font-size:12.5px;color:var(--text-3)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Codvian Router — API Try-It</h1>
+      <p class="sub">Every route the router serves, generated from its guard
+      route table. Requests go to <span class="mono">this router only</span> —
+      never to a live provider. Destructive routes need their typed
+      confirmation phrase as well as a key.</p>
+    </div>
+    <button class="pill ghost" id="themeBtn" type="button">Toggle theme</button>
+  </header>
+
+  <div class="warn"><strong>Your gateway key stays in this page's memory only.</strong>
+  It is never stored (no localStorage, no cookies) and never sent anywhere
+  except this router, as an <span class="mono">Authorization: Bearer</span> header.
+  Close the tab and it is gone.</div>
+
+  <div class="card">
+    <h2>Connection</h2>
+    <p>Base URL defaults to the origin this page was served from. Override it
+    only to point at another router you operate.</p>
+    <div class="row">
+      <label for="baseUrl">Base URL</label>
+      <input id="baseUrl" type="text" class="mono" value="" placeholder="http://127.0.0.1:8080" />
+      <label for="apiKey">Gateway key</label>
+      <input id="apiKey" type="password" class="mono" placeholder="paste gateway key (kept in memory only)" autocomplete="off" />
+    </div>
+    <p class="hint">Auth-exempt routes work with the key field empty. Scoped routes
+    answer 403 without the right scope; <span class="mono">LOCAL_ONLY</span> routes
+    answer 403 unless you open this page from loopback.</p>
+  </div>
+
+  <div class="filters" id="filters">
+    <button type="button" data-f="all" class="on">All</button>
+    <button type="button" data-f="/v1/">/v1</button>
+    <button type="button" data-f="/api/">/api</button>
+    <button type="button" data-f="/dashboard">/dashboard</button>
+    <button type="button" data-f="/admin">/admin</button>
+    <button type="button" data-f="other">other</button>
+    <input id="search" type="text" placeholder="Filter routes…" aria-label="Filter routes" />
+  </div>
+  <p class="hint" id="count"></p>
+  <div id="routes"></div>
+  <p class="hint">Route list generated from <span class="mono">internal/server/guard.go</span>
+  by <span class="mono">scripts/gen-api-docs.py</span>. Full reference:
+  <span class="mono">docs/API_REFERENCE.md</span>; machine-readable summary:
+  <span class="mono">docs/llm.txt</span>; live spec: <span class="mono">GET /openapi.json</span>
+  (route list + tier extensions only — no scopes, no schemas).</p>
+</div>
+
+<script>
+// Route table embedded at build time by scripts/gen-api-docs.py.
+// Regenerate: python3 scripts/gen-api-docs.py
+// BEGIN TRYIT-ROUTES-JSON
+const ROUTES = [
+  {
+    "method": "GET",
+    "path": "/healthz",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Liveness probe \u2014 no data, no auth.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Static dashboard UI \u2014 no live data of its own.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/auth/setup",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Sets the dashboard operator password for the first time (only while none is set); admin gateway key required. The password is stored only as an Argon2id hash in the data dir; no default password exists.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/auth/login",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Operator login with the dashboard password; on success sets an HttpOnly session cookie (12h). Failed attempts are throttled per peer (5 failures \u2192 60s lockout).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/auth/logout",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Invalidates the dashboard session cookie; 401 when the caller has neither a session nor a gateway key.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/auth/change",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Changes the dashboard operator password; requires a valid session plus the current password, or an admin gateway key. All sessions are invalidated.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/providers",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live provider facts (verification, wire, health) \u2014 no keys, no base URLs.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/overview",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live overview KPIs + traffic buckets from the ledger/recorder \u2014 counts and totals only, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/models",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live model catalog from the registry + per-model request counts \u2014 no keys, no base URLs.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/catalog-audit",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Last committed catalog freshness audit vs live models.dev (audit date + drift counts) \u2014 public catalog facts only, no keys, no operator-configured providers.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/release-verify",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Last recorded `release verify` run (verified tag, archive/SBOM counts, bundle status) \u2014 the committed snapshot proof only, never a live re-run or an invented pass.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/models/refresh",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Re-probes every provider's model list live and returns one result per provider (ok / failed / skipped, with model counts and reasons); a failed provider keeps its last known list. Local-operator dashboard action on the localhost-bound server \u2014 carries no secrets.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/logs",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Recent request attempts from the ledger (provider, model, tokens, cost, latency, outcome) \u2014 no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/usage",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live spend/token roll-up from the ledger \u2014 totals only, no keys, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/keys",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Gateway-key facts from the config (name, scopes, budget, created) \u2014 masked values only, never a raw key or hash.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/auto-route",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live auto-router classification for a typed prompt \u2014 no provider is called.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/auto-route/last",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Last real auto/* routing decision, or an honest empty state.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/feedback",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Feedback-learned routing weights: per-tier signal tallies + nudges + recent signals \u2014 counts only, no prompts, no answers, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/feedback",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Records one accept/edit/discard/regenerate signal against a served routing decision id (decision id + signal only; no content). Local-operator dashboard action on the localhost-bound server.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/learned",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Learned auto-router status: off / learning / active, evidence count, held-out calibration error + log-loss, per-tier sample counts \u2014 counts only, no prompts, no answers, no message content, never a fake accuracy.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/intent-tiers",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Intent-tier mappings (fast / balanced / best) to their operator-defined (model, effort) pairs \u2014 model names and effort levels only, no keys, no base URLs, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/intent-tiers",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Sets one intent tier's (model, effort) mapping at runtime (tier, model and effort names only). Local-operator dashboard action on the localhost-bound server \u2014 carries no secrets; applies at runtime only, never to the config file.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/suggestions",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Metadata-only learning suggestions: pending routing suggestions with their real evidence counts, per-(task, model) latency/success stats and the applied-change log \u2014 counts and model names only, no prompts, no answers, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/suggestions",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Approves (applies) or reverts one routing suggestion by id \u2014 an explicit operator action recorded in the applied-change log. Local-operator dashboard action on the localhost-bound server \u2014 carries no secrets; applies at runtime only, never to the config file.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/code-outcomes",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Auto Code mode evidence: per-model recorded coding-task outcomes (attempts, solved credit, measured solve rate or the documented neutral default) \u2014 counts only, no prompts, no answers, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/coalescing",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Single-flight counters only \u2014 no keys, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/reasoning",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Reasoning replay counters (captures, restores, hits, misses, evictions) \u2014 counts only, never reasoning content, no keys, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/responses",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live Responses feed: recent response ids with model, status, previous id (the continuation chain), serving provider and creation time, plus store counts \u2014 identifiers and counts only, never input or output text.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/responses/tree",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Responses tree: roots with their branches nested (parent \u2192 children, from the ledger tree, or the in-memory store when no ledger is wired) \u2014 identifiers and counts only, never input or output text; an empty forest is roots [] with total 0.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/concurrency",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Adaptive limiter state + TFO probe \u2014 no keys, no base URLs.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/pools",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Warm HTTP/2 pool state per (provider, key) + Little's Law sizing \u2014 counters and key fingerprints only, no keys, no base URLs.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/guard",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Guard-tier table + live guard status \u2014 no keys, no secrets.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/audit",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Audit feed: guard-denial counts (live counters), key-lifecycle events, management POSTs, and the MCP tool-call audit join \u2014 counts + redacted identifiers only, no prompts, no keys, no message content. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/mcp",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "MCP tool list + live provider/model counts \u2014 no keys, no base URLs.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/mcp/audit",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "MCP tool-call audit (inputs SHA-256-hashed, outputs truncated to 200 chars \u2014 no raw arguments), paginated, newest first. Entries are redacted as stored, so the feed cannot leak a secret.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/mcp/status",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "MCP remote-transport toggles + live session counts \u2014 flags and counts only, no keys, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/mcp/status",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Enables/disables one MCP remote transport (sse/streamable). Local-operator dashboard action on the localhost-bound server \u2014 carries no secrets; the transports themselves are served by M9.2.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/mcp/sse",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "MCP SSE transport: opens the server-to-client event stream (first event is the endpoint carrying the session id). Gateway-key auth; the mcp: scopes on the key govern tool calls inside.",
+    "auth_exempt": false,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/mcp/sse",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "MCP SSE transport: sends one JSON-RPC message for a session opened by GET; answers 202, the response arriving on the stream. Gateway-key auth; the mcp: scopes on the key govern tool calls inside.",
+    "auth_exempt": false,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/mcp/stream",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "MCP Streamable HTTP transport: one JSON-RPC message per POST; an initialize opens a session (Mcp-Session-Id header). Gateway-key auth; the mcp: scopes on the key govern tool calls inside.",
+    "auth_exempt": false,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/mcp/stream",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "MCP Streamable HTTP transport: opens the server-to-client stream for a session (closing it does not terminate the session). Gateway-key auth; the mcp: scopes on the key govern tool calls inside.",
+    "auth_exempt": false,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/mcp/stream/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "MCP Streamable HTTP transport: terminates one session (204; unknown or foreign ids are 404). Gateway-key auth; the mcp: scopes on the key govern tool calls inside.",
+    "auth_exempt": false,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/guardrails",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live guardrail state (blocking config, redaction counts, recent redacted events) \u2014 no prompts, no keys.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/guardrails",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Replaces the guardrail blocking config (toggles only; log redaction is always on and not toggleable). Local-operator dashboard action on the localhost-bound server \u2014 carries no secrets.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/plugins",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live plugin registry: registered plugins, hook points, per-hook call/error/denial/panic counts, recent response shapes \u2014 counts only, no prompts, no keys, no response content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/verification",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Honest verification status: what is proven in this VM vs what still needs CI on the first tag, a live browser, a second host, or a real Docker host \u2014 statuses only, no keys, no secrets.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/strategies",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live routing strategies (global strategy, per-chain overrides, deadline budget, last live strategy) \u2014 no keys, no base URLs, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/strategies",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Replaces the global routing strategy and/or per-chain strategy overrides (strategy names only). Local-operator dashboard action on the localhost-bound server \u2014 carries no secrets.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/cooldown",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live cooldown mode (global + per-chain overrides) + currently cooling/demoted targets with remaining seconds \u2014 mode names and counters only, no keys, no base URLs, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/cooldown",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Replaces the global cooldown mode and/or per-chain cooldown-mode overrides (mode names only: hard / soft-demote). Local-operator dashboard action on the localhost-bound server \u2014 carries no secrets.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/groups",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Operator-defined routing groups (routing.groups) with live member health \u2014 group names, member provider IDs, enabled flags, breaker state and real attempt counters only, no keys, no base URLs, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/stream-lifetime",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Stream-lifetime cap the engine enforces (effective cap + how many streams it has terminated since this process started) \u2014 a duration and a count only, no keys, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/key-budgets",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Per-key rolling 5-hour USD budgets from the ledger (spent/limit, window, unknown spend) \u2014 key ids and names only, never a raw key or hash.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/key-budgets",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Sets or deletes one key's rolling 5-hour USD budget (key id, limit, unpriced policy only). Local-operator dashboard action on the localhost-bound server \u2014 carries no secrets.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/quota-pools",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Fair-share quota pools from the ledger (dimensions with live pool-wide consumption, member allocations) \u2014 pool ids, key ids and counts only, never a raw key or hash.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/quota-pools",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Creates, replaces or deletes one fair-share quota pool (dimensions, allocations, saturation threshold). Local-operator dashboard action on the localhost-bound server \u2014 carries no secrets.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/quota-schedules",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Quota schedules from the ledger (time windows, keep-free reserves, per-window budgets, live verdict) \u2014 pool and schedule ids only, never a raw key or hash.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/quota-schedules",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Creates, replaces or deletes one quota schedule (allow/block window, reserves, budget). Local-operator dashboard action on the localhost-bound server \u2014 carries no secrets.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/internal-budgets",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Internal scoped budgets from the ledger (scope, period, limit type, live usage and decision) \u2014 budget ids only, never a raw key or hash.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/internal-budgets",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Creates, replaces or deletes one internal budget (scope, period, limit type, value, warning threshold). Local-operator dashboard action on the localhost-bound server \u2014 carries no secrets.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/teams",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Team cost centers from the ledger (members, budget window, list + metered cost) \u2014 team and key ids only, never a raw key or hash.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/teams",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Creates, replaces or deletes one team cost center (name, budget, duration, status). Local-operator dashboard action on the localhost-bound server \u2014 carries no secrets.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/teams/{id}/members",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Assigns a gateway key to a team, or unassigns it. Local-operator dashboard action on the localhost-bound server \u2014 carries no secrets.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/request-budgets",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Per-request USD budget outcomes since server start (refusals pre-send / mid-chain, overages, recent events) \u2014 counts and costs only, no keys, no base URLs, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/trace",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Route trace of the most recently finished request: every attempt in order with outcome + error-taxonomy fallback reason (model_not_found, rate_limited, request_invalid, ...) \u2014 redacted error strings only, no keys, no base URLs, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/context-fit",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Context-window fit-check decision of the most recently finished request that reached the pre-call fit gate: local prompt estimate, response reserve, required tokens, per-model fit verdicts, and which chain served it (primary / context_fallback / none) \u2014 token counts and model names only, no keys, no base URLs, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/prices",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Operator-configured per-(provider, model) prices (USD per 1M tokens) from the config file and/or local price file \u2014 unknown prices reported as unknown, never $0.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/benchmark",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Last measured Geekflare-style bench run from the data dir's benchmark.json (scripts/bench-geekflare.sh output) with per-metric target verdicts \u2014 measured values only; recorded=false when no run exists.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/benchmark/history",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Every recorded Geekflare-style bench run (benchmark-*.json in CODVIAN_BENCH_HISTORY_DIR, oldest first) with kind, clean flag, verdict and passes \u2014 recorded files only, never invented; unreadable or corrupt files are listed as skipped, not shown as data.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/memstats",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live memory of this router process (Go heap from runtime.MemStats, RSS, goroutines, in-flight requests, GC counters) + ?profile=heap / ?profile=goroutine binary pprof snapshots \u2014 live values only, nothing estimated.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/headless",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Headless-mode status + the exact terminal commands for serve --headless, init --wizard and run <cli> --model \u2014 no keys, no secrets.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/readiness",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live local-capability readiness: every gateway-provided local capability with its ready state and the Retry-After a client should honour while it is not ready \u2014 capability names and states only, no keys, no base URLs.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/streaming",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Last measured SSE token-delivery run from the data dir's streaming.json (scripts/bench-sse.sh output): median/p99 before (batching off) and after (batching on) at each mock cadence \u2014 measured values only, no target verdict; recorded=false when no run exists.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/openapi.json",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "OpenAPI spec for the management surface, generated live from this route table. Every operation carries x-loopback-only / x-always-protected / x-spawn-capable extensions matching its tier \u2014 the consistency check is TestOpenAPIConsistency.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/providers",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live provider feed \u2014 no keys, no base URLs.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/providers",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Adds a provider: tests the supplied key live against the upstream, encrypts and persists it, and adds it to the live registry with no restart. Auth always required \u2014 an unauthenticated add could redirect future LLM traffic to an attacker-chosen base URL.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/providers/{id}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Removes a provider: deletes it from the live registry and the config file, drops its live engine client, unregisters its models from the auto-router tiers (only models no remaining provider serves), and prunes its probe history. Auth always required, plus the typed confirmation phrase DELETE <id> in the JSON body \u2014 an unauthenticated delete could take a provider offline.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/providers/{id}/keys",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Adds an API key to a provider's key pool: tests the key live against the upstream, then encrypts and persists it. Auth always required \u2014 it plants a credential.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/providers/{id}/keys/{keyId}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Removes one API key from a provider's key pool (the last key cannot be removed \u2014 remove the provider instead). Auth always required \u2014 it drops a credential.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/providers/{id}/keys/{keyId}/role",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Changes one provider key's role (preferred/reserve). Auth always required \u2014 it changes which credential routes.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/providers/{id}/keys/{keyId}/rotate",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Rotates one provider key's credential in place: tests the replacement key live against the upstream, then replaces the stored ciphertext keeping the key's ID and role. Auth always required \u2014 it plants a credential.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/providers/{id}/enabled",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Enables or disables a provider: a disabled provider stops routing (the dashboard shows it as Not connected) and re-enabling returns it to the pool with no restart. Auth always required \u2014 it changes what routes.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/catalog",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live provider catalog for the add-provider selector (id, name, verification, ToS-grey flag, base-URL availability) \u2014 catalog facts only, no keys, no base URLs.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/usage/budget",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Cost summary for one gateway key (apiKeyId query param): calendar limits, warning threshold, reset cadence, last/next reset, spend today / this month / this budget period, the active limit and the allow/warn/deny budget check, plus the rolling 5h cap. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/usage/budget",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Set the calendar budget for one gateway key: daily/weekly/monthly limits, warning threshold, reset interval/time. Absent fields keep their stored values; the 5h cap and unpriced policy are untouched. Ledger-first, then config persist with rollback. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/summary",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Usage analytics summary for one calendar window: request/token/latency totals, priced spend + cost_status. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/by-provider",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Usage analytics roll-up by provider for one calendar window, with priced cost and unpriced-request count. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/by-model",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Usage analytics roll-up by model for one calendar window, with priced cost and unpriced-request count. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/costs",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Priced spend + unpriced remainder for one calendar window; deliberately no total-cost field. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/compression",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Compression savings roll-up by provider for one calendar window (prompt tokens before compression, tokens saved, saving rate). Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/diversity",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Traffic diversity for one calendar window: provider/model spread with Herfindahl concentration index. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/auto-routing",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Auto-routed traffic for one calendar window, grouped by variant, with serving providers. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/combo-health",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Per-combo health for one calendar window: step liveness from the live provider config plus matching usage requests (upper bound \u2014 a row served through a combo is indistinguishable from one served directly). Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/fallback/chains",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Fallback chains: every stored (model \u2192 provider priority list) chain, or one chain with ?model=. Provider and model names plus priorities only \u2014 no keys, no message content. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/fallback/chains",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Creates or updates one fallback chain (model + ordered provider entries). Management auth (admin scope) required \u2014 it rewrites routing state.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/fallback/chains",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Deletes one fallback chain by ?model=; 404 when the model has no chain. Management auth (admin scope) required \u2014 it rewrites routing state.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/resilience",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live resilience feed: breaker states + cooldowns per provider (unknown when unprobed); hedge counts honestly unknown. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/resilience/settings",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live resilience settings: effective cooldown mode (global + per-model overrides), cooling targets and breaker states from the engine, plus the list of settings with no runtime backing. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/resilience/settings",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Updates resilience settings: cooldown mode (global + per-model overrides) is applied live and persisted; breaker_threshold, breaker_open_for_seconds and cooldown_seconds are validated for range first (400 on a bad range) and then answer 501 naming the field \u2014 they have no runtime backing. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/resilience/breakers/reset",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Resets one provider's circuit breaker, or all breakers with {\"all\": true}; unknown provider is 404. A real reset against the production engine \u2014 router.Engine implements ResetBreaker/ResetAllBreakers (internal/router/router.go) \u2014 501 only when the engine lacks the breaker-reset interface. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/resilience/cooldowns",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Sets one model's cooldown mode (hard / soft-demote); an empty mode is 400 \u2014 clearing an override is DELETE /api/resilience/cooldowns/{model...}. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/resilience/cooldowns/{model...}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Clears one model's cooldown-mode override so it inherits the global mode again; idempotent \u2014 a model with no override still answers 200. The model id uses the multi-segment wildcard because model ids contain a slash. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/logs",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Recent server log lines, double-redacted, newest first (?limit, default 50, max 500); captured:false with an empty list until log capture is wired. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/guardrails/test",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Dry-run probe of the local guardrails against sample text: findings + would-block verdict; records nothing, sends nothing upstream. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/teams",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "List team cost centers with live budget/member/consumption views. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/teams",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Create a team cost center (name, budget, duration, members). Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/teams/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "One team cost center by id; unknown ids answer 404. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/teams/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Update one team cost center (budget, members, status). Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/teams/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Delete one team cost center. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/quota-pools",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "List fair-share quota pools with live pool-wide consumption. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/quota-pools",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Create a fair-share quota pool (dimensions, allocations, saturation threshold). Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/quota-pools/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "One fair-share quota pool by id; unknown ids answer 404. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/quota-pools/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Update one fair-share quota pool (dimensions, allocations). Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/quota-pools/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Delete one fair-share quota pool. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhooks",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Registers a webhook URL + event list (quota.exceeded, budget.warning): validates the URL (http/https only, no private/loopback targets), mints a wh_ id, persists to the config file and rebuilds the live dispatcher. Auth always required \u2014 it points the server at an operator-chosen URL and stores a signing secret.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/webhooks",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Lists webhook registrations (id, url, events, has_secret only \u2014 secrets never returned). Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/webhooks/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "One webhook registration by id (secret never returned); unknown id is 404. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/webhooks/{id}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Removes a webhook registration, persists the config file and rebuilds the live dispatcher; unknown id is 404. Auth always required \u2014 it silently drops an operator alert channel.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PUT",
+    "path": "/api/webhooks/{id}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Updates a webhook registration (partial update: url, events and secret are each optional, only provided fields change; the URL is re-validated when changed). Persists to the config file and rebuilds the live dispatcher; unknown id is 404. Auth always required \u2014 it can re-point an operator alert channel.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/usage/om-usage",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Terminal-friendly usage command for the calling gateway key (@@om-usage): spend today / this week / this month, the active limit and next reset \u2014 plain text by default, JSON with ?format=json. Only for keys the operator enabled allow_usage_command on (403 otherwise). Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/cache/stats",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live cache analytics \u2014 per-layer entries/bytes/hits/misses/hit-ratio for the exact + semantic caches, totals, single-flight coalescing counters, and aggregated savings (tokens + USD) when a savings recorder is wired; savings omitted with a note when not. Counts only, no keys, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/telemetry/model-latency-stats",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Per-(provider, model) measured latency percentiles p50/p95/p99 from recorded request samples, with sample counts; optional ?provider= / ?model= exact-match filters. Read-only counts and latencies, no keys, no message content.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/pricing",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Operator price book: per-(provider, model) rates with their source (ledger, book, synced, model fallback). Read-only, rates and sources only, no secrets.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/pricing",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Replaces price-book rates for (provider, model) pairs (all-or-nothing, validated, persisted to the config file with rollback). Auth always required \u2014 it changes what every request is charged.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/cache",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Flushes every cache layer (exact, semantic, reasoning) and reports per-layer evicted counts. Auth always required \u2014 it discards cached answers.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/metrics",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Prometheus exposition \u2014 gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/models",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Model list \u2014 gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "models"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/models/query",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Model list filtered by provider and free-tier-only; capability filter answers 400 \u2014 the catalog records no per-model capability flags. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "models"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/models/health",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Per-model health from the health-probe ring \u2014 each model's status is its provider's last probe result; unprobed models report unknown. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "models"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/models/{model...}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Single model detail \u2014 catalog entry for one model (price, base-URL presence, free-tier flag); unknown models answer 404. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "models"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/providers/{provider}/chat/completions",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Chat completions pinned to one provider \u2014 gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/providers/{provider}/models",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Model list for one provider \u2014 gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "models"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/providers/{provider}/status",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Status for one provider (configured, key count, breaker, cooling) \u2014 gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "models"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1beta/models",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Gemini-native model list \u2014 gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "models"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1beta/models/{rest...}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Gemini-native generateContent / streamGenerateContent \u2014 gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/chat/completions",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Chat completions \u2014 gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/a2a",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "A2A JSON-RPC endpoint (message/send, message/stream, tasks/get, tasks/cancel + v1.0 SendMessage/SendStreamingMessage aliases) \u2014 gateway-key auth required, owner-scoped to the caller's key; disabled unless config a2a_enabled is true.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/a2a/status",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "A2A operator status: enabled flag, live per-state task counts (operator-only aggregates across all owners), the six skill ids and the protocol version. Management auth (admin scope) required; while A2A is disabled it answers enabled:false with all-zero counts and never touches the store.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/.well-known/agent.json",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "A2A agent card (discovery document for the POST /a2a task interface): name, description, url, version, input/output modes, capabilities and the six skill descriptors \u2014 public, no auth; no task data, no keys, no provider details.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/embeddings",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Embeddings \u2014 OpenAI-compatible, routed through the same engine as chat completions (budgets, guardrails, ledger, route trace) but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/rerank",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Rerank \u2014 Cohere/LiteLLM shape (model, query, documents, top_n, return_documents), routed through the same engine as chat completions but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/completions",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Legacy completions \u2014 gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/classify",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Routing classification \u2014 gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/explain/routing",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Routing explanation \u2014 gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/segment",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Prompt segmentation + classification \u2014 gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/images/generations",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Images generations \u2014 OpenAI-compatible, routed through the same engine as chat completions (budgets, guardrails, ledger, route trace) but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/images/edits",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Images edits \u2014 OpenAI-compatible multipart/form-data, forwarded verbatim (never decoded and rebuilt), routed through the same engine as chat completions but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/audio/speech",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Audio speech (text-to-speech) \u2014 OpenAI-compatible, routed through the same engine as chat completions but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/audio/text-to-speech",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Alias of POST /v1/audio/speech \u2014 not an OpenAI endpoint; OmniRoute route name, same handler and operation. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/audio/transcriptions",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Audio transcriptions (speech-to-text) \u2014 OpenAI-compatible multipart upload, replay-exempt: exactly one upstream attempt. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/audio/speech-to-text",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Alias of POST /v1/audio/transcriptions \u2014 not an OpenAI endpoint; OmniRoute route name, same handler and operation. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/audio/translations",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Audio translations (translate audio to English) \u2014 OpenAI-compatible multipart upload, replay-exempt: exactly one upstream attempt. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/moderations",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Moderations \u2014 OpenAI-shaped, backed ONLY by the router's local guardrails (PII / secret / injection patterns); no upstream call, no input stored or echoed. The 13 OpenAI categories are not judged (all false, score 0); the real verdict is in results[].local_guardrails and results[].flagged reflects it. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/search",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Search \u2014 Perplexity Search API passthrough, verbatim, replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/ocr",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "OCR \u2014 Mistral OCR API passthrough, verbatim, replay-exempt: exactly one upstream attempt. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/videos/generations",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Video generations \u2014 Runway text-to-video passthrough, returns a task id; replay-exempt: exactly one upstream attempt. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/videos/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Video task status \u2014 Runway task poll by id; unknown ids answer 404. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/music/generations",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Music generations \u2014 MiniMax music generation passthrough, synchronous; replay-exempt: exactly one upstream attempt. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/messages",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Anthropic Messages dialect \u2014 byte-for-byte native relay to a Messages provider (only the model field rewritten; cache_control and the SSE envelope pass through untouched), translate path through the engine when a feature needs the canonical form. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/messages/count_tokens",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Token count for a Messages request body \u2014 counted locally, never sent upstream. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/responses",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "OpenAI Responses API \u2014 translated to the canonical chat request and routed through the same engine as chat completions (failover, budgets, guardrails, ledger); creates fail over pre-commit, including branched continuations, which replay the same branched input against the next target (the original provider is tried first). Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/responses/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Retrieve one served Responses object by gateway response id \u2014 the stored object, byte-identical to what the create served, plus child_response_ids (the branches off it, from the ledger tree); unknown ids answer 404. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/responses",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "List served Responses objects, newest first, paginated (limit + after cursor) \u2014 the full stored objects, byte-identical to what each create served; an unknown cursor is a 400. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/v1/responses/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Deletes one stored response (transcript + served object) so continuations of it answer 404; deleting an unknown id is an honest 404, never a silent success. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/responses/{id}/input_items",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Input items of one stored Responses object, paginated (limit + after cursor, asc/desc); unknown ids answer 404. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/responses/input_tokens",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Token count for a stored response's input \u2014 counted locally, never sent upstream. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/files",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Upload a file (multipart form-data: file + purpose) to the local disk store; returns the OpenAI-shaped file object.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/files",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "List stored files, newest first.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/files/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Retrieve one stored file's metadata by id; unknown ids answer 404.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/v1/files/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Delete one stored file (content + index entry); unknown ids answer 404, never a silent success.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/files/{id}/content",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Download one stored file's bytes; unknown ids answer 404.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/batches",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Create a batch from an input file id (endpoint must be /v1/chat/completions, completion_window must be 24h); returns the Batch object in status validating.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/batches",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "List the caller's batches, newest first (?limit= default 20, max 100).",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/batches/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Retrieve one batch by id; unknown or foreign ids answer 404.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/batches/{id}/cancel",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Cancel a running batch: cancelling -> cancelled, the worker stops starting new lines; already-terminal batches answer 409.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/v1/batches/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Delete one terminal batch record; non-terminal batches answer 409, unknown or foreign ids answer 404.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/v1/batches/delete-completed",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Delete all of the caller's terminal (completed/cancelled/failed/expired) batch records; in-progress batches are never deleted.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/me/status",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Authenticated gateway-key introspection: the caller's key id/fingerprint, created/expiry, spend this period, budget remaining, traffic limits and live usage \u2014 never the key value itself. Gateway-key auth required; an expired key answers 401 naming the expiry.",
+    "auth_exempt": false,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/me/sessions",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "List agent (Responses) sessions opened by the calling API key: one row per session root (no previous_response_id) with turns, cumulative tokens and the list-price cost of its requests; unpricedCount counts turns with no known catalog price. Every row is filtered to the calling key \u2014 other keys' sessions are never listed. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/me/sessions/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "One agent (Responses) session of the calling API key: the session root's turns, cumulative tokens and list-price cost, plus the per-turn detail; unknown ids, other keys' sessions and keyless records answer 404. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/quotas/check",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Pre-flight quota/budget check for one (provider, model, estimated tokens) request: allowed plus the budget, token-limit and price numbers the verdict was judged against, from the same ledger machinery that enforces live requests. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/auto-combo/{channel}/candidates",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Auto-combo candidate pool for one auto/* channel: live tier models with per-key connections and breaker/cooldown state \u2014 a read-only transparency listing, never a dispatch preview. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "models"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/combos",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "List named routing combos (chains): one row per combo with steps, strategy and usability. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "models"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/combos",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Create a named routing combo (ordered provider/model steps + strategy), mirrored into the routing groups so it routes immediately. Management auth (admin scope) required \u2014 it rewrites routing state.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/combos/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "One named routing combo by id; unknown ids answer 404. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "models"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/combos/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Update one named routing combo (chain, strategy, rename). Management auth (admin scope) required \u2014 it rewrites routing state.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/v1/combos/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Delete one named routing combo (record + group mirror + strategy mirror). Management auth (admin scope) required \u2014 it rewrites routing state.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/combos/import",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Imports named routing combos from an export file (one at a time); imported combos are mirrored into routing groups like created ones. Management auth (admin scope) required \u2014 it rewrites routing state.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/combos/export",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Exports all named routing combos in the importable shape. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "models"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/combos/{id}/export",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Exports one named routing combo in the importable shape; unknown ids answer 404. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "models"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/combos/{id}/duplicate",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Duplicates one named routing combo under a new id (disabled copies stay unmirrored). Management auth (admin scope) required \u2014 it rewrites routing state.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/combos/{id}/test-run",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Simulates one combo run step by step (provider key presence per step); never calls upstream, never spends quota. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "models"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/combos/{id}/enable",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Enables one named routing combo and re-mirrors its stored chain + strategy. Management auth (admin scope) required \u2014 it rewrites routing state.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/combos/{id}/disable",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Disables one named routing combo (unmirrors it from routing). Management auth (admin scope) required \u2014 it rewrites routing state.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/shutdown",
+    "tier": "LOCAL_ONLY",
+    "spawn_capable": true,
+    "description": "Terminates the server process.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/service/install",
+    "tier": "LOCAL_ONLY",
+    "spawn_capable": true,
+    "description": "Installs a system service \u2014 not implemented yet (501 behind the guard).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/plugin/load",
+    "tier": "LOCAL_ONLY",
+    "spawn_capable": true,
+    "description": "Dynamic plugin loading is intentionally unsupported: plugins are compiled-in Go registered from config at startup (CHECKLIST 201, docs/plugins.md) \u2014 loading arbitrary code from config would be arbitrary code execution. Answers 501 by design, never loads code.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/update",
+    "tier": "LOCAL_ONLY",
+    "spawn_capable": true,
+    "description": "Auto-update (checkout + install) \u2014 not implemented yet (501 behind the guard).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/tunnel/start",
+    "tier": "LOCAL_ONLY",
+    "spawn_capable": true,
+    "description": "Starts the local TCP tunnel: forwards a loopback port to the gateway's listen address (real TCP proxy, loopback-only, stdlib only).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/tunnel/stop",
+    "tier": "LOCAL_ONLY",
+    "spawn_capable": true,
+    "description": "Stops the running local TCP tunnel and reports the bytes it forwarded.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/tunnel/status",
+    "tier": "LOCAL_ONLY",
+    "spawn_capable": true,
+    "description": "Live tunnel status (running/stopped, ports, bytes forwarded) \u2014 loopback-only like the other tunnel routes.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/provider/login",
+    "tier": "LOCAL_ONLY",
+    "spawn_capable": true,
+    "description": "Launches a browser for a provider login flow \u2014 not implemented yet (501 behind the guard).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/bootstrap",
+    "tier": "LOCAL_ONLY",
+    "spawn_capable": true,
+    "description": "Fresh-install first-key setup \u2014 only while no gateway key exists; claims with the one-shot bootstrap token printed to stdout at first boot (loopback-only).",
+    "auth_exempt": false,
+    "scopes": [],
+    "bootstrap": true
+  },
+  {
+    "method": "POST",
+    "path": "/admin/settings/export",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Exports the full settings snapshot. Secrets are redacted and never exported \u2014 provider keys and gateway-key hashes stay on disk. Requires gateway-key auth AND the typed confirmation phrase EXPORT SETTINGS (the operator-credential second check).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/db/export",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Exports the config + ledger usage history as a downloadable JSON file. All secrets redacted (no provider keys, no gateway-key hashes, no base URLs); usage history is read-only, never reset. Requires gateway-key auth AND the typed confirmation phrase EXPORT.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/db/wipe/arm",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Issues a single-use DB-wipe confirmation token (5-minute TTL, stored hashed, never logged). Requires gateway-key auth AND the typed confirmation phrase WIPE DATABASE \u2014 the token is the operator-credential second check for the wipe.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/db/wipe",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Irreversibly wipes usage history: ledger usage events, budget running spend, feedback decisions/signals, probe history (ring + file + backup). Providers, provider keys, gateway keys, prices and all other config are preserved. Requires gateway-key auth AND the typed phrase WIPE DATABASE AND the single-use confirmation token from /admin/db/wipe/arm \u2014 a key alone, or a key plus phrase, cannot wipe.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/db/import",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Imports a DB export file (codvian-router-db-export/v1) and merges its usage history into the ledger \u2014 never resets or wipes existing history; duplicate events are skipped, never double-counted; the file's config section is ignored. Requires gateway-key auth AND the typed confirmation phrase IMPORT.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/keys/revoke-all",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Revokes every gateway key (including the caller's) and persists the empty key list; bootstrap becomes pending so a new first key can be issued loopback-only. Requires the typed confirmation phrase REVOKE ALL.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/keys/{id}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Updates one gateway key's expiry and per-key traffic limits (requests-per-minute, tokens-per-minute) and persists the change. Auth always required \u2014 it changes which credential can authenticate and how much traffic it may send.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/keys/{id}/rotate",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Regenerates one gateway key: the old key is revoked at rotation and a new key is issued in its place (same name/scopes/budget/limits unless overridden), returned exactly once and never logged. Auth always required \u2014 it revokes a credential and mints a new one.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/keys",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Mints one new gateway key via config.IssueKey and persists it; the raw key is returned once in the response and never logged. Auth always required \u2014 it creates a credential.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/oauth/clients",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Registers one OAuth 2.0 client (PKCE public or confidential) for gateway auth; a confidential client's secret is returned once in the response and never logged. Auth always required \u2014 it creates a credential.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/oauth/clients",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Lists registered OAuth clients (no secrets). Auth always required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/oauth/clients/{id}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Deletes one OAuth client and revokes its outstanding codes and refresh tokens. Auth always required \u2014 it destroys a credential.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/oauth/authorize",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "OAuth 2.0 authorization endpoint (code + PKCE S256): the operator's gateway key approves the grant; the granted scopes must be a subset of the operator key's scopes. Issues a single-use code by 302 redirect to the client's registered redirect_uri. Auth always required \u2014 it mints a credential.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/keys/import",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Stores an externally-issued key definition under its hash; the raw key is never logged and never returned. Auth always required \u2014 it installs a credential.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/admin/keys/{id}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Permanently revokes one gateway key: removes it from the config (persisted) so it stops authenticating at once; the reversible kill-switch is POST /admin/keys/{id} with {\"disabled\":true}. Auth always required \u2014 it destroys a credential, plus the typed confirmation phrase DELETE <id>.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/config/reset",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Resets the config to defaults (providers, gateway keys, budget, routing, guardrails, auto-router) and persists it; listen address, data dir and unknown fields are preserved, usage history is not wiped. Requires the typed confirmation phrase RESET CONFIG.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/cache/flush",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Flushes the gateway exact-match cache: an empty body flushes every entry; {\"key_id\"} flushes only that gateway key's entries. Auth always required \u2014 it discards cached answers.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/status",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live server status (uptime, provider count, guard state) \u2014 gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/oauth/token",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "OAuth 2.0 token endpoint: authorization_code (PKCE) and refresh_token grants; issues HS256 JWT access tokens (1h) + rotating refresh tokens (30d). No gateway key \u2014 client authentication is the code_verifier and the client secret.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/oauth/revoke",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "OAuth 2.0 revocation endpoint (RFC 7009): revokes a refresh token or a JWT access token; always answers 200, even for a token that was never issued. No gateway key.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/key-templates",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Built-in gateway-key templates (names, scopes, budgets); secret-free by construction \u2014 a template holds no key material. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  }
+];
+// END TRYIT-ROUTES-JSON
+
+const $ = (id) => document.getElementById(id);
+const baseUrlInput = $("baseUrl"), keyInput = $("apiKey"), routesEl = $("routes"), countEl = $("count");
+if (!baseUrlInput.value) baseUrlInput.value = window.location.origin;
+
+function themeInit() {
+  const saved = null; // no storage: theme follows the OS by default
+  const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+}
+themeInit();
+$("themeBtn").addEventListener("click", () => {
+  const cur = document.documentElement.getAttribute("data-theme");
+  document.documentElement.setAttribute("data-theme", cur === "dark" ? "light" : "dark");
+});
+
+function exampleBody(r) {
+  if (r.method === "GET" || r.method === "DELETE" && !r.description.includes("confirmation phrase")) return null;
+  if (r.description.includes("EXPORT SETTINGS")) return {confirm: "EXPORT SETTINGS"};
+  if (r.path === "/admin/db/wipe/arm") return {confirm: "WIPE DATABASE"};
+  if (r.description.includes("WIPE DATABASE")) return {confirm: "WIPE DATABASE", confirmation_token: "<single-use-token-from-/admin/db/wipe/arm>"};
+  if (r.description.includes("phrase EXPORT")) return {confirm: "EXPORT"};
+  if (r.description.includes("phrase IMPORT")) return {confirm: "IMPORT"};
+  if (r.description.includes("REVOKE ALL")) return {confirm: "REVOKE ALL"};
+  if (r.description.includes("RESET CONFIG")) return {confirm: "RESET CONFIG"};
+  if (r.description.includes("DELETE <id>")) return {confirm: "DELETE <id>"};
+  if (r.path === "/v1/chat/completions") return {model: "<model-id>", messages: [{role: "user", content: "Hello"}]};
+  if (r.path === "/v1/embeddings") return {model: "<model-id>", input: "Hello, world"};
+  if (r.path === "/v1/rerank") return {model: "<model-id>", query: "Hello", documents: ["doc one"], top_n: 1};
+  if (r.path === "/v1/messages") return {model: "<model-id>", max_tokens: 256, messages: [{role: "user", content: "Hello"}]};
+  if (r.path === "/v1/responses") return {model: "<model-id>", input: "Hello"};
+  if (r.path === "/api/providers") return {catalog_id: "<catalog-provider-id>", api_key: "<provider-api-key>"};
+  return {};
+}
+
+function authText(r) {
+  if (r.bootstrap) return "No key (bootstrap only)";
+  if (r.auth_exempt) return "No key (auth-exempt)";
+  if (r.tier === "LOCAL_ONLY") return "Key + loopback-only";
+  if (r.tier === "ALWAYS_PROTECTED") return "Key (always)";
+  return "Key (unless relaxed)";
+}
+
+let filter = "all", query = "";
+function visible(r) {
+  const f = filter === "all" ? true
+    : filter === "other" ? !["/v1/", "/api/", "/dashboard", "/admin"].some(p => r.path.startsWith(p))
+    : r.path.startsWith(filter);
+  const q = query.trim().toLowerCase();
+  return f && (!q || (r.method + " " + r.path + " " + r.description).toLowerCase().includes(q));
+}
+
+function render() {
+  const list = ROUTES.filter(visible);
+  countEl.textContent = list.length + " of " + ROUTES.length + " routes shown.";
+  routesEl.innerHTML = "";
+  list.forEach((r, i) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    const params = [...r.path.matchAll(/\{([^}]+)\}/g)].map(m => m[1]);
+    const body = exampleBody(r);
+    card.innerHTML =
+      '<div class="row"><span class="method m-' + r.method + '">' + r.method + '</span>' +
+      '<span class="path">' + r.path + '</span></div>' +
+      '<p class="desc"></p>' +
+      '<p class="meta">Tier ' + r.tier +
+      ' &middot; Scopes ' + (r.scopes && r.scopes.length ? r.scopes.join(", ") : "any authenticated key") +
+      ' &middot; Auth: ' + authText(r) +
+      (r.spawn_capable ? ' &middot; spawn-capable' : '') +
+      (r.bootstrap ? ' &middot; bootstrap' : '') + '</p>';
+    card.querySelector(".desc").textContent = r.description;
+    const form = document.createElement("div");
+    params.forEach(p => {
+      const lab = document.createElement("label");
+      lab.textContent = "{" + p + "}: ";
+      const inp = document.createElement("input");
+      inp.type = "text"; inp.className = "mono"; inp.placeholder = p;
+      inp.dataset.param = p;
+      lab.appendChild(inp); form.appendChild(lab);
+    });
+    if (body !== null) {
+      const ta = document.createElement("textarea");
+      ta.rows = Math.min(12, JSON.stringify(body, null, 2).split("\n").length + 1);
+      ta.value = JSON.stringify(body, null, 2);
+      ta.setAttribute("aria-label", "Request JSON body");
+      form.appendChild(ta);
+    }
+    const send = document.createElement("button");
+    send.className = "pill"; send.type = "button"; send.textContent = "Send request";
+    const out = document.createElement("div");
+    send.addEventListener("click", async () => {
+      let path = r.path;
+      form.querySelectorAll("[data-param]").forEach(inp => {
+        path = path.replace("{" + inp.dataset.param + "}", encodeURIComponent(inp.value || "<" + inp.dataset.param + ">"));
+      });
+      const base = (baseUrlInput.value || window.location.origin).replace(/\/$/, "");
+      const headers = {};
+      const key = keyInput.value.trim();
+      if (key) headers["Authorization"] = "Bearer " + key;
+      const opts = {method: r.method, headers};
+      const ta = form.querySelector("textarea");
+      if (ta && ta.value.trim()) { opts.body = ta.value; headers["Content-Type"] = "application/json"; }
+      out.innerHTML = '<div class="resp">Sending…</div>';
+      try {
+        const res = await fetch(base + path, opts);
+        const text = await res.text();
+        out.innerHTML = "";
+        const st = document.createElement("div");
+        st.innerHTML = '<span class="status"></span> <span class="mono"></span>';
+        st.querySelector(".status").textContent = res.status + " " + res.statusText;
+        st.querySelector(".mono").textContent = res.url;
+        const pre = document.createElement("div");
+        pre.className = "resp"; pre.textContent = text || "(empty body)";
+        out.appendChild(st); out.appendChild(pre);
+      } catch (e) {
+        out.innerHTML = "";
+        const pre = document.createElement("div");
+        pre.className = "resp"; pre.textContent = "Request failed: " + e.message +
+          "\n(This page only talks to the base URL above. Check the router is running and the base URL is right.)";
+        out.appendChild(pre);
+      }
+    });
+    form.appendChild(send);
+    card.appendChild(form);
+    card.appendChild(out);
+    routesEl.appendChild(card);
+  });
+}
+
+document.querySelectorAll("#filters button").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll("#filters button").forEach(x => x.classList.remove("on"));
+    b.classList.add("on"); filter = b.dataset.f; render();
+  });
+});
+$("search").addEventListener("input", (e) => { query = e.target.value; render(); });
+render();
+</script>
+</body>
+</html>

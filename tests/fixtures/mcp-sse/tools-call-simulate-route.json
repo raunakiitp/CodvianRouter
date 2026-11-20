@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-simulate-route",
+  "fixture": true,
+  "transport": "sse",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + fixed test gateway keys + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger for the routing-reader and cost-reader keys, prices a $10/$30 and c $5/$15 per 1M, routing group fast; memory seeded with one fixed entry for the destructive memory key) over httptest (loopback) via GET /api/mcp/sse (endpoint event) + POST /api/mcp/sse?session_id= with a test gateway key; message-event data captured verbatim. Recorded data only, no live provider call.",
+  "key": "wide",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 24,
+    "method": "tools/call",
+    "params": {
+      "name": "simulate_route",
+      "arguments": {
+        "model": "a",
+        "prompt_tokens": 1000
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 24,
+    "result": {
+      "content": [
+        {
+          "text": "{\"simulation\":{\"model\":\"a\",\"strategy\":\"priority\",\"prompt_tokens\":1000,\"attempts\":[{\"provider\":\"p1\",\"model\":\"a\",\"on_failure\":\"fail the request (no further targets)\",\"estimated_prompt_cost_usd\":0.01,\"price_known\":true}],\"estimated_prompt_cost_usd\":0.01,\"cost_known\":true,\"note\":\"Dry run — no provider was called. The tree is the declared order; a re-ranking strategy re-orders it at request time from live signals. Completion cost is never estimated (completion length is unknown before the call).\"}}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "simulation": {
+          "model": "a",
+          "strategy": "priority",
+          "prompt_tokens": 1000,
+          "attempts": [
+            {
+              "provider": "p1",
+              "model": "a",
+              "on_failure": "fail the request (no further targets)",
+              "estimated_prompt_cost_usd": 0.01,
+              "price_known": true
+            }
+          ],
+          "estimated_prompt_cost_usd": 0.01,
+          "cost_known": true,
+          "note": "Dry run — no provider was called. The tree is the declared order; a re-ranking strategy re-orders it at request time from live signals. Completion cost is never estimated (completion length is unknown before the call)."
+        }
+      }
+    }
+  },
+  "recorded_http_status": 202,
+  "assert": {
+    "id": 24,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.simulation.cost_known": true,
+      "result.structuredContent.simulation.estimated_prompt_cost_usd": 0.01
+    },
+    "http_status": 202
+  },
+  "notes": "simulate_route for model a, 1000 prompt tokens: cost known, $0.01 (1000 tokens at $10/1M)."
+}

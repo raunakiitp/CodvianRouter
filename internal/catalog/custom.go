@@ -87,6 +87,80 @@ type CustomProvider struct {
 	WireFormat WireFormat
 }
 
+// Custom-provider prefix convention (PARITY Area 3, "Custom-provider
+// prefix convention"). A custom provider ID may carry one of three
+// prefixes naming the wire format it speaks, so an operator (or a
+// config file, or the add-provider API) can say what an endpoint is
+// without spelling out the wire format separately:
+//
+//	openai-compatible-<name>    OpenAI Chat Completions (/v1/chat/completions)
+//	anthropic-compatible-<name> Anthropic Messages (/v1/messages)
+//	anthropic-compatible-cc-<name> Claude-Code-compatible Anthropic surface
+//
+// The "cc" variant is the Claude Code surface: an Anthropic Messages
+// endpoint reached through a Claude Code-compatible router. It maps
+// to the same WireAnthropic format — the prefix records provenance,
+// the wire is what the router executes. An ID with no known prefix
+// is a generic custom provider: the wire format stays whatever the
+// operator chose (WireOpenAI by default in ToProvider).
+type CustomPrefix string
+
+const (
+	// CustomPrefixOpenAICompatible marks an OpenAI-compatible endpoint.
+	CustomPrefixOpenAICompatible CustomPrefix = "openai-compatible-"
+	// CustomPrefixAnthropicCompatible marks an Anthropic-compatible endpoint.
+	CustomPrefixAnthropicCompatible CustomPrefix = "anthropic-compatible-"
+	// CustomPrefixAnthropicCompatibleCC marks a Claude-Code-compatible
+	// Anthropic endpoint.
+	CustomPrefixAnthropicCompatibleCC CustomPrefix = "anthropic-compatible-cc-"
+)
+
+// customPrefixes is the match order: longest first, so
+// "anthropic-compatible-cc-..." matches the cc variant before the
+// plain Anthropic one.
+var customPrefixes = []struct {
+	prefix CustomPrefix
+	wire   WireFormat
+}{
+	{CustomPrefixAnthropicCompatibleCC, WireAnthropic},
+	{CustomPrefixAnthropicCompatible, WireAnthropic},
+	{CustomPrefixOpenAICompatible, WireOpenAI},
+}
+
+// ParseCustomPrefix splits a custom-provider ID into its prefix
+// convention, the remainder, and the wire format it implies.
+// ok is false when the ID carries no known prefix. The remainder
+// must be non-empty: a bare prefix names no provider. Prefixes are
+// tried longest-first, and the first prefix the ID starts with is
+// decisive: "anthropic-compatible-cc-" is a bare cc prefix, not
+// "anthropic-compatible-" + "cc-".
+func ParseCustomPrefix(id string) (prefix CustomPrefix, rest string, wire WireFormat, ok bool) {
+	for _, cp := range customPrefixes {
+		if r, found := strings.CutPrefix(id, string(cp.prefix)); found {
+			if strings.TrimSpace(r) == "" {
+				return "", "", WireUnknown, false
+			}
+			return cp.prefix, r, cp.wire, true
+		}
+	}
+	return "", "", WireUnknown, false
+}
+
+// ApplyPrefix derives the wire format from a prefixed ID and sets
+// it on the custom provider, returning true when the ID carried a
+// known prefix. The prefix wins over a previously set WireFormat:
+// it is the operator's specific claim about what the endpoint
+// speaks, and a WireFormat contradicting it is a configuration
+// mistake. Unprefixed IDs leave the provider untouched.
+func (c *CustomProvider) ApplyPrefix(id string) bool {
+	_, _, wire, ok := ParseCustomPrefix(id)
+	if !ok {
+		return false
+	}
+	c.WireFormat = wire
+	return true
+}
+
 // Validate checks the custom provider's configuration. A key is not
 // validated here (keys are validated by the upstream on first use, and
 // key formats are unreliable validators).
@@ -141,10 +215,26 @@ func (c CustomProvider) headerName() string {
 // it exactly like a built-in entry. The ID is derived from the name
 // and the current time so two custom providers with the same name do
 // not collide.
+//
+// A name carrying a known prefix (openai-compatible-,
+// anthropic-compatible-, anthropic-compatible-cc-) states the wire
+// format: the prefix wins over an explicitly set WireFormat, and the
+// slug is derived from the remainder, so the generated ID does not
+// repeat the prefix ("anthropic-compatible-foo" → "custom-foo-<ts>").
+// The display Name keeps the full prefixed name.
 func (c CustomProvider) ToProvider() (Provider, error) {
 	if err := c.Validate(); err != nil {
 		return Provider{}, err
 	}
+	// The prefix convention (PARITY B4-04): apply the prefix from
+	// the name before converting, so a prefixed custom provider
+	// converts with the wire format the prefix promises. Before
+	// this, ParseCustomPrefix/ApplyPrefix existed but ToProvider
+	// never called them, so a prefixed name converted with the
+	// default WireOpenAI (wrong for anthropic-compatible-*) and a
+	// slug that repeated the prefix. c is a value copy, so the
+	// caller's struct is untouched.
+	c.ApplyPrefix(c.Name)
 	wire := c.WireFormat
 	if wire == "" {
 		wire = WireOpenAI // the common case; the user can change it
@@ -153,7 +243,11 @@ func (c CustomProvider) ToProvider() (Provider, error) {
 	for k, v := range c.ExtraHeaders {
 		extra[k] = v
 	}
-	slug := strings.ToLower(strings.TrimSpace(c.Name))
+	slugSource := strings.TrimSpace(c.Name)
+	if _, rest, _, ok := ParseCustomPrefix(slugSource); ok {
+		slugSource = rest
+	}
+	slug := strings.ToLower(slugSource)
 	slug = strings.Map(func(r rune) rune {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':

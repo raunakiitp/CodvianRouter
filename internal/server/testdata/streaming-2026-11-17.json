@@ -1,0 +1,64 @@
+{
+  "rig": {
+    "os": "Linux 7.0.0-44-generic x86_64",
+    "cpus": 4,
+    "mem_total_kib": 8124904,
+    "cpu_model": "AMD EPYC 9D25 126-Core Processor",
+    "go_version": "go version go1.27.4 linux/amd64",
+    "loadavg": [
+      "13.29",
+      "7.49",
+      "4.44"
+    ],
+    "date": "2026-11-17T20:50:00+00:00",
+    "note": "Shared VM (1.5 shared vCPU budget), not a dedicated box; one run per cell, 200 tokens each \u2014 a single sample, not a distribution over runs."
+  },
+  "date": "2026-11-17T20:50:00+00:00",
+  "batching": {
+    "max_tokens": 3,
+    "max_delay_ms": 8
+  },
+  "tcp_nodelay": {
+    "verified": true,
+    "note": "TCP_NODELAY verified set on both socket paths by GetsockoptInt probe (see provider/nodelay_test.go, server/nodelay_listener_test.go); Go's stdlib also sets it by default (net/tcpsock.go newTCPConn)."
+  },
+  "scenarios": [
+    {
+      "cadence_ms": 10,
+      "tokens": 200,
+      "before": {
+        "median_ms": 0.357,
+        "p99_ms": 25.548,
+        "mean_ms": 0.883,
+        "max_ms": 28.199,
+        "received": 200
+      },
+      "after": {
+        "median_ms": 8.536,
+        "p99_ms": 9.943,
+        "mean_ms": 8.551,
+        "max_ms": 11.271,
+        "received": 200
+      }
+    },
+    {
+      "cadence_ms": 1,
+      "tokens": 200,
+      "before": {
+        "median_ms": 0.211,
+        "p99_ms": 3.16,
+        "mean_ms": 0.335,
+        "max_ms": 4.219,
+        "received": 200
+      },
+      "after": {
+        "median_ms": 1.302,
+        "p99_ms": 2.853,
+        "mean_ms": 1.347,
+        "max_ms": 4.341,
+        "received": 200
+      }
+    }
+  ],
+  "note": "Per-token delivery latency = client receive time minus the mock's emit timestamp embedded in the token (same machine clock). Batching is a throughput trade, not a latency win: at a 10 ms cadence each token waits the full 8 ms timer (its successor is 10 ms away, so the 3-token bound never fires first); at a 1 ms cadence the 3-token bound fires first and the wait is ~2 ms. No latency target exists for token delivery, so no cell is scored MET/MISSED."
+}

@@ -71,6 +71,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/raunakiitp/codvian-router/internal/reasoning"
 )
 
 // ---------------------------------------------------------------------------
@@ -167,7 +169,10 @@ type CohereError struct {
 	StatusCode int
 	Message    string
 	RetryAfter time.Duration
-	Retryable  bool
+	// RetryAfterPresent: see AnthropicError — true when a
+	// Retry-After header was present and parsed, including "0".
+	RetryAfterPresent bool
+	Retryable         bool
 }
 
 // mustJSONValue marshals v to its JSON encoding (infallible for the
@@ -246,25 +251,28 @@ func parseCohereErrorBody(body []byte) string {
 // MapCohereError converts a non-2xx Cohere HTTP response (status,
 // headers, body) into a *CohereError that preserves the status code.
 // 429 stays 429-class and 5xx stay 5xx so the router's failover
-// triggers correctly; a 4xx whose body mentions quota/billing is not
-// retryable (it is a quota problem, and the provider maps it to
-// QuotaError by message).
+// triggers correctly. 402/404 are retryable per the shared taxonomy
+// (RetryableStatus): they are properties of that target.
 func MapCohereError(status int, headers http.Header, body []byte) error {
 	message := parseCohereErrorBody(body)
 	retryable := false
 	switch {
 	case status == http.StatusTooManyRequests:
 		retryable = true
-	case status == http.StatusRequestTimeout:
+	case status == http.StatusBadRequest && IsModelNotFoundSignal(message):
+		// Entry 151: a 400 that means "model not found at this
+		// target" falls back; any other 400 stops the chain.
 		retryable = true
-	case status >= 500:
+	case RetryableStatus(status):
 		retryable = true
 	}
+	ra, raPresent := parseRetryAfter(headers)
 	return &CohereError{
-		StatusCode: status,
-		Message:    message,
-		RetryAfter: parseRetryAfter(headers),
-		Retryable:  retryable,
+		StatusCode:        status,
+		Message:           message,
+		RetryAfter:        ra,
+		RetryAfterPresent: raPresent,
+		Retryable:         retryable,
 	}
 }
 
@@ -322,6 +330,18 @@ func ConvertCohereRequest(req ChatCompletionRequest) (*CohereRequest, error) {
 	}
 	if len(req.Stop) > 5 {
 		return nil, unrep("Cohere accepts at most 5 stop sequences, got %d", len(req.Stop))
+	}
+	// Reasoning continuity (CHECKLIST 163): the Cohere Chat API
+	// v2 has no reasoning-replay field, so ANY restored reasoning
+	// state fails this hop honestly (the router fails over to a
+	// target that can carry it) rather than silently dropping
+	// the reasoning.
+	for i, m := range req.Messages {
+		if m.Reasoning != nil && !m.Reasoning.Empty() {
+			if _, _, err := reasoning.Check(m.Reasoning, reasoning.WireCohere, req.Model); err != nil {
+				return nil, fmt.Errorf("messages[%d] reasoning: %w", i, err)
+			}
+		}
 	}
 
 	tools, toolChoice, err := convertCohereTools(req.Tools, req.ToolChoice)

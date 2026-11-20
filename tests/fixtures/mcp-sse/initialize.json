@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "initialize",
+  "fixture": true,
+  "transport": "sse",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + fixed test gateway keys + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger for the routing-reader and cost-reader keys, prices a $10/$30 and c $5/$15 per 1M, routing group fast; memory seeded with one fixed entry for the destructive memory key) over httptest (loopback) via GET /api/mcp/sse (endpoint event) + POST /api/mcp/sse?session_id= with a test gateway key; message-event data captured verbatim. Recorded data only, no live provider call.",
+  "key": "read",
+  "method": "initialize",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "mcp-sse-fixture-client",
+        "version": "0"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "capabilities": {
+        "tools": {}
+      },
+      "protocolVersion": "2025-03-26",
+      "serverInfo": {
+        "name": "codvian-router",
+        "version": "0.1.0"
+      }
+    }
+  },
+  "recorded_http_status": 202,
+  "assert": {
+    "id": 1,
+    "expect_error": false,
+    "required_fields": [
+      "result.protocolVersion",
+      "result.capabilities",
+      "result.serverInfo.name",
+      "result.serverInfo.version"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.protocolVersion": "2025-03-26",
+      "result.serverInfo.name": "codvian-router",
+      "result.serverInfo.version": "0.1.0"
+    },
+    "http_status": 202
+  },
+  "notes": "Handshake over SSE: the server reports protocol 2025-03-26 and its name/version on the stream's message event; the POST itself answers 202."
+}

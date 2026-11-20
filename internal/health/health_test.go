@@ -74,7 +74,7 @@ func addProvider(t *testing.T, reg *provider.Registry, key string) string {
 // fakeFactory returns canned clients keyed by the plaintext API key the
 // checker passes in (the registry's decrypted key).
 func fakeFactory(byKey map[string]*fakeClient) provider.ClientFactory {
-	return func(baseURL, apiKey string) (provider.Client, error) {
+	return func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (provider.Client, error) {
 		if c, ok := byKey[apiKey]; ok {
 			return c, nil
 		}
@@ -413,7 +413,7 @@ func TestCheckDoesNotLeakKeyOnBuildFailure(t *testing.T) {
 	// a key that must never appear in any Status field.
 	reg := provider.NewRegistry(nil)
 	id := addProvider(t, reg, "sk-topsecret-12345")
-	c := New(reg, func(baseURL, apiKey string) (provider.Client, error) {
+	c := New(reg, func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (provider.Client, error) {
 		if apiKey != "sk-topsecret-12345" {
 			t.Errorf("factory got apiKey %q, want the decrypted key", apiKey)
 		}
@@ -427,5 +427,146 @@ func TestCheckDoesNotLeakKeyOnBuildFailure(t *testing.T) {
 		if strings.Contains(field, "sk-topsecret-12345") {
 			t.Errorf("Status field leaks the API key: %q", field)
 		}
+	}
+}
+
+// --- Probe history (slice 5) ---
+
+// seedHistory records n samples for id directly, so window math can be
+// tested without waiting for real probes.
+func seedHistory(c *Checker, id string, at time.Time, ok bool, latencyMs int64, n int) {
+	for i := 0; i < n; i++ {
+		c.record(Status{ProviderID: id, OK: ok, LatencyMs: latencyMs, CheckedAt: at.Add(time.Duration(i) * time.Second)}, nil)
+	}
+}
+
+func TestHistoryEmptyProviderReportsNoData(t *testing.T) {
+	reg := provider.NewRegistry(nil)
+	c := New(reg, fakeFactory(nil))
+	sum := c.History("no-such-provider")
+	if sum.Samples != 0 {
+		t.Errorf("Samples = %d, want 0", sum.Samples)
+	}
+	if sum.Uptime1h != nil || sum.Uptime24h != nil {
+		t.Errorf("uptime = %v/%v, want nil (no data)", sum.Uptime1h, sum.Uptime24h)
+	}
+	if sum.P50Ms != nil || sum.P95Ms != nil {
+		t.Errorf("latency = %v/%v, want nil (no data)", sum.P50Ms, sum.P95Ms)
+	}
+	if len(sum.Buckets) != 24 {
+		t.Fatalf("len(Buckets) = %d, want 24", len(sum.Buckets))
+	}
+	for i, b := range sum.Buckets {
+		if b.Up != 0 || b.Down != 0 || b.P50Ms != nil {
+			t.Errorf("bucket %d = %+v, want empty", i, b)
+		}
+	}
+}
+
+func TestHistoryRecordsDownPeriodAndUptimeDrops(t *testing.T) {
+	reg := provider.NewRegistry(nil)
+	id := addProvider(t, reg, "sk-hist")
+	c := New(reg, fakeFactory(map[string]*fakeClient{"sk-hist": {}}))
+	now := time.Now().UTC()
+	// 10 successful probes 30 min ago, then 10 failed probes just now.
+	seedHistory(c, id, now.Add(-30*time.Minute), true, 40, 10)
+	seedHistory(c, id, now.Add(-5*time.Minute), false, 5, 10)
+	sum := c.historyAt(id, now)
+	if sum.Samples != 20 {
+		t.Fatalf("Samples = %d, want 20", sum.Samples)
+	}
+	if sum.Uptime24h == nil || *sum.Uptime24h != 50 {
+		t.Errorf("Uptime24h = %v, want 50", sum.Uptime24h)
+	}
+	if sum.Uptime1h == nil || *sum.Uptime1h != 50 {
+		t.Errorf("Uptime1h = %v, want 50 (10 up + 10 down in the hour)", sum.Uptime1h)
+	}
+	// Latency percentiles come from successful probes only: all 40 ms.
+	if sum.P50Ms == nil || *sum.P50Ms != 40 {
+		t.Errorf("P50Ms = %v, want 40", sum.P50Ms)
+	}
+	if sum.P95Ms == nil || *sum.P95Ms != 40 {
+		t.Errorf("P95Ms = %v, want 40", sum.P95Ms)
+	}
+	// Buckets: the down probes land in the current hour's bucket.
+	up, down := 0, 0
+	for _, b := range sum.Buckets {
+		up += b.Up
+		down += b.Down
+	}
+	if up != 10 || down != 10 {
+		t.Errorf("buckets total up/down = %d/%d, want 10/10", up, down)
+	}
+}
+
+func TestHistoryWindowsWithNoProbesReportNoData(t *testing.T) {
+	reg := provider.NewRegistry(nil)
+	c := New(reg, fakeFactory(nil))
+	now := time.Now().UTC()
+	// Only old probes: 2 h ago, so the 1 h window is empty but the
+	// 24 h window is not.
+	seedHistory(c, "p1", now.Add(-2*time.Hour), true, 30, 4)
+	sum := c.historyAt("p1", now)
+	if sum.Uptime1h != nil {
+		t.Errorf("Uptime1h = %v, want nil (no probes in the last hour)", sum.Uptime1h)
+	}
+	if sum.Uptime24h == nil || *sum.Uptime24h != 100 {
+		t.Errorf("Uptime24h = %v, want 100", sum.Uptime24h)
+	}
+}
+
+func TestHistoryLatencyPercentilesMove(t *testing.T) {
+	reg := provider.NewRegistry(nil)
+	c := New(reg, fakeFactory(nil))
+	now := time.Now().UTC()
+	// 100 successful probes with latencies 1..100 ms.
+	for i := int64(1); i <= 100; i++ {
+		c.record(Status{ProviderID: "p1", OK: true, LatencyMs: i, CheckedAt: now.Add(time.Duration(i) * time.Millisecond)}, nil)
+	}
+	sum := c.historyAt("p1", now.Add(time.Second))
+	if sum.P50Ms == nil || *sum.P50Ms != 50 {
+		t.Errorf("P50Ms = %v, want 50", sum.P50Ms)
+	}
+	if sum.P95Ms == nil || *sum.P95Ms != 95 {
+		t.Errorf("P95Ms = %v, want 95", sum.P95Ms)
+	}
+}
+
+func TestHistoryRingIsBounded(t *testing.T) {
+	reg := provider.NewRegistry(nil)
+	c := New(reg, fakeFactory(nil))
+	now := time.Now().UTC()
+	// More probes than the cap, all within retention.
+	for i := 0; i < MaxHistorySamples+500; i++ {
+		c.record(Status{ProviderID: "p1", OK: true, LatencyMs: 1, CheckedAt: now.Add(time.Duration(i) * time.Millisecond)}, nil)
+	}
+	sum := c.History("p1")
+	if sum.Samples != MaxHistorySamples {
+		t.Errorf("Samples = %d, want capped at %d", sum.Samples, MaxHistorySamples)
+	}
+	// Samples older than 48 h are pruned on the next record.
+	c.record(Status{ProviderID: "p1", OK: true, LatencyMs: 1, CheckedAt: now.Add(49 * time.Hour)}, nil)
+	sum = c.historyAt("p1", now.Add(49*time.Hour))
+	if sum.Samples != 1 {
+		t.Errorf("Samples after retention prune = %d, want 1", sum.Samples)
+	}
+}
+
+func TestCheckAppendsToHistory(t *testing.T) {
+	reg := provider.NewRegistry(nil)
+	id := addProvider(t, reg, "sk-hist2")
+	c := New(reg, fakeFactory(map[string]*fakeClient{"sk-hist2": {}}))
+	if got := c.Check(context.Background(), id); !got.OK {
+		t.Fatalf("Check OK = false: %q", got.LastError)
+	}
+	if got := c.Check(context.Background(), id); !got.OK {
+		t.Fatalf("second Check OK = false: %q", got.LastError)
+	}
+	sum := c.History(id)
+	if sum.Samples != 2 {
+		t.Errorf("Samples = %d, want 2 after two Checks", sum.Samples)
+	}
+	if sum.Uptime24h == nil || *sum.Uptime24h != 100 {
+		t.Errorf("Uptime24h = %v, want 100", sum.Uptime24h)
 	}
 }

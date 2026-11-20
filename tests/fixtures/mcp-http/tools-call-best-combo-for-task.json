@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-best-combo-for-task",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger, prices a $10/$30 and c $5/$15 per 1M, routing group fast) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "router",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 23,
+    "method": "tools/call",
+    "params": {
+      "name": "best_combo_for_task",
+      "arguments": {
+        "task": "fast chat"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 23,
+    "result": {
+      "content": [
+        {
+          "text": "{\"candidates_seen\":1,\"combo\":{\"name\":\"fast\",\"members\":[\"p1\",\"p2\"],\"strategy\":\"priority\",\"active\":false,\"usable\":true},\"constraints\":{},\"metrics\":{\"name\":\"fast\",\"requests\":3,\"ok\":3,\"errors\":0,\"success_rate\":1,\"prompt_tokens\":2100,\"completion_tokens\":1000,\"total_tokens\":3100,\"cost_usd\":0.0505,\"cost_known\":true,\"unpriced_tokens\":0,\"mean_latency_ms\":110,\"latency_known\":true,\"latency_events\":3,\"window\":\"all_time\"},\"metrics_known\":true,\"preferred_strategy\":\"fastest\",\"reasons\":[\"measured $0.0168333 per request over 3 requests\",\"measured success rate 100.0% over 3 requests\",\"measured mean latency 110.0 ms over 3 recent events\"]}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "candidates_seen": 1,
+        "combo": {
+          "name": "fast",
+          "members": [
+            "p1",
+            "p2"
+          ],
+          "strategy": "priority",
+          "active": false,
+          "usable": true
+        },
+        "constraints": {},
+        "metrics": {
+          "name": "fast",
+          "requests": 3,
+          "ok": 3,
+          "errors": 0,
+          "success_rate": 1,
+          "prompt_tokens": 2100,
+          "completion_tokens": 1000,
+          "total_tokens": 3100,
+          "cost_usd": 0.0505,
+          "cost_known": true,
+          "unpriced_tokens": 0,
+          "mean_latency_ms": 110,
+          "latency_known": true,
+          "latency_events": 3,
+          "window": "all_time"
+        },
+        "metrics_known": true,
+        "preferred_strategy": "fastest",
+        "reasons": [
+          "measured $0.0168333 per request over 3 requests",
+          "measured success rate 100.0% over 3 requests",
+          "measured mean latency 110.0 ms over 3 recent events"
+        ]
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 23,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.candidates_seen": 1,
+      "result.structuredContent.combo.name": "fast",
+      "result.structuredContent.metrics_known": true,
+      "result.structuredContent.preferred_strategy": "fastest"
+    },
+    "http_status": 200
+  },
+  "notes": "best_combo_for_task ranks on the seeded measured history: \"fast chat\" prefers fastest, combo fast is the only candidate, metrics known (3 seeded requests over its members)."
+}

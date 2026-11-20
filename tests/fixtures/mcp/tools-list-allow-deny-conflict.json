@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-list-allow-deny-conflict",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call. Filtered server (allow-deny): allow-list router_status, cache_stats with cache_stats denied (deny wins).",
+  "method": "tools/list",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 111,
+    "method": "tools/list"
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 111,
+    "result": {
+      "tools": [
+        {
+          "name": "router_status",
+          "description": "Live Codvian Router status: listen address, provider/model counts, gateway-key count, whether the auto-router is configured, and uptime when known.",
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          }
+        }
+      ]
+    }
+  },
+  "assert": {
+    "id": 111,
+    "expect_error": false,
+    "required_fields": [
+      "result.tools"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.tools.0.inputSchema": null,
+      "result.tools.0.name": "router_status"
+    },
+    "json_lengths": {
+      "result.tools": 1
+    }
+  },
+  "notes": "tools/list when cache_stats is both allow-listed and denied: deny wins — only router_status is announced. The conflict resolves to invisible, never to visible. The json_lengths pin (result.tools = 1) fails if cache_stats leaks in."
+}

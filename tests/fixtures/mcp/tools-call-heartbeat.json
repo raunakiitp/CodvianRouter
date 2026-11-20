@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-heartbeat",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 20,
+    "method": "tools/call",
+    "params": {
+      "name": "heartbeat",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 20,
+    "result": {
+      "content": [
+        {
+          "text": "{\"audit_log\":\"disabled\",\"protocol_version\":\"2025-03-26\",\"tool_count\":24,\"uptime_seconds\":-1}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "audit_log": "disabled",
+        "protocol_version": "2025-03-26",
+        "tool_count": 24,
+        "uptime_seconds": -1
+      }
+    }
+  },
+  "assert": {
+    "id": 20,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.tool_count"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.audit_log": "disabled",
+      "result.structuredContent.protocol_version": "2025-03-26",
+      "result.structuredContent.tool_count": 24,
+      "result.structuredContent.uptime_seconds": -1
+    }
+  },
+  "notes": "heartbeat: liveness snapshot — uptime -1 (no serving loop), 24 announced tools, protocol 2025-03-26, audit log disabled (not wired in the fixture server)."
+}

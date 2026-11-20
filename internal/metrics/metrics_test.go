@@ -283,3 +283,41 @@ func TestConcurrencyLimitAndRejected(t *testing.T) {
 		t.Fatalf("exposition missing slow rejected 2:\n%s", out)
 	}
 }
+
+// TestPanicsCounter proves the recovered-panic counter (CHECKLIST
+// 165): per-location increments, an honest zero before any panic
+// (no series rendered), the total in Snapshot, and sanitized
+// location labels.
+func TestPanicsCounter(t *testing.T) {
+	r := NewRecorder()
+	if got := r.Panics(); got != 0 {
+		t.Fatalf("Panics() = %d, want 0 before any panic", got)
+	}
+	if got := r.Snapshot().Panics; got != 0 {
+		t.Fatalf("Snapshot().Panics = %d, want 0 before any panic", got)
+	}
+	if out := body(t, r); strings.Contains(out, "codvian_router_panics_total{") {
+		t.Fatalf("metrics render a panics series before any panic:\n%s", out)
+	}
+
+	r.IncPanic("provider_chat")
+	r.IncPanic("provider_stream")
+	r.IncPanic("provider_stream")
+	r.IncPanic("weird location!") // sanitized to weird_location_
+	if got := r.Panics(); got != 4 {
+		t.Fatalf("Panics() = %d, want 4", got)
+	}
+	if got := r.Snapshot().Panics; got != 4 {
+		t.Fatalf("Snapshot().Panics = %d, want 4", got)
+	}
+	out := body(t, r)
+	for _, want := range []string{
+		`codvian_router_panics_total{location="provider_chat"} 1`,
+		`codvian_router_panics_total{location="provider_stream"} 2`,
+		`codvian_router_panics_total{location="weird_location_"} 1`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("metrics missing %q:\n%s", want, out)
+		}
+	}
+}

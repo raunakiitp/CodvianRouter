@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-set-budget-guard",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 41,
+    "method": "tools/call",
+    "params": {
+      "name": "set_budget_guard",
+      "arguments": {
+        "key_id": "key-1",
+        "limit_usd": 5,
+        "unpriced_policy": "count_as_zero",
+        "daily_limit_usd": 10
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 41,
+    "result": {
+      "content": [
+        {
+          "text": "{\"guard_set\":true,\"quota\":{\"key_id\":\"key-1\",\"has_budget\":true,\"limit_usd\":5,\"spent_usd\":0.012,\"remaining_usd\":4.988,\"at_limit\":false,\"unpriced_policy\":\"count_as_zero\",\"active_window\":\"5h\",\"active_limit_usd\":5,\"warning_reached\":false,\"unpriced_models\":[\"chat-model\"],\"daily\":{\"limit_usd\":10,\"spent_usd\":0.012,\"remaining_usd\":9.988,\"at_limit\":false},\"weekly\":{\"spent_usd\":0.012,\"at_limit\":false},\"monthly\":{\"spent_usd\":0.012,\"at_limit\":false}}}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "guard_set": true,
+        "quota": {
+          "key_id": "key-1",
+          "has_budget": true,
+          "limit_usd": 5,
+          "spent_usd": 0.012,
+          "remaining_usd": 4.988,
+          "at_limit": false,
+          "unpriced_policy": "count_as_zero",
+          "active_window": "5h",
+          "active_limit_usd": 5,
+          "warning_reached": false,
+          "unpriced_models": [
+            "chat-model"
+          ],
+          "daily": {
+            "limit_usd": 10,
+            "spent_usd": 0.012,
+            "remaining_usd": 9.988,
+            "at_limit": false
+          },
+          "weekly": {
+            "spent_usd": 0.012,
+            "at_limit": false
+          },
+          "monthly": {
+            "spent_usd": 0.012,
+            "at_limit": false
+          }
+        }
+      }
+    }
+  },
+  "assert": {
+    "id": 41,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.quota"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.guard_set": true,
+      "result.structuredContent.quota.daily.limit_usd": 10,
+      "result.structuredContent.quota.daily.remaining_usd": 9.988,
+      "result.structuredContent.quota.has_budget": true,
+      "result.structuredContent.quota.key_id": "key-1",
+      "result.structuredContent.quota.limit_usd": 5,
+      "result.structuredContent.quota.remaining_usd": 4.988,
+      "result.structuredContent.quota.spent_usd": 0.012,
+      "result.structuredContent.quota.unpriced_policy": "count_as_zero"
+    }
+  },
+  "notes": "set_budget_guard for key-1 ($5 rolling cap, count_as_zero, $10 daily): the reply re-reads the stored guard, not the request echo. Runs after check_quota so the session still sees the seeded $10 guard there."
+}

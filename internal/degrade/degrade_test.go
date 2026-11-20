@@ -112,9 +112,9 @@ func TestChatSuccessStoresAndReturns(t *testing.T) {
 		t.Fatalf("fresh success LastStaleAge = %v, want 0", se.LastStaleAge())
 	}
 
-	key, err := cache.ExactKey(testReq().Model, testReq().Messages)
+	key, err := cache.ScopedKey(cache.KeyInput{Model: testReq().Model, Messages: testReq().Messages})
 	if err != nil {
-		t.Fatalf("ExactKey: %v", err)
+		t.Fatalf("ScopedKey: %v", err)
 	}
 	cached, ok := exact.Get(ctx, key)
 	if !ok {
@@ -424,7 +424,7 @@ func TestChatStreamSuccessStores(t *testing.T) {
 	if se.LastServedStale() {
 		t.Fatal("fresh stream success must not be marked stale")
 	}
-	key, _ := cache.ExactKey(testReq().Model, testReq().Messages)
+	key, _ := cache.ScopedKey(cache.KeyInput{Model: testReq().Model, Messages: testReq().Messages})
 	if _, ok := exact.Get(ctx, key); !ok {
 		t.Fatal("successful ChatStream did not store the response")
 	}
@@ -1058,9 +1058,9 @@ func TestServeCacheSkipsToolRequests(t *testing.T) {
 	if _, err := se.Chat(ctx, toolReq); err != nil {
 		t.Fatalf("tool Chat: %v", err)
 	}
-	key, err := cache.ExactKey(toolReq.Model, toolReq.Messages)
+	key, err := cache.ScopedKey(cache.KeyInput{Model: toolReq.Model, Messages: toolReq.Messages})
 	if err != nil {
-		t.Fatalf("ExactKey: %v", err)
+		t.Fatalf("ScopedKey: %v", err)
 	}
 	if _, ok := exact.Get(ctx, key); ok {
 		t.Fatal("tool request must not be stored in the exact cache")
@@ -1197,5 +1197,49 @@ func TestStaleEngineCoalescingStatsEmptyWithoutReporter(t *testing.T) {
 	se, _ := wrapTest(&fakeEngine{}, DefaultPolicy())
 	if got := se.CoalescingStats(); got != (coalescing.Stats{}) {
 		t.Fatalf("CoalescingStats = %+v, want all zero", got)
+	}
+}
+
+// TestCacheableResponsesExcluded proves the CHECKLIST 169 cache
+// rule: a Responses create (fresh or continuation) is never
+// cacheable — so it is never served from the proactive cache,
+// never stored into it, and never served stale on provider
+// failure (staleFor refuses non-cacheable requests the same way).
+// A cached answer under a fresh response id would record a
+// conversation the provider never had.
+func TestCacheableResponsesExcluded(t *testing.T) {
+	if !cacheable(testReq()) {
+		t.Fatalf("plain chat request should be cacheable")
+	}
+	respReq := testReq()
+	respReq.Endpoint = provider.EndpointResponses
+	if cacheable(respReq) {
+		t.Fatalf("Responses create must not be cacheable")
+	}
+	contReq := testReq()
+	contReq.PreviousResponseID = "resp_123"
+	if cacheable(contReq) {
+		t.Fatalf("Responses continuation must not be cacheable")
+	}
+	// The stale path honours the same rule: with a stored exact
+	// entry and every provider down, a Responses request still
+	// fails honestly instead of serving the stale answer as a
+	// new conversation turn.
+	exact := cache.NewExactCache(10)
+	inner := &fakeEngine{chatErr: errUpstreamDown}
+	eng := WrapWithSemantic(inner, exact, nil, Policy{ServeCache: true, MaxStaleAge: time.Hour})
+	// Seed the exact cache via a plain chat success first.
+	inner.chatResp = freshResp()
+	inner.chatErr = nil
+	if _, err := eng.Chat(context.Background(), testReq()); err != nil {
+		t.Fatalf("seed chat: %v", err)
+	}
+	inner.chatResp = nil
+	inner.chatErr = errUpstreamDown
+	if _, err := eng.Chat(context.Background(), respReq); err == nil {
+		t.Fatal("Responses create with all providers down: want the honest failure, not a stale answer")
+	}
+	if inner.chatCalls != 2 {
+		t.Fatalf("inner chat calls = %d, want 2 (seed + the failed Responses attempt, no cache shortcut)", inner.chatCalls)
 	}
 }

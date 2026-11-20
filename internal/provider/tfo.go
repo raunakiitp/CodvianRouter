@@ -80,10 +80,17 @@ func TFOStatus() TFOState {
 // TFO on the socket about to be dialed. It records the attempt and
 // any setsockopt failure, and ALWAYS returns nil — a refused option
 // must fall back to a normal handshake, never fail the dial.
+//
+// The option itself is set by tfoSetSocketOption in the per-OS files
+// (tfo_linux.go, tfo_darwin.go, tfo_windows.go, tfo_other.go): the
+// socket-option call is NOT portable — on Windows SetsockoptInt
+// takes a syscall.Handle (the RawConn fd is a SOCKET handle), while
+// on Unix it takes an int fd — so the call lives behind the
+// platform split instead of in this shared file.
 func tfoControl(network, address string, c syscall.RawConn) error {
 	tfoAttempts.Add(1)
 	_ = c.Control(func(fd uintptr) {
-		if err := syscall.SetsockoptInt(int(fd), tfoLevel, tfoOption, 1); err != nil {
+		if err := tfoSetSocketOption(fd); err != nil {
 			tfoErrors.Add(1)
 		}
 	})
@@ -104,12 +111,17 @@ func tfoDialer(enabled bool) *net.Dialer {
 // tfoTransport returns an http.Transport identical to
 // http.DefaultTransport except its DialContext uses tfoDialer, so
 // provider clients keep the default proxy/TLS/idle settings and
-// only the dial changes. A nil Transport (the previous behaviour)
-// used DefaultTransport implicitly; this makes the dialer explicit
-// without changing any other setting.
+// only the dial changes. The dial is wrapped with
+// noDelayDialContext: TCP_NODELAY is set explicitly on every
+// dialed connection (the stdlib already sets it by default —
+// see nodelay.go — this makes it an enforced property of this
+// dialer, proven by the GetsockoptInt test). A nil Transport
+// (the previous behaviour) used DefaultTransport implicitly;
+// this makes the dialer explicit without changing any other
+// setting.
 func tfoTransport(enabled bool) *http.Transport {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.DialContext = tfoDialer(enabled).DialContext
+	tr.DialContext = noDelayDialContext(tfoDialer(enabled).DialContext)
 	return tr
 }
 

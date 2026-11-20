@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-model-list",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 5,
+    "method": "tools/call",
+    "params": {
+      "name": "model_list",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 5,
+    "result": {
+      "content": [
+        {
+          "text": "{\"models\":[{\"id\":\"coder-model\",\"provider_id\":\"p1\",\"provider_name\":\"Coder\"},{\"id\":\"chat-model\",\"provider_id\":\"p2\",\"provider_name\":\"Chatter\"}]}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "models": [
+          {
+            "id": "coder-model",
+            "provider_id": "p1",
+            "provider_name": "Coder"
+          },
+          {
+            "id": "chat-model",
+            "provider_id": "p2",
+            "provider_name": "Chatter"
+          }
+        ]
+      }
+    }
+  },
+  "assert": {
+    "id": 5,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.models"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.models.0.id": "coder-model",
+      "result.structuredContent.models.0.provider_id": "p1",
+      "result.structuredContent.models.1.id": "chat-model",
+      "result.structuredContent.models.1.provider_id": "p2"
+    }
+  },
+  "notes": "model_list: mock models with their provider ids."
+}

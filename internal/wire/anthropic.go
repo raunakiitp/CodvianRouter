@@ -30,6 +30,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/raunakiitp/codvian-router/internal/reasoning"
 )
 
 // DefaultMaxTokens is used when the OpenAI request omits max_tokens.
@@ -49,6 +51,17 @@ const DefaultMaxTokens = 4096
 type ContentPart struct {
 	Type string `json:"type"` // "text" | "image_url" | ...
 	Text string `json:"text,omitempty"`
+	// CacheControl, when set, is a client-supplied prompt-cache
+	// breakpoint for this part (G13): OpenAI-compatible upstreams
+	// that honour it (OpenRouter's chat-completions API for
+	// Claude/Qwen/Gemini models) pin the prefix up to this part.
+	// The gateway decodes it, preserves it through every wire
+	// conversion (Anthropic blocks carry it verbatim), and never
+	// overwrites it with its own auto-marker — a client that
+	// asked for a breakpoint keeps exactly the one it asked for.
+	// It is omitted when nil, so parts without a marker encode
+	// exactly as before.
+	CacheControl *AnthropicCacheControl `json:"cache_control,omitempty"`
 	// ImageURL is set for "image_url" parts. Detail (low/high/auto) has
 	// no Anthropic equivalent and is ignored on conversion.
 	ImageURL *ImageURLPart `json:"image_url,omitempty"`
@@ -74,19 +87,34 @@ type ToolCallFunction struct {
 
 // ChatMessage is one OpenAI chat message. Content is kept raw because
 // it may be a plain string, an array of ContentPart, or null (assistant
-// messages that only carry tool calls).
+// messages that only carry tool calls). Reasoning carries the
+// assistant turn's captured reasoning state, when the router
+// restored one for this message (or the client supplied one):
+// it is json:"-" — router-internal, never serialised into a
+// coalescing key, a cache key, a trace, or a client-facing body —
+// and each wire converter translates it into its own shape (or
+// refuses the hop honestly) via reasoning.Check.
 type ChatMessage struct {
-	Role       string          `json:"role"`
-	Content    json.RawMessage `json:"content,omitempty"`
-	ToolCalls  []ToolCall      `json:"tool_calls,omitempty"`
-	ToolCallID string          `json:"tool_call_id,omitempty"`
-	Name       string          `json:"name,omitempty"`
+	Role       string           `json:"role"`
+	Content    json.RawMessage  `json:"content,omitempty"`
+	ToolCalls  []ToolCall       `json:"tool_calls,omitempty"`
+	ToolCallID string           `json:"tool_call_id,omitempty"`
+	Name       string           `json:"name,omitempty"`
+	Reasoning  *reasoning.State `json:"-"`
 }
 
 // ToolDefinition is one OpenAI "function" tool definition.
 type ToolDefinition struct {
-	Type     string `json:"type"` // must be "function"
-	Function struct {
+	Type string `json:"type"` // must be "function"
+	// CacheControl, when set, is a client-supplied prompt-cache
+	// breakpoint on this tool definition (G13): Anthropic accepts
+	// cache_control on tool definitions, and OpenRouter's
+	// chat-completions API honours it for Claude/Qwen/Gemini
+	// models. Preserved through conversion (convertTools copies
+	// it onto AnthropicTool) and never overwritten by the
+	// gateway's own auto-marker.
+	CacheControl *AnthropicCacheControl `json:"cache_control,omitempty"`
+	Function     struct {
 		Name        string          `json:"name"`
 		Description string          `json:"description,omitempty"`
 		Parameters  json.RawMessage `json:"parameters,omitempty"`
@@ -159,11 +187,32 @@ func (r *ChatCompletionRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Usage is OpenAI-shaped token usage.
+// Usage is OpenAI-shaped token usage. CachedTokens is the
+// provider-reported count of prompt tokens served from the
+// provider's prompt cache (Anthropic's cache_read_input_tokens,
+// Gemini's cachedContentTokenCount) — 0 when the upstream did not
+// report any. It is a subset of PromptTokens, never a separate
+// charge; the ledger stores it only alongside a known split.
+// CacheWriteTokens is Anthropic's cache_creation_input_tokens:
+// tokens written into the prompt cache on this call.
+// CacheWriteTokens5m / CacheWriteTokens1h (M6.9b) split that total
+// by TTL tier: tokens written at the 5-minute / 1-hour ephemeral
+// tier (Anthropic usage.cache_creation ephemeral_5m_input_tokens
+// / ephemeral_1h_input_tokens). Both 0 with a positive
+// CacheWriteTokens means the upstream reported only the legacy
+// total — the tier is unknown, never guessed.
+// ReasoningTokens is the provider-reported count of completion
+// tokens spent on internal reasoning (Gemini's thoughtsTokenCount)
+// — a subset of CompletionTokens; 0 when the wire reports none.
 type Usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
+	PromptTokens       int `json:"prompt_tokens"`
+	CompletionTokens   int `json:"completion_tokens"`
+	TotalTokens        int `json:"total_tokens"`
+	CachedTokens       int `json:"cached_tokens,omitempty"`
+	CacheWriteTokens   int `json:"cache_write_tokens,omitempty"`
+	CacheWriteTokens5m int `json:"cache_write_tokens_5m,omitempty"`
+	CacheWriteTokens1h int `json:"cache_write_tokens_1h,omitempty"`
+	ReasoningTokens    int `json:"reasoning_tokens,omitempty"`
 }
 
 // ResponseChoice is one choice of an OpenAI chat completion.
@@ -174,13 +223,19 @@ type ResponseChoice struct {
 }
 
 // ChatCompletionResponse is an OpenAI /v1/chat/completions response.
+// Reasoning carries the reasoning state captured from the upstream
+// response (Anthropic thinking blocks, Gemini thought signatures,
+// Bedrock reasoningContent), when any was present: it is json:"-"
+// — router-internal, never sent to the client — and the engine
+// stores it in the replay store so the next turn can restore it.
 type ChatCompletionResponse struct {
-	ID      string           `json:"id"`
-	Object  string           `json:"object"`
-	Created int64            `json:"created"`
-	Model   string           `json:"model"`
-	Choices []ResponseChoice `json:"choices"`
-	Usage   Usage            `json:"usage"`
+	ID        string           `json:"id"`
+	Object    string           `json:"object"`
+	Created   int64            `json:"created"`
+	Model     string           `json:"model"`
+	Choices   []ResponseChoice `json:"choices"`
+	Usage     Usage            `json:"usage"`
+	Reasoning *reasoning.State `json:"-"`
 }
 
 // ---------------------------------------------------------------------------
@@ -195,12 +250,58 @@ type AnthropicImageSource struct {
 	URL       string `json:"url,omitempty"`
 }
 
+// AnthropicCacheControl is the cache_control block Anthropic accepts on
+// a content block to pin the prefix up to and including that block in
+// its prompt cache (POST /v1/messages). Type is always "ephemeral"
+// (the 5-minute TTL is the provider default; TTL "1h" buys the
+// 1-hour tier at a 2x write cost — this router never sets it, see
+// provider.applyPromptCacheMarker). The block sits on the content
+// block itself, never nested inside tool_result.content (Anthropic
+// rejects that with a 400), never on thinking/redacted_thinking
+// blocks, and at most 4 blocks per request may carry one
+// (Anthropic limit; this router sets at most one). Verified shape
+// against the OmniRoute reference (study only):
+// open-sse/translator/helpers/claudeHelper.ts markMessageCacheControl
+// / markLastCacheableBlock set block.cache_control =
+// {type: "ephemeral"} (with optional ttl) on the last cacheable
+// block of a message's content array — markLastCacheableBlock walks
+// back past thinking and blank blocks (markMessageCacheControl marks
+// the last block unconditionally); and against OpenRouter's
+// prompt-caching docs (openrouter.ai/docs/guides/best-practices/
+// prompt-caching): `"cache_control": { "type": "ephemeral" }` on a
+// content block, 5-minute default, `"ttl": "1h"` for the 1-hour tier,
+// max 4 explicit breakpoints per request. This router marks text
+// blocks only (never image/tool_result) and gives up if the last
+// user message has no text block rather than falling back to an
+// earlier user turn — conservative by design.
+type AnthropicCacheControl struct {
+	Type string `json:"type"`          // "ephemeral"
+	TTL  string `json:"ttl,omitempty"` // "5m" | "1h"; empty = provider default (5m)
+}
+
 // AnthropicBlock is one Anthropic content block. Only the fields for
-// its Type are populated.
+// its Type are populated. Thinking blocks carry their thinking text
+// in Thinking and their cryptographic signature in Signature — the
+// signature is what makes a thinking block replayable: the API
+// rejects thinking blocks without the signature it issued.
+// Redacted thinking carries its encrypted payload in Data.
+// CacheControl, when set, is the prompt-cache breakpoint for this
+// block (see AnthropicCacheControl); it is set by the Anthropic
+// provider client's auto-marker (M6.9c/G13) or preserved verbatim
+// from a client-supplied marker by wire.ConvertRequest (G13) —
+// ConvertRequest never invents a marker, but it must not drop one
+// the client sent either.
 type AnthropicBlock struct {
 	Type string `json:"type"` // "text" | "image" | "tool_use" | "tool_result" | "thinking" | "redacted_thinking"
 	// Text blocks.
 	Text string `json:"text,omitempty"`
+	// Prompt-cache breakpoint for this block (M6.9c).
+	CacheControl *AnthropicCacheControl `json:"cache_control,omitempty"`
+	// Thinking blocks.
+	Thinking  string `json:"thinking,omitempty"`
+	Signature string `json:"signature,omitempty"`
+	// Redacted-thinking blocks.
+	Data string `json:"data,omitempty"`
 	// Image blocks.
 	Source *AnthropicImageSource `json:"source,omitempty"`
 	// Tool-use blocks.
@@ -225,6 +326,15 @@ type AnthropicTool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description,omitempty"`
 	InputSchema json.RawMessage `json:"input_schema"`
+	// CacheControl, when set, is the prompt-cache breakpoint for
+	// this tool definition (G13): Anthropic pins the prefix up
+	// to and including the marked tool, so a long tool list is
+	// cached like the system prompt and the last user message.
+	// Set only from a client-supplied marker (copied by
+	// convertTools) or by the Anthropic provider client's
+	// auto-marker — never by wire.ConvertRequest, which stays a
+	// pure conversion.
+	CacheControl *AnthropicCacheControl `json:"cache_control,omitempty"`
 }
 
 // AnthropicToolChoice is the tool_choice of an Anthropic request.
@@ -235,22 +345,140 @@ type AnthropicToolChoice struct {
 
 // AnthropicRequest is the body of POST /v1/messages.
 type AnthropicRequest struct {
-	Model         string               `json:"model"`
-	MaxTokens     int                  `json:"max_tokens"`
-	Messages      []AnthropicMessage   `json:"messages"`
-	System        string               `json:"system,omitempty"`
+	Model     string             `json:"model"`
+	MaxTokens int                `json:"max_tokens"`
+	Messages  []AnthropicMessage `json:"messages"`
+	System    string             `json:"system,omitempty"`
+	// SystemBlocks is the system prompt in block form (G13): the
+	// Anthropic API accepts `system` as a string OR as an array
+	// of text blocks, and only the block form can carry a
+	// cache_control breakpoint. ConvertRequest fills System
+	// (string form) for plain prompts; it fills SystemBlocks
+	// only when a system part carries a client-supplied
+	// cache_control, and the provider client's auto-marker fills
+	// it when it marks the system prompt. MarshalJSON emits the
+	// block form when SystemBlocks is set, the string form
+	// otherwise, so unmarked requests encode exactly as before;
+	// UnmarshalJSON accepts both forms. The two fields always
+	// agree on text: System is the joined text of SystemBlocks
+	// when blocks are present.
+	SystemBlocks  []AnthropicBlock     `json:"-"`
 	Temperature   *float64             `json:"temperature,omitempty"`
 	TopP          *float64             `json:"top_p,omitempty"`
 	StopSequences []string             `json:"stop_sequences,omitempty"`
 	Stream        bool                 `json:"stream,omitempty"`
 	Tools         []AnthropicTool      `json:"tools,omitempty"`
 	ToolChoice    *AnthropicToolChoice `json:"tool_choice,omitempty"`
+	// Thinking enables extended thinking (CHECKLIST 285-286):
+	// the numeric budget the operator declared for the
+	// attempt's effort in config `reasoning.effort_budgets`.
+	// Nil means no thinking field is sent — the provider
+	// default applies. Set only by the Anthropic client from
+	// ChatRequest.ThinkingBudget, never by the wire converter
+	// (the converter must not invent a budget for an effort).
+	Thinking *AnthropicThinking `json:"thinking,omitempty"`
+}
+
+// MarshalJSON emits `system` as an array of blocks when
+// SystemBlocks is set (the only form that can carry a
+// cache_control breakpoint), and as the plain string otherwise
+// — unmarked requests encode byte-identically to before.
+func (r AnthropicRequest) MarshalJSON() ([]byte, error) {
+	if len(r.SystemBlocks) == 0 {
+		type Alias AnthropicRequest
+		return json.Marshal(Alias(r))
+	}
+	type Alias AnthropicRequest
+	aux := struct {
+		Alias
+		System []AnthropicBlock `json:"system"`
+	}{Alias: Alias(r), System: r.SystemBlocks}
+	return json.Marshal(aux)
+}
+
+// UnmarshalJSON accepts `system` as a string or as an array of
+// blocks. The block form populates SystemBlocks and joins its
+// text into System, so readers that only look at System keep
+// working; the string form populates System only.
+func (r *AnthropicRequest) UnmarshalJSON(data []byte) error {
+	type Alias AnthropicRequest
+	aux := struct {
+		Alias
+		System json.RawMessage `json:"system"`
+	}{}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*r = AnthropicRequest(aux.Alias)
+	if len(aux.System) == 0 {
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(aux.System, &s); err == nil {
+		r.System = s
+		return nil
+	}
+	var blocks []AnthropicBlock
+	if err := json.Unmarshal(aux.System, &blocks); err != nil {
+		return err
+	}
+	r.SystemBlocks = blocks
+	var texts []string
+	for _, b := range blocks {
+		if b.Type == "text" && b.Text != "" {
+			texts = append(texts, b.Text)
+		}
+	}
+	r.System = strings.Join(texts, "\n\n")
+	return nil
+}
+
+// AnthropicThinking is the `thinking` block of a Messages request:
+// {"type": "enabled", "budget_tokens": N}.
+type AnthropicThinking struct {
+	Type         string `json:"type"` // "enabled"
+	BudgetTokens int    `json:"budget_tokens"`
+}
+
+// AnthropicCacheCreation is the usage.cache_creation object of an
+// Anthropic response: the cache-write split by TTL tier. It is
+// present only when the upstream reports the split (the 1-hour TTL
+// is in play); older responses carry only the legacy
+// cache_creation_input_tokens total and no cache_creation object.
+// Field names verified against the shape as parsed by the
+// OmniRoute reference (open-sse/utils/cacheWriteUsage.ts:
+// usage.cache_creation.ephemeral_5m_input_tokens and
+// ephemeral_1h_input_tokens) and corroborated by Anthropic usage
+// examples in the wild.
+type AnthropicCacheCreation struct {
+	Ephemeral5mInputTokens int `json:"ephemeral_5m_input_tokens,omitempty"`
+	Ephemeral1hInputTokens int `json:"ephemeral_1h_input_tokens,omitempty"`
 }
 
 // AnthropicUsage is the usage block of an Anthropic response.
+// CacheReadInputTokens is Anthropic's provider-reported count of
+// input tokens served from its prompt cache;
+// CacheCreationInputTokens the tokens written into the cache on
+// this call (the cache-write side of prompt-cache economics).
+// CacheCreation, when present, splits that total by TTL tier
+// (see AnthropicCacheCreation); nil means the upstream reported
+// only the legacy total.
 type AnthropicUsage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
+	InputTokens              int                     `json:"input_tokens"`
+	OutputTokens             int                     `json:"output_tokens"`
+	CacheReadInputTokens     int                     `json:"cache_read_input_tokens,omitempty"`
+	CacheCreationInputTokens int                     `json:"cache_creation_input_tokens,omitempty"`
+	CacheCreation            *AnthropicCacheCreation `json:"cache_creation,omitempty"`
+}
+
+// CacheWriteTiers returns the 5-minute / 1-hour cache-write split
+// from usage.cache_creation, or 0/0 when the upstream did not
+// report the split object — the legacy total-only case.
+func (u AnthropicUsage) CacheWriteTiers() (int, int) {
+	if u.CacheCreation == nil {
+		return 0, 0
+	}
+	return u.CacheCreation.Ephemeral5mInputTokens, u.CacheCreation.Ephemeral1hInputTokens
 }
 
 // AnthropicResponse is the body of a non-streaming /v1/messages reply.
@@ -299,7 +527,12 @@ type AnthropicError struct {
 	Type       string
 	Message    string
 	RetryAfter time.Duration
-	Retryable  bool
+	// RetryAfterPresent is true when a Retry-After header was
+	// present and parsed (including an explicit "0") — see
+	// provider.RateLimitError: a present 0 is a poisoned hint
+	// the router floors, an absent hint means backoff.
+	RetryAfterPresent bool
+	Retryable         bool
 }
 
 func (e *AnthropicError) Error() string {
@@ -390,27 +623,29 @@ func parseAnthropicErrorBody(body []byte) (errType, message string) {
 }
 
 // parseRetryAfter parses a Retry-After header: integer seconds, a
-// fractional-second value, or an HTTP date. Returns 0 when unparsable.
-func parseRetryAfter(h http.Header) time.Duration {
+// fractional-second value, or an HTTP date. It reports whether the
+// header was present and parsed: (0, true) for an explicit "0",
+// (0, false) when absent or unparsable.
+func parseRetryAfter(h http.Header) (time.Duration, bool) {
 	if h == nil {
-		return 0
+		return 0, false
 	}
 	v := strings.TrimSpace(h.Get("Retry-After"))
 	if v == "" {
-		return 0
+		return 0, false
 	}
 	if secs, err := strconv.Atoi(v); err == nil && secs >= 0 {
-		return time.Duration(secs) * time.Second
+		return time.Duration(secs) * time.Second, true
 	}
 	if f, err := strconv.ParseFloat(v, 64); err == nil && f >= 0 {
-		return time.Duration(f * float64(time.Second))
+		return time.Duration(f * float64(time.Second)), true
 	}
 	if t, err := http.ParseTime(v); err == nil {
 		if d := time.Until(t); d > 0 {
-			return d
+			return d, true
 		}
 	}
-	return 0
+	return 0, false
 }
 
 // MapError converts a non-2xx Anthropic HTTP response (status, headers,
@@ -418,7 +653,11 @@ func parseRetryAfter(h http.Header) time.Duration {
 // Anthropic error type. 429 stays 429-class and 5xx stay 5xx so the
 // router's failover triggers correctly; overloaded_error is retryable
 // whether it arrives as 529 (Anthropic) or 503 (some compatible
-// providers). A 4xx whose type is billing_error is not retryable.
+// providers). 402/404 are retryable per the shared taxonomy
+// (RetryableStatus): they are properties of that target, not of the
+// request. A billing_error on any other 4xx (e.g. a 400) is not
+// retryable — except a 400 whose type/message signals
+// model-not-found (entry 151), which falls back like a 404.
 func MapError(status int, headers http.Header, body []byte) error {
 	errType, message := parseAnthropicErrorBody(body)
 	retryable := false
@@ -427,15 +666,21 @@ func MapError(status int, headers http.Header, body []byte) error {
 		retryable = true
 	case errType == "overloaded_error" || errType == "timeout_error":
 		retryable = true
-	case status >= 500 || status == http.StatusRequestTimeout:
+	case status == http.StatusBadRequest && IsModelNotFoundSignal(errType+" "+message):
+		// Entry 151: a 400 that means "model not found at this
+		// target" falls back; any other 400 stops the chain.
+		retryable = true
+	case RetryableStatus(status):
 		retryable = true
 	}
+	ra, raPresent := parseRetryAfter(headers)
 	return &AnthropicError{
-		StatusCode: status,
-		Type:       errType,
-		Message:    message,
-		RetryAfter: parseRetryAfter(headers),
-		Retryable:  retryable,
+		StatusCode:        status,
+		Type:              errType,
+		Message:           message,
+		RetryAfter:        ra,
+		RetryAfterPresent: raPresent,
+		Retryable:         retryable,
 	}
 }
 
@@ -494,6 +739,20 @@ func ConvertRequest(req ChatCompletionRequest) (*AnthropicRequest, error) {
 	if req.TopP != nil && (*req.TopP < 0 || *req.TopP > 1) {
 		return nil, unrep("top_p %v is outside the 0-1 range", *req.TopP)
 	}
+	// Reasoning continuity (CHECKLIST 163): every assistant
+	// message's restored reasoning state must be representable
+	// on this wire before anything is sent — a thinking block
+	// without its Anthropic signature cannot be replayed, so
+	// the hop fails here with *reasoning.UnrepresentableError
+	// (the router fails over to a target that can carry it)
+	// instead of silently dropping the reasoning.
+	for i, m := range req.Messages {
+		if m.Reasoning != nil && !m.Reasoning.Empty() {
+			if _, _, err := reasoning.Check(m.Reasoning, reasoning.WireAnthropic, req.Model); err != nil {
+				return nil, fmt.Errorf("messages[%d] reasoning: %w", i, err)
+			}
+		}
+	}
 
 	out := &AnthropicRequest{
 		Model:         req.Model,
@@ -520,18 +779,36 @@ func ConvertRequest(req ChatCompletionRequest) (*AnthropicRequest, error) {
 	}
 
 	var system []string
+	var systemBlocks []AnthropicBlock
+	systemMarked := false
 	for i, m := range req.Messages {
 		switch m.Role {
 		case "system", "developer":
 			// Anthropic has no developer role; OpenAI's developer
 			// message is a system instruction, so it joins the
 			// system prompt.
-			text, err := messageText(m, i)
+			//
+			// G13: a client-supplied cache_control on a system
+			// part is preserved, not dropped — the system prompt
+			// then travels in block form (out.SystemBlocks) so
+			// the marker has somewhere to sit; without a client
+			// marker the prompt stays the plain string form, so
+			// unmarked requests convert exactly as before.
+			blocks, err := convertContentParts(m.Content, i)
 			if err != nil {
 				return nil, err
 			}
-			if text != "" {
-				system = append(system, text)
+			for _, b := range blocks {
+				if b.Type != "text" {
+					return nil, unrep("messages[%d]: non-text content cannot appear in a %s message", i, m.Role)
+				}
+				if b.CacheControl != nil {
+					systemMarked = true
+				}
+				if b.Text != "" {
+					system = append(system, b.Text)
+					systemBlocks = append(systemBlocks, b)
+				}
 			}
 		default:
 			role, blocks, err := convertMessage(m, i)
@@ -543,6 +820,9 @@ func ConvertRequest(req ChatCompletionRequest) (*AnthropicRequest, error) {
 	}
 	if len(system) > 0 {
 		out.System = strings.Join(system, "\n\n")
+	}
+	if systemMarked {
+		out.SystemBlocks = systemBlocks
 	}
 	if len(out.Messages) == 0 {
 		return nil, unrep("no representable messages (all messages were empty)")
@@ -572,9 +852,10 @@ func convertTools(tools []ToolDefinition, toolChoice any) ([]AnthropicTool, bool
 			schema = json.RawMessage(`{"type":"object"}`)
 		}
 		out = append(out, AnthropicTool{
-			Name:        t.Function.Name,
-			Description: t.Function.Description,
-			InputSchema: schema,
+			Name:         t.Function.Name,
+			Description:  t.Function.Description,
+			InputSchema:  schema,
+			CacheControl: t.CacheControl,
 		})
 	}
 	return out, false, nil
@@ -690,6 +971,15 @@ func convertMessage(m ChatMessage, index int) (string, []AnthropicBlock, error) 
 				Input: json.RawMessage(args),
 			})
 		}
+		// Restored reasoning leads the assistant message:
+		// Anthropic requires thinking blocks before the text
+		// and tool_use blocks that follow them, and each one
+		// carries the signature the API issued with it.
+		// reasoning.Check (in ConvertRequest) already proved
+		// this state representable here.
+		if m.Reasoning != nil && !m.Reasoning.Empty() {
+			blocks = append(anthropicThinkingBlocks(m.Reasoning), blocks...)
+		}
 		return "assistant", blocks, nil
 	case "tool":
 		if strings.TrimSpace(m.ToolCallID) == "" {
@@ -707,6 +997,34 @@ func convertMessage(m ChatMessage, index int) (string, []AnthropicBlock, error) 
 	default:
 		return "", nil, unrep("messages[%d].role %q is not supported", index, m.Role)
 	}
+}
+
+// anthropicThinkingBlocks renders a captured reasoning state as
+// Anthropic thinking blocks, in order. Only the block kinds
+// reasoning.Check admits on this wire reach here (thinking with a
+// signature, redacted thinking); anything else was already refused
+// by ConvertRequest's Check.
+func anthropicThinkingBlocks(st *reasoning.State) []AnthropicBlock {
+	if st == nil {
+		return nil
+	}
+	out := make([]AnthropicBlock, 0, len(st.Blocks))
+	for _, b := range st.Blocks {
+		switch b.Kind {
+		case reasoning.KindThinking:
+			out = append(out, AnthropicBlock{Type: "thinking", Thinking: b.Text, Signature: b.Signature})
+		case reasoning.KindRedactedThinking:
+			var data string
+			if len(b.Data) > 0 {
+				// Data is the JSON-encoded redacted string.
+				if err := json.Unmarshal(b.Data, &data); err != nil {
+					data = string(b.Data)
+				}
+			}
+			out = append(out, AnthropicBlock{Type: "redacted_thinking", Data: data})
+		}
+	}
+	return out
 }
 
 // messageText extracts the plain-text content of a message. Multi-part
@@ -750,13 +1068,22 @@ func convertContentParts(raw json.RawMessage, index int) ([]AnthropicBlock, erro
 		switch p.Type {
 		case "text":
 			if p.Text != "" {
-				blocks = append(blocks, AnthropicBlock{Type: "text", Text: p.Text})
+				// G13: a client-supplied cache_control rides
+				// along onto the Anthropic block verbatim — the
+				// converter never invents a marker, but it must
+				// not drop one the client sent either.
+				blocks = append(blocks, AnthropicBlock{Type: "text", Text: p.Text, CacheControl: p.CacheControl})
 			}
 		case "image_url":
 			if p.ImageURL == nil || strings.TrimSpace(p.ImageURL.URL) == "" {
 				return nil, unrep("messages[%d].content[%d] is an image_url part with no URL", index, i)
 			}
-			b, err := convertImagePart(p.ImageURL.URL, index, i)
+			// G13 (B2-35): a client-supplied cache_control rides
+			// along onto the image block verbatim, exactly as on
+			// text parts above — Anthropic accepts cache_control
+			// on image blocks, and dropping it here would silently
+			// lose a breakpoint the client asked for.
+			b, err := convertImagePart(p.ImageURL.URL, index, i, p.CacheControl)
 			if err != nil {
 				return nil, err
 			}
@@ -770,8 +1097,10 @@ func convertContentParts(raw json.RawMessage, index int) ([]AnthropicBlock, erro
 
 // convertImagePart converts one OpenAI image_url value to an Anthropic
 // image block. Data URLs become base64 sources (media type must be one
-// Anthropic accepts); http(s) URLs become url sources.
-func convertImagePart(url string, msgIndex, partIndex int) (AnthropicBlock, error) {
+// Anthropic accepts); http(s) URLs become url sources. A client-supplied
+// cache_control (nil when absent) rides along onto the block verbatim
+// (G13, B2-35) — Anthropic accepts cache_control on image blocks.
+func convertImagePart(url string, msgIndex, partIndex int, cacheControl *AnthropicCacheControl) (AnthropicBlock, error) {
 	if strings.HasPrefix(url, "data:") {
 		rest := strings.TrimPrefix(url, "data:")
 		semi := strings.Index(rest, ";base64,")
@@ -790,14 +1119,16 @@ func convertImagePart(url string, msgIndex, partIndex int) (AnthropicBlock, erro
 			return AnthropicBlock{}, unrep("messages[%d].content[%d] image data is not valid base64", msgIndex, partIndex)
 		}
 		return AnthropicBlock{
-			Type:   "image",
-			Source: &AnthropicImageSource{Type: "base64", MediaType: mediaType, Data: data},
+			Type:         "image",
+			CacheControl: cacheControl,
+			Source:       &AnthropicImageSource{Type: "base64", MediaType: mediaType, Data: data},
 		}, nil
 	}
 	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
 		return AnthropicBlock{
-			Type:   "image",
-			Source: &AnthropicImageSource{Type: "url", URL: url},
+			Type:         "image",
+			CacheControl: cacheControl,
+			Source:       &AnthropicImageSource{Type: "url", URL: url},
 		}, nil
 	}
 	return AnthropicBlock{}, unrep("messages[%d].content[%d] image URL scheme is not supported (want data: or http(s):)", msgIndex, partIndex)
@@ -846,6 +1177,7 @@ func ConvertResponse(resp *AnthropicResponse) (*ChatCompletionResponse, error) {
 	var (
 		text      strings.Builder
 		toolCalls []ToolCall
+		state     *reasoning.State
 	)
 	for i, b := range resp.Content {
 		switch b.Type {
@@ -871,7 +1203,24 @@ func ConvertResponse(resp *AnthropicResponse) (*ChatCompletionResponse, error) {
 				},
 			})
 		case "thinking", "redacted_thinking":
-			// Internal reasoning: no OpenAI equivalent, dropped.
+			// Reasoning capture (CHECKLIST 163): thinking blocks
+			// are internal reasoning — they must NOT be copied
+			// into the visible message — but they are captured
+			// verbatim (text + signature) on the response so the
+			// engine can store them and replay them on the next
+			// turn or after a failover. A thinking block without
+			// a signature is not replayable; it is still captured
+			// (the next hop's Check refuses it honestly rather
+			// than silently dropping it here).
+			if state == nil {
+				state = &reasoning.State{SourceWire: reasoning.WireAnthropic, SourceModel: resp.Model}
+			}
+			if b.Type == "thinking" {
+				state.Add(reasoning.Block{Kind: reasoning.KindThinking, Text: b.Thinking, Signature: b.Signature})
+			} else {
+				data, _ := json.Marshal(b.Data)
+				state.Add(reasoning.Block{Kind: reasoning.KindRedactedThinking, Data: data})
+			}
 		default:
 			return nil, unrep("response content[%d].type %q has no OpenAI equivalent", i, b.Type)
 		}
@@ -880,6 +1229,7 @@ func ConvertResponse(resp *AnthropicResponse) (*ChatCompletionResponse, error) {
 	if resp.StopReason != nil {
 		stopReason = *resp.StopReason
 	}
+	write5m, write1h := resp.Usage.CacheWriteTiers()
 	msg := ChatMessage{Role: "assistant"}
 	if text.Len() > 0 {
 		msg.Content = mustJSON(text.String())
@@ -898,10 +1248,15 @@ func ConvertResponse(resp *AnthropicResponse) (*ChatCompletionResponse, error) {
 			FinishReason: MapFinishReason(stopReason),
 		}},
 		Usage: Usage{
-			PromptTokens:     resp.Usage.InputTokens,
-			CompletionTokens: resp.Usage.OutputTokens,
-			TotalTokens:      resp.Usage.InputTokens + resp.Usage.OutputTokens,
+			PromptTokens:       resp.Usage.InputTokens,
+			CompletionTokens:   resp.Usage.OutputTokens,
+			TotalTokens:        resp.Usage.InputTokens + resp.Usage.OutputTokens,
+			CachedTokens:       resp.Usage.CacheReadInputTokens,
+			CacheWriteTokens:   resp.Usage.CacheCreationInputTokens,
+			CacheWriteTokens5m: write5m,
+			CacheWriteTokens1h: write1h,
 		},
+		Reasoning: state,
 	}, nil
 }
 

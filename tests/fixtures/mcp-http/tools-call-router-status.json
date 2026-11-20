@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-router-status",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; no ledger wired) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "read",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+      "name": "router_status",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "content": [
+        {
+          "text": "{\"version\":\"0.1.0\",\"listen\":\"unknown\",\"providers\":2,\"enabled_providers\":2,\"models\":3,\"gateway_keys\":5,\"auto_router\":false,\"uptime_seconds\":0}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "version": "0.1.0",
+        "listen": "unknown",
+        "providers": 2,
+        "enabled_providers": 2,
+        "models": 3,
+        "gateway_keys": 5,
+        "auto_router": false,
+        "uptime_seconds": 0
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 3,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.auto_router": false,
+      "result.structuredContent.enabled_providers": 2,
+      "result.structuredContent.gateway_keys": 5,
+      "result.structuredContent.listen": "unknown",
+      "result.structuredContent.models": 3,
+      "result.structuredContent.providers": 2,
+      "result.structuredContent.uptime_seconds": null,
+      "result.structuredContent.version": "0.1.0"
+    },
+    "http_status": 200
+  },
+  "notes": "router_status over Streamable HTTP against the plain server: 2 providers (both enabled), 3 models, 5 gateway keys, no auto-router; uptime is live so presence-only."
+}

@@ -44,14 +44,18 @@
 //   - Images must be data: URLs (format from the media type, bytes
 //     passed through as base64); http(s) image URLs cannot be fetched
 //     by Converse and are unrepresentable.
-//   - reasoningContent blocks in a response are dropped (internal
-//     reasoning, no OpenAI equivalent), like Anthropic thinking.
+//   - reasoningContent blocks in a response are captured verbatim
+//     into the response's reasoning state (CHECKLIST 163 — this
+//     fixes the old item-52 "dropped by design" gap: Converse
+//     accepts reasoningContent, signature included, in requests
+//     too, so Bedrock-origin reasoning round-trips).
 //   - stop_sequence and guardrail/content-filter stops map to "stop".
 //   - ThrottlingException (and any 429) is a rate limit; 5xx / 408
 //     are retryable; other 4xx are not.
 package wire
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
@@ -63,6 +67,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/raunakiitp/codvian-router/internal/reasoning"
 )
 
 // ---------------------------------------------------------------------------
@@ -203,7 +209,10 @@ type BedrockError struct {
 	Type       string // e.g. "ThrottlingException"
 	Message    string
 	RetryAfter time.Duration
-	Retryable  bool
+	// RetryAfterPresent: see AnthropicError — true when a
+	// Retry-After header was present and parsed, including "0".
+	RetryAfterPresent bool
+	Retryable         bool
 }
 
 func (e *BedrockError) Error() string {
@@ -298,9 +307,9 @@ func bedrockErrorType(headers http.Header, bodyType string) string {
 // MapBedrockError converts a non-2xx Bedrock HTTP response (status,
 // headers, body) into a *BedrockError that preserves the status code.
 // 429 / ThrottlingException stays rate-limit class and 5xx stay 5xx
-// so the router's failover triggers correctly; a 4xx whose body
-// mentions quota/billing is not retryable (it is a quota problem, and
-// the provider maps it to QuotaError by message).
+// so the router's failover triggers correctly. 402/404 are retryable
+// per the shared taxonomy (RetryableStatus): they are properties of
+// that target.
 func MapBedrockError(status int, headers http.Header, body []byte) error {
 	message, bodyType := parseBedrockErrorBody(body)
 	errType := bedrockErrorType(headers, bodyType)
@@ -308,21 +317,25 @@ func MapBedrockError(status int, headers http.Header, body []byte) error {
 	switch {
 	case status == http.StatusTooManyRequests:
 		retryable = true
-	case status == http.StatusRequestTimeout:
+	case status == http.StatusBadRequest && IsModelNotFoundSignal(errType+" "+message):
+		// Entry 151: a 400 that means "model not found at this
+		// target" falls back; any other 400 stops the chain.
 		retryable = true
-	case status >= 500:
+	case RetryableStatus(status):
 		retryable = true
 	case strings.Contains(errType, "Throttl"):
 		retryable = true
 	case errType == "ModelTimeoutException" || errType == "ServiceUnavailableException":
 		retryable = true
 	}
+	ra, raPresent := parseRetryAfter(headers)
 	return &BedrockError{
-		StatusCode: status,
-		Type:       errType,
-		Message:    message,
-		RetryAfter: parseRetryAfter(headers),
-		Retryable:  retryable,
+		StatusCode:        status,
+		Type:              errType,
+		Message:           message,
+		RetryAfter:        ra,
+		RetryAfterPresent: raPresent,
+		Retryable:         retryable,
 	}
 }
 
@@ -361,6 +374,21 @@ func ConvertBedrockRequest(req ChatCompletionRequest) (*BedrockRequest, error) {
 	}
 	if len(req.Messages) == 0 {
 		return nil, unrep("messages is empty")
+	}
+	// Reasoning continuity (CHECKLIST 163): validate every
+	// assistant message's restored reasoning state up front.
+	// Converse accepts reasoningContent in requests, signature
+	// included, so Bedrock-origin state replays verbatim;
+	// reasoning text without a signature cannot be sent (the
+	// API requires the signature it issued), so it fails the
+	// hop here (the router fails over) rather than being
+	// silently dropped.
+	for i, m := range req.Messages {
+		if m.Reasoning != nil && !m.Reasoning.Empty() {
+			if _, _, err := reasoning.Check(m.Reasoning, reasoning.WireBedrock, req.Model); err != nil {
+				return nil, fmt.Errorf("messages[%d] reasoning: %w", i, err)
+			}
+		}
 	}
 
 	tools, toolChoice, err := convertBedrockTools(req.Tools, req.ToolChoice)
@@ -580,6 +608,22 @@ func convertBedrockMessage(m ChatMessage, index int) (string, []BedrockContentBl
 				Input:     raw,
 			}})
 		}
+		// Restored reasoning leads the assistant message:
+		// verbatim reasoningContent blocks (the wire supports
+		// them in requests, signature included). This fixes the
+		// old item-52 "reasoningContent dropped by design" gap.
+		// reasoning.Check (in ConvertBedrockRequest) already
+		// proved only bedrock blocks survive here.
+		if m.Reasoning != nil && !m.Reasoning.Empty() {
+			var rc []BedrockContentBlock
+			for _, b := range m.Reasoning.Blocks {
+				if b.Kind == reasoning.KindBedrock {
+					data := append(json.RawMessage(nil), b.Data...)
+					rc = append(rc, BedrockContentBlock{ReasoningContent: data})
+				}
+			}
+			blocks = append(rc, blocks...)
+		}
 		return "assistant", blocks, nil
 	case "tool":
 		if strings.TrimSpace(m.ToolCallID) == "" {
@@ -722,9 +766,9 @@ func MapBedrockStopReason(stopReason string) string {
 
 // ConvertBedrockResponse converts a non-streaming Converse response
 // into an OpenAI chat-completion response. reasoningContent blocks
-// are dropped (internal reasoning, no OpenAI equivalent); a
-// document block or any other unrepresentable content returns
-// *UnrepresentableError.
+// are captured verbatim into the response's reasoning state
+// (CHECKLIST 163); a document block or any other unrepresentable
+// content returns *UnrepresentableError.
 func ConvertBedrockResponse(resp *BedrockResponse) (*ChatCompletionResponse, error) {
 	if resp == nil {
 		return nil, unrep("bedrock response is nil")
@@ -732,6 +776,7 @@ func ConvertBedrockResponse(resp *BedrockResponse) (*ChatCompletionResponse, err
 	var (
 		text      strings.Builder
 		toolCalls []ToolCall
+		state     *reasoning.State
 	)
 	for i, b := range resp.Output.Message.Content {
 		switch {
@@ -757,7 +802,16 @@ func ConvertBedrockResponse(resp *BedrockResponse) (*ChatCompletionResponse, err
 				},
 			})
 		case b.ReasoningContent != nil:
-			// Internal reasoning, dropped by design.
+			// Reasoning capture (CHECKLIST 163): the block is
+			// kept verbatim — text + signature + redacted
+			// payload — so the engine can replay it on the
+			// next turn or after a failover to Bedrock. It is
+			// never copied into the visible message.
+			if state == nil {
+				state = &reasoning.State{SourceWire: reasoning.WireBedrock}
+			}
+			data := append(json.RawMessage(nil), b.ReasoningContent...)
+			state.Add(reasoning.Block{Kind: reasoning.KindBedrock, Data: data})
 		case b.Image != nil:
 			return nil, unrep("response content[%d] is an image block with no OpenAI equivalent", i)
 		default:
@@ -786,6 +840,7 @@ func ConvertBedrockResponse(resp *BedrockResponse) (*ChatCompletionResponse, err
 			CompletionTokens: resp.Usage.OutputTokens,
 			TotalTokens:      resp.Usage.TotalTokens,
 		},
+		Reasoning: state,
 	}, nil
 }
 
@@ -807,6 +862,15 @@ type bedrockStreamEvent struct {
 // (prelude + message CRC); a bad CRC is a loud error, never a
 // silently accepted corrupt stream.
 //
+// The parser is incremental (CHECKLIST 215): it reads one frame at
+// a time with io.ReadFull and calls fn as soon as that frame's bytes
+// have arrived, so the first chunk reaches the caller long before
+// the body completes — and a never-ending stream still streams
+// instead of yielding nothing. Only the bytes of the frame in
+// flight are buffered (one frame, not the whole body). The prelude
+// CRC is verified before the frame body is allocated, so a corrupt
+// prelude can never trigger a huge allocation.
+//
 // Frame layout: total length (4B BE), headers length (4B BE),
 // prelude CRC (4B, CRC32 of the first 8 bytes), headers, payload,
 // message CRC (4B, CRC32 of everything before it). A header is:
@@ -814,33 +878,48 @@ type bedrockStreamEvent struct {
 // 0 bool false, 1 bool true, 2 byte, 3 short, 4 int, 5 long,
 // 6 bytes, 7 string, 8 timestamp, 9 uuid.
 func readEventStream(r io.Reader, fn func(bedrockStreamEvent) error) error {
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return fmt.Errorf("wire: error reading Bedrock event stream: %w", err)
+	br, ok := r.(*bufio.Reader)
+	if !ok {
+		br = bufio.NewReader(r)
 	}
-	pos := 0
-	for pos < len(data) {
-		if len(data)-pos < 12 {
-			return errors.New("wire: truncated Bedrock event-stream frame (prelude)")
+	for {
+		var prelude [12]byte
+		if _, err := io.ReadFull(br, prelude[:]); err != nil {
+			if err == io.EOF {
+				// Clean end at a frame boundary.
+				return nil
+			}
+			if err == io.ErrUnexpectedEOF {
+				return errors.New("wire: truncated Bedrock event-stream frame (prelude)")
+			}
+			return fmt.Errorf("wire: error reading Bedrock event stream: %w", err)
 		}
-		totalLen := int(binary.BigEndian.Uint32(data[pos : pos+4]))
-		headersLen := int(binary.BigEndian.Uint32(data[pos+4 : pos+8]))
-		preludeCRC := binary.BigEndian.Uint32(data[pos+8 : pos+12])
-		if totalLen < 16 || pos+totalLen > len(data) {
-			return errors.New("wire: truncated Bedrock event-stream frame (message)")
-		}
-		if crc32.ChecksumIEEE(data[pos:pos+8]) != preludeCRC {
+		totalLen := int(binary.BigEndian.Uint32(prelude[0:4]))
+		headersLen := int(binary.BigEndian.Uint32(prelude[4:8]))
+		preludeCRC := binary.BigEndian.Uint32(prelude[8:12])
+		if crc32.ChecksumIEEE(prelude[:8]) != preludeCRC {
 			return errors.New("wire: Bedrock event-stream prelude CRC mismatch")
 		}
-		msgEnd := pos + totalLen
-		if crc32.ChecksumIEEE(data[pos:msgEnd-4]) != binary.BigEndian.Uint32(data[msgEnd-4:msgEnd]) {
+		// 12 prelude + headers + payload + 4 message CRC.
+		if totalLen < 16 || headersLen > totalLen-16 {
+			return errors.New("wire: truncated Bedrock event-stream frame (message)")
+		}
+		rest := make([]byte, totalLen-12)
+		if _, err := io.ReadFull(br, rest); err != nil {
+			return errors.New("wire: truncated Bedrock event-stream frame (message)")
+		}
+		msgEnd := len(rest) - 4
+		h := crc32.NewIEEE()
+		h.Write(prelude[:])
+		h.Write(rest[:msgEnd])
+		if h.Sum32() != binary.BigEndian.Uint32(rest[msgEnd:]) {
 			return errors.New("wire: Bedrock event-stream message CRC mismatch")
 		}
-		headers, err := parseEventStreamHeaders(data[pos+12 : pos+12+headersLen])
+		headers, err := parseEventStreamHeaders(rest[:headersLen])
 		if err != nil {
 			return err
 		}
-		payload := data[pos+12+headersLen : msgEnd-4]
+		payload := rest[headersLen:msgEnd]
 		evType := headers[":event-type"]
 		msgType := headers[":message-type"]
 		if msgType == "exception" {
@@ -860,9 +939,28 @@ func readEventStream(r io.Reader, fn func(bedrockStreamEvent) error) error {
 		if err := fn(bedrockStreamEvent{Type: evType, Payload: bytes.Clone(payload)}); err != nil {
 			return err
 		}
-		pos = msgEnd
 	}
-	return nil
+}
+
+// bedrockReasoningContentJSON builds the raw reasoningContent JSON
+// for one streamed reasoning block from its accumulated text and
+// signature: {"reasoningContent":{"reasoningText":{"text":...,
+// "signature":...}}}. The signature is omitted when empty (a
+// reasoning block with no signature is still captured — the next
+// hop's Check refuses it honestly rather than silently dropping
+// it here).
+func bedrockReasoningContentJSON(text, signature string) json.RawMessage {
+	rt := map[string]string{"text": text}
+	if signature != "" {
+		rt["signature"] = signature
+	}
+	b, err := json.Marshal(map[string]any{
+		"reasoningContent": map[string]any{"reasoningText": rt},
+	})
+	if err != nil {
+		return json.RawMessage(`{"reasoningContent":{"reasoningText":{"text":""}}}`)
+	}
+	return b
 }
 
 // parseEventStreamHeaders parses the header section of one
@@ -945,6 +1043,9 @@ func parseEventStreamHeaders(b []byte) (map[string]string, error) {
 }
 
 // bedrockStreamDelta is the delta of one contentBlockDelta event.
+// ReasoningContent carries the reasoning text fragments; its
+// Signature arrives with the deltas (a complete value when
+// present, repeated identically — the last non-empty value wins).
 type bedrockStreamDelta struct {
 	Text string `json:"text,omitempty"`
 	// Tool-use input fragments arrive under "toolUse".
@@ -952,7 +1053,8 @@ type bedrockStreamDelta struct {
 		Input string `json:"input,omitempty"`
 	} `json:"toolUse,omitempty"`
 	ReasoningContent *struct {
-		Text string `json:"text,omitempty"`
+		Text      string `json:"text,omitempty"`
+		Signature string `json:"signature,omitempty"`
 	} `json:"reasoningContent,omitempty"`
 }
 
@@ -987,7 +1089,9 @@ type bedrockStreamEventJSON struct {
 //
 //   - contentBlockDelta text becomes a content delta; toolUse input
 //     fragments become tool-call argument deltas, validated as JSON
-//     when the block closes; reasoningContent deltas are dropped.
+//     when the block closes; reasoningContent deltas are captured
+//     into StreamResult.Reasoning (text fragments + signature,
+//     never emitted as content).
 //   - contentBlockStart opens one tool call per toolUse block (id +
 //     name, first delta for the call); contentBlockStop validates the
 //     accumulated arguments as JSON (empty becomes "{}").
@@ -1012,6 +1116,7 @@ func TranslateBedrockStream(r io.Reader, emit func(ChatChunk) error) (StreamResu
 		sawStop    bool
 		stopReason string
 	)
+	var state *reasoning.State
 	emitChunk := func(delta ChunkDelta, finishReason *string, usage *Usage) error {
 		return emit(ChatChunk{
 			ID:      res.ID,
@@ -1084,7 +1189,20 @@ func TranslateBedrockStream(r io.Reader, emit func(ChatChunk) error) (StreamResu
 					},
 				}}}, nil, nil)
 			}
-			// reasoningContent deltas: dropped, no OpenAI equivalent.
+			if parsed.Delta.ReasoningContent != nil {
+				// Reasoning capture (CHECKLIST 163): the text
+				// arrives in fragments; the signature arrives
+				// as a complete value (repeated identically
+				// when present), so the last non-empty value
+				// wins. Nothing is emitted to the client.
+				blk.reasoning = true
+				blk.thinkBuf.WriteString(parsed.Delta.ReasoningContent.Text)
+				if sig := parsed.Delta.ReasoningContent.Signature; sig != "" {
+					blk.sigBuf.Reset()
+					blk.sigBuf.WriteString(sig)
+				}
+				return nil
+			}
 			return nil
 		case "contentBlockStop":
 			blk, ok := blocks[parsed.ContentBlockIndex]
@@ -1108,6 +1226,12 @@ func TranslateBedrockStream(r io.Reader, emit func(ChatChunk) error) (StreamResu
 						Arguments: args,
 					},
 				})
+			}
+			if blk.reasoning {
+				if state == nil {
+					state = &reasoning.State{SourceWire: reasoning.WireBedrock}
+				}
+				state.Add(reasoning.Block{Kind: reasoning.KindBedrock, Data: bedrockReasoningContentJSON(blk.thinkBuf.String(), blk.sigBuf.String())})
 			}
 			return nil
 		case "messageStop":
@@ -1141,6 +1265,7 @@ func TranslateBedrockStream(r io.Reader, emit func(ChatChunk) error) (StreamResu
 	res.Content = content.String()
 	res.FinishReason = MapBedrockStopReason(stopReason)
 	res.Usage.TotalTokens = res.Usage.PromptTokens + res.Usage.CompletionTokens
+	res.Reasoning = state
 	fr := res.FinishReason
 	usage := res.Usage
 	if err := emitChunk(ChunkDelta{}, &fr, &usage); err != nil {

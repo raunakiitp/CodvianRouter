@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-check-quota",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger, prices a $10/$30 and c $5/$15 per 1M, routing group fast) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "cost-reader",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 16,
+    "method": "tools/call",
+    "params": {
+      "name": "check_quota",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 16,
+    "result": {
+      "content": [
+        {
+          "text": "{\"quota\":{\"key_id\":\"gk_712ac451fc367787\",\"has_budget\":false,\"limit_usd\":0,\"spent_usd\":0.025500000000000002,\"at_limit\":false,\"unpriced_policy\":\"fail_closed\",\"active_window\":\"5h\",\"warning_reached\":false,\"daily\":{\"spent_usd\":0.025500000000000002,\"at_limit\":false},\"weekly\":{\"spent_usd\":0.025500000000000002,\"at_limit\":false},\"monthly\":{\"spent_usd\":0.025500000000000002,\"at_limit\":false}}}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "quota": {
+          "key_id": "gk_712ac451fc367787",
+          "has_budget": false,
+          "limit_usd": 0,
+          "spent_usd": 0.025500000000000002,
+          "at_limit": false,
+          "unpriced_policy": "fail_closed",
+          "active_window": "5h",
+          "warning_reached": false,
+          "daily": {
+            "spent_usd": 0.025500000000000002,
+            "at_limit": false
+          },
+          "weekly": {
+            "spent_usd": 0.025500000000000002,
+            "at_limit": false
+          },
+          "monthly": {
+            "spent_usd": 0.025500000000000002,
+            "at_limit": false
+          }
+        }
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 16,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.quota.has_budget": false,
+      "result.structuredContent.quota.key_id": null
+    },
+    "http_status": 200
+  },
+  "notes": "check_quota with no key_id checks the caller's own key: no budget set, so has_budget=false (unlimited, no invented cap)."
+}

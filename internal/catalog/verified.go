@@ -543,4 +543,366 @@ var verifiedProviders = []Provider{
 		SourceURL:    "internal/provider registry (CodvianPreset)",
 		Notes:        "Codvian's own API, OpenAI-compatible. The user pastes their own Codvian API key.",
 	},
+	{
+		// 2026-11-18 catalog triage (CHECKLIST 253): base URLs and
+		// auth read from Merge's own docs (docs.merge.dev/merge-gateway).
+		ID:          "merge-gateway",
+		Name:        "Merge Gateway",
+		Website:     "https://gateway.merge.dev",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api-gateway.merge.dev/v1/openai", "https://api-gateway.merge.dev/v1/ai-sdk"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		HasFreeTier:  true,
+		FreeTierNote: "Free plan covers a list of free models up to a daily request cap (cap not stated on the docs page); signup needs no card.",
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.merge.dev/merge-gateway",
+		Notes:        "OpenAI base is /v1/openai per Merge docs; /v1/ai-sdk is the Vercel AI SDK variant. Anthropic surface /v1/anthropic exists but is not the default chat base.",
+	},
+	{
+		// 2026-11-18 catalog triage (CHECKLIST 253): base URL and auth
+		// from Helicone's own docs (docs.helicone.ai/gateway/overview,
+		// quick-start).
+		ID:          "helicone",
+		Name:        "Helicone",
+		Website:     "https://helicone.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://ai-gateway.helicone.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.helicone.ai/gateway/overview",
+		Notes:        "AI Gateway: 100+ models behind one key, OpenAI-compatible. Helicone announced joining Mintlify in Mar 2026; third-party reports say the gateway is in maintenance mode — verify before new builds.",
+	},
+	{
+		// 2026-11-18 catalog triage (CHECKLIST 253): bases and auth
+		// from OpenCode's own docs (opencode.ai/v2/docs/console/models/).
+		ID:          "opencode",
+		Name:        "OpenCode",
+		Alias:       "oc",
+		Website:     "https://opencode.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://opencode.ai/inference/openai/v1", "https://opencode.ai/inference/anthropic/v1", "https://opencode.ai/inference/google/v1beta"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic, WireGemini},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointMessages, BaseURL: "https://opencode.ai/inference/anthropic/v1", AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://opencode.ai/v2/docs/console/models/",
+		Notes:        "Console pay-as-you-go (credits + API key, Bearer). Free-tier chat models require the OpenCode client, so no free tier is claimed here. Distinct from opencode-go (subscription surface).",
+	},
+	{
+		// 2026-11-18 catalog triage (CHECKLIST 253): endpoint pattern
+		// and auth from Cloudflare's own AI Gateway docs (get-started).
+		ID:          "cloudflare-ai-gateway",
+		Name:        "Cloudflare AI Gateway",
+		Website:     "https://developers.cloudflare.com/ai-gateway/",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/{provider}"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://developers.cloudflare.com/ai-gateway/get-started/",
+		Notes:        "Gateway proxy, not a model host: {account_id} and {gateway_id} must be substituted and {provider} selects the upstream (openai, anthropic, google-ai-studio, workers-ai, bedrock, azure-openai, ...). Auth is the Cloudflare API token (Bearer). Distinct from cloudflare-workers-ai (Workers AI inference).",
+	},
+	{
+		// 2026-11-18 catalog triage round 2 (CHECKLIST 266): base URL
+		// and auth from GMI Cloud's own docs
+		// (docs.gmicloud.ai/inference-engine/api-reference/llm-api-reference):
+		// Bearer API key, GET https://api.gmi-serving.com/v1/models,
+		// POST https://api.gmi-serving.com/v1/chat/completions.
+		ID:          "gmicloud",
+		Name:        "GMI Cloud",
+		Website:     "https://gmicloud.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.gmi-serving.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.gmicloud.ai/inference-engine/api-reference/llm-api-reference",
+		Notes:        "GMI Inference: OpenAI-compatible chat completions and model list per the provider's own API reference. Added 2026-11-18 triage round 2; live reachability probe HTTP 405 on the bare base.",
+	},
+	{
+		// 2026-11-18 catalog triage round 2 (CHECKLIST 266): base URL
+		// and auth from Vultr's own docs (api.vultrinference.com):
+		// requests go to https://api.vultrinference.com/v1 with the
+		// API key as a Bearer token; OpenAI/OpenRouter shapes on
+		// chat, responses, image, video, audio and embeddings, and
+		// Anthropic's Messages API on /v1/messages.
+		ID:          "vultr",
+		Name:        "Vultr",
+		Website:     "https://api.vultrinference.com/",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.vultrinference.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://api.vultrinference.com/",
+		Notes:        "Vultr Serverless Inference: one API for chat, reasoning, images, video, music, speech, embeddings and document search. Added 2026-11-18 triage round 2; live reachability probe HTTP 200 on the bare base. Anthropic Messages surface on /v1/messages is documented but not a separate endpoint here.",
+	},
+	{
+		// 2026-11-18 catalog triage round 2 (CHECKLIST 266): base URL
+		// and auth from Privatemode's own docs
+		// (docs.privatemode.ai/api/proxyless-api/): the proxyless
+		// API's OpenAI-compatible base is
+		// https://proxyless-api.privatemode.ai/v1 with a Privatemode
+		// API key. models.dev lists the LOCAL proxy base
+		// http://localhost:8080/v1 instead — that is the endpoint
+		// of the Privatemode proxy app/Docker on the user's own
+		// machine, not the cloud API, so the catalog uses the
+		// docs-verified cloud base.
+		ID:          "privatemode-ai",
+		Name:        "Privatemode AI",
+		Website:     "https://privatemode.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://proxyless-api.privatemode.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.privatemode.ai/api/proxyless-api/",
+		Notes:        "Privatemode (Edgeless Systems): confidential-computing inference API, OpenAI-compatible; the proxyless API needs no local proxy (the SDK/proxy path adds client-side attestation). Added 2026-11-18 triage round 2; live reachability probe HTTP 404 on the proxyless base.",
+	},
+	{
+		// 2026-11-18 catalog triage round 3 (CHECKLIST 275): base URL
+		// and auth from Klavo's own docs (ai.klavo.ru/docs): the
+		// OpenAI SDK quickstart uses base_url
+		// https://api.klavo.ru/v1 with Authorization: Bearer <key>;
+		// endpoints /v1/chat/completions, /v1/completions,
+		// /v1/embeddings, /v1/messages, GET /v1/models.
+		ID:          "klavo",
+		Name:        "Klavo AI",
+		Website:     "https://ai.klavo.ru",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.klavo.ru/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://ai.klavo.ru/docs",
+		Notes:        "Klavo AI: OpenAI-compatible chat, completions, embeddings and Anthropic-messages surfaces per the provider's own docs; optional x-klavo-session-id header for agent sessions. Added 2026-11-18 triage round 3; live reachability probe HTTP 404 on the bare base.",
+	},
+	{
+		// 2026-11-18 catalog triage round 3 (CHECKLIST 275): base URL
+		// and auth from Huawei Cloud's own MaaS docs
+		// (support.huaweicloud.com/model-call-maas/model-call-021.html):
+		// the OpenAI-compatible API address is
+		// https://api.modelarts-maas.com/openai/v1/chat/completions
+		// (base_url https://api.modelarts-maas.com/openai/v1) with
+		// Authorization: Bearer $MaaS_API_Key. Only the
+		// Southwest-Guiyang 1 region is supported per the same page.
+		ID:          "huawei-maas",
+		Name:        "Huawei Cloud MAAS",
+		Website:     "https://support.huaweicloud.com/model-call-maas/model-call-021.html",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.modelarts-maas.com/openai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://support.huaweicloud.com/model-call-maas/model-call-021.html",
+		Notes:        "Huawei Cloud MaaS (Model-as-a-Service): OpenAI-compatible chat completions per Huawei's own docs; regional — only Southwest-Guiyang 1 is supported, substitute your region if Huawei opens others. Added 2026-11-18 triage round 3; live reachability probe HTTP 404 on the bare base.",
+	},
+	{
+		// 2026-11-18 catalog triage round 3 (CHECKLIST 275): base URL
+		// and auth from STACKIT's own docs
+		// (docs.stackit.cloud/products/data-and-ai/ai-model-serving/):
+		// every shared model lists URL
+		// https://api.openai-compat.model-serving.eu01.onstackit.cloud/v1
+		// with OpenAI-compatible POST /chat/completions, /completions,
+		// /embeddings and GET /models; the getting-started guide
+		// creates an AI Model Serving auth token and calls the API
+		// with Authorization: Bearer [auth-token].
+		ID:          "stackit",
+		Name:        "STACKIT",
+		Website:     "https://docs.stackit.cloud/products/data-and-ai/ai-model-serving/basics/available-shared-models",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.openai-compat.model-serving.eu01.onstackit.cloud/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.stackit.cloud/products/data-and-ai/ai-model-serving/basics/available-shared-models",
+		Notes:        "STACKIT AI Model Serving (EU01): OpenAI-compatible shared-model inference per STACKIT's own docs; auth token created in the customer portal. Added 2026-11-18 triage round 3; live reachability probe HTTP 403 on the bare base (key required).",
+	},
+	{
+		// 2026-11-18 catalog triage round 4 (CHECKLIST 281): base URL
+		// and auth from Kimi's own docs
+		// (www.kimi.com/code/docs/en/kimi-code/models.html): the Kimi
+		// Code API supports OpenAI (Responses / Chat Completions)
+		// and Anthropic protocols; the OpenAI base URL for China is
+		// https://api.kimi.com/coding/v1, and an API key is created
+		// in the Kimi Code Console and filled in with the base URL.
+		ID:          "kimi-code-plan-cn",
+		Name:        "Kimi For Coding (kimi.com)",
+		Website:     "https://www.kimi.com/code",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.kimi.com/coding/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://www.kimi.com/code/docs/en/kimi-code/models.html",
+		Notes:        "Kimi For Coding, China surface (kimi.com): OpenAI-compatible Responses / chat-completions API per Kimi's own docs, which list the China base URL and API-key auth (key created in the Kimi Code Console). Added 2026-11-18 triage round 4; live reachability probe HTTP 404 on the bare base. The overseas surface is `kimi-code-plan-global` (api.kimi.ai/coding/v1).",
+	},
+	{
+		// 2026-11-18 catalog triage round 4 (CHECKLIST 281): base URL
+		// and auth from Kimi's own docs
+		// (www.kimi.ai/code/docs/en/kimi-code/models.html): the Kimi
+		// Code API supports OpenAI (Responses / Chat Completions)
+		// and Anthropic protocols; the OpenAI base URL overseas is
+		// https://api.kimi.ai/coding/v1, and an API key is created
+		// in the Kimi Code Console and filled in with the base URL.
+		ID:          "kimi-code-plan-global",
+		Name:        "Kimi For Coding (kimi.ai)",
+		Website:     "https://www.kimi.ai/code",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.kimi.ai/coding/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://www.kimi.ai/code/docs/en/kimi-code/models.html",
+		Notes:        "Kimi For Coding, overseas surface (kimi.ai): OpenAI-compatible Responses / chat-completions API per Kimi's own docs, which list the overseas base URL and API-key auth (key created in the Kimi Code Console). Added 2026-11-18 triage round 4; live reachability probe HTTP 404 on the bare base. The China surface is `kimi-code-plan-cn` (api.kimi.com/coding/v1).",
+	},
+	{
+		// 2026-11-18 catalog triage round 5 (CHECKLIST 301): base URL
+		// and auth from SaladCloud's own docs
+		// (docs.salad.com/ai-gateway/explanation/overview): the AI
+		// Gateway is an OpenAI-compatible LLM API; the docs tell
+		// tools to point the base URL to
+		// https://ai.salad.cloud/v1 with the organization-specific
+		// AI Gateway key as `Authorization: Bearer`, and list the
+		// model `qwen3.6-35b-a3b` that models.dev also lists.
+		// models.dev lists NO api field for salad-cloud, so this
+		// base comes from the docs, not from models.dev. Live
+		// reachability probe HTTP 401 on the bare base, and GET
+		// https://ai.salad.cloud/v1/models -> 200.
+		ID:          "salad-cloud",
+		Name:        "SaladCloud AI Gateway",
+		Website:     "https://docs.salad.com/ai-gateway/explanation/overview",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://ai.salad.cloud/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.salad.com/ai-gateway/explanation/overview",
+		Notes:        "SaladCloud AI Gateway: OpenAI-compatible LLM API per SaladCloud's own docs, which state the base URL https://ai.salad.cloud/v1 and Bearer auth (organization-specific AI Gateway key). Added 2026-11-18 triage round 5; live reachability probe HTTP 401 on the bare base, GET /v1/models -> 200.",
+	},
+	{
+		// 2026-11-18 catalog triage round 5 (CHECKLIST 301): base URL
+		// and auth from Verda's own docs
+		// (docs.verda.com/inference/quickstart): the quickstart sets
+		// OPENAI_BASE_URL=https://inference.verda.com/v1 with a
+		// Bearer API key and calls /v1/chat/completions with the
+		// OpenAI SDK.
+		ID:          "verda",
+		Name:        "Verda",
+		Website:     "https://docs.verda.com/inference/quickstart/",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://inference.verda.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.verda.com/inference/quickstart/",
+		Notes:        "Verda: OpenAI-compatible inference API per Verda's own docs, which state the base URL https://inference.verda.com/v1 and Bearer auth. Added 2026-11-18 triage round 5; live reachability probe HTTP 404 on the bare base.",
+	},
+	{
+		// 2026-11-18 catalog triage round 5 (CHECKLIST 301): base URL
+		// and auth from Confidential AI's own docs
+		// (confidential.ai/docs/inference-api/get-started): the
+		// production base URL is https://api.confidential.ai, the
+		// API is OpenAI-compatible, and calls use
+		// `Authorization: Bearer $CONFIDENTIAL_API_KEY` against
+		// https://api.confidential.ai/v1/chat/completions.
+		ID:          "confidential-ai",
+		Name:        "Confidential AI",
+		Website:     "https://confidential.ai/docs/inference-api/get-started",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.confidential.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://confidential.ai/docs/inference-api/get-started",
+		Notes:        "Confidential AI: OpenAI-compatible Confidential Inference API per its own docs, which state the production base URL https://api.confidential.ai (so /v1) and Bearer auth. Added 2026-11-18 triage round 5; live reachability probe HTTP 401 on the bare base.",
+	},
+	{
+		// 2026-11-18 catalog triage round 5 (CHECKLIST 301): base URL
+		// and auth from TheRouter's own docs
+		// (therouter.ai/docs/quickstart): the global endpoint for
+		// all requests is https://api.therouter.ai/v1, the API is
+		// OpenAI-compatible, and calls use
+		// `Authorization: Bearer $THEROUTER_API_KEY`.
+		ID:          "therouter",
+		Name:        "TheRouter",
+		Website:     "https://therouter.ai/docs/quickstart/",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.therouter.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://therouter.ai/docs/quickstart/",
+		Notes:        "TheRouter: unified OpenAI-compatible API per its own docs, which state the global endpoint https://api.therouter.ai/v1 and Bearer auth. Added 2026-11-18 triage round 5; live reachability probe HTTP 404 on the bare base.",
+	},
+	{
+		// 2026-11-18 catalog triage round 5 (CHECKLIST 301): base URL
+		// and auth from LLM Tech's own docs
+		// (llmtech.eu/models/qwen3.8-27b): the quickstart sets
+		// base_url="https://api.llmtech.eu/v1" with an API key
+		// against an OpenAI-compatible endpoint, and the page states
+		// the service is in production, serving live traffic since
+		// Aug 22, 2026. The bare base and /v1/models answer HTTP
+		// 410 to unauthenticated probes — the host answers, and the
+		// docs prove the endpoint, so this is verified-from-docs,
+		// not a probe-only addition.
+		ID:          "llmtech",
+		Name:        "LLM Tech",
+		Website:     "https://llmtech.eu/models/qwen3.8-27b",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.llmtech.eu/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://llmtech.eu/models/qwen3.8-27b",
+		Notes:        "LLM Tech: OpenAI-compatible hosted inference per its own docs, which state the base URL https://api.llmtech.eu/v1 and API-key auth, in production since Aug 22, 2026. Added 2026-11-18 triage round 5; live reachability probe HTTP 410 on the bare base and on /v1/models (the host answers; the docs prove the endpoint).",
+	},
 }

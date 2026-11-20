@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-list-combos",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 9,
+    "method": "tools/call",
+    "params": {
+      "name": "list_combos",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 9,
+    "result": {
+      "content": [
+        {
+          "text": "{\"active_combo\":null,\"combos\":[{\"name\":\"fast\",\"members\":[\"p1\"],\"strategy\":\"fastest\",\"active\":false,\"usable\":true},{\"name\":\"cheap\",\"members\":[\"p2\"],\"strategy\":\"cheapest\",\"active\":false,\"usable\":false,\"unusable_reason\":\"provider p2 is disabled\"}],\"count\":2}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "active_combo": null,
+        "combos": [
+          {
+            "name": "fast",
+            "members": [
+              "p1"
+            ],
+            "strategy": "fastest",
+            "active": false,
+            "usable": true
+          },
+          {
+            "name": "cheap",
+            "members": [
+              "p2"
+            ],
+            "strategy": "cheapest",
+            "active": false,
+            "usable": false,
+            "unusable_reason": "provider p2 is disabled"
+          }
+        ],
+        "count": 2
+      }
+    }
+  },
+  "assert": {
+    "id": 9,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.combos"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.active_combo": null,
+      "result.structuredContent.combos.0.members.0": "p1",
+      "result.structuredContent.combos.0.name": "fast",
+      "result.structuredContent.combos.0.strategy": "fastest",
+      "result.structuredContent.combos.0.usable": true,
+      "result.structuredContent.combos.1.members.0": "p2",
+      "result.structuredContent.combos.1.name": "cheap",
+      "result.structuredContent.combos.1.strategy": "cheapest",
+      "result.structuredContent.combos.1.usable": false,
+      "result.structuredContent.count": 2
+    }
+  },
+  "notes": "list_combos against the seeded mock: combos fast (p1, fastest, usable) and cheap (p2, cheapest, unusable — p2 is disabled); no session-active combo yet."
+}

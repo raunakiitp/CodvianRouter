@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-heartbeat-deny-2",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call. Filtered server (deny-2): deny-list cache_stats, db_stats.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 115,
+    "method": "tools/call",
+    "params": {
+      "name": "heartbeat",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 115,
+    "result": {
+      "content": [
+        {
+          "text": "{\"audit_log\":\"disabled\",\"protocol_version\":\"2025-03-26\",\"tool_count\":22,\"uptime_seconds\":-1}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "audit_log": "disabled",
+        "protocol_version": "2025-03-26",
+        "tool_count": 22,
+        "uptime_seconds": -1
+      }
+    }
+  },
+  "assert": {
+    "id": 115,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.tool_count"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.audit_log": "disabled",
+      "result.structuredContent.protocol_version": "2025-03-26",
+      "result.structuredContent.tool_count": 22,
+      "result.structuredContent.uptime_seconds": -1
+    }
+  },
+  "notes": "heartbeat under the deny-2 filter: tool_count 22 — the liveness snapshot agrees with the filtered tools/list."
+}

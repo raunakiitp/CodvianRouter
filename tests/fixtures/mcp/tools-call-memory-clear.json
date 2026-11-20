@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-memory-clear",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 42,
+    "method": "tools/call",
+    "params": {
+      "name": "memory_clear",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 42,
+    "result": {
+      "content": [
+        {
+          "text": "{\"caller\":\"local-operator\",\"cleared\":2,\"note\":\"Only the caller's own memories were deleted; other callers' memories are untouched.\",\"scope\":\"caller-only\"}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "caller": "local-operator",
+        "cleared": 2,
+        "note": "Only the caller's own memories were deleted; other callers' memories are untouched.",
+        "scope": "caller-only"
+      }
+    }
+  },
+  "assert": {
+    "id": 42,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.cleared"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.caller": "local-operator",
+      "result.structuredContent.cleared": 2,
+      "result.structuredContent.scope": "caller-only"
+    }
+  },
+  "notes": "memory_clear: deletes the caller's own 2 seeded memories (local-operator tenant only). Runs before memory_add so the cleared count is the seeded 2 in both isolation and session."
+}

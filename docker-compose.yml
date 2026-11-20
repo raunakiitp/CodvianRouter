@@ -8,22 +8,26 @@
 #   docker compose up -d
 #   curl http://127.0.0.1:20128/healthz
 #
-# NETWORKING — known limitation, read before expecting the port to work:
-# the router binds 127.0.0.1 ONLY (config validation enforces loopback).
-# Docker's published-port forwarding delivers traffic to the container's
-# eth0 address, which a loopback-only listener never sees — so the
-# `ports:` mapping below does NOT reach the server as the binary stands
-# today. Workaround until the router gains a container-aware listen
-# option: replace `ports:` with `network_mode: host`, which shares the
-# host's loopback so 127.0.0.1:20128 works exactly as on bare metal.
+# NETWORKING — how the port mapping works:
+# the router binds 127.0.0.1 by default, which Docker's published-port
+# forwarding cannot reach (it delivers traffic to the container's eth0
+# address). So this file runs serve with `--listen 0.0.0.0:20128` — the
+# binary's explicit opt-in for a non-loopback bind (see cmd/codvian-router:
+# only 127.0.0.1, ::1 and 0.0.0.0 are accepted, 0.0.0.0 prints a warning,
+# and gateway-key auth stays ON). With that, the `ports:` mapping below
+# works and the router is reachable on the host's 127.0.0.1:20128.
+# Alternative if you would rather keep the loopback-only bind: delete
+# `command:` and `ports:` and use `network_mode: host` instead, which
+# shares the host's loopback. Do not weaken the bind any other way.
 # (The healthcheck runs inside the container against 127.0.0.1 and is
-# unaffected.) Do not weaken the router's loopback-only bind to fix this.
+# unaffected by either choice.)
 
 services:
   codvian-router:
     build: .
     image: codvian-router:local
     container_name: codvian-router
+    command: ["serve", "--listen", "0.0.0.0:20128"]
     ports:
       - "127.0.0.1:20128:20128"
     volumes:

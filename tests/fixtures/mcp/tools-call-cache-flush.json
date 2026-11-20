@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-cache-flush",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 44,
+    "method": "tools/call",
+    "params": {
+      "name": "cache_flush",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 44,
+    "result": {
+      "content": [
+        {
+          "text": "{\"flushed\":10,\"note\":\"Only entries stored under the caller's own tenant were evicted; other tenants' entries are untouched.\",\"scope\":\"caller-only\",\"tenant\":\"local-operator\"}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "flushed": 10,
+        "note": "Only entries stored under the caller's own tenant were evicted; other tenants' entries are untouched.",
+        "scope": "caller-only",
+        "tenant": "local-operator"
+      }
+    }
+  },
+  "assert": {
+    "id": 44,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.flushed"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.flushed": 10,
+      "result.structuredContent.scope": "caller-only",
+      "result.structuredContent.tenant": "local-operator"
+    }
+  },
+  "notes": "cache_flush: evicts the caller's own 10 seeded entries (local-operator tenant only); other tenants untouched. Runs last so cache_stats still sees the seeded counts."
+}

@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-set-budget-guard",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger, prices a $10/$30 and c $5/$15 per 1M, routing group fast) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "cost-manager",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 18,
+    "method": "tools/call",
+    "params": {
+      "name": "set_budget_guard",
+      "arguments": {
+        "limit_usd": 10
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 18,
+    "result": {
+      "content": [
+        {
+          "text": "{\"guard_set\":true,\"quota\":{\"key_id\":\"gk_0d78a078af0ea87d\",\"has_budget\":true,\"limit_usd\":10,\"spent_usd\":0,\"remaining_usd\":10,\"at_limit\":false,\"unpriced_policy\":\"fail_closed\",\"active_window\":\"5h\",\"warning_reached\":false,\"daily\":{\"spent_usd\":0,\"at_limit\":false},\"weekly\":{\"spent_usd\":0,\"at_limit\":false},\"monthly\":{\"spent_usd\":0,\"at_limit\":false}}}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "guard_set": true,
+        "quota": {
+          "key_id": "gk_0d78a078af0ea87d",
+          "has_budget": true,
+          "limit_usd": 10,
+          "spent_usd": 0,
+          "remaining_usd": 10,
+          "at_limit": false,
+          "unpriced_policy": "fail_closed",
+          "active_window": "5h",
+          "warning_reached": false,
+          "daily": {
+            "spent_usd": 0,
+            "at_limit": false
+          },
+          "weekly": {
+            "spent_usd": 0,
+            "at_limit": false
+          },
+          "monthly": {
+            "spent_usd": 0,
+            "at_limit": false
+          }
+        }
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 18,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.guard_set": true
+    },
+    "http_status": 200
+  },
+  "notes": "set_budget_guard with no key_id guards the caller's own key: writes a real $10 ledger budget."
+}

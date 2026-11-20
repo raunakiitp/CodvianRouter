@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-db-stats",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger, prices a $10/$30 and c $5/$15 per 1M, routing group fast) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "ops",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 26,
+    "method": "tools/call",
+    "params": {
+      "name": "db_stats",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 26,
+    "result": {
+      "content": [
+        {
+          "text": "{\"files\":[{\"name\":\"ledger.db\",\"exists\":true,\"size_bytes\":4096,\"modified_at\":\"2026-11-19T12:20:39.800190002Z\",\"rows\":{\"usage_events\":3}},{\"name\":\"feedback.db\",\"exists\":false,\"modified_at\":\"0001-01-01T00:00:00Z\"}],\"note\":\"row counts are live counts from the SQLite files at call time; last write is the file modification time; sizes are the main database file only, excluding -wal/-shm sidecars\"}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "files": [
+          {
+            "name": "ledger.db",
+            "exists": true,
+            "size_bytes": 4096,
+            "modified_at": "2026-11-19T12:20:39.800190002Z",
+            "rows": {
+              "usage_events": 3
+            }
+          },
+          {
+            "name": "feedback.db",
+            "exists": false,
+            "modified_at": "0001-01-01T00:00:00Z"
+          }
+        ],
+        "note": "row counts are live counts from the SQLite files at call time; last write is the file modification time; sizes are the main database file only, excluding -wal/-shm sidecars"
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 26,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent",
+      "result.structuredContent.files"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.files.0.exists": true,
+      "result.structuredContent.files.0.name": "ledger.db",
+      "result.structuredContent.files.0.rows.usage_events": 3,
+      "result.structuredContent.files.0.size_bytes": null,
+      "result.structuredContent.files.1.exists": false,
+      "result.structuredContent.files.1.name": "feedback.db"
+    },
+    "http_status": 200
+  },
+  "notes": "db_stats with the ops key: the live ledger.db in the data dir exists with the 3 seeded usage_events rows (2 under the cost-reader key, 1 under other-key); feedback.db does not exist yet. size_bytes is live so presence-only."
+}

@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "error-call-filtered-tool-deny-2",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call. Filtered server (deny-2): deny-list cache_stats, db_stats.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 110,
+    "method": "tools/call",
+    "params": {
+      "name": "db_stats",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 110,
+    "error": {
+      "code": -32602,
+      "message": "unknown tool: db_stats"
+    }
+  },
+  "assert": {
+    "id": 110,
+    "expect_error": true,
+    "error_code": -32602,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32602,
+      "error.message": "unknown tool: db_stats",
+      "jsonrpc": "2.0"
+    }
+  },
+  "notes": "Calling denied db_stats is -32602 unknown tool — a deny-listed tool is invisible, never merely denied on call."
+}

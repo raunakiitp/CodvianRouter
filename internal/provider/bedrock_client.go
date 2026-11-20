@@ -41,6 +41,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/raunakiitp/codvian-router/internal/adaptive"
 	"github.com/raunakiitp/codvian-router/internal/wire"
 )
 
@@ -114,7 +115,7 @@ func mapBedrockError(err error) error {
 	var be *wire.BedrockError
 	if errors.As(err, &be) {
 		if be.IsRateLimit() {
-			return &RateLimitError{RetryAfter: be.RetryAfter, Body: be.Message}
+			return &RateLimitError{RetryAfter: be.RetryAfter, RetryAfterPresent: be.RetryAfterPresent, Body: be.Message}
 		}
 		if be.StatusCode == http.StatusPaymentRequired ||
 			(be.StatusCode == http.StatusBadRequest && isQuotaBody(be.Message)) {
@@ -166,6 +167,7 @@ func (c *bedrockClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespons
 		return nil, err
 	}
 	defer resp.Body.Close()
+	signals := adaptive.ParseRateLimitHeaders(resp.Header, time.Now())
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
 		return nil, fmt.Errorf("reading bedrock response: %w", err)
@@ -184,7 +186,12 @@ func (c *bedrockClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespons
 	if converted.Model == "" {
 		converted.Model = req.Model
 	}
-	return fromWireResponse(converted)
+	out, err := fromWireResponse(converted)
+	if err != nil {
+		return nil, err
+	}
+	out.RateLimit = &signals
+	return out, nil
 }
 
 // ChatStream is the text-only streaming entry point; see ChatStreamChunks.
@@ -223,7 +230,26 @@ func (c *bedrockClient) ChatStreamChunks(ctx context.Context, req ChatRequest, o
 	if err != nil {
 		return nil, fmt.Errorf("encoding bedrock request: %w", err)
 	}
-	httpReq, err := c.newSignedRequest(ctx, http.MethodPost, c.converseURL(req.Model, true), payload)
+	// Per-provider abort (CHECKLIST 277, LiteLLM #51034 half (e)):
+	// the stream runs under a child context the client itself can
+	// cancel. ConverseStream has no abort API — closing the HTTP
+	// connection IS the abort: AWS stops generating when the
+	// connection drops, so billed generation stops with the stream
+	// instead of running to completion with no reader. The cancel
+	// fires the moment the caller stops consuming (onChunk error)
+	// or the parent context is cancelled; the deferred cancel
+	// also closes the connection when Translate returns for any
+	// other reason, instead of leaving the body close (defer
+	// below) as the only abort. Without the explicit cancel, an
+	// onChunk error still closed the body eventually — but only
+	// after Translate unwound — and a caller that cancelled the
+	// parent context relied on the transport noticing it; the
+	// child context makes the abort immediate and observable in
+	// both cases (see bedrock_abort_test.go: the mock upstream
+	// stops sending frames when the connection drops).
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	httpReq, err := c.newSignedRequest(streamCtx, http.MethodPost, c.converseURL(req.Model, true), payload)
 	if err != nil {
 		return nil, mapBedrockError(err)
 	}
@@ -235,11 +261,22 @@ func (c *bedrockClient) ChatStreamChunks(ctx context.Context, req ChatRequest, o
 		return nil, err
 	}
 	defer resp.Body.Close()
+	streamSignals := adaptive.ParseRateLimitHeaders(resp.Header, time.Now())
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 		return nil, mapBedrockError(wire.MapBedrockError(resp.StatusCode, resp.Header, body))
 	}
 	emit := func(wc wire.ChatChunk) error {
+		// Same cancel rule as the OpenAI/Anthropic clients
+		// (CHECKLIST 190/205): wire.readEventStream now
+		// delivers frames incrementally (CHECKLIST 215), so a
+		// frame that arrives after the abort must never be
+		// delivered. ctx.Err() passes through mapBedrockError
+		// unwrapped, so the router still recognises the
+		// cancellation.
+		if err := streamCtx.Err(); err != nil {
+			return err
+		}
 		chunk := StreamChunk{}
 		if len(wc.Choices) > 0 {
 			d := wc.Choices[0].Delta
@@ -263,7 +300,15 @@ func (c *bedrockClient) ChatStreamChunks(ctx context.Context, req ChatRequest, o
 				TotalTokens:      wc.Usage.TotalTokens,
 			}
 		}
-		return onChunk(chunk)
+		// A consumer that stops consuming aborts the upstream
+		// NOW (see the child context above): cancel before
+		// returning the error, so the connection drops while
+		// Translate is still unwinding instead of after it.
+		if err := onChunk(chunk); err != nil {
+			cancel()
+			return err
+		}
+		return nil
 	}
 	res, err := wire.TranslateBedrockStream(resp.Body, emit)
 	if err != nil {
@@ -278,6 +323,8 @@ func (c *bedrockClient) ChatStreamChunks(ctx context.Context, req ChatRequest, o
 		Model:        res.Model,
 		ToolCalls:    res.ToolCalls,
 		FinishReason: res.FinishReason,
+		Reasoning:    res.Reasoning,
+		RateLimit:    &streamSignals,
 	}, nil
 }
 

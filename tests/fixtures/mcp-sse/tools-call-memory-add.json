@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-memory-add",
+  "fixture": true,
+  "transport": "sse",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + fixed test gateway keys + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger for the routing-reader and cost-reader keys, prices a $10/$30 and c $5/$15 per 1M, routing group fast; memory seeded with one fixed entry for the destructive memory key) over httptest (loopback) via GET /api/mcp/sse (endpoint event) + POST /api/mcp/sse?session_id= with a test gateway key; message-event data captured verbatim. Recorded data only, no live provider call.",
+  "key": "memory-destr",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 18,
+    "method": "tools/call",
+    "params": {
+      "name": "memory_add",
+      "arguments": {
+        "text": "prefers dark mode"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 18,
+    "result": {
+      "content": [
+        {
+          "text": "{\"created_at\":\"2026-11-19T13:31:02Z\",\"id\":\"6925d785e17e75e0\",\"text\":\"prefers dark mode\"}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "created_at": "2026-11-19T13:31:02Z",
+        "id": "6925d785e17e75e0",
+        "text": "prefers dark mode"
+      }
+    }
+  },
+  "recorded_http_status": 202,
+  "assert": {
+    "id": 18,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent",
+      "result.structuredContent.id"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.created_at": null,
+      "result.structuredContent.id": null,
+      "result.structuredContent.text": "prefers dark mode"
+    },
+    "http_status": 202
+  },
+  "notes": "memory_add stores the note under the caller's own tenant and returns its text back; id and created_at are random per run / wall-clock, so presence-only (one of the four fixtures whose recorded bytes vary on re-record — see the recorder's determinism note)."
+}

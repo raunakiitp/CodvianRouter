@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-provider-list",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "tools/call",
+    "params": {
+      "name": "provider_list",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "result": {
+      "content": [
+        {
+          "text": "{\"providers\":[{\"id\":\"p1\",\"name\":\"Coder\",\"wire_format\":\"openai\",\"enabled\":true,\"models\":[\"coder-model\"],\"catalog_id\":\"groq\",\"verification\":\"verified-from-docs\"},{\"id\":\"p2\",\"name\":\"Chatter\",\"wire_format\":\"anthropic\",\"enabled\":false,\"models\":[\"chat-model\",\"chat-model-2\"]}]}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "providers": [
+          {
+            "id": "p1",
+            "name": "Coder",
+            "wire_format": "openai",
+            "enabled": true,
+            "models": [
+              "coder-model"
+            ],
+            "catalog_id": "groq",
+            "verification": "verified-from-docs"
+          },
+          {
+            "id": "p2",
+            "name": "Chatter",
+            "wire_format": "anthropic",
+            "enabled": false,
+            "models": [
+              "chat-model",
+              "chat-model-2"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "assert": {
+    "id": 4,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.providers"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.providers.0.enabled": true,
+      "result.structuredContent.providers.0.id": "p1",
+      "result.structuredContent.providers.0.name": "Coder",
+      "result.structuredContent.providers.0.wire_format": "openai",
+      "result.structuredContent.providers.1.enabled": false,
+      "result.structuredContent.providers.1.id": "p2"
+    }
+  },
+  "notes": "provider_list: mock providers only; no base URL and no API key appears in any entry."
+}

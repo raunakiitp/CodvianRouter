@@ -425,6 +425,23 @@ func TestMapGeminiError(t *testing.T) {
 	if !errors.As(err, &ge) || ge.RetryAfter.Seconds() != 3 {
 		t.Errorf("RetryAfter = %v", ge)
 	}
+	// RetryInfo in the body is the fallback when no header is present
+	// (M4.4): the header always wins over the body hint.
+	retryInfoBody := []byte(`{"error":{"code":429,"message":"Resource exhausted","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"30s"}]}}`)
+	err = MapGeminiError(http.StatusTooManyRequests, nil, retryInfoBody)
+	if !errors.As(err, &ge) || !ge.RetryAfterPresent || ge.RetryAfter.Seconds() != 30 {
+		t.Errorf("body RetryInfo: RetryAfter = %v present = %v, want 30s present", ge.RetryAfter, ge.RetryAfterPresent)
+	}
+	err = MapGeminiError(http.StatusTooManyRequests, h, retryInfoBody)
+	if !errors.As(err, &ge) || ge.RetryAfter.Seconds() != 3 {
+		t.Errorf("header must win over body RetryInfo: RetryAfter = %v, want 3s", ge.RetryAfter)
+	}
+	// The SSE error path carries no headers, so the body's RetryInfo
+	// is the only hint (M4.4).
+	err = MapGeminiStreamError(retryInfoBody)
+	if !errors.As(err, &ge) || !ge.RetryAfterPresent || ge.RetryAfter.Seconds() != 30 {
+		t.Errorf("stream RetryInfo: RetryAfter = %v present = %v, want 30s present", ge.RetryAfter, ge.RetryAfterPresent)
+	}
 	// The generalized IsRetryable covers Gemini errors too.
 	if !IsRetryable(MapGeminiError(http.StatusTooManyRequests, nil, body)) {
 		t.Error("IsRetryable must cover *GeminiError")

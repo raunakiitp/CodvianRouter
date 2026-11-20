@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-switch-combos",
+  "fixture": true,
+  "transport": "sse",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + fixed test gateway keys + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger for the routing-reader and cost-reader keys, prices a $10/$30 and c $5/$15 per 1M, routing group fast; memory seeded with one fixed entry for the destructive memory key) over httptest (loopback) via GET /api/mcp/sse (endpoint event) + POST /api/mcp/sse?session_id= with a test gateway key; message-event data captured verbatim. Recorded data only, no live provider call.",
+  "key": "router-manage",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 25,
+    "method": "tools/call",
+    "params": {
+      "name": "switch_combos",
+      "arguments": {
+        "name": "fast"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 25,
+    "result": {
+      "content": [
+        {
+          "text": "{\"active_combo\":\"fast\",\"note\":\"Session-active combo only: the serving router has no single active combo (every group is always addressable), so this does not change what the serving router routes.\"}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "active_combo": "fast",
+        "note": "Session-active combo only: the serving router has no single active combo (every group is always addressable), so this does not change what the serving router routes."
+      }
+    }
+  },
+  "recorded_http_status": 202,
+  "assert": {
+    "id": 25,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.active_combo": "fast"
+    },
+    "http_status": 202
+  },
+  "notes": "switch_combos activates 'fast' on this session (per-session active combo)."
+}

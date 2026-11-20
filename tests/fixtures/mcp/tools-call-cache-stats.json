@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-cache-stats",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 17,
+    "method": "tools/call",
+    "params": {
+      "name": "cache_stats",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 17,
+    "result": {
+      "content": [
+        {
+          "text": "{\"exact\":{\"present\":true,\"entries\":3,\"bytes\":32},\"semantic\":{\"present\":false,\"entries\":0,\"bytes\":0},\"persistent\":{\"present\":true,\"entries\":5,\"bytes\":500},\"note\":\"mock fixture cache: exact and persistent layers seeded; semantic layer is not wired in this process\"}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "exact": {
+          "present": true,
+          "entries": 3,
+          "bytes": 32
+        },
+        "semantic": {
+          "present": false,
+          "entries": 0,
+          "bytes": 0
+        },
+        "persistent": {
+          "present": true,
+          "entries": 5,
+          "bytes": 500
+        },
+        "note": "mock fixture cache: exact and persistent layers seeded; semantic layer is not wired in this process"
+      }
+    }
+  },
+  "assert": {
+    "id": 17,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.exact"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.exact.bytes": 32,
+      "result.structuredContent.exact.entries": 3,
+      "result.structuredContent.exact.present": true,
+      "result.structuredContent.persistent.bytes": 500,
+      "result.structuredContent.persistent.entries": 5,
+      "result.structuredContent.persistent.present": true,
+      "result.structuredContent.semantic.present": false
+    }
+  },
+  "notes": "cache_stats: exact (3 entries, 32 bytes) and persistent (5 entries, 500 bytes) layers seeded; semantic is not wired in this process so it reports present=false, never zero-filled."
+}

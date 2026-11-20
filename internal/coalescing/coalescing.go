@@ -31,6 +31,29 @@
 // context ends first leaves with its own context error and does not
 // disturb the leader.
 //
+// Tenant isolation: RequestKeyForTenant prefixes the caller's tenant
+// (the gateway key ID) into the key, so identical requests from
+// different tenants never share a flight — one tenant must never be
+// served another tenant's response, nor ride on another tenant's
+// quota. The tenant is hashed, never stored in cleartext in the key.
+// A zero tenant hashes exactly as RequestKey does, so existing
+// callers that cannot supply a tenant yet keep today's behaviour.
+//
+// In-flight cap: at most MaxInFlight flights run at once (OmniRoute's
+// deduplicate() caps at 1,000 in-flight coalesced requests). Past the
+// cap a new request does NOT block and does NOT queue: it runs
+// uncoalesced, as its own flight, and is counted honestly as
+// CapBypassed — never folded into Shared.
+//
+// Flight timeout: every flight runs under a FlightTimeout context
+// (OmniRoute's deduplicate() times out after 60 s). On timeout the
+// flight fails with context.DeadlineExceeded, every waiter gets that
+// error, the entry is cleaned up, and a later identical request
+// starts a fresh flight. DoCtx hands the timeout context to fn, so
+// a fn that respects its context actually aborts its upstream call;
+// Do's legacy no-context fn is timed out at the flight level instead
+// (its goroutine is abandoned, its late result discarded).
+//
 // This is the golang.org/x/sync/singleflight pattern implemented with
 // stdlib sync only: x/sync is not a dependency of this module and the
 // project does not add network dependencies for a pattern this small.
@@ -55,11 +78,26 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/routetrace"
 )
+
+// MaxInFlight is the cap on concurrent registered flights. Past it a
+// new request runs uncoalesced (see Group.DoCtx) and is counted as
+// CapBypassed. The number is OmniRoute's: its deduplicate() caps at
+// 1,000 in-flight coalesced requests (M6 parity, Area 6).
+const MaxInFlight = 1000
+
+// FlightTimeout is the per-flight timeout: the leader's fn runs under
+// a context that expires this long after the flight starts, and on
+// expiry the flight fails with context.DeadlineExceeded. The number
+// is OmniRoute's: its deduplicate() times out after 60 s (M6 parity,
+// Area 6).
+const FlightTimeout = 60 * time.Second
 
 // Stats is a snapshot of the single-flight counters. All counters
 // are real: they start at zero and only move when real requests flow
@@ -89,6 +127,16 @@ type Stats struct {
 	QuotaSaved uint64 `json:"quota_saved_calls"`
 	// InFlight is the number of flights currently running.
 	InFlight int `json:"in_flight"`
+	// CapBypassed is the number of requests that arrived while the
+	// in-flight cap was reached and therefore ran uncoalesced as
+	// their own flight instead of joining or starting a registered
+	// flight. It is counted separately from Shared on purpose: a
+	// bypassed request made its own upstream call, so folding it
+	// into Shared would overstate the calls coalescing avoided.
+	// CapBypassed requests are included in Requests, but not in
+	// Flights (they were never registered flights) and not in
+	// InFlight while they run.
+	CapBypassed uint64 `json:"cap_bypassed"`
 }
 
 // Result is the outcome of one flight: the response the leader got
@@ -109,18 +157,49 @@ type flightCall struct {
 }
 
 // Group is the single-flight registry: at most one flight per key at
-// a time. It is safe for concurrent use.
+// a time. It is safe for concurrent use. One mutex guards every
+// field — the registration check, the cap check and the counter
+// updates are all done under that single mu, so there is no lock
+// ordering to get wrong on this hot path.
 type Group struct {
-	mu       sync.Mutex
-	calls    map[string]*flightCall
-	requests uint64
-	flights  uint64
-	shared   uint64
+	mu          sync.Mutex
+	calls       map[string]*flightCall
+	requests    uint64
+	flights     uint64
+	shared      uint64
+	capBypassed uint64
+	// timeout and maxInFlight are test overrides for the defaults
+	// FlightTimeout and MaxInFlight. Zero means "use the default".
+	// They are read under mu at flight registration, so they must
+	// be set before the group is used concurrently, never while
+	// flights are running.
+	timeout     time.Duration
+	maxInFlight int
 }
 
 // New returns an empty Group.
 func New() *Group {
 	return &Group{calls: make(map[string]*flightCall)}
+}
+
+// effectiveTimeout returns the per-flight timeout in force for
+// this group: the test override when set, else FlightTimeout.
+// Callers must hold g.mu.
+func (g *Group) effectiveTimeout() time.Duration {
+	if g.timeout > 0 {
+		return g.timeout
+	}
+	return FlightTimeout
+}
+
+// effectiveMaxInFlight returns the in-flight cap in force for this
+// group: the test override when set, else MaxInFlight. Callers must
+// hold g.mu.
+func (g *Group) effectiveMaxInFlight() int {
+	if g.maxInFlight > 0 {
+		return g.maxInFlight
+	}
+	return MaxInFlight
 }
 
 // Do runs fn for key, or waits for the flight already running for key
@@ -132,7 +211,33 @@ func New() *Group {
 // cancel the leader. The entry is registered BEFORE fn is called, so
 // a duplicate arriving while the leader is still dialing joins the
 // flight instead of starting a second upstream call.
+//
+// The flight is bounded by FlightTimeout (see DoCtx): on timeout the
+// flight fails, waiters get context.DeadlineExceeded, the entry is
+// cleaned up, and a later identical request starts a fresh flight.
+// Do's fn takes no context, so a fn that ignores contexts cannot be
+// cancelled mid-flight — the timeout still releases the leader and
+// the waiters on schedule, and the fn's late result is discarded.
+//
+// When the in-flight cap (MaxInFlight) is already reached, a new key
+// does not block and does not queue: fn runs immediately, uncoalesced,
+// as the caller's own flight, and the call is counted as CapBypassed
+// (see Stats), not as a flight and not as shared.
 func (g *Group) Do(ctx context.Context, key string, fn func() (*provider.ChatResponse, *routetrace.RouteTrace, error)) (Result, bool) {
+	return g.DoCtx(ctx, key, func(context.Context) (*provider.ChatResponse, *routetrace.RouteTrace, error) {
+		return fn()
+	})
+}
+
+// DoCtx is Do, except fn receives the leader's flight context: the
+// caller's ctx with the FlightTimeout deadline applied. A fn that
+// respects its context aborts its upstream call when the flight
+// times out (or when the leader's own ctx ends); a fn that ignores
+// it is still timed out at the flight level, as in Do. New callers
+// should use DoCtx so the timeout actually cancels the upstream
+// call; Do exists for the existing callers whose fn closes over
+// their own ctx. Waiters behave exactly as in Do.
+func (g *Group) DoCtx(ctx context.Context, key string, fn func(context.Context) (*provider.ChatResponse, *routetrace.RouteTrace, error)) (Result, bool) {
 	g.mu.Lock()
 	g.requests++
 	if c, ok := g.calls[key]; ok {
@@ -148,13 +253,69 @@ func (g *Group) Do(ctx context.Context, key string, fn func() (*provider.ChatRes
 			return res, true
 		}
 	}
+	timeout := g.effectiveTimeout()
+	if len(g.calls) >= g.effectiveMaxInFlight() {
+		// Cap reached: run uncoalesced, right now, without
+		// registering a flight and without waiting. Counted
+		// honestly as a bypass, not as a flight or a share.
+		// The bypass is the caller's own call, like the
+		// router's uncoalesced path, so it runs under the
+		// caller's ctx as passed — no flight timeout applies.
+		g.capBypassed++
+		g.mu.Unlock()
+		resp, trace, err := fn(ctx)
+		return Result{Resp: resp, Trace: trace, Err: err}, false
+	}
 	c := &flightCall{done: make(chan struct{})}
 	g.calls[key] = c
 	g.flights++
 	g.mu.Unlock()
 
-	resp, trace, err := fn()
-	c.result = Result{Resp: resp, Trace: trace, Err: err}
+	// The leader's fn runs in its own goroutine under a timeout
+	// context, so the flight can be failed on schedule even if fn
+	// blocks on something that ignores contexts. The result
+	// channel is buffered (capacity 1) so a fn that finishes after
+	// the timeout never blocks sending its discarded result.
+	lctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	type outcome struct {
+		res      Result
+		panicked any
+		hasPanic bool
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// A panicking fn used to propagate straight to
+				// the leader's caller (fn ran synchronously);
+				// keep that: report the panic as a flight
+				// error to the waiters, then re-panic in the
+				// leader below, after the flight is closed.
+				done <- outcome{res: Result{Err: fmt.Errorf("coalescing flight panicked: %v", r)}, panicked: r, hasPanic: true}
+			}
+		}()
+		resp, trace, err := fn(lctx)
+		done <- outcome{res: Result{Resp: resp, Trace: trace, Err: err}}
+	}()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	var res Result
+	var panicked any
+	var hasPanic bool
+	select {
+	case o := <-done:
+		res, panicked, hasPanic = o.res, o.panicked, o.hasPanic
+	case <-timer.C:
+		// Timeout: cancel the flight context (a fn that
+		// respects it aborts its upstream call now) and fail
+		// the flight. The entry is cleaned up below, so a
+		// later identical request starts a fresh flight; the
+		// abandoned fn's late result is discarded.
+		cancel()
+		res = Result{Err: fmt.Errorf("coalescing flight timed out after %s: %w", timeout, context.DeadlineExceeded)}
+	}
+	c.result = res
 	// Close first, then drop the entry: a caller arriving between
 	// the close and the delete still finds the call, sees the
 	// closed channel, and shares the finished result instead of
@@ -163,7 +324,10 @@ func (g *Group) Do(ctx context.Context, key string, fn func() (*provider.ChatRes
 	g.mu.Lock()
 	delete(g.calls, key)
 	g.mu.Unlock()
-	return c.result, false
+	if hasPanic {
+		panic(panicked)
+	}
+	return res, false
 }
 
 // Stats returns a snapshot of the group's counters.
@@ -177,32 +341,42 @@ func (g *Group) Stats() Stats {
 		UpstreamAvoided: g.shared,
 		QuotaSaved:      g.shared,
 		InFlight:        len(g.calls),
+		CapBypassed:     g.capBypassed,
 	}
 }
 
 // requestKeyPayload is the canonical form of a request for the
 // flight key: model + messages + the sampling params that change the
-// answer. Tools and tool_choice are deliberately absent —
-// Coalescable excludes tool-using requests before a key is ever
-// derived, so they are always empty here. Stream is absent too:
-// only non-streaming requests reach the group. JSON encoding of a
-// struct is deterministic (fixed field order, no maps), and
-// provider.Message's MarshalJSON encodes content parts, so two
-// requests that differ in any of these fields hash differently,
-// including message order, whitespace, and part structure.
+// answer + the per-request routing contract. Tools and tool_choice
+// are deliberately absent — Coalescable excludes tool-using
+// requests before a key is ever derived, so they are always empty
+// here. Stream is absent too: only non-streaming requests reach
+// the group. Routing is present because two requests that differ
+// only in their contract (different only/exclude/order) must never
+// share one flight: the waiter would otherwise be served by a
+// provider its own contract forbade. A nil contract marshals as
+// null, so uncontracted requests keep hashing exactly as before.
+// JSON encoding of a struct is deterministic (fixed field order,
+// no maps), and provider.Message's MarshalJSON encodes content
+// parts, so two requests that differ in any of these fields hash
+// differently, including message order, whitespace, and part
+// structure.
 type requestKeyPayload struct {
-	Model       string             `json:"model"`
-	Messages    []provider.Message `json:"messages"`
-	MaxTokens   int                `json:"max_tokens,omitempty"`
-	Temperature float64            `json:"temperature,omitempty"`
-	TopP        float64            `json:"top_p,omitempty"`
-	Stop        []string           `json:"stop,omitempty"`
+	Model       string                   `json:"model"`
+	Messages    []provider.Message       `json:"messages"`
+	MaxTokens   int                      `json:"max_tokens,omitempty"`
+	Temperature float64                  `json:"temperature,omitempty"`
+	TopP        float64                  `json:"top_p,omitempty"`
+	Stop        []string                 `json:"stop,omitempty"`
+	Routing     *provider.RequestRouting `json:"routing,omitempty"`
 }
 
 // RequestKey derives the canonical flight key for req: SHA-256 of
 // the JSON encoding of requestKeyPayload. It only fails when a float
 // param cannot be encoded (NaN/Inf) — callers must run such a
-// request uncoalesced rather than failing it.
+// request uncoalesced rather than failing it. It carries no tenant:
+// use RequestKeyForTenant when the caller's tenant is known, so
+// different tenants never share a flight.
 func RequestKey(req provider.ChatRequest) (string, error) {
 	b, err := json.Marshal(requestKeyPayload{
 		Model:       req.Model,
@@ -211,11 +385,34 @@ func RequestKey(req provider.ChatRequest) (string, error) {
 		Temperature: req.Temperature,
 		TopP:        req.TopP,
 		Stop:        req.Stop,
+		Routing:     req.Routing,
 	})
 	if err != nil {
 		return "", err
 	}
 	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// RequestKeyForTenant derives the canonical flight key for req
+// scoped to one tenant: the tenant is prefixed into the key (a
+// 0x00-separated SHA-256 over tenant + base key), so identical
+// requests from different tenants hash differently and never share
+// a flight, while identical requests from the same tenant still
+// coalesce. The tenant is the caller's identity at the coalescing
+// call site — the gateway key ID. The router's Engine.Chat wires
+// it (router.go: Engine.Chat calls RequestKeyForTenant(req,
+// req.CallerID)); callers that cannot supply a tenant pass "" and
+// keep RequestKey's behaviour bit-for-bit. The tenant is hashed,
+func RequestKeyForTenant(req provider.ChatRequest, tenant string) (string, error) {
+	base, err := RequestKey(req)
+	if err != nil {
+		return "", err
+	}
+	if tenant == "" {
+		return base, nil
+	}
+	sum := sha256.Sum256([]byte(tenant + "\x00" + base))
 	return hex.EncodeToString(sum[:]), nil
 }
 
@@ -225,7 +422,20 @@ func RequestKey(req provider.ChatRequest) (string, error) {
 // for, and a tool result in the history makes the answer depend on
 // the tool output, not just the prompt. This is the same rule the
 // degrade wrapper uses for cacheable requests.
+//
+// Responses requests are excluded too (CHECKLIST 169): a Responses
+// create mints a distinct stateful object per call (its own
+// response id, its own conversation record), so two identical
+// concurrent creates must never share one flight and hand both
+// callers the same id — and the flight key does not carry the
+// endpoint or the continuation id, so a Responses create could
+// otherwise collide with an identical chat completion. A
+// continuation (PreviousResponseID set) is excluded for the same
+// reason: it is replay-exempt, exactly one attempt, never shared.
 func Coalescable(req provider.ChatRequest) bool {
+	if req.Endpoint == provider.EndpointResponses || req.PreviousResponseID != "" {
+		return false
+	}
 	if len(req.Tools) > 0 || len(req.ToolChoice) > 0 {
 		return false
 	}

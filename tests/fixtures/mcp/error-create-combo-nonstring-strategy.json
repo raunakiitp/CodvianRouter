@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "error-create-combo-nonstring-strategy",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 77,
+    "method": "tools/call",
+    "params": {
+      "name": "create_combo",
+      "arguments": {
+        "name": "nogroup",
+        "members": [
+          "p1"
+        ],
+        "strategy": 42
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 77,
+    "error": {
+      "code": -32602,
+      "message": "strategy: must be a string"
+    }
+  },
+  "assert": {
+    "id": 77,
+    "expect_error": true,
+    "error_code": -32602,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32602,
+      "error.message": "strategy: must be a string",
+      "jsonrpc": "2.0"
+    }
+  },
+  "notes": "WT-03: create_combo with a non-string strategy is invalid params (-32602): strategies are named strings, never coerced from numbers."
+}
