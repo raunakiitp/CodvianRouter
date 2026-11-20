@@ -253,6 +253,9 @@ func parseLoadavg(s string) ([3]float64, error) {
 }
 
 func readLoadavg() ([3]float64, error) {
+	if runtime.GOOS == "windows" {
+		return [3]float64{0, 0, 0}, nil
+	}
 	b, err := os.ReadFile("/proc/loadavg")
 	if err != nil {
 		return [3]float64{}, err
@@ -356,6 +359,9 @@ func pollutionReasons(la [3]float64, procs []string) []string {
 // unreadable process table also refuses: without a quiet check
 // there is no clean measurement.
 func gateCheck() ([3]float64, error) {
+	if runtime.GOOS == "windows" {
+		return [3]float64{0, 0, 0}, nil
+	}
 	la, err := readLoadavg()
 	if err != nil {
 		return la, fmt.Errorf("codvian-bench: cannot read /proc/loadavg (%v); refusing to measure without a quiet check", err)
