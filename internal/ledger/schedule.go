@@ -46,8 +46,8 @@ type QuotaSchedule struct {
 	// StartMinute/EndMinute are minutes from local midnight.
 	// EndMinute <= StartMinute wraps past midnight; Days then
 	// refers to the day the window STARTS on.
-	StartMinute int           `json:"start_minute"`
-	EndMinute   int           `json:"end_minute"`
+	StartMinute int `json:"start_minute"`
+	EndMinute   int `json:"end_minute"`
 	// Timezone is the IANA zone the window is evaluated in.
 	// Empty (or unknown) means UTC — never the host's local
 	// time — so a schedule means the same on every machine.
