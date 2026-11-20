@@ -1,6 +1,6 @@
 // POST /v1/responses — the OpenAI Responses API surface (CHECKLIST
 // 169-170; competitor-sweep P1 gap: the Responses API is now a
-// first-class surface in LiteLLM, Portkey and OmniRoute).
+// first-class surface in LiteLLM, Portkey and the reference router).
 //
 // Design: the gateway translates a Responses request into the
 // canonical chat request and routes it through the SAME engine as
@@ -1660,6 +1660,10 @@ func (s *Server) handleResponsesStream(w http.ResponseWriter, ctx context.Contex
 		respRedactor = s.guardrails.NewResponseStreamRedactor("")
 		redactor = respRedactor
 	}
+	// Streaming vault restore (:782): same per-stream restorer as
+	// handleChatStream — redactor first, then restorer, so a token
+	// split across chunks still restores.
+	vaultRestorer := guardrails.NewStreamRestorer(s.reversibleVault)
 
 	onChunk := func(chunk provider.StreamChunk) error {
 		if err := ctx.Err(); err != nil {
@@ -1693,6 +1697,7 @@ func (s *Server) handleResponsesStream(w http.ResponseWriter, ctx context.Contex
 		}
 		if chunk.Content != "" {
 			content := redactor.WriteChunk(chunk.Content)
+			content = vaultRestorer.WriteChunk(content)
 			// Response sanitization cut (B3-22, block mode):
 			// the redactor withheld the first line carrying
 			// a finding, so nothing further may be emitted.
@@ -1872,7 +1877,12 @@ func (s *Server) handleResponsesStream(w http.ResponseWriter, ctx context.Contex
 	// reaches the client in any chunking. Withheld text was
 	// never sent, so it joins the authoritative streamed
 	// text (full) like any other delta.
-	if tail := redactor.Flush(); tail != "" {
+	tail := redactor.Flush()
+	if tail != "" {
+		tail = vaultRestorer.WriteChunk(tail)
+	}
+	tail += vaultRestorer.Flush()
+	if tail != "" {
 		if err := writeEvent("response.output_text.delta", map[string]any{
 			"type": "response.output_text.delta", "item_id": msgID,
 			"output_index": 0, "content_index": 0, "delta": tail,

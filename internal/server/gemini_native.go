@@ -1265,6 +1265,10 @@ func (s *Server) geminiGenerateStream(w http.ResponseWriter, ctx context.Context
 		respRedactor = s.guardrails.NewResponseStreamRedactor("")
 		redactor = respRedactor
 	}
+	// Streaming vault restore (:782): same per-stream restorer as
+	// handleChatStream — redactor first, then restorer, so a token
+	// split across chunks still restores.
+	vaultRestorer := guardrails.NewStreamRestorer(s.reversibleVault)
 	// cutBySanitization ends a stream cut by the response
 	// sanitization stage in block mode (B3-22): the Gemini
 	// error envelope at 403 / PERMISSION_DENIED — a policy
@@ -1295,6 +1299,7 @@ func (s *Server) geminiGenerateStream(w http.ResponseWriter, ctx context.Context
 				return nil
 			}
 			content := redactor.WriteChunk(chunk.Content)
+			content = vaultRestorer.WriteChunk(content)
 			// Response sanitization cut (B3-22, block mode):
 			// the redactor withheld the first line carrying
 			// a finding, so nothing further may be emitted.
@@ -1315,6 +1320,7 @@ func (s *Server) geminiGenerateStream(w http.ResponseWriter, ctx context.Context
 				return nil
 			}
 			content := redactor.WriteChunk(delta)
+			content = vaultRestorer.WriteChunk(content)
 			if respRedactor != nil && respRedactor.Blocked() {
 				return errResponseGuardrailBlocked
 			}
@@ -1361,7 +1367,12 @@ func (s *Server) geminiGenerateStream(w http.ResponseWriter, ctx context.Context
 	// final text delta before the terminal event, so no secret
 	// reaches the client in any chunking. The terminal event
 	// does not repeat the text, so the tail must go out here.
-	if tail := redactor.Flush(); tail != "" {
+	tail := redactor.Flush()
+	if tail != "" {
+		tail = vaultRestorer.WriteChunk(tail)
+	}
+	tail += vaultRestorer.Flush()
+	if tail != "" {
 		if err := emitText(tail); err != nil {
 			s.recordMetrics(ctx, req, finalResp, err, start)
 			return
