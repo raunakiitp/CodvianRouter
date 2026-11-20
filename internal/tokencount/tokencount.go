@@ -91,7 +91,7 @@ func (embeddedLoader) LoadTiktokenBpe(url string) (map[string]int, error) {
 		if err != nil {
 			return nil, fmt.Errorf("tokencount: malformed BPE token in %s: %w", name, err)
 		}
-		rank, err := strconv.Atoi(parts[1])
+		rank, err := strconv.Atoi(strings.TrimRight(parts[1], "\r"))
 		if err != nil {
 			return nil, fmt.Errorf("tokencount: malformed BPE rank in %s: %w", name, err)
 		}

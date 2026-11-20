@@ -2144,7 +2144,7 @@ const ROUTES = [
     "path": "/v1/me/sessions",
     "tier": "MANAGEMENT",
     "spawn_capable": false,
-    "description": "List agent (Responses) sessions opened by the calling API key: one row per session root (no previous_response_id) with turns, cumulative tokens and the list-price cost of its requests; unpricedCount counts turns with no known catalog price. Every row is filtered to the calling key \u2014 other keys' sessions are never listed. Gateway-key auth required.",
+    "description": "List agent sessions opened by the calling API key: Responses chains (one row per session root, no previous_response_id, with turns, cumulative tokens and the list-price cost of its requests) plus ledger agent sessions (one row per coding-agent session, with request/error counts, token split and record-time cost). unpricedCount counts turns/requests with no known catalog price. Every row is filtered to the calling key \u2014 other keys' sessions are never listed. Gateway-key auth required.",
     "auth_exempt": false,
     "scopes": [],
     "bootstrap": false
@@ -2154,7 +2154,7 @@ const ROUTES = [
     "path": "/v1/me/sessions/{id}",
     "tier": "MANAGEMENT",
     "spawn_capable": false,
-    "description": "One agent (Responses) session of the calling API key: the session root's turns, cumulative tokens and list-price cost, plus the per-turn detail; unknown ids, other keys' sessions and keyless records answer 404. Gateway-key auth required.",
+    "description": "One agent session of the calling API key: a Responses session (the session root's turns, cumulative tokens and list-price cost, plus the per-turn detail) or a ledger agent session (request/error counts, token split, record-time cost, no per-turn detail); unknown ids, other keys' sessions and keyless records answer 404. Gateway-key auth required.",
     "auth_exempt": false,
     "scopes": [
       "chat"

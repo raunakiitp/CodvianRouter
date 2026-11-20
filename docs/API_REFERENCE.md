@@ -1140,7 +1140,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** any authenticated key (no scope listed)
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** List agent (Responses) sessions opened by the calling API key: one row per session root (no previous_response_id) with turns, cumulative tokens and the list-price cost of its requests; unpricedCount counts turns with no known catalog price. Every row is filtered to the calling key — other keys' sessions are never listed. Gateway-key auth required.
+- **Description:** List agent sessions opened by the calling API key: Responses chains (one row per session root, no previous_response_id, with turns, cumulative tokens and the list-price cost of its requests) plus ledger agent sessions (one row per coding-agent session, with request/error counts, token split and record-time cost). unpricedCount counts turns/requests with no known catalog price. Every row is filtered to the calling key — other keys' sessions are never listed. Gateway-key auth required.
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -1156,7 +1156,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `chat` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** One agent (Responses) session of the calling API key: the session root's turns, cumulative tokens and list-price cost, plus the per-turn detail; unknown ids, other keys' sessions and keyless records answer 404. Gateway-key auth required.
+- **Description:** One agent session of the calling API key: a Responses session (the session root's turns, cumulative tokens and list-price cost, plus the per-turn detail) or a ledger agent session (request/error counts, token split, record-time cost, no per-turn detail); unknown ids, other keys' sessions and keyless records answer 404. Gateway-key auth required.
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 

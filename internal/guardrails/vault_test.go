@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -178,7 +179,8 @@ func TestVaultPersistenceRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("vault file missing after Mint: %v", err)
 	}
-	if info.Mode().Perm() != 0o600 {
+	// Windows does not enforce Unix permission bits; skip the mode check there.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Fatalf("vault file mode = %o, want 0600", info.Mode().Perm())
 	}
 	// A fresh instance over the same file restores the token:

@@ -74,7 +74,7 @@ func TestAutoRouteDecisionPriceDisplay(t *testing.T) {
 	}
 
 	// Served page: the decision's per-provider lines use moneyPerM.
-	page := string(web.IndexHTML)
+	page := strings.ReplaceAll(string(web.IndexHTML), "\r\n", "\n")
 	if !strings.Contains(page, "moneyPerM(p.input_usd_per_1m)") || !strings.Contains(page, "moneyPerM(p.output_usd_per_1m)") {
 		t.Errorf("dashboard does not render the decision pair prices with moneyPerM (per-1M as-is formatter)")
 	}

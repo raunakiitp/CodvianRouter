@@ -1,0 +1,7 @@
+# Codvian Router — Git attributes
+#
+# BPE rank tables are binary data that must never have line-endings
+# converted by git. Mark them as binary so git's autocrlf / LF
+# normalisation never touches them on any platform.
+*.tiktoken  binary
+
