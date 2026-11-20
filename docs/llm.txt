@@ -7,7 +7,7 @@
 # Scope `admin` implies every scope. LOCAL_ONLY = loopback-only
 # even with a valid key. Destructive routes need a typed
 # {"confirm": "<phrase>"} body in addition to the key.
-# Routes: 224
+# Routes: 308
 
 ## Auth
 header: Authorization: Bearer <gateway-key>
@@ -240,6 +240,90 @@ GET /admin/status | MANAGEMENT | scopes=admin | auth=key | Live server status (u
 POST /oauth/token | MANAGEMENT | scopes=- | auth=exempt | OAuth 2.0 token endpoint: authorization_code (PKCE) and refresh_token grants; issues HS256 JWT access tokens (1h) + rotating refresh tokens (30d). No gateway key — client authentication is the code_verifier and the client secret.
 POST /oauth/revoke | MANAGEMENT | scopes=- | auth=exempt | OAuth 2.0 revocation endpoint (RFC 7009): revokes a refresh token or a JWT access token; always answers 200, even for a token that was never issued. No gateway key.
 GET /admin/key-templates | MANAGEMENT | scopes=admin | auth=key | Built-in gateway-key templates (names, scopes, budgets); secret-free by construction — a template holds no key material. Gateway-key auth required.
+GET /api/features | MANAGEMENT | scopes=admin | auth=key | Feature flags status (B8-134).
+PATCH /api/features | MANAGEMENT | scopes=admin | auth=key | Updates feature flags (B8-134).
+GET /api/settings/cors | MANAGEMENT | scopes=admin | auth=key | CORS allowed origins setting (B8-129).
+PATCH /api/settings/cors | MANAGEMENT | scopes=admin | auth=key | Updates CORS allowed origins (B8-129).
+GET /api/settings/blocked-providers | MANAGEMENT | scopes=admin | auth=key | Blocked providers setting (B8-130).
+PATCH /api/settings/blocked-providers | MANAGEMENT | scopes=admin | auth=key | Updates blocked providers (B8-130).
+GET /api/settings/ai | MANAGEMENT | scopes=admin | auth=key | AI settings (B8-136).
+PATCH /api/settings/ai | MANAGEMENT | scopes=admin | auth=key | Updates AI settings (B8-136).
+GET /api/settings/modality | MANAGEMENT | scopes=admin | auth=key | Modality bridge settings (B8-137).
+PATCH /api/settings/modality | MANAGEMENT | scopes=admin | auth=key | Updates modality bridge settings (B8-137).
+POST /api/pricing/sync | ALWAYS_PROTECTED | scopes=admin | auth=key | Trigger pricing catalog sync (B8-117).
+GET /api/pricing/sync/status | MANAGEMENT | scopes=admin | auth=key | Pricing catalog sync status (B8-117).
+GET /api/settings/transform | MANAGEMENT | scopes=admin | auth=key | Transform pipeline operations (B8-70).
+PUT /api/settings/transform | MANAGEMENT | scopes=admin | auth=key | Sets transform pipeline operations (B8-70).
+GET /api/settings/sidebar | MANAGEMENT | scopes=admin | auth=key | Sidebar navigation configuration (B8-139).
+PUT /api/settings/sidebar | MANAGEMENT | scopes=admin | auth=key | Updates sidebar configuration (B8-139).
+GET /api/settings/advanced | MANAGEMENT | scopes=admin | auth=key | Advanced router settings (B8-141).
+PATCH /api/settings/advanced | MANAGEMENT | scopes=admin | auth=key | Updates advanced router settings (B8-141).
+DELETE /api/lkgp/cache | ALWAYS_PROTECTED | scopes=admin | auth=key | Clears LKGP learned routing cache (B8-69).
+GET /api/routing/strategies | MANAGEMENT | scopes=admin | auth=key | Lists all supported routing strategies (B8-35..56).
+GET /api/settings/stickiness | MANAGEMENT | scopes=admin | auth=key | Session stickiness settings (B8-5).
+PATCH /api/settings/stickiness | MANAGEMENT | scopes=admin | auth=key | Updates session stickiness (B8-5).
+GET /api/settings/switches | MANAGEMENT | scopes=admin | auth=key | Global operational switches (B8-30).
+PATCH /api/settings/switches | MANAGEMENT | scopes=admin | auth=key | Updates global switches (B8-30).
+GET /api/settings/response-validation | MANAGEMENT | scopes=admin | auth=key | Response validation rules (B8-67).
+PUT /api/settings/response-validation | MANAGEMENT | scopes=admin | auth=key | Updates response validation rules (B8-67).
+DELETE /api/cache/{model} | ALWAYS_PROTECTED | scopes=admin | auth=key | Evicts cache entries for a specific model.
+POST /admin/keys/{id}/disable | ALWAYS_PROTECTED | scopes=admin | auth=key | Disables a single gateway key (B8-10).
+POST /admin/keys/{id}/enable | ALWAYS_PROTECTED | scopes=admin | auth=key | Enables a single gateway key (B8-10).
+POST /admin/keys/{id}/revoke | ALWAYS_PROTECTED | scopes=admin | auth=key | Revokes a single gateway key (B8-10).
+PATCH /admin/keys/{id}/budget | ALWAYS_PROTECTED | scopes=admin | auth=key | Per-key daily/weekly/monthly spend limits (B8-11,12,13).
+PATCH /admin/keys/{id}/budget-warn | ALWAYS_PROTECTED | scopes=admin | auth=key | Sets key budget warning threshold (B8-100).
+PATCH /admin/keys/{id}/budget-reset | ALWAYS_PROTECTED | scopes=admin | auth=key | Sets key budget reset window (B8-101).
+GET /admin/budget-templates | MANAGEMENT | scopes=admin | auth=key | Lists budget templates (B8-102).
+POST /admin/budget-templates | ALWAYS_PROTECTED | scopes=admin | auth=key | Creates a budget template (B8-102).
+POST /admin/budget-templates/{id}/apply | ALWAYS_PROTECTED | scopes=admin | auth=key | Applies a budget template to keys (B8-102).
+GET /api/keys/{id}/devices | MANAGEMENT | scopes=admin | auth=key | Device tracking per key (B8-87).
+POST /admin/keys/{id}/lease | ALWAYS_PROTECTED | scopes=admin | auth=key | Sets exclusive lease badge on key (B8-85).
+GET /admin/management-tokens | MANAGEMENT | scopes=admin | auth=key | Lists management access tokens (B8-99).
+POST /admin/management-tokens | ALWAYS_PROTECTED | scopes=admin | auth=key | Creates a management access token (B8-99).
+GET /admin/management-tokens/{id} | MANAGEMENT | scopes=admin | auth=key | Retrieves management access token (B8-99).
+DELETE /admin/management-tokens/{id} | ALWAYS_PROTECTED | scopes=admin | auth=key | Revokes management access token (B8-99).
+GET /admin/key-pools | MANAGEMENT | scopes=admin | auth=key | Lists key fair-share pools (B8-97).
+POST /admin/key-pools | ALWAYS_PROTECTED | scopes=admin | auth=key | Creates key fair-share pool (B8-97).
+GET /admin/key-pools/{id} | MANAGEMENT | scopes=admin | auth=key | Retrieves key pool details (B8-97).
+PATCH /admin/key-pools/{id} | ALWAYS_PROTECTED | scopes=admin | auth=key | Updates key pool (B8-97).
+DELETE /admin/key-pools/{id} | ALWAYS_PROTECTED | scopes=admin | auth=key | Deletes key pool (B8-97).
+GET /dashboard/keys/{id}/routing | MANAGEMENT | scopes=admin | auth=key | Per-key routing dashboard page (B8-94).
+GET /dashboard/keys/{id}/access | MANAGEMENT | scopes=admin | auth=key | Per-key access configuration page (B8-95).
+GET /api/settings/ip-filter | MANAGEMENT | scopes=admin | auth=key | IP filter allowlist/blocklist (B8-131).
+PATCH /api/settings/ip-filter | MANAGEMENT | scopes=admin | auth=key | Updates IP filter (B8-131).
+GET /api/analytics/cost-explorer | MANAGEMENT | scopes=admin | auth=key | Cost explorer analytics (B8-19).
+GET /api/analytics/spend-projection | MANAGEMENT | scopes=admin | auth=key | Monthly spend projection (B8-18,103).
+GET /api/analytics/budget-table | MANAGEMENT | scopes=admin | auth=key | Key budget tracking table (B8-105).
+GET /api/analytics/cost-by-key | MANAGEMENT | scopes=admin | auth=key | Spend grouped by gateway key (B8-113).
+GET /api/analytics/cost-by-account | MANAGEMENT | scopes=admin | auth=key | Spend grouped by provider account (B8-114).
+GET /api/analytics/weekly-pattern | MANAGEMENT | scopes=admin | auth=key | Weekly usage patterns (B8-115).
+GET /api/analytics/heatmap | MANAGEMENT | scopes=admin | auth=key | Activity heatmap (B8-115).
+GET /api/analytics/utilization | MANAGEMENT | scopes=admin | auth=key | Provider quota utilization (B8-118).
+GET /api/analytics/search | MANAGEMENT | scopes=admin | auth=key | Search analytics (B8-121).
+GET /api/analytics/free-rankings | MANAGEMENT | scopes=admin | auth=key | Free model rankings (B8-108).
+GET /api/analytics/scoring-inspector | MANAGEMENT | scopes=admin | auth=key | 16-factor scoring breakdown (B8-78).
+GET /api/analytics/candidates | MANAGEMENT | scopes=admin | auth=key | Candidate targets for auto-combo (B8-82).
+GET /api/logs/proxy | MANAGEMENT | scopes=admin | auth=key | Proxy request logs (B8-22).
+GET /api/logs/console | MANAGEMENT | scopes=admin | auth=key | Console output feed (B8-23).
+GET /api/logs/timeline/{id} | MANAGEMENT | scopes=admin | auth=key | Request step-by-step timeline (B8-24).
+GET /api/logs/activity | MANAGEMENT | scopes=admin | auth=key | Activity feed (B8-25).
+GET /api/logs/conversations | MANAGEMENT | scopes=admin | auth=key | Conversations view (B8-26).
+GET /api/logs/compression | MANAGEMENT | scopes=admin | auth=key | Compression savings log (B8-27).
+GET /api/logs/audit | MANAGEMENT | scopes=admin | auth=key | Admin audit log (B8-28).
+GET /api/logs/export | MANAGEMENT | scopes=admin | auth=key | Export logs JSON (B8-126).
+GET /api/logs/destinations | MANAGEMENT | scopes=admin | auth=key | Lists log export destinations (B8-127).
+POST /api/logs/destinations | ALWAYS_PROTECTED | scopes=admin | auth=key | Creates log export destination (B8-127).
+GET /api/logs/destinations/{id} | MANAGEMENT | scopes=admin | auth=key | Retrieves log export destination (B8-127).
+PATCH /api/logs/destinations/{id} | ALWAYS_PROTECTED | scopes=admin | auth=key | Updates log export destination (B8-127).
+DELETE /api/logs/destinations/{id} | ALWAYS_PROTECTED | scopes=admin | auth=key | Deletes log export destination (B8-127).
+GET /api/combos/{id}/capabilities | MANAGEMENT | scopes=admin | auth=key | Capability-specific combo behavior (B8-3).
+PUT /api/combos/{id}/capabilities | MANAGEMENT | scopes=admin | auth=key | Sets capability-specific combo behavior (B8-3).
+GET /api/settings/combo-tuning | MANAGEMENT | scopes=admin | auth=key | Combo tuning settings (B8-58, B8-61..66).
+PATCH /api/settings/combo-tuning | MANAGEMENT | scopes=admin | auth=key | Updates combo tuning settings (B8-58, B8-61..66).
+GET /api/settings/scoring-modes | MANAGEMENT | scopes=admin | auth=key | Scoring factors and mode packs (B8-77).
+GET /api/settings/account-fallback | MANAGEMENT | scopes=admin | auth=key | Account fallback strategy (B8-79).
+PATCH /api/settings/account-fallback | MANAGEMENT | scopes=admin | auth=key | Updates account fallback strategy (B8-79).
+GET /api/combos/{id}/studio-cascade | MANAGEMENT | scopes=admin | auth=key | Live cascade view for combo studio (B8-83).
 
 ## Examples (one per family)
 health: curl http://127.0.0.1:8080/healthz  # -> {"status":"ok"}

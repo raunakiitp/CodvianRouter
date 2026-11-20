@@ -23,7 +23,7 @@ import (
 // The tests drive the real Server + real ledger + counting
 // engine. Schedules are built around time.Now() so the tests are
 // day-independent: "today" is whatever weekday the run lands on.
-func todayWeekday() int { return int(time.Now().Weekday()) }
+func todayWeekday() int { return int(time.Now().UTC().Weekday()) }
 
 func scheduleTestPool(t *testing.T, s *keyBudgetSetup, limit float64, threshold float64) {
 	t.Helper()

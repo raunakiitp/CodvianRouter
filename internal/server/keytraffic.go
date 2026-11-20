@@ -185,10 +185,11 @@ func (l *keyTrafficLimiter) checkLimitsLocked(keyID string, tokens int, lim traf
 		}
 	}
 	if lim.RPD > 0 {
-		dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		uNow := now.UTC()
+		dayStart := time.Date(uNow.Year(), uNow.Month(), uNow.Day(), 0, 0, 0, 0, time.UTC)
 		if l.countSinceLocked(keyID, dayStart) >= lim.RPD {
 			nextMidnight := dayStart.Add(24 * time.Hour)
-			wait := nextMidnight.Sub(now)
+			wait := nextMidnight.Sub(uNow)
 			if wait < time.Second {
 				wait = time.Second
 			}
@@ -282,7 +283,8 @@ func (l *keyTrafficLimiter) usageToday(keyID string, now time.Time) int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.pruneLocked(keyID, now, 24*time.Hour)
-	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	uNow := now.UTC()
+	dayStart := time.Date(uNow.Year(), uNow.Month(), uNow.Day(), 0, 0, 0, 0, time.UTC)
 	return l.countSinceLocked(keyID, dayStart)
 }
 

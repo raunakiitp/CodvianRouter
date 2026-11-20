@@ -1829,6 +1829,14 @@ func New(engine Engine, opts ...Option) *Server {
 	s.register(mux, "POST", "/admin/config/reset", s.handleResetConfig)
 	s.register(mux, "POST", "/admin/cache/flush", s.handleCacheFlush)
 	s.register(mux, "GET", "/admin/status", s.handleAdminStatus)
+
+	// B8 Dashboard Part 2 routes
+	s.registerB8SettingsRoutes(mux)
+	s.registerB8KeyRoutes(mux)
+	s.registerB8AnalyticsRoutes(mux)
+	s.registerB8LogsRoutes(mux)
+	s.registerB8CombosRoutes(mux)
+
 	s.handler = s.withLogging(mux)
 	return s
 }
