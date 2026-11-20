@@ -2682,6 +2682,1014 @@ const ROUTES = [
       "admin"
     ],
     "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/features",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Feature flags status (B8-134).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/features",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Updates feature flags (B8-134).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings/cors",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "CORS allowed origins setting (B8-129).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/settings/cors",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Updates CORS allowed origins (B8-129).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings/blocked-providers",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Blocked providers setting (B8-130).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/settings/blocked-providers",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Updates blocked providers (B8-130).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings/ai",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "AI settings (B8-136).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/settings/ai",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Updates AI settings (B8-136).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings/modality",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Modality bridge settings (B8-137).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/settings/modality",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Updates modality bridge settings (B8-137).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/pricing/sync",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Trigger pricing catalog sync (B8-117).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/pricing/sync/status",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Pricing catalog sync status (B8-117).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings/transform",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Transform pipeline operations (B8-70).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PUT",
+    "path": "/api/settings/transform",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Sets transform pipeline operations (B8-70).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings/sidebar",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Sidebar navigation configuration (B8-139).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PUT",
+    "path": "/api/settings/sidebar",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Updates sidebar configuration (B8-139).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings/advanced",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Advanced router settings (B8-141).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/settings/advanced",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Updates advanced router settings (B8-141).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/lkgp/cache",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Clears LKGP learned routing cache (B8-69).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/routing/strategies",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Lists all supported routing strategies (B8-35..56).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings/stickiness",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Session stickiness settings (B8-5).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/settings/stickiness",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Updates session stickiness (B8-5).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings/switches",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Global operational switches (B8-30).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/settings/switches",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Updates global switches (B8-30).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings/response-validation",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Response validation rules (B8-67).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PUT",
+    "path": "/api/settings/response-validation",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Updates response validation rules (B8-67).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/cache/{model}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Evicts cache entries for a specific model.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/keys/{id}/disable",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Disables a single gateway key (B8-10).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/keys/{id}/enable",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Enables a single gateway key (B8-10).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/keys/{id}/revoke",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Revokes a single gateway key (B8-10).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/admin/keys/{id}/budget",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Per-key daily/weekly/monthly spend limits (B8-11,12,13).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/admin/keys/{id}/budget-warn",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Sets key budget warning threshold (B8-100).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/admin/keys/{id}/budget-reset",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Sets key budget reset window (B8-101).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/budget-templates",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Lists budget templates (B8-102).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/budget-templates",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Creates a budget template (B8-102).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/budget-templates/{id}/apply",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Applies a budget template to keys (B8-102).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/keys/{id}/devices",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Device tracking per key (B8-87).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/keys/{id}/lease",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Sets exclusive lease badge on key (B8-85).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/management-tokens",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Lists management access tokens (B8-99).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/management-tokens",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Creates a management access token (B8-99).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/management-tokens/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Retrieves management access token (B8-99).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/admin/management-tokens/{id}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Revokes management access token (B8-99).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/key-pools",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Lists key fair-share pools (B8-97).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/key-pools",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Creates key fair-share pool (B8-97).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/key-pools/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Retrieves key pool details (B8-97).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/admin/key-pools/{id}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Updates key pool (B8-97).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/admin/key-pools/{id}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Deletes key pool (B8-97).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/keys/{id}/routing",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Per-key routing dashboard page (B8-94).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/keys/{id}/access",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Per-key access configuration page (B8-95).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings/ip-filter",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "IP filter allowlist/blocklist (B8-131).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/settings/ip-filter",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Updates IP filter (B8-131).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/cost-explorer",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Cost explorer analytics (B8-19).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/spend-projection",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Monthly spend projection (B8-18,103).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/budget-table",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Key budget tracking table (B8-105).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/cost-by-key",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Spend grouped by gateway key (B8-113).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/cost-by-account",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Spend grouped by provider account (B8-114).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/weekly-pattern",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Weekly usage patterns (B8-115).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/heatmap",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Activity heatmap (B8-115).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/utilization",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Provider quota utilization (B8-118).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/search",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Search analytics (B8-121).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/free-rankings",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Free model rankings (B8-108).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/scoring-inspector",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "16-factor scoring breakdown (B8-78).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/analytics/candidates",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Candidate targets for auto-combo (B8-82).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/logs/proxy",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Proxy request logs (B8-22).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/logs/console",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Console output feed (B8-23).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/logs/timeline/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Request step-by-step timeline (B8-24).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/logs/activity",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Activity feed (B8-25).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/logs/conversations",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Conversations view (B8-26).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/logs/compression",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Compression savings log (B8-27).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/logs/audit",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Admin audit log (B8-28).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/logs/export",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Export logs JSON (B8-126).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/logs/destinations",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Lists log export destinations (B8-127).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/logs/destinations",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Creates log export destination (B8-127).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/logs/destinations/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Retrieves log export destination (B8-127).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/logs/destinations/{id}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Updates log export destination (B8-127).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/logs/destinations/{id}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Deletes log export destination (B8-127).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/combos/{id}/capabilities",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Capability-specific combo behavior (B8-3).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PUT",
+    "path": "/api/combos/{id}/capabilities",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Sets capability-specific combo behavior (B8-3).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings/combo-tuning",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Combo tuning settings (B8-58, B8-61..66).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/settings/combo-tuning",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Updates combo tuning settings (B8-58, B8-61..66).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings/scoring-modes",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Scoring factors and mode packs (B8-77).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/settings/account-fallback",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Account fallback strategy (B8-79).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/settings/account-fallback",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Updates account fallback strategy (B8-79).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/combos/{id}/studio-cascade",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Live cascade view for combo studio (B8-83).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
   }
 ];
 // END TRYIT-ROUTES-JSON

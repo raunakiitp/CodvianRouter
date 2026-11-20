@@ -114,6 +114,40 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 		"POST /oauth/clients", "GET /oauth/clients", "DELETE /oauth/clients/{id}", "GET /oauth/authorize", "POST /oauth/token", "POST /oauth/revoke",
 		"POST /admin/cache/flush",
 		"GET /admin/status",
+		// B8 Dashboard Part 2 routes
+		"GET /api/features", "PATCH /api/features",
+		"GET /api/settings/cors", "PATCH /api/settings/cors",
+		"GET /api/settings/blocked-providers", "PATCH /api/settings/blocked-providers",
+		"GET /api/settings/ai", "PATCH /api/settings/ai",
+		"GET /api/settings/modality", "PATCH /api/settings/modality",
+		"POST /api/pricing/sync", "GET /api/pricing/sync/status",
+		"GET /api/settings/transform", "PUT /api/settings/transform",
+		"GET /api/settings/sidebar", "PUT /api/settings/sidebar",
+		"GET /api/settings/advanced", "PATCH /api/settings/advanced",
+		"DELETE /api/lkgp/cache", "GET /api/routing/strategies",
+		"GET /api/settings/stickiness", "PATCH /api/settings/stickiness",
+		"GET /api/settings/switches", "PATCH /api/settings/switches",
+		"GET /api/settings/response-validation", "PUT /api/settings/response-validation",
+		"DELETE /api/cache/{model}",
+		"POST /admin/keys/{id}/disable", "POST /admin/keys/{id}/enable", "POST /admin/keys/{id}/revoke",
+		"PATCH /admin/keys/{id}/budget", "PATCH /admin/keys/{id}/budget-warn", "PATCH /admin/keys/{id}/budget-reset",
+		"GET /admin/budget-templates", "POST /admin/budget-templates", "POST /admin/budget-templates/{id}/apply",
+		"GET /api/keys/{id}/devices", "POST /admin/keys/{id}/lease",
+		"GET /admin/management-tokens", "POST /admin/management-tokens", "GET /admin/management-tokens/{id}", "DELETE /admin/management-tokens/{id}",
+		"GET /admin/key-pools", "POST /admin/key-pools", "GET /admin/key-pools/{id}", "PATCH /admin/key-pools/{id}", "DELETE /admin/key-pools/{id}",
+		"GET /dashboard/keys/{id}/routing", "GET /dashboard/keys/{id}/access",
+		"GET /api/settings/ip-filter", "PATCH /api/settings/ip-filter",
+		"GET /api/analytics/cost-explorer", "GET /api/analytics/spend-projection", "GET /api/analytics/budget-table",
+		"GET /api/analytics/cost-by-key", "GET /api/analytics/cost-by-account", "GET /api/analytics/weekly-pattern",
+		"GET /api/analytics/heatmap", "GET /api/analytics/utilization", "GET /api/analytics/search",
+		"GET /api/analytics/free-rankings", "GET /api/analytics/scoring-inspector", "GET /api/analytics/candidates",
+		"GET /api/logs/proxy", "GET /api/logs/console", "GET /api/logs/timeline/{id}", "GET /api/logs/activity",
+		"GET /api/logs/conversations", "GET /api/logs/compression", "GET /api/logs/audit", "GET /api/logs/export",
+		"GET /api/logs/destinations", "POST /api/logs/destinations", "GET /api/logs/destinations/{id}", "PATCH /api/logs/destinations/{id}", "DELETE /api/logs/destinations/{id}",
+		"GET /api/combos/{id}/capabilities", "PUT /api/combos/{id}/capabilities",
+		"GET /api/settings/combo-tuning", "PATCH /api/settings/combo-tuning",
+		"GET /api/settings/scoring-modes", "GET /api/settings/account-fallback", "PATCH /api/settings/account-fallback",
+		"GET /api/combos/{id}/studio-cascade",
 	}
 	if len(expected) != len(table) {
 		t.Errorf("route table has %d entries, expected %d (a route was added without updating the table, or vice versa)", len(table), len(expected))
@@ -161,8 +195,8 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 	for _, r := range table {
 		counts[r.Tier]++
 	}
-	if counts[TierLocalOnly] != 9 || counts[TierAlwaysProtected] != 29 || counts[TierManagement] != 186 {
-		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 9/29/186)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
+	if counts[TierLocalOnly] != 9 || counts[TierAlwaysProtected] != 49 || counts[TierManagement] != 250 {
+		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 9/49/250)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
 	}
 }
 
