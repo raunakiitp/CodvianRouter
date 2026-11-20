@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-pick-fastest-model-unavailable",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; no ledger wired) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "wide",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 10,
+    "method": "tools/call",
+    "params": {
+      "name": "pick_fastest_model",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 10,
+    "error": {
+      "code": -32602,
+      "message": "unavailable: model latency backend is not available over this transport (ledger unavailable) — pick_fastest_model ranks only on measured ledger latency"
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 10,
+    "expect_error": true,
+    "error_code": -32602,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32602,
+      "error.message": "unavailable: model latency backend is not available over this transport (ledger unavailable) — pick_fastest_model ranks only on measured ledger latency",
+      "jsonrpc": "2.0"
+    },
+    "http_status": 200
+  },
+  "notes": "pick_fastest_model on the plain server (no ledger wired) answers -32602 saying the backend is not available — never a fake latency ranking."
+}

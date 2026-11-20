@@ -2,8 +2,8 @@ package tray
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -23,8 +23,10 @@ func waitFor(t *testing.T, timeout time.Duration, what string, cond func() bool)
 
 func TestNewConfigPath(t *testing.T) {
 	sup := New("/tmp/codvian-router-test", 8080)
-	if got := sup.ConfigPath(); got != "/tmp/codvian-router-test/config.json" {
-		t.Fatalf("ConfigPath() = %q, want %q", got, "/tmp/codvian-router-test/config.json")
+	// Build the expectation with filepath.Join: on Windows the
+	// separator is a backslash, so a "/" literal never matches.
+	if got := sup.ConfigPath(); got != filepath.Join("/tmp/codvian-router-test", "config.json") {
+		t.Fatalf("ConfigPath() = %q, want %q", got, filepath.Join("/tmp/codvian-router-test", "config.json"))
 	}
 	if got := sup.Status(); got != "stopped" {
 		t.Fatalf("initial Status() = %q, want stopped", got)
@@ -36,7 +38,8 @@ func TestNewConfigPath(t *testing.T) {
 
 func TestStatusTransitions(t *testing.T) {
 	ctx := context.Background()
-	sup := NewWithCommand("sleep", "30")
+	name, args := sleepCommand()
+	sup := NewWithCommand(name, args...)
 	if got := sup.Status(); got != "stopped" {
 		t.Fatalf("initial Status() = %q, want stopped", got)
 	}
@@ -72,7 +75,8 @@ func TestStatusTransitions(t *testing.T) {
 
 func TestRestartReplacesProcess(t *testing.T) {
 	ctx := context.Background()
-	sup := NewWithCommand("sleep", "30")
+	name, args := sleepCommand()
+	sup := NewWithCommand(name, args...)
 	if err := sup.Start(ctx); err != nil {
 		t.Fatalf("Start() error: %v", err)
 	}
@@ -88,15 +92,16 @@ func TestRestartReplacesProcess(t *testing.T) {
 		t.Fatalf("Restart() did not replace process: PID %d -> %d", pid1, pid2)
 	}
 	// The old child must be gone (no leaked process).
-	if err := syscall.Kill(pid1, 0); err == nil {
+	if processAlive(pid1) {
 		t.Fatalf("old child PID %d still exists after Restart", pid1)
 	}
 }
 
 func TestUnexpectedExitRestartsOnce(t *testing.T) {
 	ctx := context.Background()
-	// "false" exits immediately with status 1: an unexpected exit.
-	sup := NewWithCommand("false")
+	// A command that exits immediately with status 1: an unexpected exit.
+	name, args := failCommand()
+	sup := NewWithCommand(name, args...)
 	if err := sup.Start(ctx); err != nil {
 		t.Fatalf("Start() error: %v", err)
 	}
@@ -132,9 +137,10 @@ func TestUnexpectedExitRestartsOnce(t *testing.T) {
 
 func TestStopKillsProcessGroup(t *testing.T) {
 	ctx := context.Background()
-	// sh spawns a sleep grandchild in the same process group; Stop must
-	// kill the group, not just sh.
-	sup := NewWithCommand("sh", "-c", "sleep 30")
+	// A shell that spawns a sleep grandchild in the same process group;
+	// Stop must kill the group, not just the shell.
+	name, args := shellSleepCommand()
+	sup := NewWithCommand(name, args...)
 	if err := sup.Start(ctx); err != nil {
 		t.Fatalf("Start() error: %v", err)
 	}
@@ -147,7 +153,7 @@ func TestStopKillsProcessGroup(t *testing.T) {
 		t.Fatalf("Stop() error: %v", err)
 	}
 	// No zombie / lingering process: the pid must no longer exist.
-	if err := syscall.Kill(pid, 0); err == nil {
+	if processAlive(pid) {
 		t.Fatalf("child PID %d still exists after Stop (leaked process)", pid)
 	}
 	if got := sup.Status(); got != "stopped" {
@@ -157,7 +163,8 @@ func TestStopKillsProcessGroup(t *testing.T) {
 
 func TestRunHeadlessChildDiesUnexpectedly(t *testing.T) {
 	ctx := context.Background()
-	sup := NewWithCommand("false")
+	name, args := failCommand()
+	sup := NewWithCommand(name, args...)
 	err := RunHeadless(ctx, sup)
 	if err == nil {
 		t.Fatal("RunHeadless() = nil, want an error naming the unexpected exit")
@@ -172,7 +179,8 @@ func TestRunHeadlessChildDiesUnexpectedly(t *testing.T) {
 
 func TestRunHeadlessContextEnds(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	sup := NewWithCommand("sleep", "30")
+	name, args := sleepCommand()
+	sup := NewWithCommand(name, args...)
 	done := make(chan error, 1)
 	go func() { done <- RunHeadless(ctx, sup) }()
 	waitFor(t, 2*time.Second, "status running", func() bool { return sup.Status() == "running" })
@@ -188,7 +196,7 @@ func TestRunHeadlessContextEnds(t *testing.T) {
 	if got := sup.Status(); got != "stopped" {
 		t.Fatalf("Status() after ctx cancel = %q, want stopped", got)
 	}
-	if err := syscall.Kill(sup.PID(), 0); sup.PID() != 0 && err == nil {
+	if sup.PID() != 0 && processAlive(sup.PID()) {
 		t.Fatal("child still alive after ctx cancel")
 	}
 }

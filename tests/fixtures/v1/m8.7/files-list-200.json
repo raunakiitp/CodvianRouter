@@ -1,0 +1,46 @@
+{
+  "assert": {
+    "json_paths": {
+      "data.0.bytes": 11,
+      "data.0.filename": "seed.txt",
+      "data.0.object": "file",
+      "data.0.purpose": "batch",
+      "object": "list"
+    },
+    "required_fields": [
+      "object",
+      "data"
+    ],
+    "status": 200
+  },
+  "fixture": true,
+  "method": "GET",
+  "model": "mock-model",
+  "name": "files-list-200",
+  "notes": "GET /v1/files lists the seeded file (seed.txt, purpose batch, 11 bytes) newest first. No upstream is involved: the file lives on local disk only.",
+  "path": "/v1/files",
+  "provider": "mock-upstream",
+  "recorded_from": "mock-upstream: no upstream exists for local files \u2014 canned OpenAI-shaped response recorded from the local disk store's own contract, 2026-11-19. Recorded mock data, NOT a live provider call.",
+  "recorded_response": {
+    "body": {
+      "data": [
+        {
+          "bytes": 11,
+          "created_at": 1794000000,
+          "filename": "seed.txt",
+          "id": "file-000000000000000000000001",
+          "object": "file",
+          "purpose": "batch",
+          "status": "processed"
+        }
+      ],
+      "object": "list"
+    },
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "status": 200
+  },
+  "schema_version": 1,
+  "slice": "m8.7"
+}

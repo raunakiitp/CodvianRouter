@@ -133,3 +133,56 @@ func TestConfigVerifyGatewayKey(t *testing.T) {
 		t.Error("FindGatewayKey should miss unknown IDs")
 	}
 }
+
+// TestGatewayKeyDisabled (M1.3): a disabled key stops verifying
+// immediately — no restart, no expiry involved — and is reported
+// distinctly from an unknown key, so the server can answer 401
+// naming the disable instead of a generic auth failure.
+func TestGatewayKeyDisabled(t *testing.T) {
+	cfg := DefaultConfig(t.TempDir())
+	key, raw, err := IssueKey("victim", []string{"chat"}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.AddGatewayKey(key); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := cfg.VerifyGatewayKey(raw); !ok {
+		t.Fatal("enabled key must verify before disabling")
+	}
+	if cfg.VerifyGatewayKeyDisabled(raw) {
+		t.Error("enabled key must not report disabled")
+	}
+	// Disable in place (as the server's key-update handler does).
+	for i := range cfg.GatewayKeys {
+		if cfg.GatewayKeys[i].ID == key.ID {
+			cfg.GatewayKeys[i].Disabled = true
+		}
+	}
+	if _, ok := cfg.VerifyGatewayKey(raw); ok {
+		t.Error("disabled key must NOT verify")
+	}
+	if !cfg.VerifyGatewayKeyDisabled(raw) {
+		t.Error("disabled key must report disabled")
+	}
+	// Scopes are untouched by disabling; re-enabling restores auth.
+	found, ok := cfg.FindGatewayKey(key.ID)
+	if !ok || !found.HasScope("chat") {
+		t.Errorf("disabled key must keep its scopes: %+v ok=%v", found, ok)
+	}
+	for i := range cfg.GatewayKeys {
+		if cfg.GatewayKeys[i].ID == key.ID {
+			cfg.GatewayKeys[i].Disabled = false
+		}
+	}
+	if _, ok := cfg.VerifyGatewayKey(raw); !ok {
+		t.Error("re-enabled key must verify again")
+	}
+	if cfg.VerifyGatewayKeyDisabled(raw) {
+		t.Error("re-enabled key must not report disabled")
+	}
+	// An unknown raw value is neither verified nor disabled.
+	if cfg.VerifyGatewayKeyDisabled("crk_" + strings.Repeat("A", 32)) {
+		t.Error("an unknown key must not report disabled")
+	}
+}

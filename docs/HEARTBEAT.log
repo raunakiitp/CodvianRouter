@@ -1,0 +1,60 @@
+2026-11-19T16:11:13Z load1=0.79 dirty=38 commit_age_min=108
+2026-11-19T16:11:35Z load=0.78 0.86 0.86 last_commit=108m_ago HEAD=bcad17e dirty=40 top_cpu=[hatch 14.8;hatch-execd 1.2;systemd 0.0;]
+2026-11-19T16:14:04Z load=1.58 1.11 0.95 last_commit=2m_ago HEAD=63ceb97 dirty=31 top_cpu=[hatch 14.8;apitest.test 8.2;go 1.8;]
+2026-11-19T16:23:58Z load=2.12 1.93 1.48 last_commit=5m_ago HEAD=8201639 dirty=4 top_cpu=[hatch 14.8;server.test 12.5;hatch-execd 1.3;]
+2026-11-19T16:34:13Z load=2.13 1.77 1.52 last_commit=15m_ago HEAD=8201639 dirty=11 top_cpu=[hatch 14.8;server.test 10.6;hatch-execd 1.3;]
+2026-11-19T16:35:00Z watchdog v2: load=2.13/1.77/1.52 last_commit=15m_ago HEAD=8201639 dirty=11 agents=2-active(A1 20m last-act 97s, V-3 8m last-act 21s) NO-ACTION: dirty<=12, commit<20m, no stall, no transport error. NOTE: Block A work running after 20:03 FULL STOP; no lift recorded in MEMORY.md; HEAD moved bcad17e->8201639.
+2026-11-19T16:43:23Z load=3.96 2.80 2.10 last_commit=2m_ago HEAD=e90a83c dirty=6 top_cpu=[hatch 15.1;server.test 7.6;ledger.test 5.5;]
+2026-11-19T16:43:36Z watchdog v2: load=3.96/2.80/2.10 last_commit=2m_ago HEAD=e90a83c dirty=6 agents=2-active(V-3 18m last-act 10s, V-4 2m last-act 78s) NO-ACTION: dirty<=12, commit<20m, no stall, no transport error. NOTE: v2 lift (21:37 IST) now recorded in MEMORY.md — Block A work authorized.
+2026-11-19T16:53:23Z load=1.73 2.19 2.25 last_commit=0m_ago HEAD=44b31a7 dirty=7 top_cpu=[compile 118;hatch 15.3;go 4.1;]
+2026-11-19T22:23 IST watchdog: load=1.73/2.19/2.25 last_commit=0m HEAD=44b31a7 dirty=7 top_cpu=[compile 118;hatch 15.3;go 4.1] — HEALTHY, no action
+2026-11-19T17:03:25Z load=1.26 1.45 1.88 last_commit=2m_ago HEAD=1c0cdf7 dirty=4 top_cpu=[go 71.9;hatch 15.1;hatch-execd 1.6;]
+2026-11-19T22:33 IST watchdog: HEALTHY load=1.26/1.45/1.88 last_commit=13s HEAD=c387107 dirty=3 (HEARTBEAT.log, PLAN.md, gate-last.txt) agents=0 direct-live, go-build active; no stall, no sweep, no action
+2026-11-19T17:13:24Z load=1.17 1.27 1.60 last_commit=9m_ago HEAD=c387107 dirty=3 top_cpu=[hatch 14.7;server.test 12.7;bash 2.5;]
+2026-11-19T22:43:18+05:30 watchdog OK load=1.17/1.27/1.60 last_commit=9m HEAD=c387107 dirty=3 agents=none top_cpu=[hatch 14.7;server.test 12.7;bash 2.5] no_action
+2026-11-19T17:23:22Z load=1.31 1.08 1.31 last_commit=1m_ago HEAD=899455f dirty=3 top_cpu=[hatch 14.5;apitest.test 8.8;go 1.9;]
+2026-11-19T22:53 IST watchdog: load=1.31/1.08/1.31 last_commit=1m HEAD=899455f dirty=3 top_cpu=[hatch 14.5; apitest.test 8.8; go 1.9] — HEALTHY, no stall, no action (A4 gate running)
+2026-11-19T17:33:23Z load=0.22 0.53 0.97 last_commit=11m_ago HEAD=899455f dirty=3 top_cpu=[hatch 14.1;hatch-execd 1.4;systemd 0.0;]
+2026-11-19T17:33 IST watchdog: load=0.22/0.53/0.97 last_commit=11m HEAD=899455f dirty=3 agents=none top_cpu=[hatch 14.1; hatch-execd 1.4; systemd 0.0] — HEALTHY, no stall, no action (A4 gate finished: PASS=6003 FAIL=1 SKIP=5, packages 46/1 — 1 failing test/package noted for critic/reporter)
+2026-11-19T17:43:21Z load=1.36 1.02 0.97 last_commit=6m_ago HEAD=b1ac567 dirty=3 top_cpu=[hatch 13.8;ledger.test 6.5;hatch-execd 1.4;]
+2026-11-19T17:53:22Z load=0.30 0.85 0.94 last_commit=1m_ago HEAD=713695e dirty=2 top_cpu=[privsep-test-fu 42.8;hatch 13.5;hatch-execd 1.4;]
+2026-11-19T17:53 IST watchdog: load=0.30/0.85/0.94 last_commit=1m HEAD=713695e dirty=2 agents=none top_cpu=[privsep-test-fu 42.8; hatch 13.5; hatch-execd 1.4] — HEALTHY, no stall, no action (A4 gate GREEN 6004/0/5)
+2026-11-19T18:03:23Z load=0.69 0.59 0.74 last_commit=11m_ago HEAD=713695e dirty=9 top_cpu=[go 53.9;hatch 13.2;hatch-execd 1.3;]
+2026-11-19T18:03 IST watchdog: load=0.69/0.59/0.74 last_commit=11m HEAD=713695e dirty=9 agents=none top_cpu=[go 53.9; hatch 13.2; hatch-execd 1.3] — HEALTHY, no stall, no action (A4 gate GREEN 6004/0/5 at HEAD; fresh go test running TestSetProviderEnabled|TestDashboardM10_2ProvidersSection, started 18:03; dirty 9 <= 12, no sweep)
+2026-11-19T18:13:23Z load=0.80 1.04 0.58 last_commit=21m_ago HEAD=713695e dirty=13 top_cpu=[hatch 4.4;server.test 4.0;go 1.7;]
+2026-11-19T18:13 IST watchdog: load=0.80/1.04/0.58 last_commit=21m HEAD=713695e dirty=13 agents=none top_cpu=[hatch 4.4; server.test 4.0; go 1.7] — SWEEP: dirty 13 >12 + 21m no commit, wip commit 27f54be (13 files, 361+/9-), tree clean; server pkg test running 2m (PID 2353, unproven) so wip.sh not commit.sh; no live agents, no stalled worker, no transport error
+2026-11-19T18:23:22Z load=1.50 1.33 0.97 last_commit=7m_ago HEAD=27f54be dirty=2 top_cpu=[server.test 15.8;hatch 4.4;hatch-execd 0.6;]
+2026-11-19T18:23:22Z watchdog load=1.50/1.33/0.97 last_commit=7m HEAD=27f54be dirty=2 top_cpu=server.test:15.8% status=HEALTHY no_action
+2026-11-19T18:33:22Z load=0.01 0.31 0.63 last_commit=6m_ago HEAD=fcfe556 dirty=1 top_cpu=[hatch 3.7;hatch-execd 0.4;systemd 0.0;]
+2026-11-19T18:33:33Z watchdog: OK load=0.01 last_commit=6m HEAD=fcfe556 dirty=1 agents=none
+2026-11-19T18:43:22Z load=1.16 1.04 0.83 last_commit=2m_ago HEAD=29a1ed2 dirty=6 top_cpu=[link 57.1;go 16.1;hatch 4.1;]
+2026-11-20T00:13:18+05:30 watchdog load=1.16/1.04/0.83 last_commit=2m HEAD=29a1ed2 dirty=6 live_agents=0 top_cpu=[link 57.1;go 16.1;hatch 4.1] action=none
+2026-11-19T18:53:26Z load=1.84 1.68 1.23 last_commit=2m_ago HEAD=18ff484 dirty=22 top_cpu=[ledger.test 6.2;hatch 5.4;hatch-execd 0.6;]
+2026-11-19T19:03:24Z load=0.83 1.40 1.35 last_commit=0m_ago HEAD=4c5de2f dirty=16 top_cpu=[hatch 6.7;hatch-execd 1.1;systemd 0.0;]
+2026-11-19T19:13:26Z load=1.30 0.59 0.86 last_commit=1m_ago HEAD=40d6628 dirty=0 top_cpu=[go 7.3;hatch 6.3;router.test 4.0;]
+2026-11-19T19:13:44Z watchdog: load=1.30 0.59 0.86 last_commit=1m_ago HEAD=40d6628 dirty=0 top_cpu=[go 7.3;hatch 6.3;router.test 4.0] agents=none-listed action=none
+2026-11-19T19:23:29Z load=0.04 0.20 0.53 last_commit=7m_ago HEAD=5021242 dirty=2 top_cpu=[hatch 6.0;hatch-execd 0.8;systemd 0.0;]
+2026-11-20T00:53:18+05:30 watchdog: load=0.04/0.20/0.53 last_commit=7m HEAD=5021242 dirty=2 live_agents=none — healthy, no action
+2026-11-19T19:33:21Z load=0.50 0.56 0.60 last_commit=5m_ago HEAD=99d7261 dirty=4 top_cpu=[hatch 5.8;hatch-execd 0.8;systemd 0.0;]
+2026-11-20 01:03 IST watchdog: load=0.50/0.56/0.60 last_commit=5m HEAD=99d7261 dirty=4 live_agents=none top_cpu=[hatch 5.8; hatch-execd 0.8; systemd 0.0] action=none
+2026-11-19T19:43:23Z load=1.92 0.82 0.31 last_commit=8m_ago HEAD=8e1ac3d dirty=6 top_cpu=[server.test 7.3;hatch 6.6;go 2.8;]
+2026-11-20 01:13 IST watchdog: load=1.92/0.82/0.31 last_commit=8m HEAD=8e1ac3d dirty=6 live_agents=1 (B9-G21, active 82s ago, ~15/40min box) top_cpu=[server.test 7.3; hatch 6.6; go 2.8] action=none
+2026-11-19T19:53:24Z load=1.89 1.70 1.05 last_commit=18m_ago HEAD=8e1ac3d dirty=8 top_cpu=[server.test 15.1;hatch 6.7;hatch-execd 0.7;]
+2026-11-19T20:03:24Z load=1.92 1.84 1.40 last_commit=1m_ago HEAD=6d4159f dirty=13 top_cpu=[ps 100;server.test 14.4;hatch 9.3;]
+2026-11-19T20:13:23Z load=1.16 1.62 1.53 last_commit=4m_ago HEAD=397e913 dirty=7 top_cpu=[hatch 9.6;router.test 2.0;hatch-execd 1.3;]
+2026-11-19T20:13:49Z watchdog OK load=1.16/1.62/1.53 last_commit=4m HEAD=397e913 dirty=7 top_cpu=[hatch 9.6;router.test 2.0;hatch-execd 1.3] no_action
+2026-11-19T20:23:23Z load=1.25 1.48 1.49 last_commit=4m_ago HEAD=962179c dirty=9 top_cpu=[hatch 9.5;server.test 3.8;go 1.6;]
+2026-11-20T01:53:18+05:30 watchdog: load=1.25/1.48/1.49 last_commit=4m HEAD=962179c dirty=9 top_cpu=[hatch 9.5;server.test 3.8;go 1.6] action=none
+2026-11-19T20:33:23Z load=1.85 1.58 1.49 last_commit=14m_ago HEAD=962179c dirty=13 top_cpu=[server.test 15.2;hatch 9.2;hatch-execd 1.3;]
+2026-11-19T20:43:26Z load=1.76 1.75 1.58 last_commit=8m_ago HEAD=291be80 dirty=4 top_cpu=[hatch 8.9;hatch-execd 1.2;systemd 0.0;]
+2026-11-19T20:43:44Z watchdog OK load=1.76/1.75/1.58 last_commit=8m_ago HEAD=291be80 dirty=4 live=V-14(active 6s ago, running 7.8m) no_action
+2026-11-19T20:53:21Z load=1.50 1.98 1.84 last_commit=18m_ago HEAD=291be80 dirty=5 top_cpu=[hatch 8.3;hatch-execd 1.1;systemd 0.0;]
+2026-11-19T20:53:29Z watchdog OK load=1.50/1.98/1.84 last_commit=18m_ago HEAD=291be80 dirty=5 live=none no_action
+2026-11-19T21:03:23Z load=2.79 1.49 1.46 last_commit=28m_ago HEAD=291be80 dirty=29 top_cpu=[hatch 8.2;server.test 5.5;go 1.6;]
+2026-11-19T21:13:21Z load=1.72 1.47 1.42 last_commit=4m_ago HEAD=2882109 dirty=4 top_cpu=[hatch 8.0;ledger.test 7.0;go 1.0;]
+2026-11-19T21:13:36Z watchdog load=1.72 last_commit=4m HEAD=2882109 dirty=4 top_cpu=[hatch 8.0;ledger.test 7.0;go 1.0] OK no-action
+2026-11-19T21:23:23Z load=1.99 1.57 1.47 last_commit=14m_ago HEAD=2882109 dirty=4 top_cpu=[ps 50.0;server.test 24.0;hatch 7.7;]
+2026-11-19T21:23Z watchdog: load=1.99 last_commit=14m HEAD=2882109 dirty=4 top_cpu=[server.test 24.0] gate-re-run running, no live agents, no stall, no action
+2026-11-19T21:33:22Z load=1.66 1.90 1.80 last_commit=24m_ago HEAD=2882109 dirty=5 top_cpu=[hatch 7.5;hatch-execd 0.8;python3 0.0;]
+2026-11-19T21:34:04Z watchdog load=1.66 last_commit=24m HEAD=2882109 dirty=5 agents=0 action=NONE (no builder alive; dirty<12; no stall)
+2026-11-19T21:43:22Z load=0.35 0.69 1.15 last_commit=34m_ago HEAD=2882109 dirty=5 top_cpu=[hatch 7.3;hatch-execd 0.7;systemd 0.0;]

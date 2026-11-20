@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-list-combos",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger, prices a $10/$30 and c $5/$15 per 1M, routing group fast) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "router",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 22,
+    "method": "tools/call",
+    "params": {
+      "name": "list_combos",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 22,
+    "result": {
+      "content": [
+        {
+          "text": "{\"active_combo\":null,\"combos\":[{\"name\":\"fast\",\"members\":[\"p1\",\"p2\"],\"strategy\":\"priority\",\"active\":false,\"usable\":true}],\"count\":1}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "active_combo": null,
+        "combos": [
+          {
+            "name": "fast",
+            "members": [
+              "p1",
+              "p2"
+            ],
+            "strategy": "priority",
+            "active": false,
+            "usable": true
+          }
+        ],
+        "count": 1
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 22,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.combos.0.name": "fast"
+    },
+    "http_status": 200
+  },
+  "notes": "list_combos on a fresh ledger server lists the configured routing group fast. (In a session that created combo new first, the list is [fast, new] — combos.0 stays fast, so this fixture holds in both flows.)"
+}

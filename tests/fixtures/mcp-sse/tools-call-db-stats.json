@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-db-stats",
+  "fixture": true,
+  "transport": "sse",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + fixed test gateway keys + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger for the routing-reader and cost-reader keys, prices a $10/$30 and c $5/$15 per 1M, routing group fast; memory seeded with one fixed entry for the destructive memory key) over httptest (loopback) via GET /api/mcp/sse (endpoint event) + POST /api/mcp/sse?session_id= with a test gateway key; message-event data captured verbatim. Recorded data only, no live provider call.",
+  "key": "ops",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 13,
+    "method": "tools/call",
+    "params": {
+      "name": "db_stats",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 13,
+    "result": {
+      "content": [
+        {
+          "text": "{\"files\":[{\"name\":\"ledger.db\",\"exists\":true,\"size_bytes\":4096,\"modified_at\":\"2026-11-19T13:30:44.699189169Z\",\"rows\":{\"usage_events\":4}},{\"name\":\"feedback.db\",\"exists\":false,\"modified_at\":\"0001-01-01T00:00:00Z\"}],\"note\":\"row counts are live counts from the SQLite files at call time; last write is the file modification time; sizes are the main database file only, excluding -wal/-shm sidecars\"}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "files": [
+          {
+            "name": "ledger.db",
+            "exists": true,
+            "size_bytes": 4096,
+            "modified_at": "2026-11-19T13:30:44.699189169Z",
+            "rows": {
+              "usage_events": 4
+            }
+          },
+          {
+            "name": "feedback.db",
+            "exists": false,
+            "modified_at": "0001-01-01T00:00:00Z"
+          }
+        ],
+        "note": "row counts are live counts from the SQLite files at call time; last write is the file modification time; sizes are the main database file only, excluding -wal/-shm sidecars"
+      }
+    }
+  },
+  "recorded_http_status": 202,
+  "assert": {
+    "id": 13,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.files"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.files.0.exists": true,
+      "result.structuredContent.files.0.name": "ledger.db",
+      "result.structuredContent.files.0.rows.usage_events": 4,
+      "result.structuredContent.files.0.size_bytes": null
+    },
+    "http_status": 202
+  },
+  "notes": "db_stats: live ledger.db in the data dir, 4 seeded usage rows; size_bytes is live (presence-only, never pinned). Same assertion as TestMCPHTTPSSESuccessPathM910, now as a fixture."
+}

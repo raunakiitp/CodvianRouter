@@ -42,6 +42,14 @@ type concurrencyKey struct {
 	provider string
 }
 
+// guardrailEvalKey is one (phase, action) guardrail evaluation
+// bucket: phase "request" / "response" / "tool_args", action
+// "allowed" / "redacted" / "blocked".
+type guardrailEvalKey struct {
+	phase  string
+	action string
+}
+
 type histogram struct {
 	buckets []uint64 // one per LatencyBuckets entry, cumulative counts
 	sum     float64
@@ -65,6 +73,42 @@ type Recorder struct {
 	// cap per provider and how many calls were shed by it.
 	concurrencyLimit    map[concurrencyKey]float64
 	concurrencyRejected map[concurrencyKey]uint64
+	// Guardrail counters, fed by the server (see IncGuardrail):
+	// redactions and blocks per kind (pii/secret/injection).
+	guardrailRedacted map[string]uint64
+	guardrailBlocked  map[string]uint64
+	// Guardrail evaluations by (phase, action), fed by the server
+	// (see IncGuardrailEval): one entry per Check call — phase is
+	// "request" / "response" / "tool_args", action is "allowed" /
+	// "redacted" / "blocked". The per-kind split lives in the two
+	// maps above.
+	guardrailEvals map[guardrailEvalKey]uint64
+	// Upstream failures: chat requests whose engine error was an
+	// upstream failure (a 502 from an exhausted chain, or a
+	// terminal upstream 4xx). Deadline stops and policy refusals
+	// are NOT counted here — they are router-side, not upstream.
+	upstreamFailures uint64
+	// Content-policy refusal chain (CHECKLIST 161), fed by the
+	// engine (see SetRefusalMetrics): refusals seen, requests
+	// served by a refusal-chain hop, and requests that ended in
+	// an honest refusal because the chain ran dry. A refusal is
+	// NOT an upstream failure (it says nothing about provider
+	// health), so these counters are separate from
+	// upstreamFailures above, never folded into it.
+	contentRefusals       uint64
+	refusalChainServed    uint64
+	refusalChainExhausted uint64
+	// Panics recovered at request/stream boundaries, by location
+	// (see internal/router/panic.go for the location list):
+	// provider_chat / provider_stream (a provider client or chunk
+	// converter panicked), engine_chat / engine_stream (the
+	// engine's own machinery panicked), server_* (server-side
+	// handler code panicked). A recovered panic is counted exactly
+	// once, at the boundary that caught it — never silently
+	// swallowed, never double-counted. Zero until a panic
+	// actually happens: an empty map is the honest "no panics"
+	// state, never an invented series.
+	panics map[string]uint64
 }
 
 // NewRecorder returns an initialized Recorder.
@@ -77,6 +121,10 @@ func NewRecorder() *Recorder {
 		latency:             make(map[latencyKey]*histogram),
 		concurrencyLimit:    make(map[concurrencyKey]float64),
 		concurrencyRejected: make(map[concurrencyKey]uint64),
+		guardrailRedacted:   make(map[string]uint64),
+		guardrailBlocked:    make(map[string]uint64),
+		guardrailEvals:      make(map[guardrailEvalKey]uint64),
+		panics:              make(map[string]uint64),
 	}
 }
 
@@ -240,6 +288,142 @@ func (r *Recorder) IncConcurrencyRejected(provider string) {
 	r.concurrencyRejected[concurrencyKey{normalizeProviderModel(provider)}]++
 }
 
+// IncGuardrail records one guardrail outcome for /metrics: a
+// redaction of kind (pii/secret/injection), and — when blocked is
+// true — a block of the same kind. Only the kind label is recorded,
+// never any matched value or prompt text.
+func (r *Recorder) IncGuardrail(kind string, blocked bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.guardrailRedacted == nil {
+		r.guardrailRedacted = make(map[string]uint64)
+	}
+	if r.guardrailBlocked == nil {
+		r.guardrailBlocked = make(map[string]uint64)
+	}
+	k := sanitizeLabel(kind)
+	r.guardrailRedacted[k]++
+	if blocked {
+		r.guardrailBlocked[k]++
+	}
+}
+
+// IncGuardrailEval records one guardrail evaluation for /metrics:
+// one Check call in phase (request/response/tool_args) that ended
+// with action (allowed/redacted/blocked). Called once per Check, so
+// a phase's rows sum to its evaluation count. The per-kind
+// redaction/block counters are kept separately by IncGuardrail.
+func (r *Recorder) IncGuardrailEval(phase, action string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.guardrailEvals == nil {
+		r.guardrailEvals = make(map[guardrailEvalKey]uint64)
+	}
+	r.guardrailEvals[guardrailEvalKey{sanitizeLabel(phase), sanitizeLabel(action)}]++
+}
+
+// IncUpstreamFailure increments codvian_router_upstream_failures_total:
+// one chat request whose engine error was an upstream failure.
+func (r *Recorder) IncUpstreamFailure() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.upstreamFailures++
+}
+
+// IncPanic increments codvian_router_panics_total{location}: one
+// panic recovered at a request/stream boundary instead of killing
+// the gateway (see internal/router/panic.go for the location list).
+// The location is sanitized like every other label; an empty
+// location is recorded as "unknown" rather than dropped, so a
+// caller bug stays visible.
+func (r *Recorder) IncPanic(location string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.panics == nil {
+		r.panics = make(map[string]uint64)
+	}
+	loc := sanitizeLabel(location)
+	if loc == "" {
+		loc = "unknown"
+	}
+	r.panics[loc]++
+}
+
+// Panics returns the current codvian_router_panics_total count
+// summed over every location.
+func (r *Recorder) Panics() uint64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var total uint64
+	for _, n := range r.panics {
+		total += n
+	}
+	return total
+}
+
+// UpstreamFailures returns the current
+// codvian_router_upstream_failures_total count.
+func (r *Recorder) UpstreamFailures() uint64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.upstreamFailures
+}
+
+// IncContentRefusal increments
+// codvian_router_content_refusals_total: one upstream
+// content-policy / safety refusal seen on one attempt. A refusal
+// is not an upstream failure — it never touches
+// upstreamFailures.
+func (r *Recorder) IncContentRefusal() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.contentRefusals++
+}
+
+// IncRefusalChainServed increments
+// codvian_router_refusal_chain_served_total: one request served
+// by a refusal-chain hop after an earlier target refused the
+// content.
+func (r *Recorder) IncRefusalChainServed() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.refusalChainServed++
+}
+
+// IncRefusalChainExhausted increments
+// codvian_router_refusal_chain_exhausted_total: one request that
+// ended in an honest refusal (403 / -32001) because the refusal
+// chain ran dry.
+func (r *Recorder) IncRefusalChainExhausted() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.refusalChainExhausted++
+}
+
+// ContentRefusals returns the current
+// codvian_router_content_refusals_total count.
+func (r *Recorder) ContentRefusals() uint64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.contentRefusals
+}
+
+// RefusalChainServed returns the current
+// codvian_router_refusal_chain_served_total count.
+func (r *Recorder) RefusalChainServed() uint64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.refusalChainServed
+}
+
+// RefusalChainExhausted returns the current
+// codvian_router_refusal_chain_exhausted_total count.
+func (r *Recorder) RefusalChainExhausted() uint64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.refusalChainExhausted
+}
+
 // SetInFlight sets the codvian_router_in_flight gauge to n.
 // Negative values are clamped to 0.
 func (r *Recorder) SetInFlight(n int) {
@@ -357,6 +541,70 @@ func (r *Recorder) WriteTo(b *strings.Builder) {
 	b.WriteString("# TYPE codvian_router_budget_refused_total counter\n")
 	fmt.Fprintf(b, "codvian_router_budget_refused_total %d\n", r.budgetRefused)
 
+	// Guardrail redactions / blocks by kind (labels only — no prompt
+	// text or matched values ever reach a metric).
+	b.WriteString("# HELP codvian_router_guardrail_redactions_total Total guardrail redactions by kind.\\n")
+	b.WriteString("# TYPE codvian_router_guardrail_redactions_total counter\\n")
+	writeStringCounter(b, "codvian_router_guardrail_redactions_total", "kind", r.guardrailRedacted)
+	b.WriteString("# HELP codvian_router_guardrail_blocked_total Total requests blocked by a guardrail, by kind.\\n")
+	b.WriteString("# TYPE codvian_router_guardrail_blocked_total counter\\n")
+	writeStringCounter(b, "codvian_router_guardrail_blocked_total", "kind", r.guardrailBlocked)
+
+	// Guardrail evaluations by phase and action: one entry per Check
+	// call. A policy refusal is action="blocked" (HTTP 403, code
+	// -32001); an upstream failure is NOT here — it has its own
+	// counter below, so the two can never be confused.
+	b.WriteString("# HELP codvian_router_guardrail_evaluations_total Total guardrail evaluations by phase and action.\n")
+	b.WriteString("# TYPE codvian_router_guardrail_evaluations_total counter\n")
+	evKeys := make([]guardrailEvalKey, 0, len(r.guardrailEvals))
+	for k := range r.guardrailEvals {
+		evKeys = append(evKeys, k)
+	}
+	sort.Slice(evKeys, func(i, j int) bool {
+		if evKeys[i].phase != evKeys[j].phase {
+			return evKeys[i].phase < evKeys[j].phase
+		}
+		return evKeys[i].action < evKeys[j].action
+	})
+	for _, k := range evKeys {
+		fmt.Fprintf(b, "codvian_router_guardrail_evaluations_total%s %d\n",
+			formatLabels("phase", k.phase, "action", k.action), r.guardrailEvals[k])
+	}
+
+	// Upstream failures: engine errors that belong to the upstream
+	// provider (exhausted-chain 502, or a terminal upstream 4xx).
+	// Policy refusals (-32001) are counted in the guardrail
+	// evaluations above, never here.
+	b.WriteString("# HELP codvian_router_upstream_failures_total Total chat requests that failed with an upstream provider error.\n")
+	b.WriteString("# TYPE codvian_router_upstream_failures_total counter\n")
+	fmt.Fprintf(b, "codvian_router_upstream_failures_total %d\n", r.upstreamFailures)
+
+	// Content-policy refusals (CHECKLIST 161): upstream refusals
+	// of the content itself. These are NOT upstream failures —
+	// a refusal says nothing about provider health — so they
+	// have their own counters: refusals seen, requests served by
+	// a refusal-chain hop, and requests that ended in an honest
+	// refusal because the chain ran dry.
+	b.WriteString("# HELP codvian_router_content_refusals_total Total upstream content-policy refusals seen, one per refusing attempt.\n")
+	b.WriteString("# TYPE codvian_router_content_refusals_total counter\n")
+	fmt.Fprintf(b, "codvian_router_content_refusals_total %d\n", r.contentRefusals)
+	b.WriteString("# HELP codvian_router_refusal_chain_served_total Total requests served by a refusal-chain hop after an earlier target refused the content.\n")
+	b.WriteString("# TYPE codvian_router_refusal_chain_served_total counter\n")
+	fmt.Fprintf(b, "codvian_router_refusal_chain_served_total %d\n", r.refusalChainServed)
+	b.WriteString("# HELP codvian_router_refusal_chain_exhausted_total Total requests that ended in an honest refusal (403 / -32001) because the refusal chain ran dry.\n")
+	b.WriteString("# TYPE codvian_router_refusal_chain_exhausted_total counter\n")
+	fmt.Fprintf(b, "codvian_router_refusal_chain_exhausted_total %d\n", r.refusalChainExhausted)
+
+	// Recovered panics: a panic at a request/stream boundary that
+	// was caught instead of killing the gateway (CHECKLIST 165).
+	// One series per location that actually panicked; no series
+	// before the first panic is the honest zero, never a fake
+	// placeholder. The recovered value is never a label — it is
+	// logged (redacted) by the server, never exposed here.
+	b.WriteString("# HELP codvian_router_panics_total Total panics recovered at request/stream boundaries, by location.\n")
+	b.WriteString("# TYPE codvian_router_panics_total counter\n")
+	writeStringCounter(b, "codvian_router_panics_total", "location", r.panics)
+
 	// Coalesced (single-flight) waiters served from a shared call.
 	b.WriteString("# HELP codvian_router_coalesced_total Total requests served from a shared single-flight call (one upstream call avoided per shared request).\n")
 	b.WriteString("# TYPE codvian_router_coalesced_total counter\n")
@@ -429,6 +677,180 @@ func writeStringCounter(b *strings.Builder, name, label string, m map[string]uin
 	for _, k := range keys {
 		fmt.Fprintf(b, "%s%s %d\n", name, formatLabels(label, k), m[k])
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Snapshot (dashboard live feeds).
+//
+// Snapshot is the in-memory roll-up the dashboard's Overview and Usage
+// sections read: totals since this process started (the recorder keeps
+// no per-request timestamps, so it cannot answer "last 24 hours" —
+// the ledger answers range-limited questions; see internal/ledger).
+// Latency p50/p95/p99 are read off the recorded histogram buckets, so
+// they are real measured percentiles, not estimates. All counts are
+// zero until real traffic arrives: an empty snapshot is the honest
+// "no requests yet" state, never a placeholder.
+// ---------------------------------------------------------------------------
+
+// ProviderSnapshot is one provider's request totals since start.
+type ProviderSnapshot struct {
+	Provider string  `json:"provider"`
+	Requests uint64  `json:"requests"`
+	OK       uint64  `json:"ok"`
+	Errors   uint64  `json:"errors"`
+	MeanMs   float64 `json:"mean_latency_ms"`
+}
+
+// Snapshot is the recorder's totals since process start.
+type Snapshot struct {
+	Requests  uint64 `json:"requests"`
+	OK        uint64 `json:"ok"`
+	Errors    uint64 `json:"errors"`
+	Failovers uint64 `json:"failovers"`
+	InFlight  int64  `json:"in_flight"`
+	Coalesced uint64 `json:"coalesced"`
+	CacheHits uint64 `json:"cache_hits"`
+	CacheMiss uint64 `json:"cache_misses"`
+	// CacheHitsByLayer / CacheMissesByLayer are the same gateway
+	// cache counters split by layer ("exact" / "semantic"), so the
+	// dashboard can show the split honestly instead of a single
+	// total. Copies: mutating them cannot corrupt the recorder.
+	// Empty (nil) before any cache lookup has been recorded.
+	CacheHitsByLayer   map[string]uint64 `json:"cache_hits_by_layer,omitempty"`
+	CacheMissesByLayer map[string]uint64 `json:"cache_misses_by_layer,omitempty"`
+	// Panics is the total recovered panics since process start,
+	// summed over every location (see Panics). Zero until a panic
+	// actually happens — the dashboard renders it as an honest
+	// zero, never as an invented baseline.
+	Panics     uint64  `json:"panics"`
+	LatencyN   uint64  `json:"latency_samples"`
+	LatencyAvg float64 `json:"latency_mean_ms"`
+	LatencyP50 float64 `json:"latency_p50_ms"`
+	LatencyP95 float64 `json:"latency_p95_ms"`
+	// LatencyP99 is the 99th-percentile latency in milliseconds,
+	// read off the same recorded histogram buckets as p50/p95
+	// (G10 Area 12 row 11): 0 until a latency sample is recorded.
+	LatencyP99 float64            `json:"latency_p99_ms"`
+	ByProvider []ProviderSnapshot `json:"by_provider"`
+}
+
+// Snapshot returns the recorder's totals since process start. The
+// returned maps are copies; mutating them cannot corrupt the recorder.
+func (r *Recorder) Snapshot() Snapshot {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	snap := Snapshot{InFlight: r.inFlight, Coalesced: r.coalesced}
+	byProv := map[string]*ProviderSnapshot{}
+	latByProv := map[string]*histogram{}
+	for k, n := range r.requests {
+		snap.Requests += n
+		switch k.outcome {
+		case "ok":
+			snap.OK += n
+		case "error", "timeout":
+			snap.Errors += n
+		}
+		p := byProv[k.provider]
+		if p == nil {
+			p = &ProviderSnapshot{Provider: k.provider}
+			byProv[k.provider] = p
+		}
+		p.Requests += n
+		if k.outcome == "ok" {
+			p.OK += n
+		} else {
+			p.Errors += n
+		}
+	}
+	for _, n := range r.failovers {
+		snap.Failovers += n
+	}
+	for _, n := range r.cacheHits {
+		snap.CacheHits += n
+	}
+	for _, n := range r.cacheMisses {
+		snap.CacheMiss += n
+	}
+	if len(r.cacheHits) > 0 {
+		snap.CacheHitsByLayer = make(map[string]uint64, len(r.cacheHits))
+		for k, n := range r.cacheHits {
+			snap.CacheHitsByLayer[k] = n
+		}
+	}
+	if len(r.cacheMisses) > 0 {
+		snap.CacheMissesByLayer = make(map[string]uint64, len(r.cacheMisses))
+		for k, n := range r.cacheMisses {
+			snap.CacheMissesByLayer[k] = n
+		}
+	}
+	for _, n := range r.panics {
+		snap.Panics += n
+	}
+	// Latency: merge every per-(provider,model) histogram into one
+	// overall distribution (for p50/p95/p99) and a per-provider mean.
+	merged := &histogram{buckets: make([]uint64, len(LatencyBuckets))}
+	for k, h := range r.latency {
+		if h == nil {
+			continue
+		}
+		for i, c := range h.buckets {
+			merged.buckets[i] += c
+		}
+		merged.sum += h.sum
+		merged.count += h.count
+		p := byProv[k.provider]
+		if p == nil {
+			p = &ProviderSnapshot{Provider: k.provider}
+			byProv[k.provider] = p
+		}
+		acc := latByProv[k.provider]
+		if acc == nil {
+			acc = &histogram{buckets: make([]uint64, len(LatencyBuckets))}
+			latByProv[k.provider] = acc
+		}
+		acc.sum += h.sum
+		acc.count += h.count
+	}
+	snap.LatencyN = merged.count
+	if merged.count > 0 {
+		snap.LatencyAvg = merged.sum / float64(merged.count)
+		snap.LatencyP50 = percentileFromBuckets(merged, 0.50)
+		snap.LatencyP95 = percentileFromBuckets(merged, 0.95)
+		snap.LatencyP99 = percentileFromBuckets(merged, 0.99)
+	}
+	for _, p := range byProv {
+		if h := latByProv[p.Provider]; h != nil && h.count > 0 {
+			p.MeanMs = h.sum / float64(h.count)
+		}
+		snap.ByProvider = append(snap.ByProvider, *p)
+	}
+	sort.Slice(snap.ByProvider, func(i, j int) bool { return snap.ByProvider[i].Provider < snap.ByProvider[j].Provider })
+	if snap.ByProvider == nil {
+		snap.ByProvider = []ProviderSnapshot{}
+	}
+	return snap
+}
+
+// percentileFromBuckets reads a percentile off a cumulative histogram:
+// the upper bound of the first bucket whose (already cumulative)
+// count reaches q * total. The +Inf bucket guarantees a result
+// whenever count > 0.
+func percentileFromBuckets(h *histogram, q float64) float64 {
+	if h == nil || h.count == 0 {
+		return 0
+	}
+	need := uint64(float64(h.count)*q + 0.5)
+	if need == 0 {
+		need = 1
+	}
+	for i, cum := range h.buckets {
+		if cum >= need {
+			return LatencyBuckets[i]
+		}
+	}
+	// All samples sit above the last finite bucket: report the last
+	// bucket bound (the honest lower bound of the percentile).
+	return LatencyBuckets[len(LatencyBuckets)-1]
 }
 
 // Handler returns an http.Handler serving this recorder's metrics in

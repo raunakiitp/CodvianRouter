@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-memory-add",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger, prices a $10/$30 and c $5/$15 per 1M, routing group fast) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "memory",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 29,
+    "method": "tools/call",
+    "params": {
+      "name": "memory_add",
+      "arguments": {
+        "text": "prefers dark mode"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 29,
+    "result": {
+      "content": [
+        {
+          "text": "{\"created_at\":\"2026-11-19T12:20:44Z\",\"id\":\"b62b4d7f5b72cece\",\"text\":\"prefers dark mode\"}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "created_at": "2026-11-19T12:20:44Z",
+        "id": "b62b4d7f5b72cece",
+        "text": "prefers dark mode"
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 29,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.created_at": null,
+      "result.structuredContent.id": null,
+      "result.structuredContent.text": "prefers dark mode"
+    },
+    "http_status": 200
+  },
+  "notes": "memory_add stores the note under the caller's own namespace in the file-backed store (\u003cdata-dir\u003e/mcp/memory.jsonl) and returns it with its id; id and created_at are per-run values so presence-only."
+}

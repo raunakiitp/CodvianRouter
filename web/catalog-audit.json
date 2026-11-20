@@ -1,0 +1,3162 @@
+{
+  "generated_at": "2026-11-18T07:32:11Z",
+  "source_url": "https://models.dev/api.json",
+  "catalog": {
+    "total": 614,
+    "verified_from_docs": 65,
+    "reference_only": 545,
+    "unverified": 4,
+    "no_base_url": 234,
+    "templated_base_url": 9,
+    "tos_grey": 38
+  },
+  "remote": {
+    "providers": 324,
+    "models": 9981,
+    "deprecated_models": 863
+  },
+  "counts_by_kind": {
+    "base_url_differs": 2,
+    "base_url_missing_in_catalog": 1,
+    "base_url_missing_in_modelsdev": 10,
+    "base_url_path_differs": 3,
+    "base_url_unreachable": 6,
+    "missing_in_catalog": 37,
+    "missing_in_modelsdev": 327,
+    "possible_rename": 7,
+    "renamed": 19,
+    "verified_base_unreachable": 1,
+    "website_unreachable": 17
+  },
+  "reachability": {
+    "checked": 940,
+    "reachable": 917,
+    "unreachable": 23,
+    "skipped": 234,
+    "loopback_skipped": 7
+  },
+  "findings": [
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "onomeo",
+      "name": "onomeo",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://onomeo.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "unifically",
+      "name": "Unifically",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://unifically.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "oneminai",
+      "name": "1min.AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://1min.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "cheaperinference",
+      "name": "Cheaper Inference",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://cheaperinference.com/?utm_source=omniroute"
+    },
+    {
+      "kind": "possible_rename",
+      "catalog_id": "charm-hyper",
+      "remote_id": "hyper",
+      "name": "Charm Hyper",
+      "detail": "catalog ID \"charm-hyper\" but models.dev lists the same name under ID \"hyper\" (20 models) — possible rename, needs a human to confirm",
+      "source": "https://hyper.charm.land"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "zylo-api",
+      "name": "Zylo API",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://zyloai.net"
+    },
+    {
+      "kind": "base_url_differs",
+      "catalog_id": "fastrouter",
+      "remote_id": "fastrouter",
+      "name": "FastRouter",
+      "detail": "catalog base \"https://api.fastrouter.ai/api/v1\" (host https://api.fastrouter.ai), models.dev api \"https://go.fastrouter.ai/api/v1\" (host https://go.fastrouter.ai)",
+      "source": "https://fastrouter.ai/models"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "anyapi",
+      "remote_id": "anyapi",
+      "name": "AnyAPI AI",
+      "detail": "catalog name \"AnyAPI AI\", models.dev name \"AnyAPI\"",
+      "source": "https://docs.anyapi.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "electronhub",
+      "name": "Electron Hub",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.electronhub.ai"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "llmgateway",
+      "remote_id": "llmgateway",
+      "name": "LLM Gateway",
+      "detail": "catalog name \"LLM Gateway\", models.dev name \"DevPass (LLM Gateway)\"",
+      "source": "https://llmgateway.io/docs"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "llm-kiwi",
+      "name": "LLM.Kiwi",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://llm.kiwi"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "literouter",
+      "name": "LiteRouter",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://literouter.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "eurouter",
+      "name": "EURouter",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://eurouter.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "y-api",
+      "name": "Y-API",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://y-api.bestvirtualgoods.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "mnn-ai",
+      "name": "MNN AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://mnnai.ru"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "meganova-ai",
+      "name": "MegaNova AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://meganova.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "speka",
+      "name": "Speka AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://speka.me"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "tokenreply",
+      "name": "TokenReply",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.tokenreply.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "yolo-auto",
+      "name": "Yolo-Auto",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://yolo-auto.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "dxnt",
+      "name": "DXNT / DX Token",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.dxnt.com"
+    },
+    {
+      "kind": "possible_rename",
+      "catalog_id": "cloudcode-one",
+      "remote_id": "cloudcode",
+      "name": "CloudCode.ONE",
+      "detail": "catalog ID \"cloudcode-one\" but models.dev lists the same name under ID \"cloudcode\" (6 models) — possible rename, needs a human to confirm",
+      "source": "https://cloudcode.one"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "ofoxai",
+      "name": "OfoxAI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://ofox.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "zerolimitai",
+      "name": "ZeroLimitAI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.zerolimitai.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "chatanywhere",
+      "name": "ChatAnywhere",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://chatanywhere.tech"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "helyxai",
+      "name": "Helyx AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://helyxai.space"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "poixe-ai",
+      "name": "Poixe AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://poixe.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "naga-ai",
+      "name": "Naga AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://naga.ac"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "chat-oripe",
+      "name": "Chat Oripe",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://api.oriper.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "freeinference",
+      "name": "FreeInference",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://freeinference.org"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "free-ai",
+      "name": "Free.ai",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://free.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "dgrid",
+      "name": "DGrid",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://dgrid.ai"
+    },
+    {
+      "kind": "possible_rename",
+      "catalog_id": "qiniu",
+      "remote_id": "qiniu-ai",
+      "name": "Qiniu",
+      "detail": "catalog ID \"qiniu\" but models.dev lists the same name under ID \"qiniu-ai\" (87 models) — possible rename, needs a human to confirm",
+      "source": "https://developer.qiniu.com/aitokenapi"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "api-airforce",
+      "name": "Api.airforce",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://api.airforce"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "crof",
+      "name": "CrofAI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://crof.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "bazaarlink",
+      "name": "BazaarLink",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://bazaarlink.ai"
+    },
+    {
+      "kind": "possible_rename",
+      "catalog_id": "kilo-gateway",
+      "remote_id": "kilo",
+      "name": "Kilo Gateway",
+      "detail": "catalog ID \"kilo-gateway\" but models.dev lists the same name under ID \"kilo\" (465 models) — possible rename, needs a human to confirm",
+      "source": "https://kilo.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "wafer",
+      "name": "Wafer AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://wafer.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "opencode-zen",
+      "name": "OpenCode Zen",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://opencode.ai/zen"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "dahl",
+      "name": "Dahl",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://inference.dahl.global"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "freetheai",
+      "name": "FreeTheAi",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://freetheai.org"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "g4f-groq",
+      "name": "g4f.space — Groq",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://g4f.space"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "g4f-gemini",
+      "name": "g4f.space — Gemini",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://g4f.space"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "g4f-pollinations",
+      "name": "g4f.space — Pollinations",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://g4f.space"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "g4f-ollama",
+      "name": "g4f.space — Ollama",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://g4f.space"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "g4f-nvidia",
+      "name": "g4f.space — NVIDIA",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://g4f.space"
+    },
+    {
+      "kind": "possible_rename",
+      "catalog_id": "vercel-ai-gateway",
+      "remote_id": "vercel",
+      "name": "Vercel AI Gateway",
+      "detail": "catalog ID \"vercel-ai-gateway\" but models.dev lists the same name under ID \"vercel\" (416 models) — possible rename, needs a human to confirm",
+      "source": "https://github.com/vercel/ai/tree/5eb85cc45a259553501f535b8ac79a77d0e79223/packages/gateway"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "llm7",
+      "name": "LLM7.io",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://llm7.io"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "llamagate",
+      "name": "LlamaGate",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://llamagate.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "gitlawb",
+      "name": "Gitlawb Opengateway (MiMo)",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://opengateway.gitlawb.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "gitlawb-gmi",
+      "name": "Gitlawb Opengateway (GMI Cloud)",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://opengateway.gitlawb.com"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "nan",
+      "remote_id": "nan",
+      "name": "NaN.Builders",
+      "detail": "catalog name \"NaN.Builders\", models.dev name \"NaN\"",
+      "source": "https://nan.builders/docs/models"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "piapi",
+      "name": "PiAPI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://piapi.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "getgoapi",
+      "name": "GoAPI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://api.getgoapi.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "laozhang",
+      "name": "LaoZhang AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://api.laozhang.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "thebai",
+      "name": "TheB.AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://theb.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "bai",
+      "name": "b.ai",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://b.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "fenayai",
+      "name": "FenayAI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://fenayai.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "empower",
+      "name": "Empower",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://docs.empower.dev"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "chutes",
+      "remote_id": "chutes",
+      "name": "Chutes.ai",
+      "detail": "catalog name \"Chutes.ai\", models.dev name \"Chutes\"",
+      "source": "https://llm.chutes.ai/v1/models"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "factory",
+      "name": "Factory",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://factory.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "bluesminds",
+      "name": "BluesMinds",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.bluesminds.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "freemodel-dev",
+      "name": "FreeModel.dev",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://freemodel.dev"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "freeaiapikey",
+      "name": "FreeAIAPIKey",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://freeaiapikey.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "openadapter",
+      "name": "OpenAdapter",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://openadapter.dev"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "dit",
+      "name": "DIT.ai",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://dit.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "token-kiosk",
+      "name": "Token Kiosk",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://agent-router.gaib.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "sumopod",
+      "name": "SumoPod",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://ai.sumopod.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "x5lab",
+      "name": "X5Lab",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://x5lab.dev"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "chenzk",
+      "name": "Chenzk API",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://chenzk.top"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "tokenmarket",
+      "name": "Token Market",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.tokensmarket.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "tokenharbor",
+      "name": "Token Harbor",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://tokenharbor.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "navy",
+      "name": "NavyAI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://api.navy"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "ainative",
+      "name": "AINative Studio",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://ainative.studio"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "aion",
+      "name": "Aion Labs",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.aionlabs.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "routeway",
+      "name": "Routeway",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://routeway.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "nara",
+      "name": "NaraRouter",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://bynara.id"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "xkiro",
+      "name": "xKiro",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://xkiro.com"
+    },
+    {
+      "kind": "possible_rename",
+      "catalog_id": "regolo",
+      "remote_id": "regolo-ai",
+      "name": "Regolo AI",
+      "detail": "catalog ID \"regolo\" but models.dev lists the same name under ID \"regolo-ai\" (18 models) — possible rename, needs a human to confirm",
+      "source": "https://docs.regolo.ai/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "naga-ac",
+      "name": "Naga.ac",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://naga.ac"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "void-ai",
+      "name": "Void AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://voidai.app"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "helixmind",
+      "name": "HelixMind",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://helixmind.online"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "logfare",
+      "name": "Logfare",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://logfare.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "tabitoken",
+      "name": "TabiToken",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://tabitoken.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "seekai",
+      "name": "SeekAi",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://seekai.cc"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "demonroute",
+      "name": "Demon Route",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://demonroute.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "beatapi",
+      "name": "BeatAPI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://beatapi.io"
+    },
+    {
+      "kind": "base_url_missing_in_modelsdev",
+      "catalog_id": "openai",
+      "remote_id": "openai",
+      "name": "OpenAI",
+      "detail": "catalog base URL \"https://api.openai.com/v1\"; models.dev lists no api base for this provider",
+      "source": "https://platform.openai.com/docs/models"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "reka",
+      "name": "Reka",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://docs.reka.ai/chat/overview"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "pioneer",
+      "remote_id": "pioneer",
+      "name": "Pioneer AI",
+      "detail": "catalog name \"Pioneer AI\", models.dev name \"Pioneer\"",
+      "source": "https://agent.pioneer.ai/llms.txt"
+    },
+    {
+      "kind": "base_url_missing_in_catalog",
+      "catalog_id": "pioneer",
+      "remote_id": "pioneer",
+      "name": "Pioneer AI",
+      "detail": "catalog records no base URL; models.dev lists api \"https://api.fastino.ai/v1\"",
+      "source": "https://agent.pioneer.ai/llms.txt"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "uc-direct",
+      "name": "UC Direct (uncensored.com)",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://uncensored.com"
+    },
+    {
+      "kind": "base_url_missing_in_modelsdev",
+      "catalog_id": "anthropic",
+      "remote_id": "anthropic",
+      "name": "Anthropic",
+      "detail": "catalog base URL \"https://api.anthropic.com\"; models.dev lists no api base for this provider",
+      "source": "https://docs.anthropic.com/en/docs/about-claude/models"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "gemini",
+      "name": "Google Gemini",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://aistudio.google.com"
+    },
+    {
+      "kind": "base_url_missing_in_modelsdev",
+      "catalog_id": "groq",
+      "remote_id": "groq",
+      "name": "Groq",
+      "detail": "catalog base URL \"https://api.groq.com/openai/v1\"; models.dev lists no api base for this provider",
+      "source": "https://console.groq.com/docs/models"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "blackbox",
+      "name": "Blackbox AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://blackbox.ai"
+    },
+    {
+      "kind": "base_url_missing_in_modelsdev",
+      "catalog_id": "xai",
+      "remote_id": "xai",
+      "name": "xAI",
+      "detail": "catalog base URL \"https://api.x.ai/v1\"; models.dev lists no api base for this provider",
+      "source": "https://docs.x.ai/docs/models"
+    },
+    {
+      "kind": "base_url_missing_in_modelsdev",
+      "catalog_id": "mistral",
+      "remote_id": "mistral",
+      "name": "Mistral",
+      "detail": "catalog base URL \"https://api.mistral.ai/v1\"; models.dev lists no api base for this provider",
+      "source": "https://docs.mistral.ai/getting-started/models/"
+    },
+    {
+      "kind": "base_url_missing_in_modelsdev",
+      "catalog_id": "perplexity",
+      "remote_id": "perplexity",
+      "name": "Perplexity",
+      "detail": "catalog base URL \"https://api.perplexity.ai\"; models.dev lists no api base for this provider",
+      "source": "https://docs.perplexity.ai"
+    },
+    {
+      "kind": "base_url_missing_in_modelsdev",
+      "catalog_id": "cohere",
+      "remote_id": "cohere",
+      "name": "Cohere",
+      "detail": "catalog base URL \"https://api.cohere.com\"; models.dev lists no api base for this provider",
+      "source": "https://docs.cohere.com/docs/models"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "meta-llama",
+      "name": "Meta Llama API",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://llama.developer.meta.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "galadriel",
+      "name": "Galadriel",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://galadriel.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "codestral",
+      "name": "Codestral",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://mistral.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "maritalk",
+      "name": "Maritalk",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.maritaca.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "nous-research",
+      "name": "Nous Research",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://portal.nousresearch.com/help"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "arcee-ai",
+      "name": "Arcee AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://arcee.ai"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "liquid",
+      "remote_id": "liquid",
+      "name": "Liquid AI",
+      "detail": "catalog name \"Liquid AI\", models.dev name \"Liquid Inference\"",
+      "source": "https://inference.ai.exchange/docs"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "writer",
+      "name": "Writer",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://dev.writer.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "together",
+      "name": "Together",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://www.together.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "openvecta",
+      "name": "OpenVecta",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://openvecta.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "openference-api",
+      "name": "Openference API",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://openference.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "fireworks",
+      "name": "Fireworks",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://fireworks.ai"
+    },
+    {
+      "kind": "base_url_missing_in_modelsdev",
+      "catalog_id": "cerebras",
+      "remote_id": "cerebras",
+      "name": "Cerebras",
+      "detail": "catalog base URL \"https://api.cerebras.ai/v1\"; models.dev lists no api base for this provider",
+      "source": "https://inference-docs.cerebras.ai/models/overview"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "nvidia",
+      "remote_id": "nvidia",
+      "name": "NVIDIA NIM",
+      "detail": "catalog name \"NVIDIA NIM\", models.dev name \"Nvidia\"",
+      "source": "https://docs.api.nvidia.com/nim/"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "nebius",
+      "remote_id": "nebius",
+      "name": "Nebius AI",
+      "detail": "catalog name \"Nebius AI\", models.dev name \"Nebius Token Factory\"",
+      "source": "https://docs.tokenfactory.nebius.com/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "nube",
+      "name": "Nube.sh",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://nube.sh"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "hyperbolic",
+      "name": "Hyperbolic",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://hyperbolic.xyz"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "lambda-ai",
+      "name": "Lambda AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://lambda.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "nscale",
+      "name": "nScale",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://nscale.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "publicai",
+      "name": "PublicAI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://publicai.co"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "featherless-ai",
+      "name": "Featherless AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://featherless.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "friendliai",
+      "name": "FriendliAI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://friendli.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "inference-net",
+      "name": "Inference.net",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://inference.net"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "replicate",
+      "name": "Replicate",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://replicate.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "cerebrium",
+      "name": "Cerebrium",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.cerebrium.ai"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "hetzner",
+      "remote_id": "hetzner",
+      "name": "Hetzner Inference API",
+      "detail": "catalog name \"Hetzner Inference API\", models.dev name \"Hetzner\"",
+      "source": "https://experiments.hetzner.com/docs/inference"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "grokified",
+      "name": "Grokified",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://grokified.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "predibase",
+      "name": "Predibase",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://predibase.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "bytez",
+      "name": "Bytez",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://bytez.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "monsterapi",
+      "name": "MonsterAPI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://monsterapi.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "azure-openai",
+      "name": "Azure OpenAI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://azure.microsoft.com/products/ai-services/openai-service"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "azure-ai",
+      "name": "Azure AI Foundry",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://learn.microsoft.com/azure/ai-foundry"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "bedrock",
+      "name": "AWS Bedrock",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://aws.amazon.com/bedrock"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "watsonx",
+      "remote_id": "watsonx",
+      "name": "IBM watsonx.ai Gateway",
+      "detail": "catalog name \"IBM watsonx.ai Gateway\", models.dev name \"watsonx.ai\"",
+      "source": "https://www.ibm.com/docs/en/watsonx/saas?topic=solutions-supported-foundation-models"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "sap",
+      "name": "SAP Generative AI Hub",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/generative-ai-hub-in-sap-ai-core"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "vertex",
+      "name": "Google Vertex AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://cloud.google.com/vertex-ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "vertex-partner",
+      "name": "Vertex AI Partners",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://cloud.google.com/vertex-ai"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "scaleway",
+      "remote_id": "scaleway",
+      "name": "Scaleway AI",
+      "detail": "catalog name \"Scaleway AI\", models.dev name \"Scaleway\"",
+      "source": "https://www.scaleway.com/en/docs/generative-apis/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "heroku",
+      "name": "Heroku AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.heroku.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "datarobot",
+      "name": "DataRobot",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://docs.datarobot.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "qianfan",
+      "name": "Baidu Qianfan",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://cloud.baidu.com/product-s/qianfan_home"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "glm",
+      "name": "GLM Coding",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://z.ai/subscribe"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "glm-cn",
+      "name": "GLM Coding (China)",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://open.bigmodel.cn"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "bigmodel",
+      "name": "BigModel.cn (Zhipu)",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://open.bigmodel.cn"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "glmt",
+      "name": "GLM Thinking",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://open.bigmodel.cn"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "qwen-cloud",
+      "name": "Qwen Cloud",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.qwencloud.com/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "qwen-cloud-token-plan",
+      "name": "Qwen Cloud Token Plan",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.qwencloud.com/pricing/token-plan"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "kimi",
+      "name": "Kimi (Legacy Moonshot API)",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://platform.kimi.ai?aff=omniroute"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "kimi-coding-apikey",
+      "name": "Kimi Code API Key",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.kimi.ai/code?aff=omniroute"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "minimax",
+      "remote_id": "minimax",
+      "name": "MiniMax",
+      "detail": "catalog name \"MiniMax\", models.dev name \"MiniMax (minimax.io)\"",
+      "source": "https://platform.minimax.io/docs/guides/quickstart"
+    },
+    {
+      "kind": "base_url_path_differs",
+      "catalog_id": "minimax",
+      "remote_id": "minimax",
+      "name": "MiniMax",
+      "detail": "same host https://api.minimax.io; catalog path \"/v1\", models.dev path \"/anthropic/v1\"",
+      "source": "https://platform.minimax.io/docs/guides/quickstart"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "minimax-cn",
+      "remote_id": "minimax-cn",
+      "name": "MiniMax (China)",
+      "detail": "catalog name \"MiniMax (China)\", models.dev name \"MiniMax (minimax.cn)\"",
+      "source": "https://platform.minimaxi.com/docs/guides/quickstart"
+    },
+    {
+      "kind": "base_url_path_differs",
+      "catalog_id": "minimax-cn",
+      "remote_id": "minimax-cn",
+      "name": "MiniMax (China)",
+      "detail": "same host https://api.minimax.cn; catalog path \"/v1\", models.dev path \"/anthropic/v1\"",
+      "source": "https://platform.minimaxi.com/docs/guides/quickstart"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "alibaba",
+      "remote_id": "alibaba",
+      "name": "Alibaba Cloud Model Studio",
+      "detail": "catalog name \"Alibaba Cloud Model Studio\", models.dev name \"Alibaba\"",
+      "source": "https://www.alibabacloud.com/help/en/model-studio/models"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "longcat",
+      "remote_id": "longcat",
+      "name": "LongCat AI",
+      "detail": "catalog name \"LongCat AI\", models.dev name \"LongCat\"",
+      "source": "https://longcat.chat/platform/docs/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "moonshot",
+      "name": "Kimi",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://platform.kimi.ai?aff=omniroute"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "volcengine",
+      "remote_id": "volcengine",
+      "name": "Volcengine",
+      "detail": "catalog name \"Volcengine\", models.dev name \"Volcengine Ark\"",
+      "source": "https://www.volcengine.com/docs/82379/1330310"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "volcengine-agent-plan",
+      "name": "Volcengine Ark Agent Plan",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://console.volcengine.com/ark/region:cn-beijing/subscription/agent-plan"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "gigachat",
+      "name": "GigaChat (Sber)",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://developers.sber.ru"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "xiaomi-mimo",
+      "name": "Xiaomi MiMo",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://mimo.mi.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "xiaomi-mimo-token-plan",
+      "name": "Xiaomi MiMo Token Plan",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://mimo.mi.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "baidu",
+      "name": "Baidu (ERNIE)",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://ernie.baidu.com/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "tencent",
+      "name": "Tencent Hunyuan",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://hunyuan.tencent.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "iflytek",
+      "name": "iFlytek Spark",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://xinghuo.xfyun.cn"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "baichuan",
+      "name": "Baichuan",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.baichuan-ai.com/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "yi",
+      "name": "Yi (01.AI)",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://01.ai"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "stepfun",
+      "remote_id": "stepfun",
+      "name": "StepFun",
+      "detail": "catalog name \"StepFun\", models.dev name \"StepFun (China)\"",
+      "source": "https://platform.stepfun.com/docs/zh/overview/concept"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "coze",
+      "name": "Coze",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://coze.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "360ai",
+      "name": "360 AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://ai.360.cn"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "doubao",
+      "name": "Doubao",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://doubao.com"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "sensenova",
+      "remote_id": "sensenova",
+      "name": "SenseNova",
+      "detail": "catalog name \"SenseNova\", models.dev name \"SenseNova (China)\"",
+      "source": "https://platform.sensenova.cn/docs"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "sparkdesk",
+      "name": "SparkDesk",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://xinghuo.xfyun.cn"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "hcnsec",
+      "name": "Huancheng Public API",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://api.hcnsec.cn"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "agnes-cn",
+      "name": "Agnes AI (China)",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://api.agnes-ai.cn"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "sealion",
+      "name": "SEA-LION",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://sea-lion.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "clova-studio",
+      "name": "Naver CLOVA Studio",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://api.ncloud-docs.com/docs/en/ai-naver-clovastudio-summary"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "internlm",
+      "name": "InternLM (Intern-S1)",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://internlm.intern-ai.org.cn/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "ant-ling",
+      "name": "Ant Ling / Ring (inclusionAI)",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://developer.ant-ling.com/en/docs/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "plamo",
+      "name": "PLaMo",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://plamo.preferredai.jp/api"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "typhoon",
+      "name": "Typhoon",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://docs.opentyphoon.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "apmix",
+      "name": "Apmix",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://apmix.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "nlpcloud",
+      "name": "NLP Cloud",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://docs.nlpcloud.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "runwayml",
+      "name": "Runway",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://docs.dev.runwayml.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "kie",
+      "name": "KIE.AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://kie.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "pollinations",
+      "name": "Pollinations AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://pollinations.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "haiper",
+      "name": "Haiper",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://haiper.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "leonardo",
+      "name": "Leonardo AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://leonardo.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "ideogram",
+      "name": "Ideogram",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://ideogram.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "magnific",
+      "name": "Magnific",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.magnific.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "udio",
+      "name": "Udio",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://udio.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "v0-vercel",
+      "name": "v0 (Vercel)",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://v0.dev"
+    },
+    {
+      "kind": "renamed",
+      "catalog_id": "gitlab",
+      "remote_id": "gitlab",
+      "name": "GitLab Duo PAT",
+      "detail": "catalog name \"GitLab Duo PAT\", models.dev name \"GitLab Duo\"",
+      "source": "https://docs.gitlab.com/user/duo_agent_platform/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "voyage-ai",
+      "name": "Voyage AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.voyageai.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "jina-ai",
+      "name": "Jina AI (Foundation API)",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://jina.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "typesafe",
+      "name": "TypeSafe AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://docs.typesafe.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "fal-ai",
+      "name": "Fal.ai",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://fal.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "stability-ai",
+      "name": "Stability AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://stability.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "black-forest-labs",
+      "name": "Black Forest Labs",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://blackforestlabs.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "recraft",
+      "name": "Recraft",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://recraft.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "topaz",
+      "name": "Topaz",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://topazlabs.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "segmind",
+      "name": "Segmind",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://segmind.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "dify",
+      "name": "Dify",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://dify.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "nomic",
+      "name": "Nomic",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://nomic.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "mixedbread",
+      "name": "Mixedbread AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.mixedbread.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "jina-reader",
+      "name": "Jina Reader (r.jina.ai)",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://jina.ai/reader"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "tinyfish",
+      "name": "TinyFish Fetch",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://docs.tinyfish.ai/fetch-api"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "deepai",
+      "name": "DeepAI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://deepai.org"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "deapi",
+      "name": "deAPI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://deapi.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "cursor-api",
+      "name": "Cursor API",
+      "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://cursor.com/dashboard/api"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "chatgpt",
+      "name": "ChatGPT",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "ghe-copilot",
+      "name": "GitHub Enterprise Copilot",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "xai-oauth",
+      "name": "xAI OAuth (Grok)",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://x.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "openference",
+      "name": "Openference",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://openference.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "renderhour",
+      "name": "RenderHour",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://renderhour.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "grok-cli",
+      "name": "Grok Build",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "qoder",
+      "name": "Qoder",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "agy",
+      "name": "Antigravity CLI",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://antigravity.google"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "kiro",
+      "name": "Kiro AI",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "amazon-q",
+      "name": "Amazon Q",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://aws.amazon.com/q/developer/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "claude",
+      "name": "Claude Code",
+      "detail": "in the catalog but absent from models.dev (oauth; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://claude.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "antigravity",
+      "name": "Antigravity",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "codex",
+      "name": "OpenAI Codex",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "gitlab-duo",
+      "name": "GitLab Duo",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://docs.gitlab.com/user/duo_agent_platform/code_suggestions/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "cursor",
+      "name": "Cursor IDE",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "zed",
+      "name": "Zed IDE",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://zed.dev"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "zed-hosted",
+      "name": "Zed Hosted Models",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://zed.dev"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "trae",
+      "name": "Trae",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://trae.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "kimi-coding",
+      "name": "Kimi Code CLI",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.kimi.ai/code?aff=omniroute"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "kilocode",
+      "name": "Kilo Code",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "megabrain",
+      "name": "MegaBrain",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://getmegabrain.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "cline",
+      "name": "Cline",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "devin-desktop",
+      "name": "Devin Desktop",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://devin.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "devin-cli",
+      "name": "Devin CLI",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://cli.devin.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "codebuddy-cn",
+      "name": "CodeBuddy CN",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://copilot.tencent.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "codebuddy-intl",
+      "name": "CodeBuddy Intl",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.codebuddy.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "workbuddy",
+      "name": "WorkBuddy",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://www.workbuddy.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "muse-code",
+      "name": "Muse Code (Meta)",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://ai.developer.meta.com/docs/muse-code/auth"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "freebuff",
+      "name": "Freebuff",
+      "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
+      "source": "https://freebuff.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "mlx-gemma",
+      "name": "MLX Gemma 26B",
+      "detail": "in the catalog but absent from models.dev (local; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://github.com/ml-explore/mlx"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "mlx-qwen",
+      "name": "MLX Qwen 3.8 27B",
+      "detail": "in the catalog but absent from models.dev (local; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://github.com/ml-explore/mlx"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "ollama-local",
+      "name": "Ollama",
+      "detail": "in the catalog but absent from models.dev (local; verification verified-from-docs) — expected: this category is not tracked by models.dev",
+      "source": "https://ollama.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "opencode-server",
+      "name": "OpenCode CLI Server",
+      "detail": "in the catalog but absent from models.dev (local; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://opencode.ai/docs/server/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "vllm",
+      "name": "vLLM",
+      "detail": "in the catalog but absent from models.dev (local; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://github.com/vllm-project/vllm"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "lemonade",
+      "name": "Lemonade Server",
+      "detail": "in the catalog but absent from models.dev (local; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://lemonade-server.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "llamafile",
+      "name": "Llamafile",
+      "detail": "in the catalog but absent from models.dev (local; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://github.com/Mozilla-Ocho/llamafile"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "llama-cpp",
+      "name": "llama.cpp",
+      "detail": "in the catalog but absent from models.dev (local; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://github.com/ggml-org/llama.cpp"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "triton",
+      "name": "NVIDIA Triton",
+      "detail": "in the catalog but absent from models.dev (local; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://developer.nvidia.com/triton-inference-server"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "docker-model-runner",
+      "name": "Docker Model Runner",
+      "detail": "in the catalog but absent from models.dev (local; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://docs.docker.com/ai/model-runner/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "xinference",
+      "name": "XInference",
+      "detail": "in the catalog but absent from models.dev (local; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://inference.readthedocs.io"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "oobabooga",
+      "name": "oobabooga",
+      "detail": "in the catalog but absent from models.dev (local; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://github.com/oobabooga/text-generation-webui"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "sdwebui",
+      "name": "SD WebUI",
+      "detail": "in the catalog but absent from models.dev (local; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://github.com/AUTOMATIC1111/stable-diffusion-webui"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "comfyui",
+      "name": "ComfyUI",
+      "detail": "in the catalog but absent from models.dev (local; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://github.com/comfyanonymous/ComfyUI"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "devin-cli-agentic",
+      "name": "Devin CLI Agentic Bridge",
+      "detail": "in the catalog but absent from models.dev (no-auth; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://docs.devin.ai/work-with-devin/devin-cli"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "duckduckgo-web",
+      "name": "DuckDuckGo AI Chat",
+      "detail": "in the catalog but absent from models.dev (no-auth; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://duckduckgo.com/duckchat"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "cloudflare-playground",
+      "name": "Cloudflare AI Playground",
+      "detail": "in the catalog but absent from models.dev (no-auth; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://playground.ai.cloudflare.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "veoaifree-web",
+      "name": "Veo AI Free",
+      "detail": "in the catalog but absent from models.dev (no-auth; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://veoaifree.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "auggie",
+      "name": "Augment (Auggie CLI)",
+      "detail": "in the catalog but absent from models.dev (no-auth; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://augmentcode.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "zcode",
+      "name": "ZCode (GLM Coding Plan)",
+      "detail": "in the catalog but absent from models.dev (no-auth; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://zcode.z.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "minimax-code",
+      "name": "MiniMax Code",
+      "detail": "in the catalog but absent from models.dev (no-auth; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://www.minimax.io"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "codex-app-server",
+      "name": "OpenAI Codex (App-Server)",
+      "detail": "in the catalog but absent from models.dev (no-auth; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://developers.openai.com/codex/cli"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "uncloseai",
+      "name": "UncloseAI",
+      "detail": "in the catalog but absent from models.dev (no-auth; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://uncloseai.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "aihorde",
+      "name": "AI Horde",
+      "detail": "in the catalog but absent from models.dev (no-auth; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://aihorde.net"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "codex-search",
+      "name": "Codex Web Search (ChatGPT)",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://chatgpt.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "perplexity-search",
+      "name": "Perplexity Search",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://docs.perplexity.ai/guides/search-quickstart"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "serper-search",
+      "name": "Serper Search",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://serper.dev"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "brave-search",
+      "name": "Brave Search",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://brave.com/search/api"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "exa-search",
+      "name": "Exa Search",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://exa.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "tavily-search",
+      "name": "Tavily Search",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://tavily.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "anysearch-search",
+      "name": "AnySearch",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://anysearch.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "firecrawl",
+      "name": "Firecrawl",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://firecrawl.dev"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "google-pse-search",
+      "name": "Google Programmable Search",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://developers.google.com/custom-search/v1/overview"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "nimble-search",
+      "name": "Nimble Search",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://docs.nimbleway.com/nimble-sdk/web-tools/search"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "parallel-search",
+      "name": "Parallel Search",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://parallel.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "keenable-search",
+      "name": "Keenable Search",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://keenable.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "linkup-search",
+      "name": "Linkup Search",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://docs.linkup.so"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "searchapi-search",
+      "name": "SearchAPI",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://www.searchapi.io/docs/google"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "youcom-search",
+      "name": "You.com Search",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://you.com/business/api/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "searxng-search",
+      "name": "SearXNG Search",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://docs.searxng.org"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "x-search",
+      "name": "X Search (Grok)",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://docs.x.ai/developers/tools/x-search"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "xquik-search",
+      "name": "Xquik X Search",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://docs.xquik.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "ollama-search",
+      "name": "Ollama Search",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://ollama.com/settings/keys"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "kimi-search",
+      "name": "Kimi Search",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://platform.kimi.ai/docs/api/tools-search"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "context7",
+      "name": "Context7 (library docs)",
+      "detail": "in the catalog but absent from models.dev (search; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://context7.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "deepgram",
+      "name": "Deepgram",
+      "detail": "in the catalog but absent from models.dev (audio; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://deepgram.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "assemblyai",
+      "name": "AssemblyAI",
+      "detail": "in the catalog but absent from models.dev (audio; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://assemblyai.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "soniox",
+      "name": "Soniox",
+      "detail": "in the catalog but absent from models.dev (audio; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://soniox.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "elevenlabs",
+      "name": "ElevenLabs",
+      "detail": "in the catalog but absent from models.dev (audio; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://elevenlabs.io"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "cartesia",
+      "name": "Cartesia",
+      "detail": "in the catalog but absent from models.dev (audio; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://cartesia.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "fishaudio",
+      "name": "Fish Audio",
+      "detail": "in the catalog but absent from models.dev (audio; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://fish.audio"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "playht",
+      "name": "PlayHT",
+      "detail": "in the catalog but absent from models.dev (audio; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://play.ht"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "inworld",
+      "name": "Inworld",
+      "detail": "in the catalog but absent from models.dev (audio; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://inworld.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "aws-polly",
+      "name": "AWS Polly",
+      "detail": "in the catalog but absent from models.dev (audio; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://aws.amazon.com/polly/"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "gladia",
+      "name": "Gladia",
+      "detail": "in the catalog but absent from models.dev (audio; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://gladia.io"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "rev-ai",
+      "name": "Rev AI",
+      "detail": "in the catalog but absent from models.dev (audio; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://www.rev.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "speechmatics",
+      "name": "Speechmatics",
+      "detail": "in the catalog but absent from models.dev (audio; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://www.speechmatics.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "chatgpt-web",
+      "name": "ChatGPT Web (Clean Room)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://chatgpt.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "chatgpt-web-codex",
+      "name": "ChatGPT Web (Codex)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://chatgpt.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "grok-web",
+      "name": "Grok Web (Subscription)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://grok.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "gemini-web",
+      "name": "Gemini Web (Free)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://gemini.google.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "perplexity-web",
+      "name": "Perplexity Web (Pro/Max)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://www.perplexity.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "blackbox-web",
+      "name": "Blackbox Web (Subscription)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://app.blackbox.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "muse-spark-web",
+      "name": "Muse Spark Web (Meta AI)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://www.meta.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "claude-web",
+      "name": "Claude Web",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://claude.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "deepseek-web",
+      "name": "DeepSeek Web",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://chat.deepseek.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "copilot-web",
+      "name": "Microsoft Copilot Web",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://copilot.microsoft.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "copilot-m365-web",
+      "name": "Microsoft 365 Copilot",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://m365.cloud.microsoft/chat"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "t3-web",
+      "name": "t3.chat (Pro/Free)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://t3.chat"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "inner-ai",
+      "name": "Inner.ai (Subscription)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://app.innerai.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "adapta-web",
+      "name": "Adapta.org (Adapta One Web)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://agent.adapta.one"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "lmarena",
+      "name": "Arena (Free)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://arena.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "yuanbao-web",
+      "name": "Tencent Yuanbao (Free)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://yuanbao.tencent.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "tencent-aistudio-web",
+      "name": "Tencent AI Studio (Free)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://aistudio.tencent.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "huggingchat",
+      "name": "HuggingChat (Free)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://huggingface.co/chat"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "poe-web",
+      "name": "Poe Web (Subscription)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://poe.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "venice-web",
+      "name": "Venice Web (Privacy)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://venice.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "v0-vercel-web",
+      "name": "v0 Vercel Web (Code Gen)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://v0.dev"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "kimi-web",
+      "name": "Kimi Web",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://www.kimi.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "doubao-web",
+      "name": "Dola Web (ByteDance)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://www.dola.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "zenmux-free",
+      "name": "ZenMux Free (Web)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://zenmux.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "tinycms-web",
+      "name": "TinyCMS Web (Free/Sub)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://site.tinycms.xyz"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "zai-web",
+      "name": "Z.ai Web",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://chat.z.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "promptql",
+      "name": "PromptQL (Unofficial/Experimental)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://prompt.ql.app"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "notion-web",
+      "name": "Notion AI Web (Unofficial/Experimental)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://www.notion.so"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "adobe-firefly",
+      "name": "Adobe Firefly (Image/Video)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://firefly.adobe.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "hyperagent",
+      "name": "HyperAgent (Unofficial/Experimental)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://hyperagent.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "conol-web",
+      "name": "Conol (Unofficial/Experimental)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://conol.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "twinmind",
+      "name": "Twinmind (Unofficial/Experimental)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://app.twinmind.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "syntx",
+      "name": "SYNTX.ai (Unofficial/Experimental)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://syntx.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "maxai",
+      "name": "MaxAI",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://www.maxai.co"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "uc",
+      "name": "UC (uncensored.com)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://uncensored.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "chatplayground",
+      "name": "ChatPlayground",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://web.chatplayground.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "notrack-web",
+      "name": "NoTrack Web (Free)",
+      "detail": "in the catalog but absent from models.dev (web-cookie; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://notrack.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "cliproxyapi",
+      "name": "CLIProxyAPI",
+      "detail": "in the catalog but absent from models.dev (upstream-proxy; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://github.com/router-for-me/CLIProxyAPI"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "9router",
+      "name": "9router",
+      "detail": "in the catalog but absent from models.dev (upstream-proxy; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://www.npmjs.com/package/9router"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "jules",
+      "name": "Google Jules",
+      "detail": "in the catalog but absent from models.dev (cloud-agent; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://jules.google"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "devin",
+      "name": "Devin",
+      "detail": "in the catalog but absent from models.dev (cloud-agent; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://devin.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "codex-cloud",
+      "name": "Codex Cloud",
+      "detail": "in the catalog but absent from models.dev (cloud-agent; verification from-reference-metadata-only) — expected: this category is not tracked by models.dev",
+      "source": "https://openai.com/codex"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "codvian",
+      "name": "Codvian",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://codvian.com"
+    },
+    {
+      "kind": "base_url_path_differs",
+      "catalog_id": "merge-gateway",
+      "remote_id": "merge-gateway",
+      "name": "Merge Gateway",
+      "detail": "same host https://api-gateway.merge.dev; catalog path \"/v1/openai\", models.dev path \"/v1/ai-sdk\"",
+      "source": "https://docs.merge.dev/merge-gateway"
+    },
+    {
+      "kind": "base_url_differs",
+      "catalog_id": "privatemode-ai",
+      "remote_id": "privatemode-ai",
+      "name": "Privatemode AI",
+      "detail": "catalog base \"https://proxyless-api.privatemode.ai/v1\" (host https://proxyless-api.privatemode.ai), models.dev api \"http://localhost:8080/v1\" (host http://localhost:8080)",
+      "source": "https://docs.privatemode.ai/api/overview"
+    },
+    {
+      "kind": "base_url_missing_in_modelsdev",
+      "catalog_id": "salad-cloud",
+      "remote_id": "salad-cloud",
+      "name": "SaladCloud AI Gateway",
+      "detail": "catalog base URL \"https://ai.salad.cloud/v1\"; models.dev lists no api base for this provider",
+      "source": "https://docs.salad.com/ai-gateway/explanation/overview"
+    },
+    {
+      "kind": "base_url_missing_in_modelsdev",
+      "catalog_id": "aihubmix",
+      "remote_id": "aihubmix",
+      "name": "AIHubMix",
+      "detail": "catalog base URL \"https://aihubmix.com/v1\"; models.dev lists no api base for this provider",
+      "source": "https://docs.aihubmix.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "parasail",
+      "name": "Parasail",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://www.parasail.io"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "anyscale",
+      "name": "Anyscale Endpoints",
+      "detail": "in the catalog but absent from models.dev (api-key; verification unverified) — verify manually: untracked there, or retired",
+      "source": "https://www.anyscale.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "avian",
+      "name": "Avian",
+      "detail": "in the catalog but absent from models.dev (api-key; verification unverified) — verify manually: untracked there, or retired",
+      "source": "https://avian.io"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "io-intelligence",
+      "name": "IO Intelligence",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://io.net"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "runpod",
+      "name": "RunPod Serverless",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://www.runpod.io"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "cluster-protocol",
+      "name": "Cluster Protocol",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://hub.clusterprotocol.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "clawcu",
+      "name": "Clawcu",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://docs.clawcu.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "cloakapi",
+      "name": "CloakAPI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://docs.cloakapi.io"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "tokenflux",
+      "name": "TokenFlux",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://tokenflux.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "infermatic",
+      "name": "Infermatic",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://infermatic.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "tokenlio",
+      "name": "Tokenlio",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://docs.tokenlio.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "tokenomix",
+      "name": "TokenomixAI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://tokenomixai.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "tokensg",
+      "name": "TokenSG",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://docs.tokensg.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "inferway",
+      "name": "Inferway",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://inferway.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "lattice",
+      "name": "Lattice",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://lattice.mebbo.cloud"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "infer-flow7",
+      "name": "Infer",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://infer.flow7.org"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "comtegra",
+      "name": "Comtegra LLM API",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://docs.cgc.comtegra.cloud"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "kluster",
+      "name": "Kluster.ai",
+      "detail": "in the catalog but absent from models.dev (api-key; verification unverified) — verify manually: untracked there, or retired",
+      "source": "https://www.kluster.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "localai",
+      "name": "LocalAI",
+      "detail": "in the catalog but absent from models.dev (local; verification verified-from-docs) — expected: this category is not tracked by models.dev",
+      "source": "https://localai.io"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "jan",
+      "name": "Jan",
+      "detail": "in the catalog but absent from models.dev (local; verification verified-from-docs) — expected: this category is not tracked by models.dev",
+      "source": "https://jan.ai"
+    },
+    {
+      "kind": "possible_rename",
+      "catalog_id": "prime-intellect",
+      "remote_id": "prime",
+      "name": "Prime Inference",
+      "detail": "catalog ID \"prime-intellect\" but models.dev lists the same name under ID \"prime\" (70 models) — possible rename, needs a human to confirm",
+      "source": "https://docs.primeintellect.ai/inference/overview"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "gpt4all",
+      "name": "GPT4All",
+      "detail": "in the catalog but absent from models.dev (local; verification verified-from-docs) — expected: this category is not tracked by models.dev",
+      "source": "https://gpt4all.io"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "mancer",
+      "name": "Mancer",
+      "detail": "in the catalog but absent from models.dev (api-key; verification unverified) — verify manually: untracked there, or retired",
+      "source": "https://mancer.tech"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "kiomon",
+      "name": "Kiomon",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://docs.kiomon.com"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "ai-tokens",
+      "name": "AI Tokens",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://aitokens.ch"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "aoru",
+      "name": "Aoru AI",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://aoru.ai"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "modavio",
+      "name": "Modavio",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://modavio.app"
+    },
+    {
+      "kind": "missing_in_modelsdev",
+      "catalog_id": "cscs",
+      "name": "CSCS Inference API",
+      "detail": "in the catalog but absent from models.dev (api-key; verification verified-from-docs) — verify manually: untracked there, or retired",
+      "source": "https://www.cscs.ch"
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "alibaba-coding-plan",
+      "name": "Alibaba Coding Plan",
+      "detail": "listed by models.dev with 10 model(s) but absent from the catalog",
+      "source": "https://www.alibabacloud.com/help/en/model-studio/coding-plan",
+      "models_dev_models": 10
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "alibaba-coding-plan-cn",
+      "name": "Alibaba Coding Plan (China)",
+      "detail": "listed by models.dev with 10 model(s) but absent from the catalog",
+      "source": "https://help.aliyun.com/zh/model-studio/coding-plan",
+      "models_dev_models": 10
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "alibaba-token-plan-cn",
+      "name": "Alibaba Token Plan (China)",
+      "detail": "listed by models.dev with 29 model(s) but absent from the catalog",
+      "source": "https://www.alibabacloud.com/help/zh/model-studio/token-plan-overview",
+      "models_dev_models": 29
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "amazon-bedrock",
+      "name": "Amazon Bedrock",
+      "detail": "listed by models.dev with 208 model(s) but absent from the catalog",
+      "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html",
+      "models_dev_models": 208
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "azure",
+      "name": "Azure",
+      "detail": "listed by models.dev with 97 model(s) but absent from the catalog",
+      "source": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models",
+      "models_dev_models": 97
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "azure-cognitive-services",
+      "name": "Azure Cognitive Services",
+      "detail": "listed by models.dev with 97 model(s) but absent from the catalog",
+      "source": "https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models",
+      "models_dev_models": 97
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "drun",
+      "name": "D.Run (China)",
+      "detail": "listed by models.dev with 3 model(s) but absent from the catalog",
+      "source": "https://www.d.run",
+      "models_dev_models": 3
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "fireworks-ai",
+      "name": "Fireworks AI",
+      "detail": "listed by models.dev with 27 model(s) but absent from the catalog",
+      "source": "https://fireworks.ai/docs/",
+      "models_dev_models": 27
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "friendli",
+      "name": "Friendli",
+      "detail": "listed by models.dev with 5 model(s) but absent from the catalog",
+      "source": "https://friendli.ai/docs/guides/serverless_endpoints/introduction",
+      "models_dev_models": 5
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "google",
+      "name": "Google",
+      "detail": "listed by models.dev with 38 model(s) but absent from the catalog",
+      "source": "https://ai.google.dev/gemini-api/docs/models",
+      "models_dev_models": 38
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "google-vertex",
+      "name": "Vertex",
+      "detail": "listed by models.dev with 64 model(s) but absent from the catalog",
+      "source": "https://cloud.google.com/vertex-ai/generative-ai/docs/models",
+      "models_dev_models": 64
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "google-vertex-anthropic",
+      "name": "Vertex (Anthropic)",
+      "detail": "listed by models.dev with 18 model(s) but absent from the catalog",
+      "source": "https://cloud.google.com/vertex-ai/generative-ai/docs/partner-models/claude",
+      "models_dev_models": 18
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "inference",
+      "name": "Inference",
+      "detail": "listed by models.dev with 9 model(s) but absent from the catalog",
+      "source": "https://inference.net/models",
+      "models_dev_models": 9
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "llmgateway-providers",
+      "name": "LLM Gateway",
+      "detail": "listed by models.dev with 501 model(s) but absent from the catalog",
+      "source": "https://llmgateway.io/docs",
+      "models_dev_models": 501
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "meta",
+      "name": "Meta",
+      "detail": "listed by models.dev with 7 model(s) but absent from the catalog",
+      "source": "https://dev.meta.ai/docs",
+      "models_dev_models": 7
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "minimax-cn-coding-plan",
+      "name": "MiniMax Token Plan (minimax.cn)",
+      "detail": "listed by models.dev with 9 model(s) but absent from the catalog",
+      "source": "https://platform.minimaxi.com/docs/token-plan/intro",
+      "models_dev_models": 9
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "minimax-coding-plan",
+      "name": "MiniMax Token Plan (minimax.io)",
+      "detail": "listed by models.dev with 9 model(s) but absent from the catalog",
+      "source": "https://platform.minimax.io/docs/token-plan/intro",
+      "models_dev_models": 9
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "modelis",
+      "name": "Modelis",
+      "detail": "listed by models.dev with 9 model(s) but absent from the catalog",
+      "source": "https://modelishub.com/pricing",
+      "models_dev_models": 9
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "neon",
+      "name": "Neon",
+      "detail": "listed by models.dev with 57 model(s) but absent from the catalog",
+      "source": "https://neon.com/docs",
+      "models_dev_models": 57
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "neosmith",
+      "name": "NeoSmith",
+      "detail": "listed by models.dev with 4 model(s) but absent from the catalog",
+      "source": "https://neosmith.ai/docs",
+      "models_dev_models": 4
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "ofox",
+      "name": "Ofox",
+      "detail": "listed by models.dev with 154 model(s) but absent from the catalog",
+      "source": "https://ofox.ai/docs",
+      "models_dev_models": 154
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "qvac",
+      "name": "QVAC",
+      "detail": "listed by models.dev with 9 model(s) but absent from the catalog",
+      "source": "https://www.npmjs.com/package/@qvac/ai-sdk-provider",
+      "models_dev_models": 9
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "sap-ai-core",
+      "name": "SAP AI Core",
+      "detail": "listed by models.dev with 51 model(s) but absent from the catalog",
+      "source": "https://help.sap.com/docs/sap-ai-core",
+      "models_dev_models": 51
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "scnet-token-plan",
+      "name": "SCNet Token Plan",
+      "detail": "listed by models.dev with 19 model(s) but absent from the catalog",
+      "source": "https://www.scnet.cn/ac/openapi/doc/2.0/moduleapi/plans/token-plan.html",
+      "models_dev_models": 19
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "stepfun-ai-step-plan",
+      "name": "StepFun Step Plan (Global)",
+      "detail": "listed by models.dev with 4 model(s) but absent from the catalog",
+      "source": "https://platform.stepfun.ai/docs/en/step-plan/integrations/reasoning-api",
+      "models_dev_models": 4
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "stepfun-step-plan",
+      "name": "StepFun Step Plan (China)",
+      "detail": "listed by models.dev with 5 model(s) but absent from the catalog",
+      "source": "https://platform.stepfun.com/docs/zh/step-plan/integrations/reasoning-api",
+      "models_dev_models": 5
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "tencent-coding-plan",
+      "name": "Tencent Coding Plan (China)",
+      "detail": "listed by models.dev with 8 model(s) but absent from the catalog",
+      "source": "https://cloud.tencent.com/document/product/1772/128947",
+      "models_dev_models": 8
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "tencent-token-plan",
+      "name": "Tencent Token Plan",
+      "detail": "listed by models.dev with 15 model(s) but absent from the catalog",
+      "source": "https://cloud.tencent.com/document/product/1823/130060",
+      "models_dev_models": 15
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "togetherai",
+      "name": "Together AI",
+      "detail": "listed by models.dev with 33 model(s) but absent from the catalog",
+      "source": "https://docs.together.ai/docs/serverless-models",
+      "models_dev_models": 33
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "umans-ai-coding-plan",
+      "name": "Umans AI Coding Plan",
+      "detail": "listed by models.dev with 10 model(s) but absent from the catalog",
+      "source": "https://app.umans.ai/offers/code/docs",
+      "models_dev_models": 10
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "wafer.ai",
+      "name": "Wafer",
+      "detail": "listed by models.dev with 11 model(s) but absent from the catalog",
+      "source": "https://docs.wafer.ai/serverless/models",
+      "models_dev_models": 11
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "xiaomi",
+      "name": "Xiaomi",
+      "detail": "listed by models.dev with 6 model(s) but absent from the catalog",
+      "source": "https://platform.xiaomimimo.com/#/docs",
+      "models_dev_models": 6
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "xiaomi-token-plan-ams",
+      "name": "Xiaomi Token Plan (Europe)",
+      "detail": "listed by models.dev with 7 model(s) but absent from the catalog",
+      "source": "https://platform.xiaomimimo.com/#/docs",
+      "models_dev_models": 7
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "xiaomi-token-plan-cn",
+      "name": "Xiaomi Token Plan (China)",
+      "detail": "listed by models.dev with 7 model(s) but absent from the catalog",
+      "source": "https://platform.xiaomimimo.com/#/docs",
+      "models_dev_models": 7
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "xiaomi-token-plan-sgp",
+      "name": "Xiaomi Token Plan (Singapore)",
+      "detail": "listed by models.dev with 7 model(s) but absent from the catalog",
+      "source": "https://platform.xiaomimimo.com/#/docs",
+      "models_dev_models": 7
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "zai-coding-plan",
+      "name": "Z.AI Coding Plan",
+      "detail": "listed by models.dev with 7 model(s) but absent from the catalog",
+      "source": "https://docs.z.ai/devpack/overview",
+      "models_dev_models": 7
+    },
+    {
+      "kind": "missing_in_catalog",
+      "remote_id": "zhipuai-coding-plan",
+      "name": "Zhipu AI Coding Plan",
+      "detail": "listed by models.dev with 4 model(s) but absent from the catalog",
+      "source": "https://docs.bigmodel.cn/cn/coding-plan/overview",
+      "models_dev_models": 4
+    },
+    {
+      "kind": "base_url_unreachable",
+      "catalog_id": "speka",
+      "name": "Speka AI",
+      "detail": "catalog base URL \"https://speka.me/v1\" gave no HTTP response (connect: Get \"https://speka.me/v1\": EOF)",
+      "source": "https://speka.me/v1"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "speka",
+      "name": "Speka AI",
+      "detail": "catalog website \"https://speka.me\" gave no HTTP response (connect: Get \"https://speka.me\": EOF)",
+      "source": "https://speka.me"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "llamagate",
+      "name": "LlamaGate",
+      "detail": "catalog website \"https://llamagate.ai\" gave no HTTP response (connect: Get \"https://llamagate.ai\": EOF)",
+      "source": "https://llamagate.ai"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "thebai",
+      "name": "TheB.AI",
+      "detail": "catalog website \"https://theb.ai\" gave no HTTP response (connect: Get \"https://theb.ai\": EOF)",
+      "source": "https://theb.ai"
+    },
+    {
+      "kind": "base_url_unreachable",
+      "catalog_id": "empower",
+      "name": "Empower",
+      "detail": "catalog base URL \"https://app.empower.dev/api/v1\" gave no HTTP response (connect: Get \"https://app.empower.dev/api/v1\": EOF)",
+      "source": "https://app.empower.dev/api/v1"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "empower",
+      "name": "Empower",
+      "detail": "catalog website \"https://docs.empower.dev\" gave no HTTP response (connect: Get \"https://docs.empower.dev\": EOF)",
+      "source": "https://docs.empower.dev"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "nara",
+      "name": "NaraRouter",
+      "detail": "catalog website \"https://bynara.id\" gave no HTTP response (timeout: Get \"https://bynara.id\": context deadline exceeded)",
+      "source": "https://bynara.id"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "void-ai",
+      "name": "Void AI",
+      "detail": "catalog website \"https://voidai.app\" gave no HTTP response (connect: Get \"https://voidai.app\": EOF)",
+      "source": "https://voidai.app"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "pioneer",
+      "name": "Pioneer AI",
+      "detail": "catalog website \"https://pioneer.ai\" gave no HTTP response (timeout: Get \"https://pioneer.ai\": context deadline exceeded)",
+      "source": "https://pioneer.ai"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "meta-llama",
+      "name": "Meta Llama API",
+      "detail": "catalog website \"https://llama.developer.meta.com\" gave no HTTP response (connect: Get \"https://dev.meta.ai/\": Forbidden)",
+      "source": "https://llama.developer.meta.com"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "monsterapi",
+      "name": "MonsterAPI",
+      "detail": "catalog website \"https://monsterapi.ai\" gave no HTTP response (connect: Get \"https://monsterapi.ai\": EOF)",
+      "source": "https://monsterapi.ai"
+    },
+    {
+      "kind": "base_url_unreachable",
+      "catalog_id": "clarifai",
+      "name": "Clarifai",
+      "detail": "catalog base URL \"https://api.clarifai.com/v2/ext/openai/v1\" gave no HTTP response (connect: Get \"https://api.clarifai.com/v2/ext/openai/v1\": EOF)",
+      "source": "https://api.clarifai.com/v2/ext/openai/v1"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "clarifai",
+      "name": "Clarifai",
+      "detail": "catalog website \"https://docs.clarifai.com\" gave no HTTP response (connect: Get \"https://docs.clarifai.com\": EOF)",
+      "source": "https://docs.clarifai.com"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "codebuddy-intl",
+      "name": "CodeBuddy Intl",
+      "detail": "catalog website \"https://www.codebuddy.ai\" gave no HTTP response (connect: Get \"https://www.codebuddy.ai\": EOF)",
+      "source": "https://www.codebuddy.ai"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "muse-code",
+      "name": "Muse Code (Meta)",
+      "detail": "catalog website \"https://ai.developer.meta.com/docs/muse-code/auth\" gave no HTTP response (connect: Get \"https://dev.meta.ai/docs/muse-code/auth\": Forbidden)",
+      "source": "https://ai.developer.meta.com/docs/muse-code/auth"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "playht",
+      "name": "PlayHT",
+      "detail": "catalog website \"https://play.ht\" gave no HTTP response (connect: Get \"https://play.ht\": EOF)",
+      "source": "https://play.ht"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "muse-spark-web",
+      "name": "Muse Spark Web (Meta AI)",
+      "detail": "catalog website \"https://www.meta.ai\" gave no HTTP response (connect: Get \"https://www.meta.ai\": Forbidden)",
+      "source": "https://www.meta.ai"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "routing-run",
+      "name": "routing.run",
+      "detail": "catalog website \"https://docs.routing.run/api-reference/models\" gave no HTTP response (connect: Get \"https://docs.routing.run/api-reference/models\": EOF)",
+      "source": "https://docs.routing.run/api-reference/models"
+    },
+    {
+      "kind": "base_url_unreachable",
+      "catalog_id": "claudinio",
+      "name": "Claudinio",
+      "detail": "catalog base URL \"https://api.claudin.io/v1\" gave no HTTP response (connect: Get \"https://api.claudin.io/v1\": EOF)",
+      "source": "https://api.claudin.io/v1"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "claudinio",
+      "name": "Claudinio",
+      "detail": "catalog website \"https://claudin.io\" gave no HTTP response (connect: Get \"https://claudin.io\": EOF)",
+      "source": "https://claudin.io"
+    },
+    {
+      "kind": "base_url_unreachable",
+      "catalog_id": "clawcu",
+      "name": "Clawcu",
+      "detail": "catalog base URL \"https://token.clawcu.ai/v1\" gave no HTTP response (timeout: Get \"http://token.clawcu.ai:8080/v1/\": context deadline exceeded)",
+      "source": "https://token.clawcu.ai/v1"
+    },
+    {
+      "kind": "verified_base_unreachable",
+      "catalog_id": "clawcu",
+      "name": "Clawcu",
+      "detail": "verified-from-docs entry whose base URL \"https://token.clawcu.ai/v1\" is unreachable (timeout) — downgrade candidate, re-verify against the provider's own docs before relying on it",
+      "source": "https://token.clawcu.ai/v1"
+    },
+    {
+      "kind": "base_url_unreachable",
+      "catalog_id": "kluster",
+      "name": "Kluster.ai",
+      "detail": "catalog base URL \"https://api.kluster.ai/v1\" gave no HTTP response (connect: Get \"https://api.kluster.ai/v1\": EOF)",
+      "source": "https://api.kluster.ai/v1"
+    },
+    {
+      "kind": "website_unreachable",
+      "catalog_id": "kluster",
+      "name": "Kluster.ai",
+      "detail": "catalog website \"https://www.kluster.ai\" gave no HTTP response (connect: Get \"https://www.kluster.ai\": EOF)",
+      "source": "https://www.kluster.ai"
+    }
+  ],
+  "limitations": [
+    "Absent from models.dev is not retirement: models.dev tracks a subset of providers, and local, no-auth, web-cookie and cloud-agent entries are expected to be absent.",
+    "models.dev lists no per-provider model list in this catalog: 'new models missing' is reported only as providers models.dev lists that the catalog does not, with their model counts. Per-model drift for connected providers is covered by the opt-in models.dev price/context sync (CHECKLIST 179-180).",
+    "A base URL that differs from models.dev's `api` field is drift, not proof the catalog is wrong: models.dev stores the bare host where the catalog stores the /v1 base, and either side can be stale. A fix needs the provider's own docs as the cited source.",
+    "Reachability is a transport fact, not a correctness verdict: a host that answers 401/404 exists; a host that times out once may be a transient failure, not a dead provider.",
+    "Reachability is probed from the machine running the audit, through whatever egress it has: in this VM that is a shared egress proxy, which refuses some hosts outright and is slow for others, so a connect/EOF/timeout here is a re-check signal, not proof the provider is dead. Loopback base URLs (localhost / 127.0.0.0/8 / ::1 — local runtimes such as Ollama, LocalAI, Jan, GPT4All) are never probed: they can only be checked on the operator's own machine."
+  ],
+  "triage": {
+    "date": "2026-11-18",
+    "doc": "docs/catalog-triage-2026-11-18-round5.md",
+    "audit_before": {
+      "missing_in_catalog": 81,
+      "base_url_missing_in_catalog": 1,
+      "renamed": 19,
+      "possible_rename": 7,
+      "catalog_total": 570
+    },
+    "candidates": {
+      "total": 228,
+      "triaged": 228,
+      "added": 191,
+      "added_verified_from_docs": 17,
+      "added_reference_only": 174,
+      "rejected": 30,
+      "pending": 7,
+      "untouched": 0
+    },
+    "base_urls": {
+      "missing_before": 44,
+      "filled": 43,
+      "skipped": 1
+    },
+    "renames": {
+      "total": 21,
+      "applied": 4,
+      "rejected": 17
+    },
+    "possible_renames": {
+      "total": 12,
+      "applied": 5,
+      "pending_human": 7
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-router-status",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+      "name": "router_status",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "content": [
+        {
+          "text": "{\"version\":\"0.1.0\",\"listen\":\"127.0.0.1:20128\",\"providers\":2,\"enabled_providers\":1,\"models\":3,\"gateway_keys\":1,\"auto_router\":true,\"uptime_seconds\":-1}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "version": "0.1.0",
+        "listen": "127.0.0.1:20128",
+        "providers": 2,
+        "enabled_providers": 1,
+        "models": 3,
+        "gateway_keys": 1,
+        "auto_router": true,
+        "uptime_seconds": -1
+      }
+    }
+  },
+  "assert": {
+    "id": 3,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.auto_router": true,
+      "result.structuredContent.enabled_providers": 1,
+      "result.structuredContent.gateway_keys": 1,
+      "result.structuredContent.listen": "127.0.0.1:20128",
+      "result.structuredContent.models": 3,
+      "result.structuredContent.providers": 2,
+      "result.structuredContent.uptime_seconds": -1,
+      "result.structuredContent.version": "0.1.0"
+    }
+  },
+  "notes": "router_status against the mock registry: 2 providers (1 enabled), 3 models, 1 gateway key, auto-router on, uptime -1 (no serving loop)."
+}

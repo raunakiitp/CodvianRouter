@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-check-quota-cross-key",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger, prices a $10/$30 and c $5/$15 per 1M, routing group fast) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "cost-reader",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 17,
+    "method": "tools/call",
+    "params": {
+      "name": "check_quota",
+      "arguments": {
+        "key_id": "other-key"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 17,
+    "error": {
+      "code": -32602,
+      "message": "mcp: invalid input: key_id \"other-key\" is not the authenticated caller \"gk_30559dc041bfa04f\" — a gateway key may only read or set its own quota/budget"
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 17,
+    "expect_error": true,
+    "error_code": -32602,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32602,
+      "jsonrpc": "2.0"
+    },
+    "http_status": 200
+  },
+  "notes": "A cross-key check_quota is rejected -32602, not served: a gateway key may only read its own quota. The message names the caller's key id (random per run), so only the code is pinned."
+}

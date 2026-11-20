@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-cache-flush",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; no ledger wired) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "cache",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 9,
+    "method": "tools/call",
+    "params": {
+      "name": "cache_flush",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 9,
+    "result": {
+      "content": [
+        {
+          "text": "{\"flushed\":0,\"note\":\"Only entries stored under the caller's own tenant were evicted; other tenants' entries are untouched.\",\"scope\":\"caller-only\",\"tenant\":\"gk_48b5bfd4c2642b14\"}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "flushed": 0,
+        "note": "Only entries stored under the caller's own tenant were evicted; other tenants' entries are untouched.",
+        "scope": "caller-only",
+        "tenant": "gk_48b5bfd4c2642b14"
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 9,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.flushed": 0,
+      "result.structuredContent.tenant": null
+    },
+    "http_status": 200
+  },
+  "notes": "cache_flush with the cache key: flushed=0 (the test cache holds nothing); tenant is the gateway-key id (random per run, presence-only) — the per-request identity, not anonymous."
+}

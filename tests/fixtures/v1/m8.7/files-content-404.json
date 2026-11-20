@@ -1,0 +1,33 @@
+{
+  "assert": {
+    "json_paths": {
+      "error.message": null
+    },
+    "required_fields": [
+      "error"
+    ],
+    "status": 404
+  },
+  "fixture": true,
+  "method": "GET",
+  "model": "mock-model",
+  "name": "files-content-404",
+  "notes": "Content for an unknown id is an honest 404.",
+  "path": "/v1/files/file-ffffffffffffffffffffffff/content",
+  "provider": "mock-upstream",
+  "recorded_from": "mock-upstream: no upstream exists for local files \u2014 canned OpenAI-shaped response recorded from the local disk store's own contract, 2026-11-19. Recorded mock data, NOT a live provider call.",
+  "recorded_response": {
+    "body": {
+      "error": {
+        "message": "file not found",
+        "type": "invalid_request_error"
+      }
+    },
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "status": 404
+  },
+  "schema_version": 1,
+  "slice": "m8.7"
+}

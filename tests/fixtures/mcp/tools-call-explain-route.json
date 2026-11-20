@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-explain-route",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 11,
+    "method": "tools/call",
+    "params": {
+      "name": "explain_route",
+      "arguments": {
+        "model": "coder-model"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 11,
+    "result": {
+      "content": [
+        {
+          "text": "{\"route\":{\"model\":\"coder-model\",\"strategy\":\"priority\",\"rule\":\"Declared order first.\",\"attempts\":[{\"provider\":\"p1\",\"provider_name\":\"Coder\",\"model\":\"coder-model\",\"enabled\":true,\"price_known\":true,\"prompt_usd_per_1m\":3}],\"note\":\"Dry run — no provider was called. Declared (priority) order; strategies that re-rank do so at request time from live signals this fixture does not observe.\"}}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "route": {
+          "model": "coder-model",
+          "strategy": "priority",
+          "rule": "Declared order first.",
+          "attempts": [
+            {
+              "provider": "p1",
+              "provider_name": "Coder",
+              "model": "coder-model",
+              "enabled": true,
+              "price_known": true,
+              "prompt_usd_per_1m": 3
+            }
+          ],
+          "note": "Dry run — no provider was called. Declared (priority) order; strategies that re-rank do so at request time from live signals this fixture does not observe."
+        }
+      }
+    }
+  },
+  "assert": {
+    "id": 11,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.route"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.route.attempts.0.enabled": true,
+      "result.structuredContent.route.attempts.0.model": "coder-model",
+      "result.structuredContent.route.attempts.0.price_known": true,
+      "result.structuredContent.route.attempts.0.prompt_usd_per_1m": 3,
+      "result.structuredContent.route.attempts.0.provider": "p1",
+      "result.structuredContent.route.attempts.0.provider_name": "Coder",
+      "result.structuredContent.route.model": "coder-model",
+      "result.structuredContent.route.rule": "Declared order first.",
+      "result.structuredContent.route.strategy": "priority"
+    }
+  },
+  "notes": "explain_route for coder-model: dry run over the mock registry — p1 only (p2 does not offer the model), price known at $3.00/1M prompt tokens."
+}

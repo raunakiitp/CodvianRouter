@@ -1,6 +1,7 @@
 package autorouter
 
 import (
+	"math"
 	"sort"
 	"testing"
 	"time"
@@ -205,8 +206,8 @@ func TestUtteranceDefaultsPresent(t *testing.T) {
 			t.Errorf("tier %s has no utterances", tier)
 		}
 	}
-	if got := len(VirtualModels); got != 5 {
-		t.Errorf("VirtualModels = %d entries; want 5", got)
+	if got := len(VirtualModels); got != 6 {
+		t.Errorf("VirtualModels = %d entries; want 6", got)
 	}
 	for _, name := range VirtualModels {
 		if !IsVirtualModel(name) {
@@ -257,5 +258,225 @@ func BenchmarkClassify(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		r.Classify("auto", prompt, 0)
+	}
+}
+
+// TestRankModelsReordersTier tests the cost/latency-aware tier
+// ordering: a ranker that puts the cheapest model first must win
+// over list order, and the decision must carry the ranked model.
+func TestRankModelsReordersTier(t *testing.T) {
+	reverse := func(tier Tier, models []string) []string {
+		out := append([]string(nil), models...)
+		for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+			out[i], out[j] = out[j], out[i]
+		}
+		return out
+	}
+	r := New(Config{
+		DefaultModel: "strong-model",
+		TierModels: map[Tier][]string{
+			TierQuickQA: {"expensive-model", "cheap-model"},
+		},
+		RankModels: reverse,
+	})
+	model, dec, ok := r.Resolve("auto/cheap", "What is two plus two")
+	if !ok {
+		t.Fatalf("Resolve failed: %+v", dec)
+	}
+	if model != "cheap-model" {
+		t.Errorf("Resolve = %q (want cheap-model: ranker must beat list order)", model)
+	}
+	if dec.Model != "cheap-model" {
+		t.Errorf("decision model = %q (want cheap-model)", dec.Model)
+	}
+}
+
+// TestRankModelsBadRankerFallsBack proves a ranker that drops,
+// duplicates or panics can never break routing: list order stands.
+func TestRankModelsBadRankerFallsBack(t *testing.T) {
+	cases := map[string]ModelRanker{
+		"drops":      func(tier Tier, models []string) []string { return models[:1] },
+		"duplicates": func(tier Tier, models []string) []string { return []string{models[0], models[0]} },
+		"panics":     func(tier Tier, models []string) []string { panic("ranker blew up") },
+		"nil-out":    func(tier Tier, models []string) []string { return nil },
+	}
+	for name, ranker := range cases {
+		r := New(Config{
+			DefaultModel: "strong-model",
+			TierModels: map[Tier][]string{
+				TierQuickQA: {"first-model", "second-model"},
+			},
+			RankModels: ranker,
+		})
+		model, _, ok := r.Resolve("auto/cheap", "What is two plus two")
+		if !ok {
+			t.Fatalf("%s: Resolve failed", name)
+		}
+		if model != "first-model" {
+			t.Errorf("%s: Resolve = %q (want first-model: bad ranker falls back to list order)", name, model)
+		}
+	}
+}
+
+// TestRankModelsNilKeepsListOrder is the no-ranker baseline: first
+// listed model wins.
+func TestRankModelsNilKeepsListOrder(t *testing.T) {
+	r := New(Config{
+		DefaultModel: "strong-model",
+		TierModels: map[Tier][]string{
+			TierQuickQA: {"first-model", "second-model"},
+		},
+	})
+	model, _, ok := r.Resolve("auto/cheap", "What is two plus two")
+	if !ok || model != "first-model" {
+		t.Errorf("Resolve = %q, %v (want first-model, true)", model, ok)
+	}
+}
+
+// TestRegisterTierModelsLiveAdd proves the live-add path: a model
+// registered after construction becomes a candidate of every tier
+// (so a live-added provider's models can win tier ordering), with
+// no duplicates on repeat registration, and Resolve then honours
+// the ranker over the new candidate list.
+func TestRegisterTierModelsLiveAdd(t *testing.T) {
+	reverse := func(tier Tier, models []string) []string {
+		out := append([]string(nil), models...)
+		for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+			out[i], out[j] = out[j], out[i]
+		}
+		return out
+	}
+	r := New(Config{
+		DefaultModel: "strong-model",
+		TierModels: map[Tier][]string{
+			TierQuickQA: {"expensive-model"},
+		},
+		RankModels: reverse,
+	})
+	if got := r.ModelsForTier(TierQuickQA); len(got) != 1 || got[0] != "expensive-model" {
+		t.Fatalf("ModelsForTier(quick-qa) = %v, want [expensive-model]", got)
+	}
+	// Empty and blank registrations are no-ops.
+	r.RegisterTierModels(nil)
+	r.RegisterTierModels([]string{""})
+	if got := r.ModelsForTier(TierQuickQA); len(got) != 1 {
+		t.Fatalf("empty RegisterTierModels changed tiers: %v", got)
+	}
+	// A live-added model joins every tier, appended after the
+	// configured entries.
+	r.RegisterTierModels([]string{"live-model"})
+	for _, tier := range AllTiers {
+		found := false
+		for _, m := range r.ModelsForTier(tier) {
+			if m == "live-model" {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("tier %s has no live-model after registration: %v", tier, r.ModelsForTier(tier))
+		}
+	}
+	if got := r.ModelsForTier(TierQuickQA); len(got) != 2 || got[0] != "expensive-model" || got[1] != "live-model" {
+		t.Errorf("ModelsForTier(quick-qa) = %v, want [expensive-model live-model]", got)
+	}
+	// Re-registering the same model (even twice in one call)
+	// never duplicates it.
+	r.RegisterTierModels([]string{"live-model", "live-model"})
+	if got := r.ModelsForTier(TierQuickQA); len(got) != 2 {
+		t.Errorf("duplicate RegisterTierModels duplicated entries: %v", got)
+	}
+	// The ranker (reverse) now sees the new candidate and picks it.
+	model, _, ok := r.Resolve("auto/cheap", "What is two plus two")
+	if !ok || model != "live-model" {
+		t.Errorf("Resolve = %q, %v (want live-model, true: ranker must see live-registered models)", model, ok)
+	}
+}
+
+// TestRankModelsCheapestPairWins proves the auto-router tier
+// ordering ranks on the (provider, model) pair price: the tier's
+// models are ordered by each model's cheapest pair, so a model
+// that is $60 at one provider but $1 at another beats a $5 model
+// — the pair the router would actually serve it through wins,
+// not the expensive pairing and not list order.
+func TestRankModelsCheapestPairWins(t *testing.T) {
+	// Pair prices: model -> provider -> USD per 1M (blended).
+	pairPrice := map[string]map[string]float64{
+		"expensive-model": {"expensive-provider": 60},
+		"cheap-model":     {"expensive-provider": 60, "cheap-provider": 1},
+		"mid-model":       {"only-provider": 5},
+	}
+	cheapestPair := func(tier Tier, models []string) []string {
+		out := append([]string(nil), models...)
+		best := func(model string) float64 {
+			best := math.Inf(1)
+			for _, v := range pairPrice[model] {
+				if v < best {
+					best = v
+				}
+			}
+			return best
+		}
+		sort.SliceStable(out, func(i, j int) bool { return best(out[i]) < best(out[j]) })
+		return out
+	}
+	r := New(Config{
+		DefaultModel: "strong-model",
+		TierModels: map[Tier][]string{
+			TierQuickQA: {"expensive-model", "mid-model", "cheap-model"},
+		},
+		RankModels: cheapestPair,
+	})
+	model, dec, ok := r.Resolve("auto/cheap", "What is two plus two")
+	if !ok {
+		t.Fatalf("Resolve failed: %+v", dec)
+	}
+	if model != "cheap-model" {
+		t.Errorf("Resolve = %q (want cheap-model: its $1 pair beats mid-model's $5 and expensive-model's $60)", model)
+	}
+}
+
+// TestUnregisterTierModels is the delete counterpart of
+// TestRegisterTierModelsLiveAdd: models leave every tier, the rest
+// stay put, and unknown/empty removals are no-ops. The caller
+// (main.go's provider-removed hook) decides which models to drop —
+// only models no remaining provider serves — because tiers hold
+// model IDs, not (provider, model) pairs.
+func TestUnregisterTierModels(t *testing.T) {
+	r := New(Config{
+		DefaultModel: "strong-model",
+		TierModels: map[Tier][]string{
+			TierQuickQA:   {"a-model", "b-model"},
+			TierReasoning: {"b-model", "c-model"},
+		},
+	})
+	r.RegisterTierModels([]string{"live-model"})
+	// Empty and blank removals are no-ops.
+	r.UnregisterTierModels(nil)
+	r.UnregisterTierModels([]string{""})
+	if got := r.ModelsForTier(TierQuickQA); len(got) != 3 {
+		t.Fatalf("empty UnregisterTierModels changed tiers: %v", got)
+	}
+	// Removing an unknown model is a no-op.
+	r.UnregisterTierModels([]string{"no-such-model"})
+	if got := r.ModelsForTier(TierQuickQA); len(got) != 3 {
+		t.Fatalf("unknown UnregisterTierModels changed tiers: %v", got)
+	}
+	// Removing b-model drops it from BOTH tiers; the rest stay.
+	r.UnregisterTierModels([]string{"b-model", "live-model"})
+	if got := r.ModelsForTier(TierQuickQA); len(got) != 1 || got[0] != "a-model" {
+		t.Errorf("ModelsForTier(quick-qa) = %v, want [a-model]", got)
+	}
+	if got := r.ModelsForTier(TierReasoning); len(got) != 1 || got[0] != "c-model" {
+		t.Errorf("ModelsForTier(reasoning) = %v, want [c-model]", got)
+	}
+	// Removing it again is a no-op, and the ranker no longer
+	// resolves to it.
+	r.UnregisterTierModels([]string{"b-model"})
+	if got := r.ModelsForTier(TierReasoning); len(got) != 1 {
+		t.Errorf("second UnregisterTierModels changed tiers: %v", got)
+	}
+	model, _, ok := r.Resolve("auto/cheap", "What is two plus two")
+	if !ok || model == "b-model" {
+		t.Errorf("Resolve = %q, %v (want a remaining model, true)", model, ok)
 	}
 }

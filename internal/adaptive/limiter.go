@@ -118,6 +118,9 @@ type state struct {
 	samples   uint64
 	admitted  uint64
 	rejected  uint64
+	// learned is the latest upstream rate-limit signal for this
+	// key (M5.13), or nil when nothing has been learned yet.
+	learned *RateLimitSignals
 }
 
 // State is a snapshot of one key's limiter state, for the dashboard
@@ -127,6 +130,9 @@ type state struct {
 // long-term minimum RTT; the ratio BaselineMs/RTTMs is the gradient.
 // Samples is how many completed calls fed the estimate; before any
 // sample the RTT fields are 0 and Limit is the initial cap.
+// PacedLimit is the cap the learned upstream rate-limit signals
+// would impose right now (0 when no fresh signal applies — the
+// cap is then purely the Gradient2 value).
 type State struct {
 	Provider   string  `json:"provider"`
 	Limit      float64 `json:"limit"`
@@ -136,6 +142,7 @@ type State struct {
 	Samples    uint64  `json:"samples"`
 	Admitted   uint64  `json:"admitted"`
 	Rejected   uint64  `json:"rejected"`
+	PacedLimit float64 `json:"paced_limit,omitempty"`
 }
 
 // Limiter is a per-key adaptive concurrency limiter. The zero value
@@ -254,6 +261,70 @@ func (l *Limiter) Record(key string, rtt time.Duration, ok bool) {
 	st.limit = next
 }
 
+// ApplyLearnedLimit paces key's cap from one upstream rate-limit
+// signal (M5.13). The latest signal wins (an upstream's remaining
+// only moves as requests consume it, so the newest header is the
+// current truth); an empty signal is ignored. The paced cap is
+// clamp(MaxLimit * remainingFraction, MinLimit, MaxLimit) and only
+// ever shrinks the stored cap, never raises it — when a window
+// resets, the cap recovers gradually through normal Gradient2
+// growth instead of flooding the upstream at once. A nil limiter
+// no-ops. Stale signals (past their reset, or older than the
+// 5-minute TTL) are stored but never pace: the next response
+// re-learns, and the cap recovers through Record in the meantime.
+func (l *Limiter) ApplyLearnedLimit(key string, sig RateLimitSignals, now time.Time) {
+	if l == nil || sig.Empty() {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	st := l.get(key)
+	cp := sig
+	st.learned = &cp
+	paced := l.pacedLimitLocked(st, now)
+	if paced > 0 && paced < st.limit {
+		st.limit = paced
+	}
+}
+
+// PacedLimit returns the cap the freshest learned signal for key
+// would impose right now, and whether any fresh signal applies. A
+// nil limiter, a key with no signal, or a stale signal reports
+// (0, false).
+func (l *Limiter) PacedLimit(key string, now time.Time) (float64, bool) {
+	if l == nil {
+		return 0, false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	st, ok := l.keys[key]
+	if !ok {
+		return 0, false
+	}
+	paced := l.pacedLimitLocked(st, now)
+	if paced <= 0 {
+		return 0, false
+	}
+	return paced, true
+}
+
+// pacedLimitLocked computes the paced cap from the state's latest
+// learned signal: 0 when no fresh signal applies. Caller must hold
+// l.mu.
+func (l *Limiter) pacedLimitLocked(st *state, now time.Time) float64 {
+	if st.learned == nil || !st.learned.Fresh(now) {
+		return 0
+	}
+	paced := l.cfg.MaxLimit * st.learned.RemainingFraction()
+	if paced < l.cfg.MinLimit {
+		paced = l.cfg.MinLimit
+	}
+	if paced > l.cfg.MaxLimit {
+		paced = l.cfg.MaxLimit
+	}
+	return paced
+}
+
 // Snapshot returns the current state of every key with state, sorted
 // by provider key. A nil limiter returns an empty list. Keys that
 // were never used have no entry: the dashboard shows providers with
@@ -264,6 +335,7 @@ func (l *Limiter) Snapshot() []State {
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	now := time.Now()
 	out := make([]State, 0, len(l.keys))
 	for k, st := range l.keys {
 		out = append(out, State{
@@ -275,6 +347,7 @@ func (l *Limiter) Snapshot() []State {
 			Samples:    st.samples,
 			Admitted:   st.admitted,
 			Rejected:   st.rejected,
+			PacedLimit: l.pacedLimitLocked(st, now),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Provider < out[j].Provider })
@@ -303,6 +376,7 @@ func (l *Limiter) StateFor(key string) (State, bool) {
 		Samples:    st.samples,
 		Admitted:   st.admitted,
 		Rejected:   st.rejected,
+		PacedLimit: l.pacedLimitLocked(st, time.Now()),
 	}, true
 }
 

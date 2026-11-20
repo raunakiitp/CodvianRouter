@@ -1,0 +1,21 @@
+{
+  "assert": {
+    "status": 200
+  },
+  "fixture": true,
+  "method": "GET",
+  "model": "mock-model",
+  "name": "files-content-200",
+  "notes": "GET /v1/files/{id}/content streams the stored bytes (status-only fixture: the body is raw bytes, not JSON, so no JSON assertions apply). The test seeds a file and rewrites the placeholder id.",
+  "path": "/v1/files/file-000000000000000000000001/content",
+  "provider": "mock-upstream",
+  "recorded_from": "mock-upstream: no upstream exists for local files \u2014 canned OpenAI-shaped response recorded from the local disk store's own contract, 2026-11-19. Recorded mock data, NOT a live provider call.",
+  "recorded_response": {
+    "headers": {
+      "Content-Type": "application/octet-stream"
+    },
+    "status": 200
+  },
+  "schema_version": 1,
+  "slice": "m8.7"
+}

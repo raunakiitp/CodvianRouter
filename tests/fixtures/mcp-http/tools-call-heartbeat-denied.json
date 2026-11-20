@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-heartbeat-denied",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger, prices a $10/$30 and c $5/$15 per 1M, routing group fast) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "cost-reader",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 38,
+    "method": "tools/call",
+    "params": {
+      "name": "heartbeat",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 38,
+    "error": {
+      "code": -32002,
+      "message": "scope denied: missing required scope(s): mcp:read:status"
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 38,
+    "expect_error": true,
+    "error_code": -32002,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32002,
+      "error.message": "scope denied: missing required scope(s): mcp:read:status",
+      "jsonrpc": "2.0"
+    },
+    "http_status": 200
+  },
+  "notes": "heartbeat with the cost-reader key (mcp:read:cost only) is denied -32002 (mcp:read:status required). No empty-scope key exists on the fixture servers, so a wrong-scope key stands in for it."
+}

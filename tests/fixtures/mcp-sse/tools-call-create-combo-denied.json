@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-create-combo-denied",
+  "fixture": true,
+  "transport": "sse",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + fixed test gateway keys + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger for the routing-reader and cost-reader keys, prices a $10/$30 and c $5/$15 per 1M, routing group fast; memory seeded with one fixed entry for the destructive memory key) over httptest (loopback) via GET /api/mcp/sse (endpoint event) + POST /api/mcp/sse?session_id= with a test gateway key; message-event data captured verbatim. Recorded data only, no live provider call.",
+  "key": "router",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 31,
+    "method": "tools/call",
+    "params": {
+      "name": "create_combo",
+      "arguments": {
+        "name": "new",
+        "members": [
+          "p1"
+        ]
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 31,
+    "error": {
+      "code": -32002,
+      "message": "scope denied: missing required scope(s): mcp:manage:routing"
+    }
+  },
+  "recorded_http_status": 202,
+  "assert": {
+    "id": 31,
+    "expect_error": true,
+    "error_code": -32002,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32002,
+      "error.message": "scope denied: missing required scope(s): mcp:manage:routing",
+      "jsonrpc": "2.0"
+    },
+    "http_status": 202
+  },
+  "notes": "create_combo with the router-reader key (mcp:read:routing only) is denied -32002: create_combo requires mcp:manage:routing (RegisterToolScopes in internal/mcp/tools_routing.go; there is no mcp:manage:combos scope, and -32602 is invalid-params, not scope denial). The request is identical to the create-combo success fixture, so the key is the only difference; the scope check runs before dispatch, so no combo is created. Same code/message as the stdio TestM93ScopeDenial denial and the Streamable switch-combos denial."
+}

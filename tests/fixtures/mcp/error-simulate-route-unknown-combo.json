@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "error-simulate-route-unknown-combo",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 64,
+    "method": "tools/call",
+    "params": {
+      "name": "simulate_route",
+      "arguments": {
+        "model": "coder-model",
+        "combo": "ghost"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 64,
+    "error": {
+      "code": -32602,
+      "message": "mcp: invalid input: unknown combo \"ghost\""
+    }
+  },
+  "assert": {
+    "id": 64,
+    "expect_error": true,
+    "error_code": -32602,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32602,
+      "error.message": "mcp: invalid input: unknown combo \"ghost\"",
+      "jsonrpc": "2.0"
+    }
+  },
+  "notes": "simulate_route restricted to an unknown combo is invalid params (-32602) — the same combo resolution as explain_route, on the simulate path."
+}

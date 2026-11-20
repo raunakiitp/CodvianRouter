@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "initialize",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "initialize",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "mcp-fixture-recorder",
+        "version": "0"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "capabilities": {
+        "tools": {}
+      },
+      "protocolVersion": "2025-03-26",
+      "serverInfo": {
+        "name": "codvian-router",
+        "version": "0.1.0"
+      }
+    }
+  },
+  "assert": {
+    "id": 1,
+    "expect_error": false,
+    "required_fields": [
+      "result.protocolVersion",
+      "result.capabilities",
+      "result.serverInfo.name",
+      "result.serverInfo.version"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.protocolVersion": "2025-03-26",
+      "result.serverInfo.name": "codvian-router",
+      "result.serverInfo.version": "0.1.0"
+    }
+  },
+  "notes": "Handshake: the server reports protocol 2025-03-26 and its name/version; capabilities carry the tools key only."
+}

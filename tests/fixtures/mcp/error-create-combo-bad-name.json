@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "error-create-combo-bad-name",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 49,
+    "method": "tools/call",
+    "params": {
+      "name": "create_combo",
+      "arguments": {
+        "name": "a:b",
+        "members": [
+          "p1"
+        ],
+        "strategy": "priority"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 49,
+    "error": {
+      "code": -32602,
+      "message": "mcp: invalid input: combo name \"a:b\" must not contain \":\" or \"/\""
+    }
+  },
+  "assert": {
+    "id": 49,
+    "expect_error": true,
+    "error_code": -32602,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32602,
+      "error.message": "mcp: invalid input: combo name \"a:b\" must not contain \":\" or \"/\"",
+      "jsonrpc": "2.0"
+    }
+  },
+  "notes": "create_combo with \":\" in the name is invalid params (-32602): the routing-group name rule forbids \":\" and \"/\"."
+}

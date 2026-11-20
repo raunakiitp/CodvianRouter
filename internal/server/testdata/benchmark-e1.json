@@ -1,0 +1,123 @@
+{
+  "limiter_comparison": {
+    "on": {
+      "limiter_mode": "on",
+      "rig": {
+        "date": "2026-11-18T02:29:47+00:00",
+        "os": "Linux 7.0.0-44-generic x86_64",
+        "cpus": 4,
+        "cpu_model": "AMD EPYC 9D25 126-Core Processor",
+        "go_version": "go version go1.27.4 linux/amd64",
+        "note": "Shared VM (1.5 shared vCPU budget), not a dedicated 2-vCPU droplet like Geekflare's; numbers are one sample per pass, pass 2 is the stability check."
+      },
+      "ready_ms": {
+        "healthz": 503.9,
+        "v1_models": 616.9
+      },
+      "idle_rss_kib": 39772,
+      "passes": {
+        "1": {
+          "added_latency_p50_ms": 1.162,
+          "router_latency": {
+            "p50_ms": 1.223,
+            "ok": 1000,
+            "errors": 0,
+            "cache_hits": 10
+          },
+          "router_rps": {
+            "rps": 585.012,
+            "ok": 11740,
+            "errors": 4280,
+            "completed": 16020,
+            "cache_hits": 654
+          },
+          "direct_rps": {
+            "rps": 10567.016
+          },
+          "peak_rss_kib": 72492
+        },
+        "2": {
+          "added_latency_p50_ms": 0.68,
+          "router_latency": {
+            "p50_ms": 0.772,
+            "ok": 1000,
+            "errors": 0,
+            "cache_hits": 16
+          },
+          "router_rps": {
+            "rps": 1324.192,
+            "ok": 26551,
+            "errors": 5141,
+            "completed": 31692,
+            "cache_hits": 10
+          },
+          "direct_rps": {
+            "rps": 19221.508
+          },
+          "peak_rss_kib": 100936
+        }
+      }
+    },
+    "off": {
+      "limiter_mode": "off",
+      "rig": {
+        "date": "2026-11-18T02:52:55+00:00",
+        "os": "Linux 7.0.0-44-generic x86_64",
+        "cpus": 4,
+        "cpu_model": "AMD EPYC 9D25 126-Core Processor",
+        "go_version": "go version go1.27.4 linux/amd64",
+        "note": "Shared VM (1.5 shared vCPU budget), not a dedicated 2-vCPU droplet like Geekflare's; numbers are one sample per pass, pass 2 is the stability check."
+      },
+      "ready_ms": {
+        "healthz": 425.9,
+        "v1_models": 534.7
+      },
+      "idle_rss_kib": 39676,
+      "passes": {
+        "1": {
+          "added_latency_p50_ms": 0.641,
+          "router_latency": {
+            "p50_ms": 0.71,
+            "ok": 1000,
+            "errors": 0,
+            "cache_hits": 10
+          },
+          "router_rps": {
+            "rps": 646.432,
+            "ok": 12943,
+            "errors": 0,
+            "completed": 12943,
+            "cache_hits": 10
+          },
+          "direct_rps": {
+            "rps": 13588.768
+          },
+          "peak_rss_kib": 72436
+        },
+        "2": {
+          "added_latency_p50_ms": 0.781,
+          "router_latency": {
+            "p50_ms": 0.852,
+            "ok": 1000,
+            "errors": 0,
+            "cache_hits": 10
+          },
+          "router_rps": {
+            "rps": 1419.285,
+            "ok": 28394,
+            "errors": 0,
+            "completed": 28394,
+            "cache_hits": 10
+          },
+          "direct_rps": {
+            "rps": 19387.75
+          },
+          "peak_rss_kib": 83792
+        }
+      }
+    },
+    "verdict": "VERDICT (pass 2 only \u2014 on pass 1 was polluted, direct-mock RPS 10567, so pass 1 is excluded from this verdict; both pass-2 canaries are clean: on 19222, off 19388 RPS) : the limiter is NOT the RPS ceiling. Limiter-off sheds nothing (502 rate 0.0% pass 2 vs 16.2% on) yet RPS is unchanged within noise (+7.2% pass 2) and added latency moves only +0.101 ms (pass 2) \u2014 the binding constraint is per-request CPU on this VM, and the limiter was only converting overload into 502s.",
+    "clean": false,
+    "method": "Same harness (scripts/bench-geekflare.sh), same tree, back-to-back: limiter-on then limiter-off. Pass 1 is the reported run, pass 2 the stability check. Clean = direct-mock RPS >= 12,000 in every pass."
+  }
+}

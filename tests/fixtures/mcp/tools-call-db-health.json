@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-db-health",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 18,
+    "method": "tools/call",
+    "params": {
+      "name": "db_health",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 18,
+    "result": {
+      "content": [
+        {
+          "text": "{\"healthy\":true,\"files\":[{\"name\":\"ledger.db\",\"exists\":true,\"size_bytes\":1234,\"modified_at\":\"2026-11-19T12:00:00Z\",\"rows\":{\"usage_events\":14}}],\"note\":\"mock fixture databases: ledger.db only\"}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "healthy": true,
+        "files": [
+          {
+            "name": "ledger.db",
+            "exists": true,
+            "size_bytes": 1234,
+            "modified_at": "2026-11-19T12:00:00Z",
+            "rows": {
+              "usage_events": 14
+            }
+          }
+        ],
+        "note": "mock fixture databases: ledger.db only"
+      }
+    }
+  },
+  "assert": {
+    "id": 18,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.files"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.files.0.exists": true,
+      "result.structuredContent.files.0.name": "ledger.db",
+      "result.structuredContent.files.0.rows.usage_events": 14,
+      "result.structuredContent.files.0.size_bytes": 1234,
+      "result.structuredContent.healthy": true
+    }
+  },
+  "notes": "db_health: the single seeded mock database ledger.db (1234 bytes, 14 usage_events) opens cleanly."
+}

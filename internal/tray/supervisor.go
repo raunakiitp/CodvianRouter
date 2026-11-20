@@ -9,18 +9,23 @@
 //
 // Build tags: the Supervisor itself is tag-free and works in every build.
 // The tray icon lives in tray_gui.go (//go:build tray) and the blocking
-// headless runner in headless.go (//go:build !tray). See README.md.
+// headless runner in headless.go (//go:build !tray). The
+// process-group primitives are split by platform —
+// supervisor_unix.go (Setpgid + SIGTERM/SIGKILL) and
+// supervisor_windows.go (CREATE_NEW_PROCESS_GROUP +
+// CTRL_BREAK_EVENT/Process.Kill) — because Windows has no POSIX
+// signals or Setpgid; see README.md.
 package tray
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -31,8 +36,11 @@ const (
 	maxAutoRestarts = 1
 	// restartBackoff is the delay before an automatic restart attempt.
 	restartBackoff = time.Second
-	// stopGrace is how long Stop waits for a graceful SIGTERM exit before
-	// escalating to SIGKILL on the whole process group.
+	// stopGrace is how long Stop waits for a graceful exit before
+	// escalating to a force-kill (SIGTERM then SIGKILL to the whole
+	// process group on Unix; CTRL_BREAK_EVENT to the group then
+	// Process.Kill on Windows — see stopChildProcessGroup in
+	// supervisor_unix.go / supervisor_windows.go).
 	stopGrace = 2 * time.Second
 )
 
@@ -121,7 +129,130 @@ func (s *Supervisor) Status() string {
 	return s.state
 }
 
-// PID returns the child process id, or 0 when no child is running.
+// PIDFilePath returns the path of the PID file for a gateway supervised
+// with this config file: <config-dir>/router.pid. The file is written
+// by the supervisor on Start (and refreshed when an automatic restart
+// replaces the child) and removed on Stop, so the `status`/`stop`/
+// `restart` CLI commands can find the supervised gateway without
+// asking the supervisor process. Empty configPath means "no PID file"
+// (NewWithCommand supervisors, used by tests, have no config file).
+func PIDFilePath(configPath string) string {
+	if configPath == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(configPath), "router.pid")
+}
+
+// LogFilePath returns the path of the gateway log file for a gateway
+// supervised with this config file: <config-dir>/router.log. The file
+// itself is only written when the gateway is started through the
+// lifecycle commands (`restart`/`update` redirect the detached
+// supervisor's stdout/stderr there, and the gateway child inherits
+// them); a gateway started by hand in a terminal logs to that
+// terminal instead. Empty configPath means "no log file".
+func LogFilePath(configPath string) string {
+	if configPath == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(configPath), "router.log")
+}
+
+// pidFile is the on-disk record the supervisor writes to its PID
+// file: the supervisor's own pid (so `stop` can signal the
+// supervisor, which then stops the child gracefully), the gateway
+// child's pid, and the port the child was started with.
+type pidFile struct {
+	SupervisorPID int `json:"supervisor_pid"`
+	GatewayPID    int `json:"gateway_pid"`
+	Port          int `json:"port"`
+}
+
+// pidFilePath is PIDFilePath for this supervisor's config file.
+func (s *Supervisor) pidFilePath() string {
+	return PIDFilePath(s.configPath)
+}
+
+// writePIDFile records the running gateway child in the PID file
+// (atomic temp-file + rename, 0600 — pids are not secrets, but the
+// config directory is the operator's private state and nothing else
+// needs to read it). It creates the config directory when missing.
+// A failure is reported to the caller: Start keeps the gateway
+// running and only warns, because a running gateway is more useful
+// than a refused start, and the CLI reports the missing PID file
+// honestly when it looks for it.
+func (s *Supervisor) writePIDFile(gatewayPID int) error {
+	path := s.pidFilePath()
+	if path == "" {
+		return nil
+	}
+	rec := pidFile{
+		SupervisorPID: os.Getpid(),
+		GatewayPID:    gatewayPID,
+		Port:          s.port,
+	}
+	data, err := json.Marshal(rec)
+	if err != nil {
+		return fmt.Errorf("tray: cannot encode PID file: %w", err)
+	}
+	if dir := filepath.Dir(path); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return fmt.Errorf("tray: cannot create PID file directory %s: %w", dir, err)
+		}
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".router-pid-*.tmp")
+	if err != nil {
+		return fmt.Errorf("tray: cannot create PID file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(append(data, '\n')); err != nil {
+		tmp.Close()
+		return fmt.Errorf("tray: cannot write PID file: %w", err)
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return fmt.Errorf("tray: cannot set PID file permissions: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("tray: cannot write PID file: %w", err)
+	}
+	// The rename replaces the previous PID file. On Windows it
+	// can fail transiently with "Access is denied" when a
+	// scanner (Defender/indexer) briefly holds the existing file
+	// open, so retry a few times before giving up — a failed
+	// refresh leaves `status`/`stop` pointing at a dead pid.
+	if err := renamePIDFile(tmpName, path); err != nil {
+		return fmt.Errorf("tray: cannot write PID file: %w", err)
+	}
+	return nil
+}
+
+// renamePIDFile moves tmp over dst, retrying briefly: on Windows a
+// freshly-written file can be held open for a moment by a scanner,
+// and the first rename then fails with "Access is denied" even
+// though nothing is wrong. The retry is harmless on Unix, where
+// the first rename succeeds.
+func renamePIDFile(tmp, dst string) error {
+	var err error
+	for i := 0; i < 5; i++ {
+		if err = os.Rename(tmp, dst); err == nil {
+			return nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return err
+}
+
+// removePIDFile deletes the PID file, ignoring a file that is
+// already gone. Called when the supervised gateway stops for good,
+// so a later `status` does not report a dead pid as running.
+func (s *Supervisor) removePIDFile() {
+	path := s.pidFilePath()
+	if path == "" {
+		return
+	}
+	_ = os.Remove(path)
+}
 func (s *Supervisor) PID() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -174,6 +305,17 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	s.lastErr = nil
 	s.doneCh = make(chan struct{})
 	s.stopReq = make(chan struct{})
+
+	// Record the child in the PID file before publishing the
+	// running state: Status()/PID() become visible the moment
+	// the lock is released, so a reader (the lifecycle CLI, or a
+	// test) must never observe a new pid while the file still
+	// holds the old one. A failure here does not stop the
+	// gateway — it is already running — but it is reported, so
+	// the operator knows `status` will not see this gateway.
+	if err := s.writePIDFile(cmd.Process.Pid); err != nil {
+		fmt.Fprintf(os.Stderr, "codvian-router: tray: %v\n", err)
+	}
 	s.mu.Unlock()
 
 	go s.monitor()
@@ -186,9 +328,13 @@ func (s *Supervisor) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop terminates the child process group (SIGTERM, then SIGKILL after
-// stopGrace) and waits for the monitor goroutine to reap the child, so no
-// zombie process is left behind. It is idempotent.
+// Stop terminates the child process group (graceful signal, then a
+// force-kill after stopGrace — SIGTERM then SIGKILL on Unix,
+// CTRL_BREAK_EVENT then Process.Kill on Windows; see
+// stopChildProcessGroup in supervisor_unix.go /
+// supervisor_windows.go) and waits for the monitor goroutine to
+// reap the child, so no zombie process is left behind. It is
+// idempotent.
 func (s *Supervisor) Stop() error {
 	s.mu.Lock()
 	if s.state == "stopped" {
@@ -207,17 +353,12 @@ func (s *Supervisor) Stop() error {
 	if cmd != nil && cmd.Process != nil {
 		// Kill the whole process group so grandchildren (e.g. helpers the
 		// gateway may spawn) do not outlive the gateway.
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-		select {
-		case <-doneCh:
-			return nil
-		case <-time.After(stopGrace):
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		}
+		stopChildProcessGroup(cmd, doneCh)
 	}
 	if doneCh != nil {
 		<-doneCh
 	}
+	s.removePIDFile()
 	return nil
 }
 
@@ -249,8 +390,10 @@ func (s *Supervisor) buildCmd() (*exec.Cmd, error) {
 		cmd = exec.Command(exe, args...)
 	}
 	// Own process group so Stop can signal the whole group, and so the
-	// child never shares this process's group.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// child never shares this process's group. The platform split
+	// lives in supervisor_unix.go (Setpgid) and
+	// supervisor_windows.go (CREATE_NEW_PROCESS_GROUP).
+	configureChildProcessGroup(cmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = nil
@@ -278,6 +421,7 @@ func (s *Supervisor) monitor() {
 			doneCh := s.doneCh
 			s.mu.Unlock()
 			close(doneCh)
+			s.removePIDFile()
 			return
 		}
 		// Unexpected exit.
@@ -288,6 +432,7 @@ func (s *Supervisor) monitor() {
 			doneCh := s.doneCh
 			s.mu.Unlock()
 			close(doneCh)
+			s.removePIDFile()
 			return
 		}
 		s.autoRestarts++
@@ -321,6 +466,7 @@ func (s *Supervisor) monitor() {
 			doneCh := s.doneCh
 			s.mu.Unlock()
 			close(doneCh)
+			s.removePIDFile()
 			return
 		}
 		if startErr := next.Start(); startErr != nil {
@@ -330,10 +476,18 @@ func (s *Supervisor) monitor() {
 			doneCh := s.doneCh
 			s.mu.Unlock()
 			close(doneCh)
+			s.removePIDFile()
 			return
 		}
 		s.cmd = next
 		s.state = "running"
+		// The child pid changed: refresh the PID file before
+		// publishing the running state (see Start), so a reader
+		// never observes the new pid while the file still holds
+		// the old one.
+		if err := s.writePIDFile(next.Process.Pid); err != nil {
+			fmt.Fprintf(os.Stderr, "codvian-router: tray: %v\n", err)
+		}
 		s.mu.Unlock()
 		// Loop back to Wait on the new child.
 	}
@@ -356,6 +510,7 @@ func (s *Supervisor) finishStopped(err error) {
 		// closer and it returns right after closing.
 		close(doneCh)
 	}
+	s.removePIDFile()
 }
 
 // doneChan returns the done channel for the current run (nil when never

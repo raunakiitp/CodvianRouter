@@ -1,0 +1,341 @@
+# Codvian Router — signed release pipeline.
+#
+# Runs ONLY on a pushed `v*.*.*` tag. Tags are created by the maintainer
+# alone (the first release happens only when the router is 10x ahead of
+# OmniRoute — no slice, cron, or workflow creates a tag or a release).
+# Pushing a tag is therefore the release decision, and this workflow is
+# the only thing that publishes.
+#
+# What a run produces on the GitHub release, for every platform:
+#   codvian-router_<version>_<os>_<arch>.tar.gz (.zip on Windows)
+#   checksums.txt                        (SHA-256 of every archive)
+#   checksums.txt.sigstore.json          (Sigstore keyless signature)
+#   <archive>.sbom.json                  (SPDX-JSON SBOM, syft)
+#   <archive>.sbom.json.sigstore.json    (Sigstore keyless signature)
+# plus SLSA build-provenance attestations (one per artifact, verifiable
+# with `gh attestation verify`), recorded by the attest step below.
+#
+# And on GHCR, a signed multi-arch Docker image (linux/amd64 + arm64):
+#   ghcr.io/raunakiitp/codvian-router:<tag> and :latest
+# signed with the SAME cosign keyless identity as the blobs (the
+# workflow + tag ref), with its own SLSA provenance attestation pushed
+# to the registry. Users verify the image BEFORE `docker run` with
+# scripts/verify-image.sh — see docs/RELEASE-SIGNING.md.
+#
+# Users verify BEFORE installing, with scripts/verify-release.sh.
+# See docs/RELEASE-SIGNING.md for the design, the threat model
+# (LiteLLM Oct 2026 compromise, Bifrost CVE-2026-90898), and the exact
+# commands.
+#
+# Permissions are minimal for the job: contents:write publishes the
+# release, packages:write pushes the image to GHCR, id-token:write
+# mints the keyless signing identity, and attestations:write records
+# the provenance attestations. There is no long-term signing key
+# anywhere — nothing to rotate, nothing to steal.
+#
+# PINNING POLICY (items 223-224): every tool in this file is pinned to
+# an exact version — no `latest`, no floating major tag, no floating
+# runner image. Each `uses:` entry is pinned to the full 40-char
+# commit SHA of a tagged release (the SHA is the checksum for the
+# action's code: GitHub checks out exactly that commit, so a moved
+# tag or a compromised repo cannot silently substitute different
+# code), with the human-readable version in a comment next to it.
+# GoReleaser itself is pinned to an exact release tag (v2.20.2) and Go
+# to an exact patch (1.27.4); the runner is pinned to ubuntu-24.04.
+# The majors below are the ones this workflow was built and reviewed
+# against — a major bump is a deliberate change, not a side effect of
+# a re-run, and must be reviewed like any other release-pipeline
+# change (the pipeline cannot be exercised until the first real tag,
+# so an untested major bump would only fail at release time).
+# To bump a pin: pick the new tag, resolve its commit SHA with
+#   git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>
+# (annotated tags need the `^{}` dereference to reach the commit),
+# and update the SHA + the version comment together.
+# Residual, stated honestly: the actions download their tool binaries
+# (GoReleaser, cosign, syft) over HTTPS from GitHub releases, and
+# none of them documents an independent checksum check of that
+# download — the pin covers the action code and the exact tool
+# version, not a hash of the tool binary. The release job's own
+# `verify` job is the tripwire: it re-verifies the published
+# artifacts (signature -> checksums -> SBOM -> attestation) exactly
+# as a user would, and a green build with a red verify is a failed
+# release. Items 289-290 add a second, earlier tripwire INSIDE the
+# release job: right after GoReleaser builds, `release verify`
+# checks the dist/ that was just produced (all six archives incl.
+# both Windows zips + SBOMs + Sigstore bundles) and fails the job
+# before any provenance attestation is recorded. It runs after
+# publish (GoReleaser publishes in the same step), so it cannot
+# un-publish — and it never executes a binary, so Windows execution
+# stays unproven until a CI run runs the exe.
+# Items 307-308 (2026-11-18) investigated restructuring this into a
+# true pre-publish gate (build-only -> verify -> publish the same
+# dist/) and proved it cannot be done with the pinned OSS toolchain:
+# the split needs GoReleaser's `release --prepare` + `goreleaser
+# publish`, which are GoReleaser Pro-only — the pinned OSS v2.20.2
+# binary has no `publish` command (it prints the release help) and
+# rejects `--prepare` as an unknown flag (both proven locally
+# against that exact binary). A second `release` run cannot publish
+# the verified dist/ instead: `build` is not a skippable step and a
+# run without --clean refuses an existing dist/, so it would wipe
+# and rebuild — the published artifacts would be a rebuild, not the
+# verified bits, re-signed with fresh per-run keyless certificates.
+# Measured locally 2026-11-18: two consecutive snapshot builds of
+# the same committed tree produced different SHA-256 for all 12
+# archives + SBOMs, so a rebuild's bytes are provably not the
+# verified bytes.
+# Two workarounds were evaluated and rejected (see
+# docs/RELEASE-SIGNING.md): a draft release gates only the GitHub
+# blobs while the Docker image is pushed, signed and :latest-tagged
+# in the same run before any verify, and a failed verify cannot
+# un-push it; a manual `gh release create` + `docker push` +
+# `cosign sign` re-publish re-implements GoReleaser's publish pipe
+# by hand with unpinned tooling. The tripwire is therefore the
+# FINAL design, not a placeholder: the in-job verify fails the job,
+# skips attestations and blocks the verify job, but it cannot
+# un-publish. Follow-up, not this slice: a GoReleaser Pro licence
+# would unlock --prepare/publish — the maintainer's call, not
+# assumed here.
+# See docs/RELEASE-SIGNING.md ("Pinned release toolchain").
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.27.4"
+          cache: true
+
+      # Validate the GoReleaser config BEFORE anything is built or
+      # published (items 241-242): a broken config makes GoReleaser
+      # refuse to run at all — the 221-222 slice found two `signs`
+      # entries both defaulting to id `default`, a bug that would only
+      # have surfaced at tag time without this step. `check` validates
+      # config schema/fields only: it does not build anything, does
+      # not execute Dockerfile.release, and does not touch Docker —
+      # see docs/ci-proof-multarch.md (G2).
+      - name: Validate GoReleaser config
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
+        with:
+          version: v2.20.2
+          args: check
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+
+      # GoReleaser's SBOM step shells out to syft; install it first so
+      # a missing syft fails here with a clear error instead of deep in
+      # the release.
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+
+      # Multi-arch build setup (items 241-242): GoReleaser's
+      # `dockers_v2` builds with `docker buildx` under the hood, and
+      # buildx needs a multi-platform-capable builder — the default
+      # `docker`-driver builder silently ignores `--platform`, and
+      # foreign-arch build steps need QEMU binfmt handlers. Before
+      # this slice the workflow had neither step and relied entirely
+      # on the runner's default Docker setup (Docker's docs say the
+      # default GitHub Actions runner setup supports multi-platform
+      # builds to registries, so it may have worked — but nothing
+      # created the builder explicitly). These two steps make it
+      # explicit; they are validated here by YAML parse + pin
+      # resolution only (no Docker exists in this VM) and stay
+      # unproven until the first tag — see docs/ci-proof-multarch.md
+      # (G1). Pins resolved with `git ls-remote … refs/tags/v3.7.0`
+      # / `v3.12.0`; both tags are lightweight, so each SHA is the
+      # commit (no `^{}` dereference exists for them).
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      # GoReleaser does not log in to registries itself: the image push
+      # needs an authenticated GHCR login. GITHUB_TOKEN can push to
+      # ghcr.io/raunakiitp/* (packages: write, granted above).
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish the release
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
+        with:
+          version: v2.20.2
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Release-verify tripwire (items 289-290): run the router's own
+      # `release verify` against the dist/ this job just built — all
+      # six archives (including both Windows zips) + SBOMs + Sigstore
+      # bundles, checked with cosign (installed above; the tool fails
+      # closed when cosign is missing, so a missing cosign fails here
+      # loudly instead of passing by skipping). Any failure fails
+      # this job, which skips the attestation steps below and blocks
+      # the `verify` job — a red release is never recorded as
+      # verified. Attestations are skipped here (local mode: they
+      # live in GitHub's attestation store, not dist/) and the image
+      # is skipped (the `verify` job checks the published image as
+      # a user would, including `docker run ... help`).
+      #
+      # Honest limits, stated where the step lives: GoReleaser builds
+      # AND publishes in one step, so this runs AFTER the release is
+      # already published — it is a tripwire that fails the job, not
+      # a pre-publish gate, and it cannot un-publish a bad release.
+      # Items 307-308 proved a true pre-publish gate (build-only ->
+      # verify -> publish the same dist/) cannot be built with the
+      # pinned OSS GoReleaser v2.20.2: the split needs Pro-only
+      # `release --prepare` + `goreleaser publish`, and the draft /
+      # manual re-publish workarounds were evaluated and rejected
+      # (see the workflow header + docs/RELEASE-SIGNING.md) — so
+      # this tripwire is the FINAL design, not a placeholder.
+      # And it does NOT execute any binary: the Windows archives are
+      # checked (present, listed in checksums.txt, hash-verified) but
+      # the exe inside them is never run — Windows-binary execution
+      # stays unproven until a CI run executes it (see
+      # docs/RELEASE-CHECKLIST.md). The local dry-run of this exact
+      # command against the snapshot dist/ is recorded in
+      # docs/release-verify-2026-11-18-snapshot.json (checksums 12/12,
+      # archives 6/6, SBOM 6/6; bundles/signatures fail as expected
+      # for an unsigned snapshot).
+      - name: Verify the built release with release verify
+        run: |
+          go build -o /tmp/codvian-router ./cmd/codvian-router
+          /tmp/codvian-router release verify "${{ github.ref_name }}" --dir dist --skip-image --skip-attestation
+
+      # The published image's manifest digest, read from the
+      # artifacts.json GoReleaser writes to dist/ (the Docker Image
+      # entry's extra.Digest). The digest — not the tag — is the
+      # subject of the provenance attestation below, and the same
+      # digest users pin with
+      # ghcr.io/raunakiitp/codvian-router@sha256:... .
+      - name: Get published image digest
+        id: image-digest
+        run: |
+          python3 - <<'EOF'
+          import json, os, sys
+          tag = os.environ["GITHUB_REF_NAME"]
+          with open("dist/artifacts.json") as f:
+              artifacts = json.load(f)
+          want = f"ghcr.io/raunakiitp/codvian-router:{tag}"
+          for a in artifacts:
+              if a.get("type") in ("Docker Image", "Published Docker Image") \
+                      and a.get("name") == want:
+                  digest = (a.get("extra") or {}).get("Digest")
+                  if digest:
+                      print(f"image digest: {digest}")
+                      with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+                          out.write(f"digest={digest}\n")
+                      sys.exit(0)
+          print(f"no Docker Image artifact named {want} in dist/artifacts.json", file=sys.stderr)
+          sys.exit(1)
+          EOF
+
+      # SLSA-style build provenance: an in-toto attestation per artifact,
+      # signed by Sigstore, stating that this workflow built these exact
+      # files from this commit. Verifiable with:
+      #   gh attestation verify <artifact> --repo raunakiitp/CodvianRouter
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+            dist/*.sbom.json
+
+      # The same provenance for the published Docker image. The image
+      # has no file in dist/, so its subject is the manifest digest
+      # from the step above. push-to-registry stores the attestation
+      # alongside the image, so it verifies with:
+      #   gh attestation verify oci://ghcr.io/raunakiitp/codvian-router:<tag> --repo raunakiitp/CodvianRouter
+      - name: Attest image build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-name: ghcr.io/raunakiitp/codvian-router
+          subject-digest: ${{ steps.image-digest.outputs.digest }}
+          push-to-registry: true
+
+  # Self-check: download the just-published release exactly as a user
+  # would and run the full verification (signature -> checksums -> SBOM
+  # -> attestation). A green release job with a red verify job means the
+  # pipeline published something users cannot verify — treat it as a
+  # failed release. GitHub can take a few seconds to serve new release
+  # assets, so the script retries its downloads.
+  verify:
+    needs: release
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out (for the verify script only)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify the published release as a user would
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if sh scripts/verify-release.sh "${{ github.ref_name }}"; then
+              exit 0
+            fi
+            echo "verify attempt $i failed; retrying in 30s (release assets may still be propagating)..."
+            sleep 30
+          done
+          echo "release verification failed after 6 attempts" >&2
+          exit 1
+
+      # Same self-check for the Docker image: signature (same keyless
+      # identity as the release blobs) -> provenance attestation ->
+      # pull -> run `help` (proves the published image actually starts
+      # the router binary). A green release job with a red image verify
+      # is a failed release, same as for the binaries. GHCR can take a
+      # few seconds to serve the new image, so this retries too.
+      - name: Verify the published Docker image as a user would
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if sh scripts/verify-image.sh "${{ github.ref_name }}" \
+              && docker pull "ghcr.io/raunakiitp/codvian-router:${{ github.ref_name }}" \
+              && docker run --rm "ghcr.io/raunakiitp/codvian-router:${{ github.ref_name }}" help; then
+              exit 0
+            fi
+            echo "image verify attempt $i failed; retrying in 30s (image may still be propagating)..."
+            sleep 30
+          done
+          echo "image verification failed after 6 attempts" >&2
+          exit 1

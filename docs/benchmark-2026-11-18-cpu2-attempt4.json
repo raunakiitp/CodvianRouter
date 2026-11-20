@@ -1,0 +1,179 @@
+{
+  "limiter_mode": "on",
+  "rig": {
+    "os": "Linux 7.0.0-44-generic x86_64",
+    "cpus": 4,
+    "mem_total_kib": 8124900,
+    "cpu_model": "AMD EPYC 9D25 126-Core Processor",
+    "go_version": "go version go1.27.4 linux/amd64",
+    "loadavg": [
+      "4.84",
+      "3.60",
+      "2.97"
+    ],
+    "loadavg_start": [
+      "1.45",
+      "3.42",
+      "2.88"
+    ],
+    "date": "2026-11-18T06:13:19+00:00",
+    "note": "Shared VM (1.5 shared vCPU budget), not a dedicated 2-vCPU droplet like Geekflare's; numbers are one sample per pass, pass 2 is the stability check."
+  },
+  "ready_ms": {
+    "healthz": 464.2,
+    "v1_models": 642.9
+  },
+  "idle_rss_kib": 42476,
+  "passes": {
+    "1": {
+      "direct_latency": {
+        "mode": "latency",
+        "base": "http://127.0.0.1:52885",
+        "model": "model-a",
+        "requests": 1000,
+        "ok": 1000,
+        "errors": 0,
+        "cache_hits": 0,
+        "elapsed_s": 0.136,
+        "mean_ms": 0.13,
+        "p50_ms": 0.085,
+        "p95_ms": 0.158,
+        "p99_ms": 0.227,
+        "min_ms": 0.047,
+        "max_ms": 35.35
+      },
+      "router_latency": {
+        "mode": "latency",
+        "base": "http://127.0.0.1:43067",
+        "model": "model-a",
+        "requests": 1000,
+        "ok": 1000,
+        "errors": 0,
+        "cache_hits": 10,
+        "elapsed_s": 2.768,
+        "mean_ms": 2.755,
+        "p50_ms": 0.993,
+        "p95_ms": 17.594,
+        "p99_ms": 35.643,
+        "min_ms": 0.542,
+        "max_ms": 66.229
+      },
+      "added_latency_p50_ms": 0.908,
+      "direct_rps": {
+        "mode": "rps",
+        "base": "http://127.0.0.1:52885",
+        "model": "model-a",
+        "concurrency": 32,
+        "duration_s": 20,
+        "elapsed_s": 20,
+        "completed": 304108,
+        "ok": 304108,
+        "errors": 0,
+        "cache_hits": 0,
+        "rps": 15205.129,
+        "upstream_rps": 15205.129,
+        "mean_ms": 2.601,
+        "p50_ms": 0.867,
+        "p95_ms": 5.359,
+        "p99_ms": 59.176
+      },
+      "router_rps": {
+        "mode": "rps",
+        "base": "http://127.0.0.1:43067",
+        "model": "model-a",
+        "concurrency": 32,
+        "duration_s": 20,
+        "elapsed_s": 20.023,
+        "completed": 28797,
+        "ok": 24286,
+        "errors": 4511,
+        "error_kinds": {
+          "http-502": 4511
+        },
+        "cache_hits": 10,
+        "rps": 1212.934,
+        "upstream_rps": 1212.434,
+        "mean_ms": 21.973,
+        "p50_ms": 12.059,
+        "p95_ms": 65.863,
+        "p99_ms": 84.099
+      },
+      "peak_rss_kib": 75240
+    },
+    "2": {
+      "direct_latency": {
+        "mode": "latency",
+        "base": "http://127.0.0.1:52885",
+        "model": "model-a",
+        "requests": 1000,
+        "ok": 1000,
+        "errors": 0,
+        "cache_hits": 0,
+        "elapsed_s": 0.114,
+        "mean_ms": 0.108,
+        "p50_ms": 0.083,
+        "p95_ms": 0.179,
+        "p99_ms": 0.387,
+        "min_ms": 0.04,
+        "max_ms": 6.012
+      },
+      "router_latency": {
+        "mode": "latency",
+        "base": "http://127.0.0.1:43067",
+        "model": "model-a",
+        "requests": 1000,
+        "ok": 1000,
+        "errors": 0,
+        "cache_hits": 10,
+        "elapsed_s": 1.345,
+        "mean_ms": 1.334,
+        "p50_ms": 0.794,
+        "p95_ms": 1.525,
+        "p99_ms": 25.767,
+        "min_ms": 0.442,
+        "max_ms": 30.945
+      },
+      "added_latency_p50_ms": 0.711,
+      "direct_rps": {
+        "mode": "rps",
+        "base": "http://127.0.0.1:52885",
+        "model": "model-a",
+        "concurrency": 32,
+        "duration_s": 20,
+        "elapsed_s": 20,
+        "completed": 335128,
+        "ok": 335128,
+        "errors": 0,
+        "cache_hits": 0,
+        "rps": 16756.218,
+        "upstream_rps": 16756.218,
+        "mean_ms": 1.533,
+        "p50_ms": 0.539,
+        "p95_ms": 2.473,
+        "p99_ms": 53.034
+      },
+      "router_rps": {
+        "mode": "rps",
+        "base": "http://127.0.0.1:43067",
+        "model": "model-a",
+        "concurrency": 32,
+        "duration_s": 20,
+        "elapsed_s": 20.037,
+        "completed": 24086,
+        "ok": 19295,
+        "errors": 4791,
+        "error_kinds": {
+          "http-502": 4791
+        },
+        "cache_hits": 10,
+        "rps": 962.95,
+        "upstream_rps": 962.451,
+        "mean_ms": 26.535,
+        "p50_ms": 14.55,
+        "p95_ms": 76.138,
+        "p99_ms": 99.202
+      },
+      "peak_rss_kib": 96420
+    }
+  }
+}

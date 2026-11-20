@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "error-call-tool-search-max-5",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call. Filtered server (max-5): MaxTools cap of 5.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 106,
+    "method": "tools/call",
+    "params": {
+      "name": "tool_search",
+      "arguments": {
+        "query": ""
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 106,
+    "error": {
+      "code": -32602,
+      "message": "unknown tool: tool_search"
+    }
+  },
+  "assert": {
+    "id": 106,
+    "expect_error": true,
+    "error_code": -32602,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32602,
+      "error.message": "unknown tool: tool_search",
+      "jsonrpc": "2.0"
+    }
+  },
+  "notes": "tool_search sits past the MaxTools-5 cap (last in Tools() order), so calling it is -32602 unknown tool — the cap hides the tail of the list, not just its announcement. The capped count (5) is pinned on tools-list-max-5 by index + json_lengths, not here."
+}

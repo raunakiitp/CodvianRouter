@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-explain-route",
+  "fixture": true,
+  "transport": "sse",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + fixed test gateway keys + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger for the routing-reader and cost-reader keys, prices a $10/$30 and c $5/$15 per 1M, routing group fast; memory seeded with one fixed entry for the destructive memory key) over httptest (loopback) via GET /api/mcp/sse (endpoint event) + POST /api/mcp/sse?session_id= with a test gateway key; message-event data captured verbatim. Recorded data only, no live provider call.",
+  "key": "wide",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 14,
+    "method": "tools/call",
+    "params": {
+      "name": "explain_route",
+      "arguments": {
+        "model": "a"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 14,
+    "result": {
+      "content": [
+        {
+          "text": "{\"route\":{\"model\":\"a\",\"strategy\":\"priority\",\"rule\":\"Declared order first — targets are tried in the order the operator configured them, with no re-ranking.\",\"attempts\":[{\"provider\":\"p1\",\"provider_name\":\"Coder\",\"model\":\"a\",\"enabled\":true,\"price_known\":true,\"prompt_usd_per_1m\":10}],\"note\":\"Order shown is the declared (priority) order over the providers offering this model. Priority keeps declared order: no re-ranking.\"}}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "route": {
+          "model": "a",
+          "strategy": "priority",
+          "rule": "Declared order first — targets are tried in the order the operator configured them, with no re-ranking.",
+          "attempts": [
+            {
+              "provider": "p1",
+              "provider_name": "Coder",
+              "model": "a",
+              "enabled": true,
+              "price_known": true,
+              "prompt_usd_per_1m": 10
+            }
+          ],
+          "note": "Order shown is the declared (priority) order over the providers offering this model. Priority keeps declared order: no re-ranking."
+        }
+      }
+    }
+  },
+  "recorded_http_status": 202,
+  "assert": {
+    "id": 14,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.route.attempts.0.price_known": true,
+      "result.structuredContent.route.attempts.0.provider": "p1",
+      "result.structuredContent.route.strategy": "priority"
+    },
+    "http_status": 202
+  },
+  "notes": "explain_route dry-runs model a from the live feed: strategy priority, one attempt on p1 with a known price."
+}

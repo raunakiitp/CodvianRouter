@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-memory-search",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger, prices a $10/$30 and c $5/$15 per 1M, routing group fast) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "memory",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 30,
+    "method": "tools/call",
+    "params": {
+      "name": "memory_search",
+      "arguments": {
+        "query": "DARK"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 30,
+    "result": {
+      "content": [
+        {
+          "text": "{\"count\":1,\"entries\":[{\"id\":\"93ec6ec7a64e1b03\",\"text\":\"prefers dark mode\",\"created_at\":\"2026-11-19T12:20:47.091221404Z\",\"matches\":1}]}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "count": 1,
+        "entries": [
+          {
+            "id": "93ec6ec7a64e1b03",
+            "text": "prefers dark mode",
+            "created_at": "2026-11-19T12:20:47.091221404Z",
+            "matches": 1
+          }
+        ]
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 30,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.count": 1,
+      "result.structuredContent.entries.0.created_at": null,
+      "result.structuredContent.entries.0.id": null,
+      "result.structuredContent.entries.0.matches": 1,
+      "result.structuredContent.entries.0.text": "prefers dark mode"
+    },
+    "http_status": 200
+  },
+  "notes": "memory_search finds the caller's own note by case-insensitive substring (query DARK matches \"prefers dark mode\" once). Setup adds the note first on the same session — a fresh server's store is empty, so without the setup this would honestly return count 0."
+}

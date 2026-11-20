@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-db-health",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; no ledger wired) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "ops",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 8,
+    "method": "tools/call",
+    "params": {
+      "name": "db_health",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 8,
+    "result": {
+      "content": [
+        {
+          "text": "{\"healthy\":true,\"files\":[{\"name\":\"ledger.db\",\"exists\":false,\"modified_at\":\"0001-01-01T00:00:00Z\"},{\"name\":\"feedback.db\",\"exists\":false,\"modified_at\":\"0001-01-01T00:00:00Z\"}]}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "healthy": true,
+        "files": [
+          {
+            "name": "ledger.db",
+            "exists": false,
+            "modified_at": "0001-01-01T00:00:00Z"
+          },
+          {
+            "name": "feedback.db",
+            "exists": false,
+            "modified_at": "0001-01-01T00:00:00Z"
+          }
+        ]
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 8,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent",
+      "result.structuredContent.files"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.healthy": true
+    },
+    "http_status": 200
+  },
+  "notes": "db_health with the mcp:manage:ops key: healthy=true (no database files exist yet, nothing is broken)."
+}

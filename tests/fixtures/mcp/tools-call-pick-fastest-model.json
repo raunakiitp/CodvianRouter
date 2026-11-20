@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-pick-fastest-model",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 14,
+    "method": "tools/call",
+    "params": {
+      "name": "pick_fastest_model",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 14,
+    "result": {
+      "content": [
+        {
+          "text": "{\"latency_events\":9,\"mean_latency_ms\":120.5,\"model\":\"coder-model\",\"note\":\"Measured mean latency over recent successful ledger events only — no price or catalog guess.\",\"provider\":\"p1\",\"requests\":10,\"success_rate\":0.9}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "latency_events": 9,
+        "mean_latency_ms": 120.5,
+        "model": "coder-model",
+        "note": "Measured mean latency over recent successful ledger events only — no price or catalog guess.",
+        "provider": "p1",
+        "requests": 10,
+        "success_rate": 0.9
+      }
+    }
+  },
+  "assert": {
+    "id": 14,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.model"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.latency_events": 9,
+      "result.structuredContent.mean_latency_ms": 120.5,
+      "result.structuredContent.model": "coder-model",
+      "result.structuredContent.provider": "p1",
+      "result.structuredContent.requests": 10,
+      "result.structuredContent.success_rate": 0.9
+    }
+  },
+  "notes": "pick_fastest_model: coder-model wins on measured mean latency (120.5 ms over 9 events); chat-model has no measured latency so it is not eligible."
+}

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-model-list-denied",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; no ledger wired) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "read",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 7,
+    "method": "tools/call",
+    "params": {
+      "name": "model_list",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 7,
+    "error": {
+      "code": -32002,
+      "message": "scope denied: missing required scope(s): mcp:read:models"
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 7,
+    "expect_error": true,
+    "error_code": -32002,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32002,
+      "error.message": "scope denied: missing required scope(s): mcp:read:models",
+      "jsonrpc": "2.0"
+    },
+    "http_status": 200
+  },
+  "notes": "model_list with the narrow mcp:read:status key is denied -32002."
+}

@@ -46,8 +46,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/raunakiitp/codvian-router/internal/reasoning"
 )
 
 // ---------------------------------------------------------------------------
@@ -57,6 +61,10 @@ import (
 // GeminiPart is one part of a Gemini content block.
 type GeminiPart struct {
 	Text string `json:"text,omitempty"`
+	// Thought marks a part as model thought (internal reasoning):
+	// its text is never visible content, and it is captured into
+	// the response's reasoning state instead.
+	Thought bool `json:"thought,omitempty"`
 	// InlineData carries a base64 image (data: URL on the OpenAI side).
 	InlineData *GeminiInlineData `json:"inlineData,omitempty"`
 	// FunctionCall is a model request to call a function.
@@ -64,7 +72,8 @@ type GeminiPart struct {
 	// FunctionResponse is a tool result.
 	FunctionResponse *GeminiFunctionResponse `json:"functionResponse,omitempty"`
 	// ThoughtSignature is internal reasoning metadata Gemini attaches
-	// to parts; it is carried through on decode and ignored.
+	// to parts; it is carried through on decode and captured into
+	// the reasoning state (never emitted as content).
 	ThoughtSignature string `json:"thoughtSignature,omitempty"`
 }
 
@@ -123,6 +132,20 @@ type GeminiGenerationConfig struct {
 	TopP            *float64 `json:"topP,omitempty"`
 	MaxOutputTokens *int     `json:"maxOutputTokens,omitempty"`
 	StopSequences   []string `json:"stopSequences,omitempty"`
+	// ThinkingConfig carries the numeric thinking budget
+	// (CHECKLIST 285-286): the operator-declared budget for the
+	// attempt's effort in config `reasoning.effort_budgets`.
+	// Nil means no thinkingConfig is sent — the provider
+	// default applies. Set only by the Gemini client from
+	// ChatRequest.ThinkingBudget, never by the wire converter
+	// (the converter must not invent a budget for an effort).
+	ThinkingConfig *GeminiThinkingConfig `json:"thinkingConfig,omitempty"`
+}
+
+// GeminiThinkingConfig is the thinkingConfig block of a Gemini
+// generationConfig: {"thinkingBudget": N}.
+type GeminiThinkingConfig struct {
+	ThinkingBudget int `json:"thinkingBudget,omitempty"`
 }
 
 // GeminiRequest is the body of POST .../models/{model}:generateContent.
@@ -147,10 +170,17 @@ type GeminiPromptFeedback struct {
 }
 
 // GeminiUsageMetadata is the usageMetadata block of a Gemini response.
+// CachedContentTokenCount is Gemini's provider-reported count of
+// prompt tokens served from its cached content.
+// ThoughtsTokenCount is Gemini's provider-reported count of
+// completion tokens spent on internal reasoning — a subset of
+// CandidatesTokenCount.
 type GeminiUsageMetadata struct {
-	PromptTokenCount     int `json:"promptTokenCount,omitempty"`
-	CandidatesTokenCount int `json:"candidatesTokenCount,omitempty"`
-	TotalTokenCount      int `json:"totalTokenCount,omitempty"`
+	PromptTokenCount        int `json:"promptTokenCount,omitempty"`
+	CandidatesTokenCount    int `json:"candidatesTokenCount,omitempty"`
+	TotalTokenCount         int `json:"totalTokenCount,omitempty"`
+	CachedContentTokenCount int `json:"cachedContentTokenCount,omitempty"`
+	ThoughtsTokenCount      int `json:"thoughtsTokenCount,omitempty"`
 }
 
 // GeminiResponse is the body of a generateContent reply (streaming or not).
@@ -177,7 +207,10 @@ type GeminiError struct {
 	Status     string // e.g. "RESOURCE_EXHAUSTED", "INVALID_ARGUMENT"
 	Message    string
 	RetryAfter time.Duration
-	Retryable  bool
+	// RetryAfterPresent: see AnthropicError — true when a
+	// Retry-After header was present and parsed, including "0".
+	RetryAfterPresent bool
+	Retryable         bool
 }
 
 func (e *GeminiError) Error() string {
@@ -243,9 +276,11 @@ func parseGeminiErrorBody(body []byte) (code int, status, message string) {
 // MapGeminiError converts a non-2xx Gemini HTTP response (status,
 // headers, body) into a *GeminiError that preserves the status code
 // and the Gemini error status. 429 stays 429-class and 5xx stay 5xx
-// so the router's failover triggers correctly; a 4xx whose body
-// mentions quota/billing is not retryable (it is a quota problem, and
-// the provider maps it to QuotaError by message).
+// so the router's failover triggers correctly. 402/404 are retryable
+// per the shared taxonomy (RetryableStatus): they are properties of
+// that target (its billing, its model list) — the provider layer
+// still maps a 402 to QuotaError by status, so the retryable flag
+// here only matters for the wire-level error itself.
 func MapGeminiError(status int, headers http.Header, body []byte) error {
 	_, errStatus, message := parseGeminiErrorBody(body)
 	retryable := false
@@ -254,16 +289,55 @@ func MapGeminiError(status int, headers http.Header, body []byte) error {
 		retryable = true
 	case errStatus == "UNAVAILABLE" || errStatus == "DEADLINE_EXCEEDED":
 		retryable = true
-	case status >= 500 || status == http.StatusRequestTimeout:
+	case status == http.StatusBadRequest && IsModelNotFoundSignal(errStatus+" "+message):
+		// Entry 151: a 400 that means "model not found at this
+		// target" falls back; any other 400 stops the chain.
+		retryable = true
+	case RetryableStatus(status):
 		retryable = true
 	}
-	return &GeminiError{
-		StatusCode: status,
-		Status:     errStatus,
-		Message:    message,
-		RetryAfter: parseRetryAfter(headers),
-		Retryable:  retryable,
+	ra, raPresent := parseRetryAfter(headers)
+	if !raPresent {
+		// No usable header: a Gemini 429 usually carries its
+		// hint in the body instead — google.rpc.RetryInfo
+		// (`"retryDelay": "30s"`). The general body parser
+		// lives in internal/provider (ParseRetryAfterBody,
+		// M4.4); this wire-local extraction covers only the
+		// RetryInfo shape, because the wire package cannot
+		// import the provider package.
+		ra, raPresent = geminiRetryDelay(body)
 	}
+	return &GeminiError{
+		StatusCode:        status,
+		Status:            errStatus,
+		Message:           message,
+		RetryAfter:        ra,
+		RetryAfterPresent: raPresent,
+		Retryable:         retryable,
+	}
+}
+
+// geminiRetryDelayRE matches a google.rpc.RetryInfo retryDelay value
+// inside a Gemini error body: `"retryDelay": "30s"` (protobuf
+// Duration JSON). See geminiRetryDelay.
+var geminiRetryDelayRE = regexp.MustCompile(`"retryDelay"\s*:\s*"([0-9]+(?:\.[0-9]+)?s)"`)
+
+// geminiRetryDelay extracts a Retry-After duration from a Gemini error
+// body (google.rpc.RetryInfo), or (0, false) when the body carries
+// none. The general body parser is internal/provider.ParseRetryAfterBody
+// (M4.4); this wire-local extraction exists because the wire package
+// cannot import the provider package, and Gemini is the one wire
+// whose 429s carry their hint in the body rather than a header.
+func geminiRetryDelay(body []byte) (time.Duration, bool) {
+	m := geminiRetryDelayRE.FindSubmatch(body)
+	if m == nil {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(strings.TrimSuffix(string(m[1]), "s"), 64)
+	if err != nil || f < 0 {
+		return 0, false
+	}
+	return time.Duration(f * float64(time.Second)), true
 }
 
 // MapGeminiStreamError converts a Gemini SSE error payload
@@ -283,11 +357,16 @@ func MapGeminiStreamError(body []byte) error {
 	case "INTERNAL", "UNKNOWN":
 		retryable = true
 	}
+	// SSE error payloads carry no headers, so a RetryInfo hint in
+	// the payload is the only hint there is (see geminiRetryDelay).
+	ra, raPresent := geminiRetryDelay(body)
 	return &GeminiError{
-		StatusCode: status,
-		Status:     errStatus,
-		Message:    message,
-		Retryable:  retryable,
+		StatusCode:        status,
+		Status:            errStatus,
+		Message:           message,
+		RetryAfter:        ra,
+		RetryAfterPresent: raPresent,
+		Retryable:         retryable,
 	}
 }
 
@@ -325,6 +404,19 @@ func ConvertGeminiRequest(req ChatCompletionRequest) (*GeminiRequest, error) {
 	}
 	if len(req.Stop) > 5 {
 		return nil, unrep("Gemini accepts at most 5 stop sequences, got %d", len(req.Stop))
+	}
+	// Reasoning continuity (CHECKLIST 163): validate every
+	// assistant message's restored reasoning state up front —
+	// Gemini translates reasoning text into thought parts and
+	// drops lone signatures, but a state it cannot represent at
+	// all fails the hop here (the router fails over) rather
+	// than silently dropping reasoning.
+	for i, m := range req.Messages {
+		if m.Reasoning != nil && !m.Reasoning.Empty() {
+			if _, _, err := reasoning.Check(m.Reasoning, reasoning.WireGemini, req.Model); err != nil {
+				return nil, fmt.Errorf("messages[%d] reasoning: %w", i, err)
+			}
+		}
 	}
 
 	// Map tool-call IDs to function names from assistant messages, so
@@ -562,6 +654,14 @@ func convertGeminiMessage(m ChatMessage, index int, callNames map[string]string)
 				Args: json.RawMessage(args),
 			}})
 		}
+		// Restored reasoning: thought parts lead the model
+		// content; thought signatures attach to the functionCall
+		// part they sign (or the first part, best-effort).
+		// reasoning.Check (in ConvertGeminiRequest) already
+		// proved this state representable here.
+		if m.Reasoning != nil && !m.Reasoning.Empty() {
+			parts = geminiReasoningParts(m.Reasoning, parts)
+		}
 		return GeminiContent{Role: "model", Parts: parts}, nil
 	case "tool":
 		if strings.TrimSpace(m.ToolCallID) == "" {
@@ -584,6 +684,69 @@ func convertGeminiMessage(m ChatMessage, index int, callNames map[string]string)
 	default:
 		return GeminiContent{}, unrep("messages[%d].role %q is not supported", index, m.Role)
 	}
+}
+
+// geminiReasoningParts renders a captured reasoning state as Gemini
+// parts and merges them into the model content's parts. Reasoning
+// text becomes thought parts (thought:true) that lead the content;
+// a thought_signature attaches to the functionCall part whose name
+// it carries, or — when the call is not in this message — to the
+// first part, best-effort (a signature whose call is absent from
+// this turn cannot be attached anywhere better; the function call
+// itself is preserved in the conversation). Bedrock redacted
+// content and lone signatures have no Gemini equivalent and were
+// already recorded as drops by reasoning.Check.
+func geminiReasoningParts(st *reasoning.State, parts []GeminiPart) []GeminiPart {
+	if st == nil {
+		return parts
+	}
+	var thought []GeminiPart
+	var sigs []reasoning.Block
+	for _, b := range st.Blocks {
+		switch b.Kind {
+		case reasoning.KindThinking, reasoning.KindThought:
+			p := GeminiPart{Text: b.Text, Thought: true}
+			// Only a Gemini-issued signature may ride on a
+			// thought part: an Anthropic or Bedrock signature
+			// is meaningless to Gemini and would fail its
+			// validation, so it is dropped (recorded by Check).
+			if b.Signature != "" && st.SourceWire == reasoning.WireGemini {
+				p.ThoughtSignature = b.Signature
+			}
+			thought = append(thought, p)
+		case reasoning.KindBedrock:
+			if text, _, _ := reasoning.ParseBedrockReasoning(b.Data); strings.TrimSpace(text) != "" {
+				thought = append(thought, GeminiPart{Text: text, Thought: true})
+			}
+		case reasoning.KindThoughtSignature:
+			sigs = append(sigs, b)
+		}
+	}
+	// Attach signatures to the part they sign.
+	for _, sig := range sigs {
+		attached := false
+		if sig.Name != "" {
+			for i := range parts {
+				if parts[i].FunctionCall != nil && parts[i].FunctionCall.Name == sig.Name {
+					parts[i].ThoughtSignature = sig.Signature
+					attached = true
+					break
+				}
+			}
+		}
+		if !attached {
+			// No matching call in this message: attach to the
+			// first part (a thought part if one was just built,
+			// else the first content part). Best-effort — the
+			// signature is preserved rather than dropped.
+			if len(thought) > 0 {
+				thought[0].ThoughtSignature = sig.Signature
+			} else if len(parts) > 0 {
+				parts[0].ThoughtSignature = sig.Signature
+			}
+		}
+	}
+	return append(thought, parts...)
 }
 
 // geminiFunctionResponseValue wraps a tool result's text as the
@@ -750,12 +913,32 @@ func ConvertGeminiResponse(resp *GeminiResponse) (*ChatCompletionResponse, error
 	var (
 		text      strings.Builder
 		toolCalls []ToolCall
+		state     *reasoning.State
 	)
+	capture := func(b reasoning.Block) {
+		if state == nil {
+			state = &reasoning.State{SourceWire: reasoning.WireGemini, SourceModel: resp.ModelVersion}
+		}
+		state.Add(b)
+	}
 	if cand.Content != nil {
 		for i, p := range cand.Content.Parts {
 			switch {
+			case p.Thought:
+				// Thought text is internal reasoning, never
+				// visible content — captured, not written to
+				// the message. A thought part with no text
+				// but a signature carries the signature only.
+				if strings.TrimSpace(p.Text) != "" {
+					capture(reasoning.Block{Kind: reasoning.KindThought, Text: p.Text, Signature: p.ThoughtSignature})
+				} else if p.ThoughtSignature != "" {
+					capture(reasoning.Block{Kind: reasoning.KindThoughtSignature, Signature: p.ThoughtSignature})
+				}
 			case p.Text != "":
 				text.WriteString(p.Text)
+				if p.ThoughtSignature != "" {
+					capture(reasoning.Block{Kind: reasoning.KindThoughtSignature, Signature: p.ThoughtSignature})
+				}
 			case p.FunctionCall != nil:
 				if strings.TrimSpace(p.FunctionCall.Name) == "" {
 					return nil, unrep("response candidate parts[%d] is a functionCall with no name", i)
@@ -775,15 +958,19 @@ func ConvertGeminiResponse(resp *GeminiResponse) (*ChatCompletionResponse, error
 						Arguments: args,
 					},
 				})
+				if p.ThoughtSignature != "" {
+					capture(reasoning.Block{Kind: reasoning.KindThoughtSignature, Name: p.FunctionCall.Name, Signature: p.ThoughtSignature})
+				}
 			case p.InlineData != nil:
 				return nil, unrep("response candidate parts[%d] is image output (inlineData) with no OpenAI equivalent", i)
 			case p.FunctionResponse != nil:
 				return nil, unrep("response candidate parts[%d] is a functionResponse with no OpenAI equivalent", i)
 			default:
-				// A part carrying only a thoughtSignature (internal
-				// reasoning metadata) is dropped; anything else
-				// unrecognised is an error.
+				// A part carrying only a thoughtSignature
+				// (internal reasoning metadata) is captured;
+				// anything else unrecognised is an error.
 				if p.ThoughtSignature != "" {
+					capture(reasoning.Block{Kind: reasoning.KindThoughtSignature, Signature: p.ThoughtSignature})
 					continue
 				}
 				return nil, unrep("response candidate parts[%d] has an unrecognised shape", i)
@@ -803,6 +990,8 @@ func ConvertGeminiResponse(resp *GeminiResponse) (*ChatCompletionResponse, error
 			PromptTokens:     resp.UsageMetadata.PromptTokenCount,
 			CompletionTokens: resp.UsageMetadata.CandidatesTokenCount,
 			TotalTokens:      resp.UsageMetadata.TotalTokenCount,
+			CachedTokens:     resp.UsageMetadata.CachedContentTokenCount,
+			ReasoningTokens:  resp.UsageMetadata.ThoughtsTokenCount,
 		}
 		if usage.TotalTokens == 0 {
 			usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
@@ -818,7 +1007,8 @@ func ConvertGeminiResponse(resp *GeminiResponse) (*ChatCompletionResponse, error
 			Message:      msg,
 			FinishReason: MapGeminiFinishReason(cand.FinishReason),
 		}},
-		Usage: usage,
+		Usage:     usage,
+		Reasoning: state,
 	}, nil
 }
 
@@ -864,6 +1054,19 @@ func TranslateGeminiStream(r io.Reader, emit func(ChatChunk) error) (StreamResul
 		finish   string
 		blocked  bool
 	)
+	// Reasoning capture (CHECKLIST 163): thought parts accumulate
+	// their text across events (thoughtBuf) and keep the latest
+	// signature (thoughtSig); functionCall signatures accumulate
+	// per call name (callSigs); signature-only parts accumulate in
+	// order (bareSigs). Assembled into StreamResult.Reasoning at
+	// the end — never emitted as content.
+	var (
+		thoughtBuf strings.Builder
+		thoughtSig string
+		callSigs   = make(map[string]string)
+		callOrder  []string
+		bareSigs   []string
+	)
 	emitChunk := func(delta ChunkDelta, finishReason *string, usage *Usage) error {
 		return emit(ChatChunk{
 			ID:      res.ID,
@@ -899,6 +1102,8 @@ func TranslateGeminiStream(r io.Reader, emit func(ChatChunk) error) (StreamResul
 			res.Usage.PromptTokens = parsed.UsageMetadata.PromptTokenCount
 			res.Usage.CompletionTokens = parsed.UsageMetadata.CandidatesTokenCount
 			res.Usage.TotalTokens = parsed.UsageMetadata.TotalTokenCount
+			res.Usage.CachedTokens = parsed.UsageMetadata.CachedContentTokenCount
+			res.Usage.ReasoningTokens = parsed.UsageMetadata.ThoughtsTokenCount
 			if res.Usage.TotalTokens == 0 {
 				res.Usage.TotalTokens = res.Usage.PromptTokens + res.Usage.CompletionTokens
 			}
@@ -920,10 +1125,22 @@ func TranslateGeminiStream(r io.Reader, emit func(ChatChunk) error) (StreamResul
 		}
 		for _, p := range cand.Content.Parts {
 			switch {
+			case p.Thought:
+				// Thought text is internal reasoning, never
+				// visible content — accumulated, not emitted.
+				if p.Text != "" {
+					thoughtBuf.WriteString(p.Text)
+				}
+				if p.ThoughtSignature != "" {
+					thoughtSig = p.ThoughtSignature
+				}
 			case p.Text != "":
 				content.WriteString(p.Text)
 				if err := emitChunk(ChunkDelta{Role: "assistant", Content: p.Text}, nil, nil); err != nil {
 					return err
+				}
+				if p.ThoughtSignature != "" {
+					bareSigs = append(bareSigs, p.ThoughtSignature)
 				}
 			case p.FunctionCall != nil:
 				name := p.FunctionCall.Name
@@ -946,6 +1163,12 @@ func TranslateGeminiStream(r io.Reader, emit func(ChatChunk) error) (StreamResul
 						return err
 					}
 				}
+				if p.ThoughtSignature != "" {
+					if _, seen := callSigs[name]; !seen {
+						callOrder = append(callOrder, name)
+					}
+					callSigs[name] = p.ThoughtSignature
+				}
 				args := strings.TrimSpace(string(p.FunctionCall.Args))
 				if args != "" {
 					toolArgs[idx].WriteString(args)
@@ -961,7 +1184,10 @@ func TranslateGeminiStream(r io.Reader, emit func(ChatChunk) error) (StreamResul
 			case p.FunctionResponse != nil:
 				return unrep("streamed part is a functionResponse with no OpenAI equivalent")
 			default:
-				// Thought-signature-only parts are dropped.
+				// Thought-signature-only parts are captured.
+				if p.ThoughtSignature != "" {
+					bareSigs = append(bareSigs, p.ThoughtSignature)
+				}
 			}
 		}
 		return nil
@@ -997,6 +1223,21 @@ func TranslateGeminiStream(r io.Reader, emit func(ChatChunk) error) (StreamResul
 	}
 	res.Content = content.String()
 	res.FinishReason = finish
+	if thoughtBuf.Len() > 0 || thoughtSig != "" || len(callOrder) > 0 || len(bareSigs) > 0 {
+		state := &reasoning.State{SourceWire: reasoning.WireGemini, SourceModel: res.Model}
+		if thoughtBuf.Len() > 0 {
+			state.Add(reasoning.Block{Kind: reasoning.KindThought, Text: thoughtBuf.String(), Signature: thoughtSig})
+		} else if thoughtSig != "" {
+			bareSigs = append([]string{thoughtSig}, bareSigs...)
+		}
+		for _, name := range callOrder {
+			state.Add(reasoning.Block{Kind: reasoning.KindThoughtSignature, Name: name, Signature: callSigs[name]})
+		}
+		for _, sig := range bareSigs {
+			state.Add(reasoning.Block{Kind: reasoning.KindThoughtSignature, Signature: sig})
+		}
+		res.Reasoning = state
+	}
 	fr := res.FinishReason
 	usage := res.Usage
 	if err := emitChunk(ChunkDelta{}, &fr, &usage); err != nil {

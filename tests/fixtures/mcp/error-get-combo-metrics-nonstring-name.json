@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "error-get-combo-metrics-nonstring-name",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 80,
+    "method": "tools/call",
+    "params": {
+      "name": "get_combo_metrics",
+      "arguments": {
+        "name": 42
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 80,
+    "error": {
+      "code": -32602,
+      "message": "name: must be a string"
+    }
+  },
+  "assert": {
+    "id": 80,
+    "expect_error": true,
+    "error_code": -32602,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32602,
+      "error.message": "name: must be a string",
+      "jsonrpc": "2.0"
+    }
+  },
+  "notes": "WT-06: get_combo_metrics with a non-string name is invalid params (-32602): combo names are strings, never coerced from numbers."
+}

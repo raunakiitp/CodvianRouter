@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-memory-search",
+  "fixture": true,
+  "transport": "sse",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + fixed test gateway keys + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger for the routing-reader and cost-reader keys, prices a $10/$30 and c $5/$15 per 1M, routing group fast; memory seeded with one fixed entry for the destructive memory key) over httptest (loopback) via GET /api/mcp/sse (endpoint event) + POST /api/mcp/sse?session_id= with a test gateway key; message-event data captured verbatim. Recorded data only, no live provider call.",
+  "key": "memory-destr",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 20,
+    "method": "tools/call",
+    "params": {
+      "name": "memory_search",
+      "arguments": {
+        "query": "dark mode"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 20,
+    "result": {
+      "content": [
+        {
+          "text": "{\"count\":1,\"entries\":[{\"id\":\"mem-0000000000000001\",\"text\":\"prefers dark mode\",\"created_at\":\"2026-11-19T12:00:00Z\",\"matches\":1}]}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "count": 1,
+        "entries": [
+          {
+            "id": "mem-0000000000000001",
+            "text": "prefers dark mode",
+            "created_at": "2026-11-19T12:00:00Z",
+            "matches": 1
+          }
+        ]
+      }
+    }
+  },
+  "recorded_http_status": 202,
+  "assert": {
+    "id": 20,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.entries"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.count": 1,
+      "result.structuredContent.entries.0.id": "mem-0000000000000001",
+      "result.structuredContent.entries.0.matches": 1,
+      "result.structuredContent.entries.0.text": "prefers dark mode"
+    },
+    "http_status": 202
+  },
+  "notes": "memory_search for 'dark mode' finds the one seeded memory (fixed id, fixed created_at): occurrence count 1, not a relevance score."
+}

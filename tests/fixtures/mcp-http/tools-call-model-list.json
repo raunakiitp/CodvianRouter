@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-model-list",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; no ledger wired) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "wide",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 5,
+    "method": "tools/call",
+    "params": {
+      "name": "model_list",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 5,
+    "result": {
+      "content": [
+        {
+          "text": "{\"models\":[{\"id\":\"a\",\"provider_id\":\"p1\",\"provider_name\":\"Coder\"},{\"id\":\"b\",\"provider_id\":\"p1\",\"provider_name\":\"Coder\"},{\"id\":\"c\",\"provider_id\":\"p2\",\"provider_name\":\"Chatter\"}]}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "models": [
+          {
+            "id": "a",
+            "provider_id": "p1",
+            "provider_name": "Coder"
+          },
+          {
+            "id": "b",
+            "provider_id": "p1",
+            "provider_name": "Coder"
+          },
+          {
+            "id": "c",
+            "provider_id": "p2",
+            "provider_name": "Chatter"
+          }
+        ]
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 5,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.models"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.models.0.id": "a",
+      "result.structuredContent.models.0.provider_id": "p1",
+      "result.structuredContent.models.1.id": "b",
+      "result.structuredContent.models.1.provider_id": "p1",
+      "result.structuredContent.models.2.id": "c",
+      "result.structuredContent.models.2.provider_id": "p2"
+    },
+    "http_status": 200
+  },
+  "notes": "model_list with the mcp:read:* key: models a/b on p1, c on p2."
+}

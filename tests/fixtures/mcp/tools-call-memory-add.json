@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-memory-add",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 43,
+    "method": "tools/call",
+    "params": {
+      "name": "memory_add",
+      "arguments": {
+        "text": "The router caches repeated prompts."
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 43,
+    "result": {
+      "content": [
+        {
+          "text": "{\"created_at\":\"2026-11-19T12:00:00Z\",\"id\":\"mem-3\",\"text\":\"The router caches repeated prompts.\"}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "created_at": "2026-11-19T12:00:00Z",
+        "id": "mem-3",
+        "text": "The router caches repeated prompts."
+      }
+    }
+  },
+  "assert": {
+    "id": 43,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.id"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.created_at": "2026-11-19T12:00:00Z",
+      "result.structuredContent.id": "mem-3",
+      "result.structuredContent.text": "The router caches repeated prompts."
+    }
+  },
+  "notes": "memory_add: stores one memory under the local-operator namespace; id mem-3 follows the seeded mem-1/mem-2 (counter-based, so it is the same after a clear)."
+}

@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-set-routing-strategy",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 40,
+    "method": "tools/call",
+    "params": {
+      "name": "set_routing_strategy",
+      "arguments": {
+        "strategy": "fastest"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 40,
+    "result": {
+      "content": [
+        {
+          "text": "{\"chain\":\"\",\"previous\":{\"name\":\"priority\",\"rule\":\"Declared order first.\",\"scope\":\"global\",\"inherited\":false},\"strategy\":{\"name\":\"fastest\",\"rule\":\"Lowest measured latency first.\",\"scope\":\"global\",\"inherited\":false}}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "chain": "",
+        "previous": {
+          "name": "priority",
+          "rule": "Declared order first.",
+          "scope": "global",
+          "inherited": false
+        },
+        "strategy": {
+          "name": "fastest",
+          "rule": "Lowest measured latency first.",
+          "scope": "global",
+          "inherited": false
+        }
+      }
+    }
+  },
+  "assert": {
+    "id": 40,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.strategy"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.chain": "",
+      "result.structuredContent.previous.name": "priority",
+      "result.structuredContent.strategy.name": "fastest",
+      "result.structuredContent.strategy.scope": "global"
+    }
+  },
+  "notes": "set_routing_strategy to fastest (global): replies with the stored strategy and the previous one (priority). Runs after explain/simulate so the session still sees priority there."
+}

@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-create-combo",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger, prices a $10/$30 and c $5/$15 per 1M, routing group fast) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "router",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 21,
+    "method": "tools/call",
+    "params": {
+      "name": "create_combo",
+      "arguments": {
+        "name": "new",
+        "members": [
+          "p1"
+        ]
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 21,
+    "result": {
+      "content": [
+        {
+          "text": "{\"combo\":{\"name\":\"new\",\"members\":[\"p1\"],\"strategy\":\"priority\",\"active\":false,\"usable\":true},\"created\":true}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "combo": {
+          "name": "new",
+          "members": [
+            "p1"
+          ],
+          "strategy": "priority",
+          "active": false,
+          "usable": true
+        },
+        "created": true
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 21,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.combo.members.0": "p1",
+      "result.structuredContent.combo.name": "new",
+      "result.structuredContent.combo.strategy": "priority",
+      "result.structuredContent.created": true
+    },
+    "http_status": 200
+  },
+  "notes": "create_combo succeeds through the same ComboStore.Create path POST /v1/combos runs: combo new, member p1, strategy priority."
+}

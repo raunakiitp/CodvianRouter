@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-set-routing-strategy",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger, prices a $10/$30 and c $5/$15 per 1M, routing group fast) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "router",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 20,
+    "method": "tools/call",
+    "params": {
+      "name": "set_routing_strategy",
+      "arguments": {
+        "strategy": "cheapest"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 20,
+    "result": {
+      "content": [
+        {
+          "text": "{\"chain\":\"\",\"previous\":{\"name\":\"priority\",\"rule\":\"Declared order first — targets are tried in the order the operator configured them, with no re-ranking.\",\"scope\":\"global\",\"inherited\":false},\"strategy\":{\"name\":\"cheapest\",\"rule\":\"Lowest cost first — the cheapest provider that is still reasonably reliable wins.\",\"scope\":\"global\",\"inherited\":false}}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "chain": "",
+        "previous": {
+          "name": "priority",
+          "rule": "Declared order first — targets are tried in the order the operator configured them, with no re-ranking.",
+          "scope": "global",
+          "inherited": false
+        },
+        "strategy": {
+          "name": "cheapest",
+          "rule": "Lowest cost first — the cheapest provider that is still reasonably reliable wins.",
+          "scope": "global",
+          "inherited": false
+        }
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 20,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.strategy.name": "cheapest"
+    },
+    "http_status": 200
+  },
+  "notes": "set_routing_strategy persists the global strategy as cheapest (read-back shows it) and applies it to the engine."
+}

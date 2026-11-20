@@ -105,15 +105,26 @@ func TestEngineSlowProviderCapShrinksAndSheds(t *testing.T) {
 	// The slow provider must serve at most its cap; the rest must
 	// shed to the fast provider.
 	slowBefore, fastBefore := slow.chatCalls(), fast.chatCalls()
+	// A start barrier: all ten goroutines begin together, so the
+	// burst is a real contention window (every request orders
+	// against the same in-flight state) instead of ten launches
+	// smeared across goroutine-scheduling jitter — a straggler
+	// launched after the first slow calls finished could
+	// otherwise acquire a freed slow slot and skew the split.
+	// The assertions below are unchanged: the limiter, not the
+	// launch order, must decide who serves what (CHECKLIST 190).
+	start := make(chan struct{})
 	var wg sync.WaitGroup
 	errs := make([]error, 10)
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
+			<-start
 			_, errs[i] = eng.Chat(ctx, chatReq(fmt.Sprintf("burst-%d", i)))
 		}(i)
 	}
+	close(start)
 	wg.Wait()
 	for i, err := range errs {
 		if err != nil {
@@ -163,7 +174,7 @@ func TestEngineSaturatedProviderDeprioritised(t *testing.T) {
 	}
 	defer eng.limiter.Release("slow")
 	defer eng.limiter.Release("slow")
-	ordered, _ := eng.orderAttempts([]Attempt{{ProviderID: "slow", Model: "m"}, {ProviderID: "fast", Model: "m"}})
+	ordered, _ := eng.orderAttempts([]Attempt{{ProviderID: "slow", Model: "m"}, {ProviderID: "fast", Model: "m"}}, "balanced", "hard", false)
 	if len(ordered) != 2 || ordered[0].ProviderID != "fast" {
 		t.Fatalf("saturated provider not deprioritised: order = %+v", ordered)
 	}

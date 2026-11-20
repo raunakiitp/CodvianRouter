@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "error-cost-report-days",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 25,
+    "method": "tools/call",
+    "params": {
+      "name": "cost_report",
+      "arguments": {
+        "key_id": "key-1",
+        "days": 400
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 25,
+    "error": {
+      "code": -32602,
+      "message": "days: must be between 0 (all time) and 365"
+    }
+  },
+  "assert": {
+    "id": 25,
+    "expect_error": true,
+    "error_code": -32602,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32602,
+      "error.message": "days: must be between 0 (all time) and 365",
+      "jsonrpc": "2.0"
+    }
+  },
+  "notes": "cost_report with days=400 (max 365) is invalid params (-32602)."
+}

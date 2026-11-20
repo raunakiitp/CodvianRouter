@@ -24,7 +24,7 @@ func TestRecordUsageAndSpendFor(t *testing.T) {
 	ctx := context.Background()
 	l := openTestLedger(t)
 	prices := Prices{
-		"model-a": {PromptPerToken: 0.001, CompletionPerToken: 0.002},
+		{Model: "model-a"}: {PromptPerToken: 0.001, CompletionPerToken: 0.002},
 	}
 
 	cost, err := l.RecordUsage(ctx, Usage{
@@ -83,7 +83,7 @@ func TestRecordUsageUnknownModelCostsZero(t *testing.T) {
 	cost, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Provider: "p1", Model: "mystery-model",
 		PromptTokens: 100000, CompletionTokens: 100000, SplitKnown: true, OK: true,
-	}, Prices{"other-model": {PromptPerToken: 1, CompletionPerToken: 1}})
+	}, Prices{{Model: "other-model"}: {PromptPerToken: 1, CompletionPerToken: 1}})
 	if err != nil {
 		t.Fatalf("RecordUsage: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestCheckBudgetSoftCap(t *testing.T) {
 	if _, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Model: "m",
 		PromptTokens: 10, CompletionTokens: 0, SplitKnown: true, OK: true,
-	}, Prices{"m": {PromptPerToken: 0.10}}); err != nil {
+	}, Prices{{Model: "m"}: {PromptPerToken: 0.10}}); err != nil {
 		t.Fatalf("RecordUsage: %v", err)
 	}
 	allowed, remaining, err := l.CheckBudget(ctx, "key-1")
@@ -150,7 +150,7 @@ func TestCheckBudgetFailClosed(t *testing.T) {
 	if _, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Model: "m",
 		PromptTokens: 5, CompletionTokens: 0, SplitKnown: true, OK: true,
-	}, Prices{"m": {PromptPerToken: 0.10}}); err != nil {
+	}, Prices{{Model: "m"}: {PromptPerToken: 0.10}}); err != nil {
 		t.Fatalf("RecordUsage: %v", err)
 	}
 	allowed, remaining, err := l.CheckBudgetOrError(ctx, "key-1")
@@ -202,7 +202,7 @@ func TestSoftWarningAtEightyPercent(t *testing.T) {
 	if _, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Model: "m",
 		PromptTokens: 79, CompletionTokens: 0, SplitKnown: true, OK: true,
-	}, Prices{"m": {PromptPerToken: 0.01}}); err != nil {
+	}, Prices{{Model: "m"}: {PromptPerToken: 0.01}}); err != nil {
 		t.Fatalf("RecordUsage: %v", err)
 	}
 	_, warn, err := l.CheckBudgetOrError(ctx, "key-1")
@@ -216,7 +216,7 @@ func TestSoftWarningAtEightyPercent(t *testing.T) {
 	if _, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Model: "m",
 		PromptTokens: 1, CompletionTokens: 0, SplitKnown: true, OK: true,
-	}, Prices{"m": {PromptPerToken: 0.01}}); err != nil {
+	}, Prices{{Model: "m"}: {PromptPerToken: 0.01}}); err != nil {
 		t.Fatalf("RecordUsage: %v", err)
 	}
 	_, warn, err = l.CheckBudgetOrError(ctx, "key-1")
@@ -237,7 +237,7 @@ func TestSetBudgetPreservesSpent(t *testing.T) {
 	if _, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Model: "m",
 		PromptTokens: 10, CompletionTokens: 0, SplitKnown: true, OK: true,
-	}, Prices{"m": {PromptPerToken: 0.10}}); err != nil {
+	}, Prices{{Model: "m"}: {PromptPerToken: 0.10}}); err != nil {
 		t.Fatalf("RecordUsage: %v", err)
 	}
 	// Raising the cap must not wipe the spend.
@@ -291,7 +291,7 @@ func TestRecordUsageSplitKnownCostDifferentPrices(t *testing.T) {
 	l := openTestLedger(t)
 	// Prompt and completion prices deliberately differ, so a cost
 	// computed from a collapsed total would be wrong.
-	prices := Prices{"model-a": {PromptPerToken: 0.001, CompletionPerToken: 0.01}}
+	prices := Prices{{Model: "model-a"}: {PromptPerToken: 0.001, CompletionPerToken: 0.01}}
 	cost, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Provider: "p1", Model: "model-a",
 		PromptTokens: 100, CompletionTokens: 50, SplitKnown: true, OK: true,
@@ -324,7 +324,7 @@ func TestRecordUsageSplitKnownCostDifferentPrices(t *testing.T) {
 func TestRecordUsageUnknownSplitCostsZero(t *testing.T) {
 	ctx := context.Background()
 	l := openTestLedger(t)
-	prices := Prices{"model-a": {PromptPerToken: 0.001, CompletionPerToken: 0.01}}
+	prices := Prices{{Model: "model-a"}: {PromptPerToken: 0.001, CompletionPerToken: 0.01}}
 	// Even with prices configured and split-looking numbers present,
 	// an unknown split must never be priced: the split fields are
 	// ignored, the total is preserved, and cost is 0.
@@ -428,7 +428,7 @@ CREATE TABLE budgets (
 	if _, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Model: "m",
 		PromptTokens: 10, CompletionTokens: 5, SplitKnown: true, OK: true,
-	}, Prices{"m": {PromptPerToken: 0.01, CompletionPerToken: 0.02}}); err != nil {
+	}, Prices{{Model: "m"}: {PromptPerToken: 0.01, CompletionPerToken: 0.02}}); err != nil {
 		l.Close()
 		t.Fatalf("RecordUsage after migration: %v", err)
 	}
@@ -458,7 +458,7 @@ CREATE TABLE budgets (
 func TestRecordShared(t *testing.T) {
 	ctx := context.Background()
 	l := openTestLedger(t)
-	prices := Prices{"model-a": {PromptPerToken: 0.001, CompletionPerToken: 0.002}}
+	prices := Prices{{Model: "model-a"}: {PromptPerToken: 0.001, CompletionPerToken: 0.002}}
 
 	// The leader's real attempt.
 	if _, err := l.RecordUsage(ctx, Usage{
@@ -529,7 +529,7 @@ func TestRecordShared(t *testing.T) {
 func TestRecordUsageSharedFlagForcedZero(t *testing.T) {
 	ctx := context.Background()
 	l := openTestLedger(t)
-	prices := Prices{"model-a": {PromptPerToken: 0.01, CompletionPerToken: 0.02}}
+	prices := Prices{{Model: "model-a"}: {PromptPerToken: 0.01, CompletionPerToken: 0.02}}
 	cost, err := l.RecordUsage(ctx, Usage{
 		GatewayKeyID: "key-1", Provider: "p1", Model: "model-a",
 		PromptTokens: 100, CompletionTokens: 50, SplitKnown: true, OK: true, Shared: true,
@@ -543,5 +543,164 @@ func TestRecordUsageSharedFlagForcedZero(t *testing.T) {
 	prompt, completion, total, splitKnown, rowCost := readUsageRow(t, l, "key-1")
 	if prompt != 0 || completion != 0 || total != 0 || splitKnown != 0 || rowCost != 0 {
 		t.Fatalf("row = %d/%d/%d split=%d cost=%v, want all zero", prompt, completion, total, splitKnown, rowCost)
+	}
+}
+
+// TestRecordUsageRedactsKeyShapedIdentifiers proves the spend-log
+// redaction rule (LiteLLM entry 152, ON by default here): a
+// key-shaped identifier passed as the gateway key ID is stored
+// redacted in usage_events, never verbatim — so no token can leak
+// into the spend log. Ordinary identifiers are stored unchanged.
+func TestRecordUsageRedactsKeyShapedIdentifiers(t *testing.T) {
+	ctx := context.Background()
+	l := openTestLedger(t)
+	prices := Prices{{Model: "model-a"}: {PromptPerToken: 0.001, CompletionPerToken: 0.002}}
+	if _, err := l.RecordUsage(ctx, Usage{
+		GatewayKeyID: "sk-proj-abcdefghij1234567890", Provider: "p1", Model: "model-a",
+		PromptTokens: 10, CompletionTokens: 5, SplitKnown: true, OK: true, LatencyMS: 10,
+	}, prices); err != nil {
+		t.Fatalf("RecordUsage: %v", err)
+	}
+	var stored string
+	err := l.db.QueryRowContext(ctx, `SELECT gateway_key_id FROM usage_events`).Scan(&stored)
+	if err != nil {
+		t.Fatalf("read stored key id: %v", err)
+	}
+	if stored != "[REDACTED:SECRET]" {
+		t.Fatalf("stored key id = %q, want [REDACTED:SECRET] (the raw key must never reach the spend log)", stored)
+	}
+}
+
+// TestRecordUsagePairPrice proves the ledger charges the
+// (provider, model) pair price: the same model costs differently
+// at two providers, the model-level fallback applies only where no
+// pair price exists, and an unknown pair records $0 — never a
+// guessed price.
+func TestRecordUsagePairPrice(t *testing.T) {
+	ctx := context.Background()
+	l := openTestLedger(t)
+	prices := Prices{
+		{Provider: "cheap-provider", Model: "shared"}:     {PromptPerToken: 0.001, CompletionPerToken: 0.002},
+		{Provider: "expensive-provider", Model: "shared"}: {PromptPerToken: 0.01, CompletionPerToken: 0.02},
+		{Model: "fallback-model"}:                         {PromptPerToken: 0.005, CompletionPerToken: 0.005},
+	}
+	record := func(provider, model string) float64 {
+		t.Helper()
+		cost, err := l.RecordUsage(ctx, Usage{
+			GatewayKeyID: "key-1", Provider: provider, Model: model,
+			PromptTokens: 100, CompletionTokens: 50, SplitKnown: true, OK: true,
+		}, prices)
+		if err != nil {
+			t.Fatalf("RecordUsage(%s, %s): %v", provider, model, err)
+		}
+		return cost
+	}
+	// Same model, same tokens, different pair price.
+	if got := record("cheap-provider", "shared"); got != 0.20 {
+		t.Errorf("cheap pair cost = %v (want 0.20 = 100*0.001 + 50*0.002)", got)
+	}
+	if got := record("expensive-provider", "shared"); got != 2.00 {
+		t.Errorf("expensive pair cost = %v (want 2.00 = 100*0.01 + 50*0.02)", got)
+	}
+	// No pair price for this provider: the model-level fallback
+	// applies (it is a fallback, not a pair price).
+	if got := record("other-provider", "fallback-model"); got != 0.75 {
+		t.Errorf("fallback cost = %v (want 0.75 = 150*0.005)", got)
+	}
+	// Unknown pair, no fallback: $0, never guessed.
+	if got := record("other-provider", "shared"); got != 0 {
+		t.Errorf("unknown pair cost = %v (want 0: no pair price, no fallback)", got)
+	}
+	// Spend totals only the real charges: 0.20 + 2.00 + 0.75.
+	spent, err := l.SpendFor(ctx, "key-1", time.Now().Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("SpendFor: %v", err)
+	}
+	if spent != 2.95 {
+		t.Errorf("spent = %v (want 2.95)", spent)
+	}
+}
+
+func TestPricesCostPairVsFallback(t *testing.T) {
+	p := Prices{
+		{Provider: "p1", Model: "m"}: {PromptPerToken: 0.01, CompletionPerToken: 0.02},
+		{Model: "m"}:                 {PromptPerToken: 0.001, CompletionPerToken: 0.001},
+		{Model: "free"}:              {PromptPerToken: 0, CompletionPerToken: 0},
+	}
+	// Pair wins over the fallback for its own provider.
+	if got := p.Cost("p1", "m", 100, 100); got != 3 {
+		t.Errorf("pair cost = %v (want 3)", got)
+	}
+	// Another provider falls back to the model-level price.
+	if got := p.Cost("p2", "m", 100, 100); got != 0.2 {
+		t.Errorf("fallback cost = %v (want 0.2)", got)
+	}
+	// CostForModel is the fallback alone, never a pair price.
+	if got := p.CostForModel("m", 100, 100); got != 0.2 {
+		t.Errorf("CostForModel = %v (want 0.2)", got)
+	}
+	// Genuinely free (present 0) is 0 and known — distinct from
+	// unknown, which is also 0 dollars but must never be ranked
+	// as free upstream (see scoring: unknown is -1, free is 0).
+	if got := p.Cost("any", "free", 100000, 100000); got != 0 {
+		t.Errorf("free cost = %v (want 0)", got)
+	}
+	// Unknown pair: 0, and a nil map is safe.
+	if got := p.Cost("p1", "missing", 100, 100); got != 0 {
+		t.Errorf("unknown pair cost = %v (want 0)", got)
+	}
+	if got := (Prices)(nil).Cost("p1", "m", 100, 100); got != 0 {
+		t.Errorf("nil Prices cost = %v (want 0)", got)
+	}
+}
+
+// TestLedgerWipe proves the wipe half of the DB-wipe scope: every
+// usage event is deleted, every budget's running spend resets to
+// zero, and the budget CAPS (operator config, not history) survive.
+// A second wipe on the empty ledger is a clean no-op.
+func TestLedgerWipe(t *testing.T) {
+	ctx := context.Background()
+	l := openTestLedger(t)
+	if err := l.SetBudget(ctx, "key-1", 10, "monthly"); err != nil {
+		t.Fatal(err)
+	}
+	prices := Prices{{Model: "model-a"}: {PromptPerToken: 0.001, CompletionPerToken: 0.002}}
+	for _, u := range []Usage{
+		{GatewayKeyID: "key-1", Provider: "p1", Model: "model-a", PromptTokens: 100, CompletionTokens: 50, SplitKnown: true, OK: true, LatencyMS: 120},
+		{GatewayKeyID: "key-1", Provider: "p1", Model: "model-a", PromptTokens: 10, CompletionTokens: 10, SplitKnown: true, OK: false, LatencyMS: 5},
+	} {
+		if _, err := l.RecordUsage(ctx, u, prices); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if b, err := l.GetBudget(ctx, "key-1"); err != nil || b.SpentUSD != 0.23 {
+		t.Fatalf("spent before wipe = %v (err %v), want 0.23", b.SpentUSD, err)
+	}
+	res, err := l.Wipe(ctx)
+	if err != nil {
+		t.Fatalf("Wipe: %v", err)
+	}
+	if res.UsageEvents != 2 || res.BudgetsReset != 1 {
+		t.Errorf("Wipe = %+v, want {UsageEvents:2 BudgetsReset:1}", res)
+	}
+	sum, err := l.Summary(ctx, time.Time{}, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.Requests != 0 || sum.CostUSD != 0 || sum.TotalTokens != 0 {
+		t.Errorf("summary after wipe = %+v, want zero requests/cost/tokens", sum)
+	}
+	if b, err := l.GetBudget(ctx, "key-1"); err != nil {
+		t.Fatal(err)
+	} else if b.SpentUSD != 0 || b.CapUSD != 10 || b.Period != "monthly" {
+		t.Errorf("budget after wipe = %+v, want spent 0, cap 10, period monthly (cap/period preserved)", b)
+	}
+	// Second wipe: nothing left to delete, still no error.
+	res, err = l.Wipe(ctx)
+	if err != nil {
+		t.Fatalf("second Wipe: %v", err)
+	}
+	if res.UsageEvents != 0 {
+		t.Errorf("second Wipe UsageEvents = %d, want 0", res.UsageEvents)
 	}
 }

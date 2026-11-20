@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-tool-search",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; no ledger wired) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "read",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 28,
+    "method": "tools/call",
+    "params": {
+      "name": "tool_search",
+      "arguments": {
+        "query": "cache"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 28,
+    "result": {
+      "content": [
+        {
+          "text": "{\"count\":3,\"query\":\"cache\",\"tools\":[{\"name\":\"cache_flush\",\"description\":\"DESTRUCTIVE: evict the caller's own cached entries only. The tenant is the authenticated caller, never an argument — other tenants' entries are untouched. Requires mcp:manage:cache AND mcp:destructive.\",\"scopes\":[\"mcp:manage:cache\",\"mcp:destructive\"]},{\"name\":\"cache_stats\",\"description\":\"Live counts for the router's 3-layer cache (exact / semantic / persistent): entries and bytes per layer. A layer the current process cannot see is reported present=false, never zero-filled.\",\"scopes\":[\"mcp:manage:cache\"]},{\"name\":\"db_health\",\"description\":\"Health of the router's data-dir databases (ledger, feedback, persistent cache): whether each file exists, opens, and its known tables count cleanly.\",\"scopes\":[\"mcp:manage:ops\"]}]}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "count": 3,
+        "query": "cache",
+        "tools": [
+          {
+            "name": "cache_flush",
+            "description": "DESTRUCTIVE: evict the caller's own cached entries only. The tenant is the authenticated caller, never an argument — other tenants' entries are untouched. Requires mcp:manage:cache AND mcp:destructive.",
+            "scopes": [
+              "mcp:manage:cache",
+              "mcp:destructive"
+            ]
+          },
+          {
+            "name": "cache_stats",
+            "description": "Live counts for the router's 3-layer cache (exact / semantic / persistent): entries and bytes per layer. A layer the current process cannot see is reported present=false, never zero-filled.",
+            "scopes": [
+              "mcp:manage:cache"
+            ]
+          },
+          {
+            "name": "db_health",
+            "description": "Health of the router's data-dir databases (ledger, feedback, persistent cache): whether each file exists, opens, and its known tables count cleanly.",
+            "scopes": [
+              "mcp:manage:ops"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 28,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.count": 3,
+      "result.structuredContent.query": "cache",
+      "result.structuredContent.tools.0.name": "cache_flush",
+      "result.structuredContent.tools.1.name": "cache_stats",
+      "result.structuredContent.tools.2.name": "db_health"
+    },
+    "http_status": 200
+  },
+  "notes": "\"cache\" matches exactly the three tools whose name or description mentions the cache (cache_flush, cache_stats, db_health — in Tools() order)."
+}

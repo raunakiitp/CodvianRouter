@@ -23,7 +23,7 @@
     "url": "https://github.com/raunakiitp/CodvianRouter.git"
   },
   "scripts": {
-    "test": "node --check bin/codvian-router.js"
+    "test": "node --check bin/codvian-router.js && node --test bin/codvian-router.test.js"
   },
   "version": "0.1.0",
   "license": "MIT"

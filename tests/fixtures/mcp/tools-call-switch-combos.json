@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-switch-combos",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 39,
+    "method": "tools/call",
+    "params": {
+      "name": "switch_combos",
+      "arguments": {
+        "name": "cheap"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 39,
+    "result": {
+      "content": [
+        {
+          "text": "{\"active_combo\":\"cheap\",\"note\":\"Session-active combo only: the serving router has no single active combo (every group is always addressable), so this does not change what the serving router routes.\"}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "active_combo": "cheap",
+        "note": "Session-active combo only: the serving router has no single active combo (every group is always addressable), so this does not change what the serving router routes."
+      }
+    }
+  },
+  "assert": {
+    "id": 39,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.active_combo"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.active_combo": "cheap"
+    }
+  },
+  "notes": "switch_combos to cheap: sets the session-active combo only — the serving router has no single active combo, so this never changes what it routes."
+}

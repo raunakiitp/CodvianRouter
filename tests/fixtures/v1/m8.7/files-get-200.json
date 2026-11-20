@@ -1,0 +1,41 @@
+{
+  "assert": {
+    "json_paths": {
+      "bytes": 11,
+      "filename": "seed.txt",
+      "object": "file",
+      "purpose": "batch",
+      "status": "processed"
+    },
+    "required_fields": [
+      "id",
+      "created_at"
+    ],
+    "status": 200
+  },
+  "fixture": true,
+  "method": "GET",
+  "model": "mock-model",
+  "name": "files-get-200",
+  "notes": "GET /v1/files/{id} returns the OpenAI-shaped file object. The test seeds a file and rewrites this fixture's placeholder id to the seeded id (see files_api_test.go).",
+  "path": "/v1/files/file-000000000000000000000001",
+  "provider": "mock-upstream",
+  "recorded_from": "mock-upstream: no upstream exists for local files \u2014 canned OpenAI-shaped response recorded from the local disk store's own contract, 2026-11-19. Recorded mock data, NOT a live provider call.",
+  "recorded_response": {
+    "body": {
+      "bytes": 11,
+      "created_at": 1794000000,
+      "filename": "seed.txt",
+      "id": "file-000000000000000000000001",
+      "object": "file",
+      "purpose": "batch",
+      "status": "processed"
+    },
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "status": 200
+  },
+  "schema_version": 1,
+  "slice": "m8.7"
+}

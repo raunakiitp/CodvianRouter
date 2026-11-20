@@ -40,6 +40,8 @@ package catalog
 
 import (
 	"fmt"
+	"net/url"
+	"sort"
 	"strings"
 )
 
@@ -129,6 +131,31 @@ const (
 	WireOllama WireFormat = "ollama"
 	// WireUnknown means the wire format is not known — never guessed.
 	WireUnknown WireFormat = "unknown"
+)
+
+// ToolCalling says how a provider performs tool/function calling.
+// It mirrors the `toolCalling` marker in the OmniRoute reference
+// metadata ("supported" / "emulated" / "native" there; "none" is
+// recorded as unknown here with the reason in Notes).
+type ToolCalling string
+
+const (
+	// ToolCallingUnknown means the reference states nothing about
+	// tool calling for this provider. Unknown never counts as tool
+	// support — see SupportsTools. "" (unset) means the same.
+	ToolCallingUnknown ToolCalling = "unknown"
+
+	// ToolCallingSupported means the provider natively supports
+	// tool/function calling (reference: "native").
+	ToolCallingSupported ToolCalling = "supported"
+
+	// ToolCallingEmulated means tool calls are prompt-emulated:
+	// the model is asked to emit tool calls as text and they are
+	// parsed back out (OmniRoute webTools.ts), rather than the
+	// provider executing native function calling. Emulated is NOT
+	// tool support and must never satisfy a tool-capable filter or
+	// an auto-pool capability check (CT-4 / GAP-TRACK entry 403).
+	ToolCallingEmulated ToolCalling = "emulated"
 )
 
 // Category groups providers by how the user connects to them. It mirrors
@@ -273,12 +300,62 @@ type Provider struct {
 	// own terms (limits as stated, no aggregate headlines). "" when
 	// none verified.
 	FreeTierNote string
+	// KeyCreationURL is where a user creates an API key for this
+	// provider (the provider's key-management page, or the signup
+	// page when the key is created at signup). "" when unknown —
+	// never guessed from the homepage: a key page is only recorded
+	// when a reference hint or the provider's own docs name it.
+	// Seeded from OmniRoute reference hints (see keycreation.go);
+	// entries verified against the provider's own docs are marked
+	// in that file's source notes.
+	KeyCreationURL string
+	// Models is the provider's static model list: the model IDs the
+	// provider is known to serve, as published by the provider or
+	// by models.dev. Empty means "no static list known" — models
+	// are then discovered only from the live /v1/models probe at
+	// add time, never invented. The list is a snapshot: a provider
+	// may serve models not listed here (live discovery wins), and
+	// a listed model may since have retired (see DeprecatedModels).
+	Models []string
 	// Verification says how this entry's facts were established.
 	Verification VerificationStatus
-	// ToSGrey is true for web-cookie / subscription-OAuth providers:
-	// catalogued for completeness, never recommended as a routing
-	// target.
+	// ToSGrey is true for web-cookie / subscription-OAuth providers,
+	// and for the keyless no-auth providers of CT-4 (GAP-TRACK entry
+	// 403): catalogued for completeness, never recommended as a
+	// routing target.
 	ToSGrey bool
+	// ToSAvoid is the routing-facing ToS-avoid marker, separate from
+	// ToSGrey: when true, the router must avoid this provider as a
+	// routing target when a safer route exists (see AvoidAsTarget).
+	// ToSGrey is the catalog fact (hard refusal at add/load/auth
+	// time); ToSAvoid is the soft routing preference, so the two can
+	// diverge — a provider can be avoided without being refused.
+	// Set on the five CT-4 entry-403 providers, which are ToS-grey.
+	ToSAvoid bool
+	// ToolCalling says how the provider performs tool/function
+	// calling: natively supported, prompt-emulated, or unknown (the
+	// reference states nothing). Only ToolCallingSupported counts
+	// as tool support — see SupportsTools. "" (unset) means unknown.
+	ToolCalling ToolCalling
+	// Retired is true when the provider's public inference API is
+	// discontinued and the entry must no longer appear in the live
+	// catalog (CT-3): All() excludes it, so it leaves the dashboard
+	// feed, FreeTierProviders, and add-by-catalog-ID (which resolves
+	// through ByID/All). RetiredByID still returns it, so callers can
+	// report the retirement reason instead of "unknown provider".
+	// mergeVerified preserves this flag: it only overwrites the
+	// fields it lists, and Retired is not one of them.
+	Retired bool
+	// RetiredReason states what happened, in the provider's own terms
+	// where published (e.g. an OmniRoute deprecation sweep note).
+	// Required whenever Retired is true — a retired entry with no
+	// reason fails Validate.
+	RetiredReason string
+	// RetiredOn is the provider-published shutdown date (YYYY-MM-DD),
+	// or "" when no shutdown date could be verified — never invented.
+	// A sweep/observation date is not a shutdown date and is not
+	// recorded here; it belongs in RetiredReason if it matters.
+	RetiredOn string
 	// SourceURL is where this entry's facts came from (official docs
 	// URL for verified entries, reference repo for reference ones).
 	SourceURL string
@@ -304,10 +381,28 @@ func (p Provider) Validate() error {
 	default:
 		return fmt.Errorf("catalog: provider %q has unknown verification status %q", p.ID, p.Verification)
 	}
+	switch p.ToolCalling {
+	case "", ToolCallingUnknown, ToolCallingSupported, ToolCallingEmulated:
+	default:
+		return fmt.Errorf("catalog: provider %q has unknown tool-calling value %q", p.ID, p.ToolCalling)
+	}
 	for _, u := range p.BaseURLs {
 		if err := validateCatalogBaseURL(u); err != nil {
 			return fmt.Errorf("catalog: provider %q: %w", p.ID, err)
 		}
+	}
+	if p.KeyCreationURL != "" {
+		if err := validateBaseURL(p.KeyCreationURL); err != nil {
+			return fmt.Errorf("catalog: provider %q key-creation URL: %w", p.ID, err)
+		}
+	}
+	for _, m := range p.Models {
+		if strings.TrimSpace(m) == "" {
+			return fmt.Errorf("catalog: provider %q has an empty static model ID", p.ID)
+		}
+	}
+	if p.Retired && strings.TrimSpace(p.RetiredReason) == "" {
+		return fmt.Errorf("catalog: provider %q is marked retired without a reason", p.ID)
 	}
 	for _, e := range p.Endpoints {
 		if strings.TrimSpace(e.Endpoint) == "" {
@@ -335,6 +430,7 @@ func (p Provider) Clone() Provider {
 	c := p
 	c.BaseURLs = append([]string(nil), p.BaseURLs...)
 	c.WireFormats = append([]WireFormat(nil), p.WireFormats...)
+	c.Models = append([]string(nil), p.Models...)
 	if len(p.Endpoints) > 0 {
 		c.Endpoints = make([]EndpointAuth, len(p.Endpoints))
 		for i, e := range p.Endpoints {
@@ -380,6 +476,26 @@ func (p Provider) DefaultWireFormat() WireFormat {
 	return p.WireFormats[0]
 }
 
+// SupportsTools reports whether the provider natively supports tool /
+// function calling. Only ToolCallingSupported counts: emulated tool
+// calling is prompt-parsed text, not native support, and unknown (or
+// unset) means the reference states nothing — neither ever satisfies
+// a tool-capable check (CT-4 / GAP-TRACK entry 403: an emulated
+// entry must never be picked by an auto pool as tool-capable).
+func (p Provider) SupportsTools() bool {
+	return p.ToolCalling == ToolCallingSupported
+}
+
+// AvoidAsTarget reports whether the provider should be avoided as a
+// routing target when a safer route exists. It wires the dedicated
+// ToSAvoid marker together with ToSGrey: either signal avoids the
+// target. ToSGrey providers are additionally refused outright at
+// add/load/auth time (internal/provider/registry.go); this is the
+// soft routing preference for targets that are addable.
+func (p Provider) AvoidAsTarget() bool {
+	return p.ToSAvoid || p.ToSGrey
+}
+
 // Endpoint returns the EndpointAuth for the named surface and variant
 // ("default" when variant is ""), or false when the provider records no
 // such surface.
@@ -392,14 +508,64 @@ func (p Provider) Endpoint(name, variant string) (EndpointAuth, bool) {
 	return EndpointAuth{}, false
 }
 
-// All returns the full catalog: reference entries, with verified entries
-// overlaid by ID, plus additional providers. The result is a fresh slice
-// of copies on every call. System entries (OmniRoute-internal loopback
-// providers) are excluded: they are not real upstreams.
+// All returns the live catalog: reference entries, with verified entries
+// overlaid by ID, plus additional providers — excluding retired
+// providers (CT-3) and system entries (OmniRoute-internal loopback
+// providers), neither of which is a real upstream. The result is a
+// fresh slice of copies on every call.
 //
 // Order is deterministic: reference order, then verified-only additions
 // in file order, then additional providers in file order.
 func All() []Provider {
+	all := allIncludingRetired()
+	out := make([]Provider, 0, len(all))
+	for _, p := range all {
+		if p.Retired {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// RetiredProviders returns every retired entry, in catalog order.
+// These are the providers All() excludes; use RetiredByID to explain
+// a refusal instead of reporting "unknown provider".
+func RetiredProviders() []Provider {
+	var out []Provider
+	for _, p := range allIncludingRetired() {
+		if p.Retired {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// RetiredByID returns the retired entry with the given ID or alias, or
+// false when the ID names no retired provider. It matches aliases too
+// (e.g. "bb" for blackbox) so an add-by-alias attempt gets the same
+// retirement reason as an add-by-ID attempt.
+func RetiredByID(idOrAlias string) (Provider, bool) {
+	for _, p := range RetiredProviders() {
+		if p.ID == idOrAlias || (p.Alias != "" && p.Alias == idOrAlias) {
+			return p, true
+		}
+	}
+	return Provider{}, false
+}
+
+// IsRetired reports whether the given ID or alias names a retired provider.
+func IsRetired(idOrAlias string) bool {
+	_, ok := RetiredByID(idOrAlias)
+	return ok
+}
+
+// allIncludingRetired builds the full catalog — reference entries, with
+// verified entries overlaid by ID, plus additional providers — before
+// the retired exclusion. All() filters its result; RetiredProviders
+// and RetiredByID read from it so the retirement reason stays
+// available after the entry leaves the live surface.
+func allIncludingRetired() []Provider {
 	byID := make(map[string]int, len(referenceProviders))
 	out := make([]Provider, 0, len(referenceProviders)+len(verifiedProviders)+len(additionalProviders))
 	for _, p := range referenceProviders {
@@ -411,12 +577,27 @@ func All() []Provider {
 	}
 	for _, p := range verifiedProviders {
 		if i, ok := byID[p.ID]; ok {
-			out[i] = p.Clone() // verified entry replaces the reference one
+			// G7 (PARITY Area 3, WRONG row): the overlay MERGES,
+			// it does not replace. The old code did
+			// `out[i] = p.Clone()`, which dropped every
+			// reference-only fact the verified entry did not
+			// restate — HasFreeTier for 10 providers
+			// (cerebras, cloudflare-ai, deepseek, fireworks,
+			// gemini, groq, mistral, nvidia, ollama-cloud,
+			// openrouter, vertex). A verified entry that does
+			// not mention a free tier means "not checked in
+			// that pass", never "no free tier", so the
+			// reference flag survives. See mergeVerified.
+			out[i] = mergeVerified(out[i], p)
 			continue
 		}
 		byID[p.ID] = len(out)
 		out = append(out, p.Clone())
 	}
+	// Triage fixes (2026-11-18 catalog triage, CHECKLIST 253):
+	// base-URL fills and display-name renames on reference entries,
+	// plus reference-only new providers. See providers_triage.go.
+	out = applyTriageFixes(out, byID)
 	for _, p := range additionalProviders {
 		if _, ok := byID[p.ID]; ok {
 			continue // additional must never shadow an existing ID
@@ -424,7 +605,90 @@ func All() []Provider {
 		byID[p.ID] = len(out)
 		out = append(out, p.Clone())
 	}
+	// Key-creation links (G7, PARITY Area 3): fill KeyCreationURL
+	// from the seed map where the entry records none. The fill
+	// runs last so it covers reference, verified-only, triage and
+	// additional entries alike; it never overwrites a URL the
+	// entry already carries.
+	for i := range out {
+		if out[i].KeyCreationURL == "" {
+			if u, ok := keyCreationURLs[out[i].ID]; ok {
+				out[i].KeyCreationURL = u
+			}
+		}
+	}
 	return out
+}
+
+// mergeVerified overlays a docs-verified entry onto the reference
+// entry it matches. Verified facts win wherever the verified entry
+// states them; reference-only facts survive wherever it does not.
+//
+//   - Verified wins when set: Name, Website, Category, BaseURLs,
+//     WireFormats, Endpoints, KeyPrefix, KeyFormat, Notes,
+//     SourceURL, and the Verification label itself (the merged
+//     entry is verified-from-docs).
+//   - Reference survives when the verified entry is silent: Alias,
+//     KeyPrefix/KeyFormat (reference entries carry none today, but
+//     the rule must not depend on that), and the static Models
+//     list.
+//   - Flags merge by OR, never by overwrite: HasFreeTier,
+//     ToSGrey and ToSAvoid. A verified entry that does not mention
+//     a free tier means "not checked in that pass", never "no free
+//     tier"; ToSGrey and ToSAvoid are safety flags and must never
+//     be dropped by an overlay. FreeTierNote and KeyCreationURL
+//     take the verified value when set, else the reference value.
+//
+// The result is a fresh copy; neither input is mutated.
+func mergeVerified(ref, ver Provider) Provider {
+	merged := ref.Clone()
+	if ver.Name != "" {
+		merged.Name = ver.Name
+	}
+	if ver.Website != "" {
+		merged.Website = ver.Website
+	}
+	if ver.Category != "" {
+		merged.Category = ver.Category
+	}
+	if len(ver.BaseURLs) > 0 {
+		merged.BaseURLs = append([]string(nil), ver.BaseURLs...)
+	}
+	if len(ver.WireFormats) > 0 {
+		merged.WireFormats = append([]WireFormat(nil), ver.WireFormats...)
+	}
+	if len(ver.Endpoints) > 0 {
+		merged.Endpoints = ver.Clone().Endpoints
+	}
+	if ver.Alias != "" {
+		merged.Alias = ver.Alias
+	}
+	if ver.KeyPrefix != "" {
+		merged.KeyPrefix = ver.KeyPrefix
+	}
+	if ver.KeyFormat != "" {
+		merged.KeyFormat = ver.KeyFormat
+	}
+	if ver.Notes != "" {
+		merged.Notes = ver.Notes
+	}
+	if ver.SourceURL != "" {
+		merged.SourceURL = ver.SourceURL
+	}
+	if ver.FreeTierNote != "" {
+		merged.FreeTierNote = ver.FreeTierNote
+	}
+	if ver.KeyCreationURL != "" {
+		merged.KeyCreationURL = ver.KeyCreationURL
+	}
+	if len(ver.Models) > 0 {
+		merged.Models = append([]string(nil), ver.Models...)
+	}
+	merged.HasFreeTier = ref.HasFreeTier || ver.HasFreeTier
+	merged.ToSGrey = ref.ToSGrey || ver.ToSGrey
+	merged.ToSAvoid = ref.ToSAvoid || ver.ToSAvoid
+	merged.Verification = ver.Verification
+	return merged
 }
 
 // ByID returns the catalog entry with the given ID, or false when absent.
@@ -485,6 +749,202 @@ func ByCategory(c Category) []Provider {
 		}
 	}
 	return out
+}
+
+// Routable reports whether the provider has at least one concrete
+// (non-template) http(s) base URL — i.e. the router can actually
+// send it a request once a key is supplied. Templated bases
+// (Azure {resource}, Vertex {LOCATION}) are NOT routable as-is:
+// the operator must substitute the placeholder first. A loopback
+// base (localhost) IS routable: local runtimes serve on it.
+func (p Provider) Routable() bool {
+	for _, u := range p.BaseURLs {
+		if strings.Contains(u, "{") || strings.Contains(u, "}") {
+			continue
+		}
+		parsed, err := url.Parse(strings.TrimSpace(u))
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// StaticModels returns the provider's static model list (a copy),
+// or nil when no static list is known. Live /v1/models discovery
+// at add time is the fallback; this list never invents a model.
+func (p Provider) StaticModels() []string {
+	return append([]string(nil), p.Models...)
+}
+
+// BaseURLCoverage is the honest accounting of routable-base-URL
+// coverage (PARITY Area 3, "Providers with a routable base URL"):
+// how many entries can actually be added, how many cannot, and
+// where the un-addable ones sit. Categories with no API surface
+// by nature (web-cookie, OAuth, local, no-auth, cloud-agent,
+// upstream-proxy) are counted separately from the real gap:
+// API-capable providers (api-key, audio, search) with no base URL.
+type BaseURLCoverage struct {
+	Total int
+	// WithBaseURL counts entries with any BaseURLs entry at all.
+	WithBaseURL int
+	// Routable counts entries with a concrete (non-template) base.
+	Routable int
+	// TemplateOnly counts entries whose only bases are templates.
+	TemplateOnly int
+	// WithoutByCategory counts entries with no BaseURLs at all.
+	WithoutByCategory map[Category]int
+	// APICapableWithout counts api-key/audio/search entries with no
+	// base URL — the providers a user cannot add even though an
+	// API exists to add them to.
+	APICapableWithout int
+}
+
+// BaseURLCoverageOf measures coverage over the given entries.
+func BaseURLCoverageOf(all []Provider) BaseURLCoverage {
+	cov := BaseURLCoverage{Total: len(all), WithoutByCategory: map[Category]int{}}
+	for _, p := range all {
+		switch {
+		case len(p.BaseURLs) == 0:
+			cov.WithoutByCategory[p.Category]++
+			switch p.Category {
+			case CategoryAPIKey, CategoryAudio, CategorySearch:
+				cov.APICapableWithout++
+			}
+		case p.Routable():
+			cov.WithBaseURL++
+			cov.Routable++
+		default:
+			cov.WithBaseURL++
+			cov.TemplateOnly++
+		}
+	}
+	return cov
+}
+
+// MeasureBaseURLCoverage measures coverage over the full catalog.
+func MeasureBaseURLCoverage() BaseURLCoverage { return BaseURLCoverageOf(All()) }
+
+// FreeTierProviders returns every entry with a verified free tier,
+// in catalog order. Retired providers are excluded: All() drops
+// them, so their stale free-tier flags can no longer inflate the
+// count (CT-3).
+func FreeTierProviders() []Provider {
+	var out []Provider
+	for _, p := range All() {
+		if p.HasFreeTier {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// FreeTierCount returns how many entries carry a verified free tier.
+func FreeTierCount() int { return len(FreeTierProviders()) }
+
+// FreeTierPool is one free-tier pool: the free-tier providers in
+// a single category, with the docs-verified share. Pools are
+// groupings of the verified free-tier set — OmniRoute's pools are
+// budget pools, and no verified per-provider free budget exists
+// anywhere in this catalog to build budget pools from (inventing
+// one would breach the honesty rules), so the grouping is by
+// category and the summary reports counts, never invented
+// token budgets.
+type FreeTierPool struct {
+	// Name is the pool name ("api-key", "local", ...).
+	Name string
+	// Providers are the pool's free-tier entries, catalog order.
+	Providers []Provider
+	// VerifiedDocs counts pool members verified from docs.
+	VerifiedDocs int
+}
+
+// FreeTierPools groups the free-tier providers into per-category
+// pools, in first-appearance order.
+func FreeTierPools() []FreeTierPool {
+	var pools []FreeTierPool
+	byName := map[string]int{}
+	for _, p := range FreeTierProviders() {
+		name := string(p.Category)
+		i, ok := byName[name]
+		if !ok {
+			i = len(pools)
+			byName[name] = i
+			pools = append(pools, FreeTierPool{Name: name})
+		}
+		pools[i].Providers = append(pools[i].Providers, p)
+		if p.Verification == VerificationDocs {
+			pools[i].VerifiedDocs++
+		}
+	}
+	return pools
+}
+
+// FreeTierSummary is the honest headline for the free tier: counts
+// only, never an invented aggregate token budget.
+type FreeTierSummary struct {
+	// Total free-tier providers.
+	Total int
+	// VerifiedDocs counts free-tier providers verified from docs.
+	VerifiedDocs int
+	// WithNote counts free-tier providers carrying a FreeTierNote.
+	WithNote int
+	// Pools counts free-tier pools (see FreeTierPools).
+	Pools int
+}
+
+// SummarizeFreeTier summarises the free tier over the full catalog.
+func SummarizeFreeTier() FreeTierSummary {
+	var s FreeTierSummary
+	for _, p := range FreeTierProviders() {
+		s.Total++
+		if p.Verification == VerificationDocs {
+			s.VerifiedDocs++
+		}
+		if p.FreeTierNote != "" {
+			s.WithNote++
+		}
+	}
+	s.Pools = len(FreeTierPools())
+	return s
+}
+
+// FreeTierRanking returns the free-tier providers in ranking order:
+// docs-verified first (their free tier was checked against the
+// provider's own docs), then entries with a free-tier note, then
+// the rest; ties break by ID so the order is deterministic. The
+// ranking is a display order for the free-tier list, not a quality
+// score — it ranks evidence strength, never invents one.
+func FreeTierRanking() []Provider {
+	ranked := FreeTierProviders()
+	score := func(p Provider) int {
+		s := 0
+		if p.Verification == VerificationDocs {
+			s += 2
+		}
+		if p.FreeTierNote != "" {
+			s += 1
+		}
+		return s
+	}
+	sort.SliceStable(ranked, func(i, j int) bool {
+		if si, sj := score(ranked[i]), score(ranked[j]); si != sj {
+			return si > sj
+		}
+		return ranked[i].ID < ranked[j].ID
+	})
+	return ranked
+}
+
+// KeyCreationURLFor returns the key-creation URL recorded for id,
+// or false when the catalog records none for it.
+func KeyCreationURLFor(id string) (string, bool) {
+	p, ok := ByID(id)
+	if !ok || p.KeyCreationURL == "" {
+		return "", false
+	}
+	return p.KeyCreationURL, true
 }
 
 // ByAuthKind returns all entries whose default auth kind is k (the

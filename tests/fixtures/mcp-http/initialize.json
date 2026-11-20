@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "initialize",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; no ledger wired) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "read",
+  "method": "initialize",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "mcp-http-fixture-client",
+        "version": "0"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "capabilities": {
+        "tools": {}
+      },
+      "protocolVersion": "2025-03-26",
+      "serverInfo": {
+        "name": "codvian-router",
+        "version": "0.1.0"
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 1,
+    "expect_error": false,
+    "required_fields": [
+      "result.protocolVersion",
+      "result.capabilities",
+      "result.serverInfo.name",
+      "result.serverInfo.version"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.protocolVersion": "2025-03-26",
+      "result.serverInfo.name": "codvian-router",
+      "result.serverInfo.version": "0.1.0"
+    },
+    "http_status": 200,
+    "require_session_header": true
+  },
+  "notes": "Handshake over Streamable HTTP: the server reports protocol 2025-03-26 and its name/version, and issues a Mcp-Session-Id header."
+}

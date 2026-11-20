@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-provider-list-denied",
+  "fixture": true,
+  "transport": "sse",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + fixed test gateway keys + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger for the routing-reader and cost-reader keys, prices a $10/$30 and c $5/$15 per 1M, routing group fast; memory seeded with one fixed entry for the destructive memory key) over httptest (loopback) via GET /api/mcp/sse (endpoint event) + POST /api/mcp/sse?session_id= with a test gateway key; message-event data captured verbatim. Recorded data only, no live provider call.",
+  "key": "read",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 27,
+    "method": "tools/call",
+    "params": {
+      "name": "provider_list",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 27,
+    "error": {
+      "code": -32002,
+      "message": "scope denied: missing required scope(s): mcp:read:providers"
+    }
+  },
+  "recorded_http_status": 202,
+  "assert": {
+    "id": 27,
+    "expect_error": true,
+    "error_code": -32002,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32002,
+      "error.message": "scope denied: missing required scope(s): mcp:read:providers",
+      "jsonrpc": "2.0"
+    },
+    "http_status": 202
+  },
+  "notes": "provider_list with the narrow mcp:read:status key is denied -32002 (scope denial, the most common remote-transport outcome)."
+}

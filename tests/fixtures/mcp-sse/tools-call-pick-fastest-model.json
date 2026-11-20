@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-pick-fastest-model",
+  "fixture": true,
+  "transport": "sse",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + fixed test gateway keys + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger for the routing-reader and cost-reader keys, prices a $10/$30 and c $5/$15 per 1M, routing group fast; memory seeded with one fixed entry for the destructive memory key) over httptest (loopback) via GET /api/mcp/sse (endpoint event) + POST /api/mcp/sse?session_id= with a test gateway key; message-event data captured verbatim. Recorded data only, no live provider call.",
+  "key": "wide",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 21,
+    "method": "tools/call",
+    "params": {
+      "name": "pick_fastest_model",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 21,
+    "result": {
+      "content": [
+        {
+          "text": "{\"latency_events\":2,\"mean_latency_ms\":90,\"model\":\"c\",\"note\":\"Measured mean latency over recent successful ledger events only — no price or catalog guess.\",\"provider\":\"p2\",\"requests\":2,\"success_rate\":1}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "latency_events": 2,
+        "mean_latency_ms": 90,
+        "model": "c",
+        "note": "Measured mean latency over recent successful ledger events only — no price or catalog guess.",
+        "provider": "p2",
+        "requests": 2,
+        "success_rate": 1
+      }
+    }
+  },
+  "recorded_http_status": 202,
+  "assert": {
+    "id": 21,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.mean_latency_ms": 90,
+      "result.structuredContent.model": "c",
+      "result.structuredContent.provider": "p2"
+    },
+    "http_status": 202
+  },
+  "notes": "pick_fastest_model ranks on measured ledger latency: c at 90 ms beats a at 120 ms."
+}

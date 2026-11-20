@@ -95,6 +95,21 @@ func TestCoalescable(t *testing.T) {
 	if Coalescable(toolCalls) {
 		t.Fatalf("tool-call history must not be coalescable")
 	}
+	// Responses creates mint a distinct stateful object per call
+	// (CHECKLIST 169): a fresh create and a continuation must
+	// never share a flight — and the flight key does not carry
+	// the endpoint or the continuation id, so a Responses create
+	// could otherwise collide with an identical chat completion.
+	respReq := testReq("hi")
+	respReq.Endpoint = provider.EndpointResponses
+	if Coalescable(respReq) {
+		t.Fatalf("Responses create must not be coalescable")
+	}
+	contReq := testReq("hi")
+	contReq.PreviousResponseID = "resp_123"
+	if Coalescable(contReq) {
+		t.Fatalf("Responses continuation must not be coalescable")
+	}
 }
 
 func TestGroupSharesOneCall(t *testing.T) {

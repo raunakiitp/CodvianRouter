@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-provider-list",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; no ledger wired) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "wide",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "tools/call",
+    "params": {
+      "name": "provider_list",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "result": {
+      "content": [
+        {
+          "text": "{\"providers\":[{\"id\":\"p1\",\"name\":\"Coder\",\"wire_format\":\"openai\",\"enabled\":true,\"models\":[\"a\",\"b\"]},{\"id\":\"p2\",\"name\":\"Chatter\",\"wire_format\":\"anthropic\",\"enabled\":true,\"models\":[\"c\"]}]}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "providers": [
+          {
+            "id": "p1",
+            "name": "Coder",
+            "wire_format": "openai",
+            "enabled": true,
+            "models": [
+              "a",
+              "b"
+            ]
+          },
+          {
+            "id": "p2",
+            "name": "Chatter",
+            "wire_format": "anthropic",
+            "enabled": true,
+            "models": [
+              "c"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 4,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.providers"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.providers.0.enabled": true,
+      "result.structuredContent.providers.0.id": "p1",
+      "result.structuredContent.providers.0.models.0": "a",
+      "result.structuredContent.providers.0.models.1": "b",
+      "result.structuredContent.providers.0.name": "Coder",
+      "result.structuredContent.providers.0.wire_format": "openai",
+      "result.structuredContent.providers.1.enabled": true,
+      "result.structuredContent.providers.1.id": "p2",
+      "result.structuredContent.providers.1.models.0": "c"
+    },
+    "http_status": 200
+  },
+  "notes": "provider_list with the mcp:read:* key: both providers with their registry models; no base URL or key appears."
+}

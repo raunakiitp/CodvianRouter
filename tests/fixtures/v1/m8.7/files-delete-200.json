@@ -1,0 +1,33 @@
+{
+  "assert": {
+    "json_paths": {
+      "deleted": true,
+      "object": "file"
+    },
+    "required_fields": [
+      "id"
+    ],
+    "status": 200
+  },
+  "fixture": true,
+  "method": "DELETE",
+  "model": "mock-model",
+  "name": "files-delete-200",
+  "notes": "DELETE /v1/files/{id} removes content + index entry and returns deleted:true. The test seeds a file and rewrites the placeholder id to the seeded id.",
+  "path": "/v1/files/file-000000000000000000000001",
+  "provider": "mock-upstream",
+  "recorded_from": "mock-upstream: no upstream exists for local files \u2014 canned OpenAI-shaped response recorded from the local disk store's own contract, 2026-11-19. Recorded mock data, NOT a live provider call.",
+  "recorded_response": {
+    "body": {
+      "deleted": true,
+      "id": "file-000000000000000000000001",
+      "object": "file"
+    },
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "status": 200
+  },
+  "schema_version": 1,
+  "slice": "m8.7"
+}

@@ -2,7 +2,9 @@ package cache
 
 import (
 	"context"
+	"hash/fnv"
 	"math"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -395,4 +397,147 @@ func TestLocalSemanticCacheConcurrentAccess(t *testing.T) {
 	if c.Size() > 50 {
 		t.Fatalf("Size = %d, want <= 50 (max entries)", c.Size())
 	}
+}
+
+// TestCosineSparseMatchesDense pins the sparse-cosine rewrite
+// (2026-11-17 hot-path fix): the sparse sum must agree with the
+// old dense 256-iteration sum to within float64 summation-order
+// rounding on dense, sparse and zero vectors alike.
+func TestCosineSparseMatchesDense(t *testing.T) {
+	denseCosine := func(a, b []float32) float32 {
+		n := len(a)
+		if len(b) < n {
+			n = len(b)
+		}
+		if n == 0 {
+			return 0
+		}
+		var dot, na, nb float64
+		for i := 0; i < n; i++ {
+			dot += float64(a[i]) * float64(b[i])
+			na += float64(a[i]) * float64(a[i])
+			nb += float64(b[i]) * float64(b[i])
+		}
+		if na == 0 || nb == 0 {
+			return 0
+		}
+		sim := dot / (math.Sqrt(na) * math.Sqrt(nb))
+		if sim > 1 {
+			sim = 1
+		}
+		if sim < -1 {
+			sim = -1
+		}
+		return float32(sim)
+	}
+	rng := rand.New(rand.NewSource(1))
+	mk := func(sparse bool) []float32 {
+		v := make([]float32, SemanticVectorDims)
+		for i := range v {
+			if sparse && rng.Float64() < 0.9 {
+				continue
+			}
+			v[i] = float32(rng.NormFloat64())
+		}
+		return v
+	}
+	for i := 0; i < 200; i++ {
+		a, b := mk(i%2 == 0), mk(i%2 == 0)
+		got, want := Cosine(a, b), denseCosine(a, b)
+		if math.Abs(float64(got-want)) > 1e-6 {
+			t.Fatalf("case %d: Cosine = %v, dense = %v", i, got, want)
+		}
+	}
+	if got := Cosine(make([]float32, 256), mk(false)); got != 0 {
+		t.Fatalf("zero vector Cosine = %v, want 0", got)
+	}
+	if got := Cosine(nil, nil); got != 0 {
+		t.Fatalf("nil Cosine = %v, want 0", got)
+	}
+	// Identical sparse vectors score exactly 1 (the near-duplicate
+	// threshold in Set is 0.9999, so this must not drift below it).
+	v := EmbedText("explain how to install python on windows step by step")
+	if got := Cosine(v, v); got != 1 {
+		t.Fatalf("identical Cosine = %v, want 1", got)
+	}
+}
+
+// TestHashFNVIdentical pins the allocation-free hash rewrite: the
+// inlined FNV-1a must produce byte-identical bucket assignments to
+// hash/fnv, and hashBigram must equal hashing the concatenated
+// "a\x00b" form, so no cached similarity ever changes.
+func TestHashFNVIdentical(t *testing.T) {
+	tokens := []string{"hello", "world", "python", "a", "", "x\ny", "token-123_ABC", "über"}
+	for _, tok := range tokens {
+		h := fnv.New64a()
+		_, _ = h.Write([]byte(tok))
+		if got, want := fnv1a(tok), h.Sum64(); got != want {
+			t.Fatalf("fnv1a(%q) = %d, want %d", tok, got, want)
+		}
+	}
+	pairs := [][2]string{{"hello", "world"}, {"a", "b"}, {"", "x"}, {"foo", ""}}
+	for _, p := range pairs {
+		h := fnv.New64a()
+		_, _ = h.Write([]byte(p[0] + "\x00" + p[1]))
+		want := int(h.Sum64() % SemanticVectorDims)
+		if got := hashBigram(p[0], p[1]); got != want {
+			t.Fatalf("hashBigram(%q,%q) = %d, want %d", p[0], p[1], got, want)
+		}
+		if got, want := hashToken(p[0]), int(fnv1a(p[0])%SemanticVectorDims); got != want {
+			t.Fatalf("hashToken(%q) = %d, want %d", p[0], got, want)
+		}
+	}
+	// End to end: the vectors themselves are unchanged by the
+	// rewrite (same buckets, same normalisation).
+	a := EmbedText("the quick brown fox jumps over the lazy dog")
+	b := EmbedText("the quick brown fox jumps over the lazy dog")
+	for i := range a {
+		if a[i] != b[i] {
+			t.Fatalf("EmbedText not deterministic at %d", i)
+		}
+	}
+}
+
+// BenchmarkSemanticCacheScan pins the hot-path cost of the semantic
+// layer (2026-11-17: cosine was 30.6% of router CPU, and a naive
+// sparse rewrite measured even slower). A full 500-entry cache with
+// distinct prompts: GetText (miss) and SetText each run the full
+// scan. If these regress, the router's added latency regresses
+// with them — see docs/BENCHMARK.md.
+func BenchmarkSemanticCacheGetTextMiss(b *testing.B) {
+	ctx := context.Background()
+	c := NewLocalSemanticCache()
+	for i := 0; i < 500; i++ {
+		c.SetText(ctx, "benchmark prompt number "+itoa(i)+" about topic "+itoa(i%50), SemanticEntry{Response: CachedResponse{Content: "x"}}, time.Hour)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.GetText(ctx, "a completely different benchmark query "+itoa(i))
+	}
+}
+
+func BenchmarkSemanticCacheSetText(b *testing.B) {
+	ctx := context.Background()
+	c := NewLocalSemanticCache()
+	for i := 0; i < 500; i++ {
+		c.SetText(ctx, "benchmark prompt number "+itoa(i)+" about topic "+itoa(i%50), SemanticEntry{Response: CachedResponse{Content: "x"}}, time.Hour)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.SetText(ctx, "a new benchmark prompt "+itoa(i)+" about topic "+itoa(i%50), SemanticEntry{Response: CachedResponse{Content: "x"}}, time.Hour)
+	}
+}
+
+func itoa(i int) string {
+	if i == 0 {
+		return "0"
+	}
+	var buf [20]byte
+	pos := len(buf)
+	for i > 0 {
+		pos--
+		buf[pos] = byte('0' + i%10)
+		i /= 10
+	}
+	return string(buf[pos:])
 }

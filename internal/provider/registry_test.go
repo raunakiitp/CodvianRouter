@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/raunakiitp/codvian-router/internal/crypto"
@@ -250,14 +251,14 @@ func TestRegistryRemoveGetList(t *testing.T) {
 
 func TestDetectWireFormat(t *testing.T) {
 	ctx := context.Background()
-	factory := func(baseURL, apiKey string) (Client, error) {
-		return NewClient(baseURL, apiKey)
+	factory := func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (Client, error) {
+		return NewClient(baseURL, apiKey, WithAuthHeaders(authHeaders))
 	}
 
 	// Models OK -> openai.
 	srv := openAIMock(t)
 	defer srv.Close()
-	if got, err := DetectWireFormat(ctx, srv.URL, "k", factory); err != nil || got != WireFormatOpenAI {
+	if got, err := DetectWireFormat(ctx, srv.URL, "k", nil, factory); err != nil || got != WireFormatOpenAI {
 		t.Errorf("models-ok: got %q, err %v", got, err)
 	}
 
@@ -266,7 +267,7 @@ func TestDetectWireFormat(t *testing.T) {
 		chatBody: `{"error":{"message":"model not found"}}`}
 	srv2 := httptest.NewServer(m.handler(t))
 	defer srv2.Close()
-	if got, err := DetectWireFormat(ctx, srv2.URL, "k", factory); err != nil || got != WireFormatOpenAI {
+	if got, err := DetectWireFormat(ctx, srv2.URL, "k", nil, factory); err != nil || got != WireFormatOpenAI {
 		t.Errorf("chat-exists: got %q, err %v", got, err)
 	}
 
@@ -275,7 +276,7 @@ func TestDetectWireFormat(t *testing.T) {
 		chatBody: `{"error":"no such route"}`}
 	srv3 := httptest.NewServer(m2.handler(t))
 	defer srv3.Close()
-	if got, err := DetectWireFormat(ctx, srv3.URL, "k", factory); err != nil || got != WireFormatUnknown {
+	if got, err := DetectWireFormat(ctx, srv3.URL, "k", nil, factory); err != nil || got != WireFormatUnknown {
 		t.Errorf("both-404: got %q, err %v", got, err)
 	}
 }
@@ -340,7 +341,9 @@ func TestJSONFileStoreRoundTripAndPerms(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat: %v", err)
 	}
-	if info.Mode().Perm() != 0o600 {
+	// Windows has no Unix permission bits (files report 0666), so
+	// the exact mode is only asserted off Windows.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Errorf("store perms = %o, want 0600", info.Mode().Perm())
 	}
 	loaded, err := s.Load()
@@ -349,5 +352,77 @@ func TestJSONFileStoreRoundTripAndPerms(t *testing.T) {
 	}
 	if len(loaded) != 1 || loaded[0].ID != "prov_1" {
 		t.Errorf("loaded = %+v", loaded)
+	}
+}
+
+// TestRegistryApplySyncedContextWindow (CHECKLIST 179): the sync
+// sets a model's context window in memory only — the provider
+// store file is byte-identical afterwards (the sync state file
+// owns durability), and a reload loses the synced window.
+func TestRegistryApplySyncedContextWindow(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "providers.json")
+	store := NewJSONFileStore(path)
+	if err := store.Save([]ProviderConfig{{
+		ID: "openai", Name: "OpenAI", BaseURL: "https://api.openai.com/v1", Enabled: true,
+		Models: []Model{{ID: "gpt-4o"}, {ID: "gpt-4o-mini", ContextWindow: 128000}},
+	}}); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+	reg := NewRegistry(store)
+	if err := reg.Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read store: %v", err)
+	}
+	windowOf := func(reg *Registry, model string) int {
+		for _, p := range reg.List() {
+			for _, m := range p.Models {
+				if m.ID == model {
+					return m.ContextWindow
+				}
+			}
+		}
+		return -1
+	}
+	if err := reg.ApplySyncedContextWindow("openai", "gpt-4o", 128000); err != nil {
+		t.Fatalf("ApplySyncedContextWindow: %v", err)
+	}
+	if got := windowOf(reg, "gpt-4o"); got != 128000 {
+		t.Errorf("gpt-4o window = %d, want 128000", got)
+	}
+	if got := windowOf(reg, "gpt-4o-mini"); got != 128000 {
+		t.Errorf("gpt-4o-mini window moved to %d, want untouched 128000", got)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read store: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Error("synced window was persisted to the provider store — the sync must stay in-memory only")
+	}
+	// A reload from the store loses the synced window: the state
+	// file (not the store) is what re-applies it at startup.
+	reg2 := NewRegistry(store)
+	if err := reg2.Load(); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if got := windowOf(reg2, "gpt-4o"); got != 0 {
+		t.Errorf("reloaded gpt-4o window = %d, want 0 (synced, not stored)", got)
+	}
+	for _, tc := range []struct {
+		provider, model string
+		window          int
+	}{
+		{"nope", "gpt-4o", 128000},
+		{"openai", "nope", 128000},
+		{"openai", "gpt-4o", 0},
+		{"openai", "gpt-4o", -5},
+	} {
+		if err := reg.ApplySyncedContextWindow(tc.provider, tc.model, tc.window); err == nil {
+			t.Errorf("ApplySyncedContextWindow(%q, %q, %d) succeeded, want an error", tc.provider, tc.model, tc.window)
+		}
 	}
 }

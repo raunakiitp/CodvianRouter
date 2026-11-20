@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-tool-search",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 21,
+    "method": "tools/call",
+    "params": {
+      "name": "tool_search",
+      "arguments": {
+        "query": "combo"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 21,
+    "result": {
+      "content": [
+        {
+          "text": "{\"count\":7,\"query\":\"combo\",\"tools\":[{\"name\":\"best_combo_for_task\",\"description\":\"Recommend a combo for a task, ranked on measured ledger metrics (success rate, cost per request, mean latency) and the task's strategy preference (coding tasks prefer code, fast tasks fastest, cheap tasks cheapest). A combo with no history ranks on strategy match alone and is reported as metrics-unknown. A cost/latency constraint a combo cannot be checked against (unknown price, no latency) does not exclude it — the result reports the constraint as not applied for that combo.\",\"scopes\":[\"mcp:read:routing\"]},{\"name\":\"create_combo\",\"description\":\"Create a routing combo: a named ordered list of providers (members may carry a reasoning effort as \\\"provider@effort\\\") with a routing strategy. The combo is written to the config routing groups (and the chain-strategy mirror) and persisted to the config file. Members must be configured providers; the strategy must be a known strategy name or a combo execution mode (fusion, pipeline, jev).\",\"scopes\":[\"mcp:manage:routing\"]},{\"name\":\"explain_route\",\"description\":\"Explain how a model would be routed: the effective strategy and its rule, and the attempt order over the providers offering the model (declared order). Dry run — no provider is called. Strategies that re-rank do so at request time from live signals this tool does not observe; the result says so. Optionally restrict the order to one combo's members.\",\"scopes\":[\"mcp:read:routing\"]},{\"name\":\"get_combo_metrics\",\"description\":\"Measured ledger history for one combo's member providers (all time): requests, successes, errors, success rate, tokens, cost, and mean latency over recent successful events (at most the 500 most recent events — older events do not affect the mean). Cost is a lower bound when any of the combo's tokens are unpriced (cost_known=false) — unpriced usage is never reported as $0.\",\"scopes\":[\"mcp:read:routing\"]},{\"name\":\"list_combos\",\"description\":\"List every configured routing combo (config routing groups) with its members, strategy, and whether it is the session-active combo. Read-only.\",\"scopes\":[\"mcp:read:routing\"]},{\"name\":\"set_routing_strategy\",\"description\":\"Set the routing strategy: globally (no chain) or for one chain (a model id, or a combo/group name). The strategy must be a known strategy name. The change is written to the config and persisted to the config file.\",\"scopes\":[\"mcp:manage:routing\"]},{\"name\":\"switch_combos\",\"description\":\"Set the session-active combo (the default combo the routing tools report). The serving router has no single active combo — every group is always addressable — so this selects the MCP session's default only; it never changes what the serving router routes. Pass active=false to clear the active selection.\",\"scopes\":[\"mcp:manage:routing\"]}]}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "count": 7,
+        "query": "combo",
+        "tools": [
+          {
+            "name": "best_combo_for_task",
+            "description": "Recommend a combo for a task, ranked on measured ledger metrics (success rate, cost per request, mean latency) and the task's strategy preference (coding tasks prefer code, fast tasks fastest, cheap tasks cheapest). A combo with no history ranks on strategy match alone and is reported as metrics-unknown. A cost/latency constraint a combo cannot be checked against (unknown price, no latency) does not exclude it — the result reports the constraint as not applied for that combo.",
+            "scopes": [
+              "mcp:read:routing"
+            ]
+          },
+          {
+            "name": "create_combo",
+            "description": "Create a routing combo: a named ordered list of providers (members may carry a reasoning effort as \"provider@effort\") with a routing strategy. The combo is written to the config routing groups (and the chain-strategy mirror) and persisted to the config file. Members must be configured providers; the strategy must be a known strategy name or a combo execution mode (fusion, pipeline, jev).",
+            "scopes": [
+              "mcp:manage:routing"
+            ]
+          },
+          {
+            "name": "explain_route",
+            "description": "Explain how a model would be routed: the effective strategy and its rule, and the attempt order over the providers offering the model (declared order). Dry run — no provider is called. Strategies that re-rank do so at request time from live signals this tool does not observe; the result says so. Optionally restrict the order to one combo's members.",
+            "scopes": [
+              "mcp:read:routing"
+            ]
+          },
+          {
+            "name": "get_combo_metrics",
+            "description": "Measured ledger history for one combo's member providers (all time): requests, successes, errors, success rate, tokens, cost, and mean latency over recent successful events (at most the 500 most recent events — older events do not affect the mean). Cost is a lower bound when any of the combo's tokens are unpriced (cost_known=false) — unpriced usage is never reported as $0.",
+            "scopes": [
+              "mcp:read:routing"
+            ]
+          },
+          {
+            "name": "list_combos",
+            "description": "List every configured routing combo (config routing groups) with its members, strategy, and whether it is the session-active combo. Read-only.",
+            "scopes": [
+              "mcp:read:routing"
+            ]
+          },
+          {
+            "name": "set_routing_strategy",
+            "description": "Set the routing strategy: globally (no chain) or for one chain (a model id, or a combo/group name). The strategy must be a known strategy name. The change is written to the config and persisted to the config file.",
+            "scopes": [
+              "mcp:manage:routing"
+            ]
+          },
+          {
+            "name": "switch_combos",
+            "description": "Set the session-active combo (the default combo the routing tools report). The serving router has no single active combo — every group is always addressable — so this selects the MCP session's default only; it never changes what the serving router routes. Pass active=false to clear the active selection.",
+            "scopes": [
+              "mcp:manage:routing"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "assert": {
+    "id": 21,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.tools"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.count": 7,
+      "result.structuredContent.query": "combo",
+      "result.structuredContent.tools.0.name": "best_combo_for_task",
+      "result.structuredContent.tools.6.name": "switch_combos"
+    }
+  },
+  "notes": "tool_search for 'combo': 7 hits (name or description contains 'combo'), in Tools() order."
+}

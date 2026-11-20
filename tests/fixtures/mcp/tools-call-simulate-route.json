@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-simulate-route",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 12,
+    "method": "tools/call",
+    "params": {
+      "name": "simulate_route",
+      "arguments": {
+        "model": "coder-model",
+        "prompt_tokens": 1000
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 12,
+    "result": {
+      "content": [
+        {
+          "text": "{\"simulation\":{\"model\":\"coder-model\",\"strategy\":\"priority\",\"prompt_tokens\":1000,\"attempts\":[{\"provider\":\"p1\",\"model\":\"coder-model\",\"on_failure\":\"stop\",\"estimated_prompt_cost_usd\":0.003,\"price_known\":true}],\"estimated_prompt_cost_usd\":0.003,\"cost_known\":true,\"note\":\"Dry run — no provider was called. Completion cost is never estimated (the completion length is unknown before the call).\"}}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "simulation": {
+          "model": "coder-model",
+          "strategy": "priority",
+          "prompt_tokens": 1000,
+          "attempts": [
+            {
+              "provider": "p1",
+              "model": "coder-model",
+              "on_failure": "stop",
+              "estimated_prompt_cost_usd": 0.003,
+              "price_known": true
+            }
+          ],
+          "estimated_prompt_cost_usd": 0.003,
+          "cost_known": true,
+          "note": "Dry run — no provider was called. Completion cost is never estimated (the completion length is unknown before the call)."
+        }
+      }
+    }
+  },
+  "assert": {
+    "id": 12,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.simulation"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.simulation.attempts.0.estimated_prompt_cost_usd": 0.003,
+      "result.structuredContent.simulation.attempts.0.model": "coder-model",
+      "result.structuredContent.simulation.attempts.0.on_failure": "stop",
+      "result.structuredContent.simulation.attempts.0.price_known": true,
+      "result.structuredContent.simulation.attempts.0.provider": "p1",
+      "result.structuredContent.simulation.cost_known": true,
+      "result.structuredContent.simulation.estimated_prompt_cost_usd": 0.003,
+      "result.structuredContent.simulation.model": "coder-model",
+      "result.structuredContent.simulation.prompt_tokens": 1000,
+      "result.structuredContent.simulation.strategy": "priority"
+    }
+  },
+  "notes": "simulate_route for coder-model at 1000 prompt tokens: single-attempt fallback tree, first-attempt prompt cost $0.003 from the fixed $3.00/1M mock price."
+}

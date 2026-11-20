@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-get-combo-metrics",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 10,
+    "method": "tools/call",
+    "params": {
+      "name": "get_combo_metrics",
+      "arguments": {
+        "name": "fast"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 10,
+    "result": {
+      "content": [
+        {
+          "text": "{\"metrics\":{\"name\":\"fast\",\"requests\":10,\"ok\":9,\"errors\":1,\"success_rate\":0.9,\"prompt_tokens\":1000,\"completion_tokens\":500,\"total_tokens\":1500,\"cost_usd\":0.012,\"cost_known\":true,\"unpriced_tokens\":0,\"mean_latency_ms\":120.5,\"latency_known\":true,\"latency_events\":9,\"window\":\"all time\"}}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "metrics": {
+          "name": "fast",
+          "requests": 10,
+          "ok": 9,
+          "errors": 1,
+          "success_rate": 0.9,
+          "prompt_tokens": 1000,
+          "completion_tokens": 500,
+          "total_tokens": 1500,
+          "cost_usd": 0.012,
+          "cost_known": true,
+          "unpriced_tokens": 0,
+          "mean_latency_ms": 120.5,
+          "latency_known": true,
+          "latency_events": 9,
+          "window": "all time"
+        }
+      }
+    }
+  },
+  "assert": {
+    "id": 10,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.metrics"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.metrics.cost_known": true,
+      "result.structuredContent.metrics.cost_usd": 0.012,
+      "result.structuredContent.metrics.errors": 1,
+      "result.structuredContent.metrics.latency_events": 9,
+      "result.structuredContent.metrics.latency_known": true,
+      "result.structuredContent.metrics.mean_latency_ms": 120.5,
+      "result.structuredContent.metrics.name": "fast",
+      "result.structuredContent.metrics.ok": 9,
+      "result.structuredContent.metrics.requests": 10,
+      "result.structuredContent.metrics.success_rate": 0.9,
+      "result.structuredContent.metrics.total_tokens": 1500
+    }
+  },
+  "notes": "get_combo_metrics for fast: measured mock ledger history (10 requests, 9 ok, $0.012 priced, 120.5 ms mean latency)."
+}

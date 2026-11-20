@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-heartbeat",
+  "fixture": true,
+  "transport": "sse",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + fixed test gateway keys + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger for the routing-reader and cost-reader keys, prices a $10/$30 and c $5/$15 per 1M, routing group fast; memory seeded with one fixed entry for the destructive memory key) over httptest (loopback) via GET /api/mcp/sse (endpoint event) + POST /api/mcp/sse?session_id= with a test gateway key; message-event data captured verbatim. Recorded data only, no live provider call.",
+  "key": "read",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 16,
+    "method": "tools/call",
+    "params": {
+      "name": "heartbeat",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 16,
+    "result": {
+      "content": [
+        {
+          "text": "{\"audit_log\":\"enabled\",\"protocol_version\":\"2025-03-26\",\"tool_count\":24,\"uptime_seconds\":0}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "audit_log": "enabled",
+        "protocol_version": "2025-03-26",
+        "tool_count": 24,
+        "uptime_seconds": 0
+      }
+    }
+  },
+  "recorded_http_status": 202,
+  "assert": {
+    "id": 16,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.audit_log": "enabled",
+      "result.structuredContent.protocol_version": "2025-03-26",
+      "result.structuredContent.tool_count": 24,
+      "result.structuredContent.uptime_seconds": null
+    },
+    "http_status": 202
+  },
+  "notes": "heartbeat: live snapshot — protocol version, all 24 tools announced, audit log enabled (the HTTP transport opens \u003cdata-dir\u003e/mcp/audit.jsonl); uptime is live so presence-only."
+}

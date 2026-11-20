@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-memory-clear",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger, prices a $10/$30 and c $5/$15 per 1M, routing group fast) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "memory-destr",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 31,
+    "method": "tools/call",
+    "params": {
+      "name": "memory_clear",
+      "arguments": {}
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 31,
+    "result": {
+      "content": [
+        {
+          "text": "{\"caller\":\"gk_e11ac192c1439dd6\",\"cleared\":1,\"note\":\"Only the caller's own memories were deleted; other callers' memories are untouched.\",\"scope\":\"caller-only\"}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "caller": "gk_e11ac192c1439dd6",
+        "cleared": 1,
+        "note": "Only the caller's own memories were deleted; other callers' memories are untouched.",
+        "scope": "caller-only"
+      }
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 31,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.caller": null,
+      "result.structuredContent.cleared": 1,
+      "result.structuredContent.scope": "caller-only"
+    },
+    "http_status": 200
+  },
+  "notes": "memory_clear with the destructive memory key clears only the caller's own note (cleared=1) and reports the caller's own key id (random per run, presence-only) with scope caller-only. Setup adds the note first on the same session."
+}

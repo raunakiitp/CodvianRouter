@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	cryptorand "crypto/rand"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -208,6 +210,33 @@ type Registry struct {
 	cipher     KeyCipher
 	newClient  ClientFactory
 	tfoEnabled bool // TCP Fast Open on clients built by the default factory (default true)
+	// pools owns the warm HTTP/2 transports, one per (provider, key)
+	// (see pool.go). Every client ClientFor builds shares its pair's
+	// pool, so a provider's connections stay warm across requests,
+	// health probes and engine clients instead of re-dialing.
+	pools *PoolManager
+	// httpAdapter is the plugin provider-adapter hook (CHECKLIST
+	// 201), set by main from the plugins registry. Nil means no
+	// adapter is registered for any provider. Guarded by mu: it
+	// is set once at startup before any client is built, and
+	// read on every ClientFor.
+	httpAdapter HTTPAdapterFunc
+	// authCache memoizes resolveAuthHeaders results, one entry per
+	// provider ID (see cachedAuth). The resolution walks the whole
+	// catalog — catalog.All deep-clones every provider, and
+	// ResolveAuthForBaseURL calls it up to twice, with the
+	// catalogWireForBaseURL fallback calling it twice more — so an
+	// uncached resolve costs ~4 full catalog clones per request
+	// for a base-URL provider (benchmark round 2, phase 2 profile:
+	// catalog.All 42.7% of all CPU on the request path, via the
+	// per-request readiness check in server.checkLocalReadiness).
+	// The cached result is keyed by a fingerprint of every input
+	// the resolution depends on (see authFingerprint), so a key
+	// rotation, base-URL change or catalog relink can never serve
+	// a stale header; it only costs a recompute. authMu guards the
+	// map only — the (slow) resolution itself runs without it.
+	authMu    sync.Mutex
+	authCache map[string]cachedAuth
 }
 
 // RegistryOption configures a Registry.
@@ -233,7 +262,55 @@ func WithClientFactory(f ClientFactory) RegistryOption {
 // the dialer falls back gracefully either way, so disabling is
 // never needed for correctness.
 func WithTFOEnabled(enabled bool) RegistryOption {
-	return func(r *Registry) { r.tfoEnabled = enabled }
+	return func(r *Registry) {
+		r.tfoEnabled = enabled
+		r.pools.SetTFOEnabled(enabled)
+	}
+}
+
+// WithPoolConfig sets the warm-pool sizing for the upstream clients
+// the registry builds (see PoolConfig in pool.go — Little's Law
+// sizing from expected_rps × expected_latency_ms, 0 fields mean
+// defaults). Pools created before this option applies keep the size
+// they were built with; in serve mode the option is applied at
+// construction, before any client is built.
+func WithPoolConfig(cfg PoolConfig) RegistryOption {
+	return func(r *Registry) { r.pools.SetConfig(cfg) }
+}
+
+// SetHTTPAdapter installs the plugin provider-adapter hook
+// (CHECKLIST 201). It is called once at startup by main, before
+// any client is built; every client built afterwards carries the
+// hook and its provider ID, so the adapter sees the outgoing
+// request for exactly the provider it registered for.
+func (r *Registry) SetHTTPAdapter(fn HTTPAdapterFunc) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.httpAdapter = fn
+}
+
+// httpAdapterSetter is implemented by clients that can carry the
+// plugin adapter hook (openAIClient, promoted to every native-wire
+// wrapper through the embedded client). Factory-built fakes in
+// tests do not implement it and are left alone.
+type httpAdapterSetter interface {
+	setHTTPAdapter(providerID string, fn HTTPAdapterFunc)
+}
+
+// attachHTTPAdapter gives a freshly built client its provider ID
+// and the adapter hook, when one is installed. A nil hook means no
+// adapter: the client is returned untouched.
+func (r *Registry) attachHTTPAdapter(providerID string, client Client) Client {
+	r.mu.RLock()
+	fn := r.httpAdapter
+	r.mu.RUnlock()
+	if fn == nil {
+		return client
+	}
+	if s, ok := client.(httpAdapterSetter); ok {
+		s.setHTTPAdapter(providerID, fn)
+	}
+	return client
 }
 
 // NewRegistry returns an empty Registry backed by store (nil store means
@@ -248,6 +325,8 @@ func NewRegistry(store Store, opts ...RegistryOption) *Registry {
 		providers:  make(map[string]*Provider),
 		store:      store,
 		tfoEnabled: true,
+		pools:      NewPoolManager(PoolConfig{}, true),
+		authCache:  make(map[string]cachedAuth),
 	}
 	// The default factory reads r.tfoEnabled at call time (not at
 	// construction), so WithTFOEnabled applied after NewRegistry
@@ -313,6 +392,17 @@ func (r *Registry) Load() error {
 			if err := resolveCatalogForLoad(p); err != nil {
 				return err
 			}
+		} else if rem, ok := IsRemovedBaseURL(p.BaseURL); ok {
+			// CT-2: a config-file provider with an explicit base
+			// URL and no catalog link bypasses
+			// resolveCatalogForLoad entirely, so the removed-
+			// domain check has to run here too — otherwise a
+			// removed provider comes back through the config
+			// file with an explicit base URL.
+			return fmt.Errorf("provider %q: %w", p.ID, &catalog.RemovedProviderError{
+				Entry:   catalog.Provider{ID: rem.ID, BaseURLs: []string{p.BaseURL}},
+				Removed: rem,
+			})
 		}
 		providers[p.ID] = p
 		order = append(order, p.ID)
@@ -348,7 +438,8 @@ const addTimeout = 30 * time.Second
 // derived from the base URL host; use AddNamed for an explicit name.
 //
 // If the upstream's /v1/models endpoint 404s but its chat endpoint
-// answers, the provider is still added with an empty model list and wire
+// answers, the provider is still added — with the catalog entry's
+// static model list when one is known, else an empty list — and wire
 // format "openai" (some gateways only expose chat completions). Any other
 // key-test failure (401, 429, 5xx, network error) rejects the add.
 func (r *Registry) Add(baseURL, apiKey string) (*Provider, error) {
@@ -388,6 +479,11 @@ type addInput struct {
 	verification  string
 	authEndpoint  string
 	authVariant   string
+	// staticModels is the catalog entry's static model list
+	// (entry.StaticModels()); catalog adds pass it, custom
+	// adds leave it nil. Used only as a fallback when the
+	// live /v1/models probe yields no list.
+	staticModels []string
 }
 
 // addProvider validates baseURL, encrypts apiKey, verifies the key
@@ -397,7 +493,8 @@ type addInput struct {
 // name.
 //
 // If the upstream's /v1/models endpoint 404s but its chat endpoint
-// answers, the provider is still added with an empty model list and wire
+// answers, the provider is still added — with the catalog entry's
+// static model list when one is known, else an empty list — and wire
 // format "openai" (some gateways only expose chat completions). Any other
 // key-test failure (401, 429, 5xx, network error) rejects the add.
 func (r *Registry) addProvider(ctx context.Context, in addInput) (*Provider, error) {
@@ -405,12 +502,44 @@ func (r *Registry) addProvider(ctx context.Context, in addInput) (*Provider, err
 	if err != nil {
 		return nil, err
 	}
+	// Removed-provider enforcement (G19 Area 1, CT-2): a base
+	// URL belonging to a removed provider can never be added —
+	// not as a custom provider, not via a catalog add with a
+	// base-URL override. The catalog-add path additionally
+	// checks the entry itself (AddCatalogWithOptions), and
+	// config-file loads check at resolve time
+	// (resolveCatalogForLoad). The refusal is the typed
+	// catalog.RemovedProviderError, so callers can distinguish
+	// a removal from a generic validation failure.
+	if rem, ok := IsRemovedBaseURL(normalized); ok {
+		return nil, &catalog.RemovedProviderError{
+			Entry:   catalog.Provider{ID: rem.ID, BaseURLs: []string{normalized}},
+			Removed: rem,
+		}
+	}
 	if strings.TrimSpace(in.apiKey) == "" && !in.allowEmptyKey {
 		return nil, errors.New("provider API key is empty")
 	}
 	name := in.name
 	if strings.TrimSpace(name) == "" {
 		name = DeriveName(normalized)
+	}
+
+	// Custom-provider prefix convention (PARITY B4-04): a hand-added
+	// provider whose name carries a known prefix (openai-compatible-,
+	// anthropic-compatible-, anthropic-compatible-cc-) states the wire
+	// format, and the prefix wins — over the base-URL derivation below
+	// and over the chat-probe detection. This mirrors ToProvider's
+	// ApplyPrefix in internal/catalog/custom.go; the live add path
+	// (AddNamed/AddContext, incl. POST /api/providers) never consulted
+	// it. Only applies when no wire was already prescribed (catalog
+	// adds prescribe their resolved wire, which stands); prescribing
+	// in.wireFormat makes the prefix behave exactly like a
+	// catalog-prescribed wire downstream.
+	if in.wireFormat == "" {
+		if _, _, prefixWire, ok := catalog.ParseCustomPrefix(name); ok {
+			in.wireFormat = string(prefixWire)
+		}
 	}
 
 	r.mu.RLock()
@@ -448,6 +577,13 @@ func (r *Registry) addProvider(ctx context.Context, in addInput) (*Provider, err
 		wireFormat = WireFormatOpenAI
 	}
 	var models []Model
+	// fetchedAt stamps ModelsFetchedAt (CT-7): the add-time
+	// ListModels call is a fetch, so a provider added with a
+	// live list is stamped now. The chat-only path below
+	// (models 404s, no list fetched) leaves it zero — never
+	// fetched — rather than claiming a fetch that never
+	// happened.
+	fetchedAt := time.Time{}
 	switch {
 	case testErr == nil:
 		// 2. Auto-fetch model list (second call, per the Phase 1 contract:
@@ -457,6 +593,7 @@ func (r *Registry) addProvider(ctx context.Context, in addInput) (*Provider, err
 			return nil, fmt.Errorf("fetching model list for %s: %w", normalized, err)
 		}
 		models = modelsFromIDs(ids)
+		fetchedAt = time.Now().UTC()
 	case isNotFound(testErr):
 		// /v1/models 404s: maybe the gateway only exposes chat. Probe it.
 		// The probe only speaks OpenAI wire, so it may only override a
@@ -473,8 +610,16 @@ func (r *Registry) addProvider(ctx context.Context, in addInput) (*Provider, err
 		if in.wireFormat == "" {
 			wireFormat = detected
 		}
-		// Chat endpoint exists but no model list: add with no models.
-		models = nil
+		// Chat endpoint exists but no model list: fall back to
+		// the catalog entry's static list when one is known
+		// (B4-02); a custom provider has none, so it keeps an
+		// empty list. The static list is not a fetch, so
+		// fetchedAt stays zero.
+		if len(in.staticModels) > 0 {
+			models = modelsFromIDs(in.staticModels)
+		} else {
+			models = nil
+		}
 	default:
 		return nil, fmt.Errorf("key test failed for %s: %w", normalized, testErr)
 	}
@@ -486,6 +631,7 @@ func (r *Registry) addProvider(ctx context.Context, in addInput) (*Provider, err
 		APIKeyEncrypted: encrypted,
 		WireFormat:      wireFormat,
 		Models:          models,
+		ModelsFetchedAt: fetchedAt,
 		Enabled:         true,
 		QuotaHint:       QuotaUnknown,
 		CreatedAt:       time.Now().UTC(),
@@ -493,6 +639,16 @@ func (r *Registry) addProvider(ctx context.Context, in addInput) (*Provider, err
 		Verification:    in.verification,
 		AuthEndpoint:    in.authEndpoint,
 		AuthVariant:     in.authVariant,
+		// Pool-native from birth: the single key added here is
+		// the pool's first preferred key, so later AddKey calls
+		// append to this pool instead of orphaning it.
+		Keys: []ProviderKey{{
+			ID:          NewProviderKeyID(),
+			Encrypted:   encrypted,
+			Role:        KeyRolePreferred,
+			Fingerprint: KeyFingerprint(in.apiKey),
+			CreatedAt:   time.Now().UTC(),
+		}},
 	}
 
 	r.mu.Lock()
@@ -544,10 +700,12 @@ type CatalogAddOptions struct {
 //     JSON, OpenRouter JWT, Azure Entra): the resolver never fakes a
 //     static header for these — add the static-header variant instead
 //     (e.g. Azure "api-key"), or wait for exchange support. Bedrock
-//     SigV4 is the exception: the client signs each request itself,
-//     so a Bedrock provider is allowed when the key is AWS
-//     credential material ("ACCESS:SECRET[:TOKEN]"); a key that is
-//     not stays refused.
+//     SigV4 and Vertex service-account JSON are the exceptions: the
+//     client performs the exchange itself (Bedrock signs each
+//     request from the operator's AWS credentials; Vertex mints an
+//     OAuth2 token from the service-account JSON), so those
+//     providers are allowed when the key is the right credential
+//     material; a key that is not stays refused.
 //   - entries with no known base URL (name-only reference entries);
 //   - templated catalog base URLs (Azure {resource}, ...): pass a
 //     concrete BaseURL via AddCatalogWithOptions.
@@ -558,9 +716,33 @@ func (r *Registry) AddCatalog(ctx context.Context, catalogID, apiKey string) (*P
 // AddCatalogWithOptions is AddCatalog with an explicit surface,
 // variant, and/or base-URL override (see CatalogAddOptions).
 func (r *Registry) AddCatalogWithOptions(ctx context.Context, catalogID, apiKey string, opts CatalogAddOptions) (*Provider, error) {
+	// Removed-provider enforcement (G19 Area 1, CT-2): check
+	// BEFORE the catalog lookup. The removed providers are not
+	// in the catalog, so lookupCatalog would fail first with a
+	// generic "unknown catalog provider" that never names the
+	// removal. The refusal is the typed
+	// catalog.RemovedProviderError, so callers can distinguish
+	// a removal from a generic failure.
+	if err := refuseRemovedCatalogID(catalogID); err != nil {
+		return nil, err
+	}
 	entry, err := lookupCatalog(catalogID)
 	if err != nil {
 		return nil, err
+	}
+	// Removed-provider enforcement (G19 Area 1, CT-2): the
+	// entry itself must not be the removed variant. Matches
+	// carries the keyless-only nuance — an authenticated
+	// opencode entry passes, the keyless "OpenCode Free"
+	// surface does not. (This is the second half of the
+	// pre-lookup check above: the pre-lookup check can only
+	// refuse whole-integration removals, because a keyless-
+	// only ID may still name a legitimate authenticated
+	// catalog entry.)
+	for _, rem := range catalog.RemovedProviders {
+		if rem.Matches(entry) {
+			return nil, &catalog.RemovedProviderError{Entry: entry, Removed: rem}
+		}
 	}
 	if entry.ToSGrey {
 		return nil, fmt.Errorf("catalog provider %q (%s) is ToS-grey (web-cookie / subscription auth) and cannot be added as a routing target", entry.ID, entry.Name)
@@ -580,11 +762,20 @@ func (r *Registry) AddCatalogWithOptions(ctx context.Context, catalogID, apiKey 
 	res, err := catalog.ResolveAuth(entry, endpoint, opts.Variant, apiKey)
 	if err != nil {
 		if errors.Is(err, catalog.ErrExchangeRequired) {
-			if headers, _, ok := sigv4Headers(res, apiKey); ok {
+			if headers, wire, ok := sigv4Headers(res, apiKey); ok {
 				// SigV4 is the one exchange the client performs
 				// itself: keep the resolution (BaseURL + Wire are
 				// already set on res) with an empty header set.
 				res.Headers = headers
+				res.Wire = catalog.WireFormat(wire)
+			} else if headers, wire, ok := vertexHeaders(res, apiKey); ok {
+				// Vertex service-account JSON is the second
+				// exchange the client performs itself (CHECKLIST
+				// 277 (e)): the client mints the OAuth2 token
+				// per request. The wire is "vertex", not the
+				// resolution's Gemini wire — see vertexHeaders.
+				res.Headers = headers
+				res.Wire = catalog.WireFormat(wire)
 			} else {
 				return nil, fmt.Errorf("catalog provider %q (%s): %w — credential exchange is not supported yet; use a static-header variant of this provider if one exists", entry.ID, entry.Name, err)
 			}
@@ -621,17 +812,45 @@ func (r *Registry) AddCatalogWithOptions(ctx context.Context, catalogID, apiKey 
 		verification:  string(entry.Verification),
 		authEndpoint:  endpoint,
 		authVariant:   opts.Variant,
+		staticModels:  entry.StaticModels(),
 	})
 }
 
+// refuseRemovedCatalogID reports whether catalogID (an ID or alias
+// as the operator typed it) names a removed provider whose whole
+// integration was removed, returning the typed removal error. It
+// deliberately does NOT refuse keyless-only removals (opencode):
+// that ID may still name the legitimate authenticated catalog
+// entry, which only RemovedProvider.Matches can tell apart once
+// the entry is looked up — so keyless-only IDs fall through to
+// the post-lookup Matches check in AddCatalogWithOptions /
+// resolveCatalogForLoad. The check reuses the catalog's own
+// 5-entry register (catalog.IsRemoved); it never forks the table.
+func refuseRemovedCatalogID(catalogID string) error {
+	rem, ok := catalog.IsRemoved(catalogID)
+	if !ok || rem.KeylessOnly {
+		return nil
+	}
+	return &catalog.RemovedProviderError{
+		Entry:   catalog.Provider{ID: rem.ID, Alias: rem.Alias},
+		Removed: rem,
+	}
+}
+
 // lookupCatalog finds a catalog entry by ID, falling back to alias
-// ("grok" → xai, "ollama" → ollama-local).
+// ("grok" → xai, "ollama" → ollama-local). A retired ID is not
+// "unknown": RetiredByID names it and its retirement reason, so an
+// add/load attempt fails with the reason instead of a generic
+// "unknown catalog provider" (CT-3 registry half).
 func lookupCatalog(idOrAlias string) (catalog.Provider, error) {
 	if entry, ok := catalog.ByID(idOrAlias); ok {
 		return entry, nil
 	}
 	if entry, ok := catalog.ByAlias(idOrAlias); ok {
 		return entry, nil
+	}
+	if rp, ok := catalog.RetiredByID(idOrAlias); ok {
+		return catalog.Provider{}, fmt.Errorf("catalog provider %q (%s) is retired and cannot be added: %s", rp.ID, rp.Name, rp.RetiredReason)
 	}
 	return catalog.Provider{}, fmt.Errorf("unknown catalog provider %q (see the catalog for known IDs)", idOrAlias)
 }
@@ -666,9 +885,29 @@ func defaultCatalogEndpoint(entry catalog.Provider) string {
 // made). An exchange surface still yields a usable BaseURL/Wire
 // alongside its error, which is tolerated here for that reason.
 func resolveCatalogForLoad(p *Provider) error {
+	// Removed-provider enforcement (G19 Area 1, CT-2): check
+	// BEFORE the catalog lookup, for the same reason as in
+	// AddCatalogWithOptions — a removed provider is not in the
+	// catalog, so the lookup would fail first with a generic
+	// "unknown catalog provider" that never names the removal.
+	// The error is wrapped with the config provider's ID so the
+	// load failure names the offending row; errors.As still
+	// finds the typed catalog.RemovedProviderError underneath.
+	if err := refuseRemovedCatalogID(p.CatalogID); err != nil {
+		return fmt.Errorf("provider %q: %w", p.ID, err)
+	}
 	entry, err := lookupCatalog(p.CatalogID)
 	if err != nil {
 		return fmt.Errorf("provider %q: %w", p.ID, err)
+	}
+	// Removed-provider enforcement (G19 Area 1, CT-2): a
+	// config-file provider whose catalog entry is the removed
+	// variant fails the load loudly instead of routing to a
+	// provider its operator asked removed.
+	for _, rem := range catalog.RemovedProviders {
+		if rem.Matches(entry) {
+			return fmt.Errorf("provider %q: %w", p.ID, &catalog.RemovedProviderError{Entry: entry, Removed: rem})
+		}
 	}
 	if entry.ToSGrey {
 		return fmt.Errorf("provider %q: catalog provider %q (%s) is ToS-grey and cannot be a routing target", p.ID, entry.ID, entry.Name)
@@ -689,8 +928,26 @@ func resolveCatalogForLoad(p *Provider) error {
 			return fmt.Errorf("provider %q: catalog provider %q has a templated base URL %q; set a concrete base_url in the config", p.ID, entry.ID, res.BaseURL)
 		}
 		p.BaseURL = NormalizeBaseURL(res.BaseURL)
-	} else if _, err := ValidateBaseURL(p.BaseURL); err != nil {
+	} else if normalized, err := ValidateBaseURL(p.BaseURL); err != nil {
 		return fmt.Errorf("provider %q: %w", p.ID, err)
+	} else {
+		// A config-file override keeps its spelling only in the
+		// file: the stored value is the canonical form, so a
+		// trailing slash or mixed-case scheme/host registers to
+		// the same value as the clean spelling.
+		p.BaseURL = normalized
+	}
+	// CT-2: an explicit base URL in the config file — whether it
+	// overrides the catalog base or is the only base URL — must
+	// also be checked against the removed domains. A catalog-
+	// linked provider pointed at a removed host (or a catalog
+	// entry whose own base URL sits on a removed domain) fails
+	// the load here, at load time, not at first request.
+	if rem, ok := IsRemovedBaseURL(p.BaseURL); ok {
+		return fmt.Errorf("provider %q: %w", p.ID, &catalog.RemovedProviderError{
+			Entry:   catalog.Provider{ID: rem.ID, BaseURLs: []string{p.BaseURL}},
+			Removed: rem,
+		})
 	}
 	if p.WireFormat == "" {
 		p.WireFormat = string(res.Wire)
@@ -730,6 +987,21 @@ func (r *Registry) Remove(id string) error {
 			break
 		}
 	}
+	// Drop the warm pool: a removed provider leaves no idle
+	// connection behind (the transport's idle sockets are closed).
+	r.pools.Drop(id)
+	// Drop its memoized auth resolutions too, so the cache cannot
+	// grow across add/remove cycles (a re-added provider with the
+	// same ID re-resolves under its new fingerprint anyway).
+	// Entries are keyed by provider ID + fingerprint (see
+	// resolveAuthHeaders), so every entry for this provider goes.
+	r.authMu.Lock()
+	for k := range r.authCache {
+		if strings.HasPrefix(k, id+"\x00") {
+			delete(r.authCache, k)
+		}
+	}
+	r.authMu.Unlock()
 	if err := r.saveLocked(); err != nil {
 		return fmt.Errorf("persisting provider removal: %w", err)
 	}
@@ -811,6 +1083,400 @@ func (r *Registry) SetQuotaHint(id string, hint float64) error {
 	return nil
 }
 
+// --- Multi-key pooling (CHECKLIST 175) ---
+//
+// A provider may hold several API keys. The pool lives on the
+// Provider (Keys, in pool order); the legacy APIKeyEncrypted field
+// always holds the primary (first preferred) key's ciphertext, so
+// older code paths that read it keep working.
+
+// materializeLegacyKeyLocked moves a provider stored before pools
+// existed onto an explicit pool: its legacy single key becomes
+// Keys[0] (preferred, same ciphertext, derived stable ID — its
+// fingerprint is unknown without the plaintext and stays empty).
+// Caller must hold r.mu. It is a no-op when Keys is already
+// populated or the provider holds no key at all. It never
+// persists by itself — callers save after their mutation.
+func (r *Registry) materializeLegacyKeyLocked(p *Provider) {
+	if len(p.Keys) > 0 || p.APIKeyEncrypted == "" {
+		return
+	}
+	p.Keys = []ProviderKey{{
+		ID:        legacyKeyID(p.APIKeyEncrypted),
+		Encrypted: p.APIKeyEncrypted,
+		Role:      KeyRolePreferred,
+		CreatedAt: p.CreatedAt,
+	}}
+}
+
+// syncPrimaryKeyLocked re-points APIKeyEncrypted at the primary
+// (first preferred) key's ciphertext after a pool mutation, so
+// the legacy field never names a key that left the pool. Caller
+// must hold r.mu.
+func (r *Registry) syncPrimaryKeyLocked(p *Provider) {
+	if k, ok := p.PrimaryKey(); ok {
+		p.APIKeyEncrypted = k.Encrypted
+	}
+}
+
+// AddKey tests a new API key live against the provider's upstream
+// (same contract as Add: TestKey must pass, or the models endpoint
+// 404s and the chat probe finds the wire) and appends it to the
+// provider's pool with the given role ("preferred" or "reserve";
+// "" means preferred). The same credential twice is refused —
+// failing over to an identical key would burn an attempt for
+// nothing. The key is stored encrypted and the change is
+// persisted; the returned key carries its ID, role and fingerprint,
+// never the plaintext.
+// keyFingerprint returns the fingerprint for a pool key: the
+// stored fingerprint when present, else the fingerprint of the
+// decrypted credential (CHECKLIST 175). The legacy synthesized
+// key carries no stored fingerprint (it is built without
+// plaintext), so a duplicate check that only compared stored
+// fingerprints would let the same credential in twice — once as
+// the legacy key, once as a new key. An undecryptable or empty
+// key reports "": it can never match a real fingerprint, so the
+// check stays safe rather than refusing a legitimate add.
+func (r *Registry) keyFingerprint(k ProviderKey) string {
+	if k.Fingerprint != "" {
+		return k.Fingerprint
+	}
+	if k.Encrypted == "" {
+		return ""
+	}
+	plaintext, err := r.decryptKey(k.Encrypted)
+	if err != nil {
+		return ""
+	}
+	return KeyFingerprint(plaintext)
+}
+
+// testKeyLive tests a candidate API key against the provider's upstream
+// without storing anything: TestKey must pass, or the models endpoint
+// 404s and the chat probe finds the wire. AddKey and RotateKey share
+// it, so a key the upstream rejects can never enter the pool by
+// either path.
+func (r *Registry) testKeyLive(ctx context.Context, p *Provider, apiKey string) error {
+	headers, _, err := r.resolveAuthHeadersUncached(p, apiKey)
+	if err != nil {
+		return fmt.Errorf("resolving auth for provider %q: %w", p.Name, err)
+	}
+	client, err := r.newClient(p.BaseURL, apiKey, headers, p.WireFormat)
+	if err != nil {
+		return err
+	}
+	if err := client.TestKey(ctx); err != nil {
+		if !isNotFound(err) {
+			return fmt.Errorf("key test failed for %s: %w", p.BaseURL, err)
+		}
+		// Models endpoint 404s: maybe the gateway only exposes
+		// chat — same probe Add runs before accepting the key.
+		detected, probeErr := DetectWireFormat(ctx, p.BaseURL, apiKey, headers, r.newClient)
+		if probeErr != nil || detected == WireFormatUnknown {
+			if probeErr != nil {
+				return fmt.Errorf("key test failed for %s: %w", p.BaseURL, probeErr)
+			}
+			return fmt.Errorf("key test failed for %s: %w", p.BaseURL, err)
+		}
+	}
+	return nil
+}
+
+func (r *Registry) AddKey(ctx context.Context, providerID, apiKey, role string) (ProviderKey, error) {
+	if strings.TrimSpace(apiKey) == "" {
+		return ProviderKey{}, errors.New("provider API key is empty")
+	}
+	if !IsKeyRole(role) {
+		return ProviderKey{}, fmt.Errorf("unknown key role %q (want %q or %q)", role, KeyRolePreferred, KeyRoleReserve)
+	}
+	r.mu.RLock()
+	p, ok := r.providers[providerID]
+	r.mu.RUnlock()
+	if !ok {
+		return ProviderKey{}, fmt.Errorf("%w: %s", ErrProviderNotFound, providerID)
+	}
+	fp := KeyFingerprint(apiKey)
+	for _, k := range p.EffectiveKeys() {
+		if f := r.keyFingerprint(k); f != "" && f == fp {
+			return ProviderKey{}, fmt.Errorf("provider %q already holds this key (fingerprint %s)", p.Name, fp)
+		}
+	}
+
+	// Live key test against this provider's upstream, with its
+	// stored wire format and catalog-resolved auth (uncached:
+	// the key is not stored yet, so there is no ciphertext to
+	// fingerprint a cache entry with).
+	if err := r.testKeyLive(ctx, p, apiKey); err != nil {
+		return ProviderKey{}, err
+	}
+
+	encrypted, err := r.encryptKey(apiKey)
+	if err != nil {
+		return ProviderKey{}, err
+	}
+	added := ProviderKey{
+		ID:          NewProviderKeyID(),
+		Encrypted:   encrypted,
+		Role:        NormalizeKeyRole(role),
+		Fingerprint: fp,
+		CreatedAt:   time.Now().UTC(),
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok = r.providers[providerID]
+	if !ok {
+		return ProviderKey{}, fmt.Errorf("%w: %s", ErrProviderNotFound, providerID)
+	}
+	// Re-check the duplicate under the write lock: a concurrent
+	// AddKey could have stored the same credential meanwhile.
+	// (Same decrypt-fallback as above: the legacy key's stored
+	// fingerprint is empty.)
+	for _, k := range p.EffectiveKeys() {
+		if f := r.keyFingerprint(k); f != "" && f == fp {
+			return ProviderKey{}, fmt.Errorf("provider %q already holds this key (fingerprint %s)", p.Name, fp)
+		}
+	}
+	r.materializeLegacyKeyLocked(p)
+	p.Keys = append(p.Keys, added)
+	r.syncPrimaryKeyLocked(p)
+	if err := r.saveLocked(); err != nil {
+		// Roll back the in-memory append so a persist failure
+		// never leaves memory and disk disagreeing.
+		p.Keys = p.Keys[:len(p.Keys)-1]
+		return ProviderKey{}, fmt.Errorf("persisting provider key: %w", err)
+	}
+	return added.Clone(), nil
+}
+
+// RemoveKey deletes one key from a provider's pool and persists
+// the change. The last key cannot be removed — a provider with no
+// key cannot serve, and removing the provider itself is the way to
+// drop it. Removing the primary key re-points the legacy field at
+// the new primary. The warm pool for the provider is dropped: its
+// idle connections were keyed by the removed key's fingerprint.
+func (r *Registry) RemoveKey(providerID, keyID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.providers[providerID]
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrProviderNotFound, providerID)
+	}
+	r.materializeLegacyKeyLocked(p)
+	if len(p.Keys) <= 1 {
+		return fmt.Errorf("provider %q holds only one key; remove the provider instead of its last key", p.Name)
+	}
+	idx := -1
+	for i, k := range p.Keys {
+		if k.ID == keyID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return fmt.Errorf("provider %q holds no key %q", p.Name, keyID)
+	}
+	p.Keys = append(p.Keys[:idx], p.Keys[idx+1:]...)
+	r.syncPrimaryKeyLocked(p)
+	r.pools.Drop(providerID)
+	if err := r.saveLocked(); err != nil {
+		return fmt.Errorf("persisting provider key removal: %w", err)
+	}
+	return nil
+}
+
+// SetKeyRole changes one pool key's role ("preferred" or
+// "reserve") and persists the change. A reserve key is held back
+// until every preferred key is exhausted; a preferred key is tried
+// first, in pool order.
+func (r *Registry) SetKeyRole(providerID, keyID, role string) error {
+	if !IsKeyRole(role) {
+		return fmt.Errorf("unknown key role %q (want %q or %q)", role, KeyRolePreferred, KeyRoleReserve)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.providers[providerID]
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrProviderNotFound, providerID)
+	}
+	r.materializeLegacyKeyLocked(p)
+	found := false
+	for i := range p.Keys {
+		if p.Keys[i].ID == keyID {
+			p.Keys[i].Role = NormalizeKeyRole(role)
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("provider %q holds no key %q", p.Name, keyID)
+	}
+	r.syncPrimaryKeyLocked(p)
+	if err := r.saveLocked(); err != nil {
+		return fmt.Errorf("persisting provider key role: %w", err)
+	}
+	return nil
+}
+
+// RotateKey replaces one pool key's credential in place, keeping its
+// ID and role: the dashboard's "paste a replacement key" box rotates
+// the provider's primary key without changing key identity (unlike
+// DELETE + POST-add, which mints a new ID and can strand the provider
+// if the add fails after the delete). The new key is tested live
+// against the upstream exactly like AddKey tests one (a 401 key is
+// refused); the same credential twice is refused, whether it is the
+// key being rotated or another key in the pool. The warm pool is
+// dropped (idle connections are keyed by fingerprint), the primary
+// pointer is re-synced when the rotated key is the primary, and the
+// change is persisted. CreatedAt is stamped at rotation: the stored
+// credential is new.
+func (r *Registry) RotateKey(ctx context.Context, providerID, keyID, apiKey string) (ProviderKey, error) {
+	if strings.TrimSpace(apiKey) == "" {
+		return ProviderKey{}, errors.New("provider API key is empty")
+	}
+	r.mu.RLock()
+	p, ok := r.providers[providerID]
+	r.mu.RUnlock()
+	if !ok {
+		return ProviderKey{}, fmt.Errorf("%w: %s", ErrProviderNotFound, providerID)
+	}
+	// KeyByID covers EffectiveKeys, so a legacy provider's single
+	// key is found by its derived ID too.
+	if _, found := p.KeyByID(keyID); !found {
+		return ProviderKey{}, fmt.Errorf("provider %q holds no key %q", p.Name, keyID)
+	}
+	fp := KeyFingerprint(apiKey)
+	for _, k := range p.EffectiveKeys() {
+		if f := r.keyFingerprint(k); f != "" && f == fp {
+			return ProviderKey{}, fmt.Errorf("provider %q already holds this key (fingerprint %s)", p.Name, fp)
+		}
+	}
+	if err := r.testKeyLive(ctx, p, apiKey); err != nil {
+		return ProviderKey{}, err
+	}
+	encrypted, err := r.encryptKey(apiKey)
+	if err != nil {
+		return ProviderKey{}, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok = r.providers[providerID]
+	if !ok {
+		return ProviderKey{}, fmt.Errorf("%w: %s", ErrProviderNotFound, providerID)
+	}
+	r.materializeLegacyKeyLocked(p)
+	// Re-check the duplicate under the write lock: a concurrent
+	// AddKey could have stored the same credential meanwhile.
+	for _, k := range p.EffectiveKeys() {
+		if f := r.keyFingerprint(k); f != "" && f == fp {
+			return ProviderKey{}, fmt.Errorf("provider %q already holds this key (fingerprint %s)", p.Name, fp)
+		}
+	}
+	idx := -1
+	for i := range p.Keys {
+		if p.Keys[i].ID == keyID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return ProviderKey{}, fmt.Errorf("provider %q holds no key %q", p.Name, keyID)
+	}
+	old := p.Keys[idx]
+	p.Keys[idx].Encrypted = encrypted
+	p.Keys[idx].Fingerprint = fp
+	p.Keys[idx].CreatedAt = time.Now().UTC()
+	r.syncPrimaryKeyLocked(p)
+	r.pools.Drop(providerID)
+	if err := r.saveLocked(); err != nil {
+		// Roll back the in-memory replacement so a persist
+		// failure never leaves memory and disk disagreeing.
+		p.Keys[idx] = old
+		r.syncPrimaryKeyLocked(p)
+		return ProviderKey{}, fmt.Errorf("persisting provider key: %w", err)
+	}
+	return p.Keys[idx].Clone(), nil
+}
+
+// KeyPool returns display-safe copies of a provider's key pool —
+// ID, role, fingerprint and creation time only, never ciphertext
+// (and never plaintext). An empty pool (no-auth provider) returns
+// an empty non-nil slice.
+func (r *Registry) KeyPool(providerID string) ([]ProviderKey, error) {
+	r.mu.RLock()
+	p, ok := r.providers[providerID]
+	r.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrProviderNotFound, providerID)
+	}
+	out := make([]ProviderKey, 0, len(p.EffectiveKeys()))
+	for _, k := range p.EffectiveKeys() {
+		k.Encrypted = "" // display-safe: no ciphertext leaves the registry
+		out = append(out, k)
+	}
+	return out, nil
+}
+
+// ApplySyncedVision sets one model's vision capability from the
+// opt-in models.dev sync (G19 Area 1), in memory ONLY — the same
+// contract as ApplySyncedContextWindow: the sync state file
+// (models-dev-sync.json) is the durable record, and the flag is
+// re-applied from it at startup. Unlike a window, vision is a
+// boolean the sync both sets and clears: a feed entry that
+// affirmatively reports a modalities table without image input
+// clears a previously synced flag. The provider's other models
+// are untouched. known records whether the feed affirmatively
+// reported modalities for this model (VisionReported): only a
+// known report sets VisionKnown, so the modality bridge can
+// tell "the feed said text-only" (known=true, vision=false)
+// from "never reported" (known=false) — the bridge reroutes
+// away only from the former, never from the latter.
+func (r *Registry) ApplySyncedVision(providerID, model string, vision, known bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.providers[providerID]
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrProviderNotFound, providerID)
+	}
+	for i := range p.Models {
+		if p.Models[i].ID == model {
+			p.Models[i].Vision = vision
+			p.Models[i].VisionKnown = known
+			return nil
+		}
+	}
+	return fmt.Errorf("provider: model %q not offered by provider %q", model, providerID)
+}
+
+// ApplySyncedContextWindow sets one model's context window from
+// the opt-in models.dev sync (CHECKLIST 179), in memory ONLY —
+// it deliberately does NOT persist: the sync state file
+// (models-dev-sync.json) is the durable record, and the window is
+// re-applied from it at startup. Writing a synced value into the
+// provider store would mix fetched data into the operator's config
+// and erase the operator-vs-synced distinction (a later sync
+// could no longer tell an operator-set window from a synced one).
+// A window <= 0 clears nothing and is refused: the sync only ever
+// applies a positive window models.dev reported. The provider's
+// other models are untouched.
+func (r *Registry) ApplySyncedContextWindow(providerID, model string, window int) error {
+	if window <= 0 {
+		return fmt.Errorf("provider: cannot apply a non-positive synced context window %d for %s/%s", window, providerID, model)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.providers[providerID]
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrProviderNotFound, providerID)
+	}
+	for i := range p.Models {
+		if p.Models[i].ID == model {
+			p.Models[i].ContextWindow = window
+			return nil
+		}
+	}
+	return fmt.Errorf("provider: model %q not offered by provider %q", model, providerID)
+}
+
 // encryptKey seals apiKey with the registry's cipher. It fails clearly
 // when no cipher is configured instead of panicking on a nil cipher.
 func (r *Registry) encryptKey(apiKey string) (string, error) {
@@ -825,8 +1491,21 @@ func (r *Registry) encryptKey(apiKey string) (string, error) {
 }
 
 // decryptKey unseals a stored API key. It fails clearly when no cipher
-// is configured instead of panicking on a nil cipher.
+// is configured instead of panicking on a nil cipher. An empty
+// ciphertext means no key was ever stored — a local no-auth provider
+// (e.g. Ollama) holds no credential at all — so it unseals to the
+// empty key instead of erroring: Vault.Unseal rejects "" as an
+// unknown seal format (no "v1:"/"v2:" prefix), which used to make
+// ClientFor fail for exactly the providers that need no key
+// (CHECKLIST 313; RelayTargetForModel already skipped decryption
+// when no key was stored, clientForKey did not). An auth provider
+// stored with no key still fails honestly downstream: ResolveAuth
+// refuses an empty credential for auth surfaces, and an
+// uncatalogued base falls back to a client that 401s upstream.
 func (r *Registry) decryptKey(ciphertext string) (string, error) {
+	if ciphertext == "" {
+		return "", nil
+	}
 	if r.cipher == nil {
 		return "", errors.New("provider: no key cipher configured (pass a Vault-backed cipher via WithCipher)")
 	}
@@ -860,19 +1539,22 @@ func (r *Registry) DecryptedKey(id string) (string, error) {
 // provider added by hand with no catalog link is matched against the
 // catalog by base URL when possible (a hand-added DeepSeek or
 // Fireworks base URL gets the right header too); otherwise it keeps
-// the legacy Bearer default. Exchange surfaces (Vertex, OpenRouter
-// JWT, Azure Entra) fail here with a clear error — the client is
-// never built with a faked static header for them. The one exception
-// is Bedrock SigV4: the exchange is performed by the client itself
-// (each request is signed from the operator's AWS credentials), so a
-// SigV4 surface with parseable credentials builds a Converse client
-// instead of failing.
+// the legacy Bearer default. Exchange surfaces (Vertex without a
+// service-account JSON key, OpenRouter JWT, Azure Entra) fail here
+// with a clear error — the client is never built with a faked static
+// header for them. The two exceptions are Bedrock SigV4 and Vertex
+// service-account JSON: the exchange is performed by the client
+// itself (each Bedrock request is signed from the operator's AWS
+// credentials; each Vertex request carries a token minted from the
+// service-account JSON), so a SigV4 surface with parseable
+// credentials, or a Vertex surface with a parseable service-account
+// JSON key, builds its native client instead of failing.
 //
 // The wire format likewise comes from the catalog resolution: a
 // provider whose surface speaks Anthropic gets a Messages client, a
 // Gemini surface a generateContent client, a Cohere surface a Chat
-// API v2 client, a Bedrock surface a Converse client, everything
-// else the OpenAI client.
+// API v2 client, a Bedrock surface a Converse client, a Vertex
+// surface a Vertex client, everything else the OpenAI client.
 func (r *Registry) ClientFor(id string) (Client, error) {
 	r.mu.RLock()
 	p, ok := r.providers[id]
@@ -880,31 +1562,219 @@ func (r *Registry) ClientFor(id string) (Client, error) {
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrProviderNotFound, id)
 	}
-	key, err := r.decryptKey(p.APIKeyEncrypted)
+	// The client serves through the provider's primary key — the
+	// first preferred key in pool order (see Provider.PrimaryKey).
+	// For a key other than the primary, use ClientForKey: each key
+	// gets its own client (and its own warm pool), so the router
+	// can fail over from one key to the next without rebuilding
+	// anything mid-request.
+	key, ok := p.PrimaryKey()
+	if !ok {
+		// No key at all (a no-auth provider whose stored key is
+		// an empty seal): build with the legacy field, exactly
+		// as before pools existed.
+		key = ProviderKey{Encrypted: p.APIKeyEncrypted}
+	}
+	return r.clientForKey(p, key)
+}
+
+// ClientForKey builds an upstream Client for one key of a
+// registered provider (CHECKLIST 175): the client the router
+// uses for that key's attempts, so a dead key can be abandoned
+// without taking the provider's other keys with it. The key's
+// ciphertext fingerprints the memoized auth resolution, so two
+// keys of one provider never share a cached header set.
+func (r *Registry) ClientForKey(providerID, keyID string) (Client, error) {
+	r.mu.RLock()
+	p, ok := r.providers[providerID]
+	r.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrProviderNotFound, providerID)
+	}
+	key, ok := p.KeyByID(keyID)
+	if !ok {
+		return nil, fmt.Errorf("provider %q holds no key %q", p.Name, keyID)
+	}
+	return r.clientForKey(p, key)
+}
+
+// clientForKey is the shared build behind ClientFor and
+// ClientForKey: decrypt this key, resolve auth + wire for it, and
+// attach its warm pool.
+func (r *Registry) clientForKey(p *Provider, key ProviderKey) (Client, error) {
+	plaintext, err := r.decryptKey(key.Encrypted)
 	if err != nil {
 		return nil, err
 	}
-	headers, wireFormat, err := r.resolveAuthHeaders(p, key)
+	headers, wireFormat, err := r.resolveAuthHeaders(p, plaintext, key.Encrypted)
 	if err != nil {
 		return nil, err
 	}
-	// A native wire wins from either source: a stored wire from an
-	// older config must not be silently downgraded by a base-URL
-	// lookup that could not see it (e.g. a proxy base), and a
-	// resolved native wire must not be lost to a stale stored
-	// "openai".
-	if p.WireFormat == WireFormatAnthropic || wireFormat == WireFormatAnthropic {
-		wireFormat = WireFormatAnthropic
-	} else if p.WireFormat == WireFormatGemini || wireFormat == WireFormatGemini {
-		wireFormat = WireFormatGemini
-	} else if p.WireFormat == WireFormatCohere || wireFormat == WireFormatCohere {
-		wireFormat = WireFormatCohere
-	} else if p.WireFormat == WireFormatBedrock || wireFormat == WireFormatBedrock {
-		wireFormat = WireFormatBedrock
-	} else if wireFormat == "" {
-		wireFormat = p.WireFormat
+	wireFormat = resolveWireFormat(p, wireFormat)
+	// Warm pool: the client shares its (provider, key) pool with
+	// every other client built for the same pair (engine clients,
+	// health probes, live-added providers), so its connections stay
+	// warm across requests instead of re-dialing. A factory-built
+	// fake (tests) has no attachable transport and keeps its own.
+	client, err := r.newClient(p.BaseURL, plaintext, headers, wireFormat)
+	if err != nil {
+		return nil, err
 	}
-	return r.newClient(p.BaseURL, key, headers, wireFormat)
+	client = r.attachHTTPAdapter(p.ID, client)
+	if at, ok := client.(interface{ attachPoolTransport(http.RoundTripper) }); ok {
+		at.attachPoolTransport(r.pools.TransportFor(p.ID, plaintext))
+	}
+	return client, nil
+}
+
+// resolveWireFormat merges the stored and catalog-resolved wire
+// formats with the native-wire-wins rule shared by ClientFor and
+// RelayTargetForModel: a stored wire from an older config must not
+// be silently downgraded by a base-URL lookup that could not see
+// it (e.g. a proxy base), and a resolved native wire must not be
+// lost to a stale stored "openai".
+func resolveWireFormat(p *Provider, wireFormat string) string {
+	switch {
+	case p.WireFormat == WireFormatAnthropic || wireFormat == WireFormatAnthropic:
+		return WireFormatAnthropic
+	case p.WireFormat == WireFormatGemini || wireFormat == WireFormatGemini:
+		return WireFormatGemini
+	case p.WireFormat == WireFormatCohere || wireFormat == WireFormatCohere:
+		return WireFormatCohere
+	case p.WireFormat == WireFormatBedrock || wireFormat == WireFormatBedrock:
+		return WireFormatBedrock
+	case p.WireFormat == WireFormatVertex || wireFormat == WireFormatVertex:
+		return WireFormatVertex
+	case wireFormat == "":
+		return p.WireFormat
+	default:
+		return wireFormat
+	}
+}
+
+// PoolStats returns the live warm-pool state, one row per
+// (provider, key) pool (see PoolStat in pool.go).
+func (r *Registry) PoolStats() []PoolStat {
+	return r.pools.Stats()
+}
+
+// PoolConfig returns the resolved warm-pool sizing config in force.
+func (r *Registry) PoolConfig() PoolConfig {
+	return r.pools.Config()
+}
+
+// WarmPools warms every enabled provider's pool with one real
+// request (TestKey = GET /v1/models) through the pooled transport,
+// so the first user request never pays a cold dial. It is
+// best-effort: a provider whose key test fails is reported in the
+// returned failures map and skipped — a bad key must not take the
+// gateway down at startup. Callers pass a bounded context; each
+// provider gets at most 5 s.
+func (r *Registry) WarmPools(ctx context.Context) (warmed int, failures map[string]error) {
+	failures = make(map[string]error)
+	for _, p := range r.List() {
+		if !p.Enabled {
+			continue
+		}
+		pctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		client, err := r.ClientFor(p.ID)
+		if err == nil {
+			err = client.TestKey(pctx)
+		}
+		cancel()
+		if err != nil {
+			failures[p.ID] = err
+			continue
+		}
+		warmed++
+	}
+	return warmed, failures
+}
+
+// RelayTarget is what the byte-for-byte native relay needs to
+// forward one request verbatim: the single provider serving the
+// model, its native wire format, its base URL, and exactly the auth
+// headers the catalog resolves for it (never a guessed header).
+// Attempts counts the enabled providers serving the model: >1 means
+// a failover chain exists, so the relay must translate instead of
+// forwarding verbatim. IsLocal marks a gateway-provided local
+// capability (Ollama wire, or a catalog local-category provider):
+// those go through the readiness gate and answer 503 + Retry-After
+// while their runtime is not ready.
+type RelayTarget struct {
+	ProviderID    string
+	ProviderName  string
+	WireFormat    string
+	BaseURL       string
+	AuthHeaders   map[string]string
+	UpstreamModel string
+	Attempts      int
+	IsLocal       bool
+}
+
+// RelayTargetForModel resolves the relay target for one model ID:
+// the first enabled provider serving it (insertion order), with the
+// attempt count across all enabled providers serving it. It errors
+// when no enabled provider serves the model — the caller then falls
+// back to the translate path, whose engine reports the unknown
+// model honestly, instead of the relay inventing a target.
+func (r *Registry) RelayTargetForModel(model string) (*RelayTarget, error) {
+	var first *Provider
+	attempts := 0
+	for _, p := range r.List() {
+		if p == nil || !p.Enabled {
+			continue
+		}
+		for _, m := range p.Models {
+			if m.ID == model {
+				attempts++
+				if first == nil {
+					first = p
+				}
+				break
+			}
+		}
+	}
+	if first == nil {
+		return nil, fmt.Errorf("%w: %s", ErrProviderNotFound, model)
+	}
+	key := ""
+	keyCiphertext := ""
+	if pk, ok := first.PrimaryKey(); ok {
+		keyCiphertext = pk.Encrypted
+	} else {
+		keyCiphertext = first.APIKeyEncrypted
+	}
+	if keyCiphertext != "" {
+		var err error
+		key, err = r.decryptKey(keyCiphertext)
+		if err != nil {
+			return nil, err
+		}
+	}
+	headers, wireFormat, err := r.resolveAuthHeaders(first, key, keyCiphertext)
+	if err != nil {
+		return nil, err
+	}
+	// A native wire wins from either source, exactly as in
+	// ClientFor (see resolveWireFormat).
+	wireFormat = resolveWireFormat(first, wireFormat)
+	isLocal := wireFormat == "ollama" || first.WireFormat == "ollama"
+	if !isLocal && first.CatalogID != "" {
+		if entry, err := lookupCatalog(first.CatalogID); err == nil && entry.Category == catalog.CategoryLocal {
+			isLocal = true
+		}
+	}
+	return &RelayTarget{
+		ProviderID:    first.ID,
+		ProviderName:  first.Name,
+		WireFormat:    wireFormat,
+		BaseURL:       first.BaseURL,
+		AuthHeaders:   headers,
+		UpstreamModel: model,
+		Attempts:      attempts,
+		IsLocal:       isLocal,
+	}, nil
 }
 
 // catalogWireForBaseURL derives the wire format for a raw base URL
@@ -919,6 +1789,9 @@ func (r *Registry) ClientFor(id string) (Client, error) {
 func catalogWireForBaseURL(baseURL, apiKey string) string {
 	if isBedrockBaseURL(baseURL) {
 		return WireFormatBedrock
+	}
+	if isVertexBaseURL(baseURL) {
+		return WireFormatVertex
 	}
 	res, found, err := catalog.ResolveAuthForBaseURL(baseURL, "", "", apiKey)
 	if err != nil || !found {
@@ -954,6 +1827,19 @@ func isBedrockBaseURL(baseURL string) bool {
 		(strings.HasSuffix(host, ".amazonaws.com") || strings.HasSuffix(host, ".api.aws"))
 }
 
+// isVertexBaseURL reports whether baseURL points at a Vertex AI
+// host ({location}-aiplatform.googleapis.com). The catalog
+// records that host templated ({LOCATION}), so a concrete
+// operator URL never matches a catalog entry exactly — the host
+// pattern is the honest match, mirroring isBedrockBaseURL.
+func isVertexBaseURL(baseURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return strings.HasSuffix(u.Hostname(), "-aiplatform.googleapis.com")
+}
+
 // sigv4Headers handles the one credential exchange the router can
 // perform itself: Bedrock SigV4. When the resolution failed only
 // because the surface needs a SigV4 exchange and the operator
@@ -972,10 +1858,115 @@ func sigv4Headers(res catalog.AuthResolution, key string) (map[string]string, st
 	return map[string]string{}, string(res.Wire), true
 }
 
+// vertexHeaders handles the second credential exchange the router
+// can perform itself: Vertex AI service-account JSON (CHECKLIST
+// 277 (e)). When the resolution failed only because the surface
+// needs a service-account-json exchange and the operator supplied
+// a parseable service-account JSON key, it returns the (empty)
+// header set — the client mints an OAuth2 token per request, so
+// no static header exists — plus the Vertex wire ("vertex", NOT
+// the resolution's Gemini wire: the two surfaces share a shape
+// but not an auth exchange). Otherwise it reports false and the
+// caller keeps the exchange refusal. A key that is not
+// service-account JSON stays refused: the exchange is never
+// faked.
+func vertexHeaders(res catalog.AuthResolution, key string) (map[string]string, string, bool) {
+	if res.Exchange == nil || res.Exchange.Kind != "service-account-json" {
+		return nil, "", false
+	}
+	if _, _, err := parseVertexServiceAccount(key); err != nil {
+		return nil, "", false
+	}
+	return map[string]string{}, WireFormatVertex, true
+}
+
+// cachedAuth is one memoized resolveAuthHeaders result. headers is
+// owned by the cache: callers always receive a copy, so no caller
+// can mutate a cached header set (e.g. by adding a per-request
+// header) and poison later requests.
+type cachedAuth struct {
+	fp      [32]byte // authFingerprint of the provider record resolved
+	headers map[string]string
+	wire    string
+}
+
+// authFingerprint hashes every input resolveAuthHeaders depends on,
+// so a cache hit is only possible when the resolution would return
+// exactly the same result. The plaintext key is deliberately NOT an
+// input: both call sites (ClientFor, RelayTargetForModel) derive key
+// as decryptKey(ciphertext), so the stored ciphertext covers the
+// key — a rotation changes the ciphertext (fresh random nonce per
+// seal) and therefore the fingerprint, while the secret itself never
+// enters a map key or a hash input. keyCiphertext is the ciphertext
+// of the key being resolved (CHECKLIST 175): two keys of one
+// provider resolve under different fingerprints, so they never
+// share a cached header set. Enabled/QuotaHint are not inputs
+// either: they never affect auth or wire. The catalog itself is
+// compile-time data with no runtime mutation path, so it needs no
+// fingerprint component.
+func authFingerprint(p *Provider, keyCiphertext string) [32]byte {
+	h := sha256.New()
+	var lenBuf [8]byte
+	for _, s := range []string{p.ID, p.BaseURL, p.CatalogID, p.AuthEndpoint, p.AuthVariant, p.APIKeyEncrypted, keyCiphertext} {
+		binary.BigEndian.PutUint64(lenBuf[:], uint64(len(s)))
+		h.Write(lenBuf[:])
+		h.Write([]byte(s))
+	}
+	var fp [32]byte
+	copy(fp[:], h.Sum(nil))
+	return fp
+}
+
+func cloneHeaders(h map[string]string) map[string]string {
+	if h == nil {
+		return nil
+	}
+	out := make(map[string]string, len(h))
+	for k, v := range h {
+		out[k] = v
+	}
+	return out
+}
+
 // resolveAuthHeaders resolves the exact auth headers for one provider,
 // plus the wire format its surface speaks. It returns ("", nil, nil)
 // for the legacy Bearer default with the stored wire format.
-func (r *Registry) resolveAuthHeaders(p *Provider, key string) (map[string]string, string, error) {
+//
+// The result is memoized per (provider, key) — the cache key is the
+// provider ID plus the resolution fingerprint, which covers the key's
+// ciphertext (see authFingerprint), so two keys of one provider hold
+// separate entries and never share a header set. Only successful
+// resolutions are cached — an error (ToS-grey provider, exchange
+// required, unknown catalog ID) is re-resolved on every call, so a
+// configuration fix takes effect immediately.
+func (r *Registry) resolveAuthHeaders(p *Provider, key, keyCiphertext string) (map[string]string, string, error) {
+	fp := authFingerprint(p, keyCiphertext)
+	cacheKey := p.ID + "\x00" + string(fp[:])
+	r.authMu.Lock()
+	if ent, ok := r.authCache[cacheKey]; ok && ent.fp == fp {
+		headers, wire := cloneHeaders(ent.headers), ent.wire
+		r.authMu.Unlock()
+		return headers, wire, nil
+	}
+	r.authMu.Unlock()
+
+	headers, wire, err := r.resolveAuthHeadersUncached(p, key)
+	if err != nil {
+		return nil, "", err
+	}
+	r.authMu.Lock()
+	if r.authCache == nil {
+		r.authCache = make(map[string]cachedAuth)
+	}
+	r.authCache[cacheKey] = cachedAuth{fp: fp, headers: cloneHeaders(headers), wire: wire}
+	r.authMu.Unlock()
+	return headers, wire, nil
+}
+
+// resolveAuthHeadersUncached is the uncached resolution behind
+// resolveAuthHeaders: catalog lookup for a catalog-linked provider,
+// base-URL catalog match (plus the wire fallback) otherwise.
+func (r *Registry) resolveAuthHeadersUncached(p *Provider, key string) (map[string]string, string, error) {
 	if p.CatalogID != "" {
 		entry, err := lookupCatalog(p.CatalogID)
 		if err != nil {
@@ -987,6 +1978,9 @@ func (r *Registry) resolveAuthHeaders(p *Provider, key string) (map[string]strin
 		res, err := catalog.ResolveAuth(entry, p.AuthEndpoint, p.AuthVariant, key)
 		if err != nil {
 			if headers, wire, ok := sigv4Headers(res, key); ok {
+				return headers, wire, nil
+			}
+			if headers, wire, ok := vertexHeaders(res, key); ok {
 				return headers, wire, nil
 			}
 			return nil, "", fmt.Errorf("provider %q (%s): %w", p.ID, entry.ID, err)
@@ -1002,6 +1996,16 @@ func (r *Registry) resolveAuthHeaders(p *Provider, key string) (map[string]strin
 		}
 		return map[string]string{}, WireFormatBedrock, nil
 	}
+	// No catalog link: a Vertex AI host speaks the Vertex wire
+	// and mints its token from service-account JSON — same
+	// host-pattern rule as Bedrock above, and a key that is not
+	// service-account JSON stays refused.
+	if isVertexBaseURL(p.BaseURL) {
+		if _, _, err := parseVertexServiceAccount(key); err != nil {
+			return nil, "", fmt.Errorf("provider %q: %w", p.ID, err)
+		}
+		return map[string]string{}, WireFormatVertex, nil
+	}
 	// No catalog link: match by base URL when the catalog knows it.
 	// Exchange matches fail loudly; an unknown endpoint on a known
 	// provider falls back to the legacy Bearer default (the operator
@@ -1015,6 +2019,9 @@ func (r *Registry) resolveAuthHeaders(p *Provider, key string) (map[string]strin
 	if err != nil {
 		if errors.Is(err, catalog.ErrExchangeRequired) {
 			if headers, wire, ok := sigv4Headers(res, key); ok {
+				return headers, wire, nil
+			}
+			if headers, wire, ok := vertexHeaders(res, key); ok {
 				return headers, wire, nil
 			}
 			return nil, "", fmt.Errorf("provider %q: %w", p.ID, err)

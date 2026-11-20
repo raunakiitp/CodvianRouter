@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-create-combo",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 38,
+    "method": "tools/call",
+    "params": {
+      "name": "create_combo",
+      "arguments": {
+        "name": "balanced",
+        "members": [
+          "p1",
+          "p2"
+        ],
+        "strategy": "priority"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 38,
+    "result": {
+      "content": [
+        {
+          "text": "{\"combo\":{\"name\":\"balanced\",\"members\":[\"p1\",\"p2\"],\"strategy\":\"priority\",\"active\":false,\"usable\":false,\"unusable_reason\":\"provider p2 is disabled\"},\"created\":true}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "combo": {
+          "name": "balanced",
+          "members": [
+            "p1",
+            "p2"
+          ],
+          "strategy": "priority",
+          "active": false,
+          "usable": false,
+          "unusable_reason": "provider p2 is disabled"
+        },
+        "created": true
+      }
+    }
+  },
+  "assert": {
+    "id": 38,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.combo"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.combo.members.0": "p1",
+      "result.structuredContent.combo.members.1": "p2",
+      "result.structuredContent.combo.name": "balanced",
+      "result.structuredContent.combo.strategy": "priority",
+      "result.structuredContent.combo.usable": false,
+      "result.structuredContent.created": true
+    }
+  },
+  "notes": "create_combo 'balanced' (p1 + p2, priority): stored and read back; usable=false because p2 is disabled. Runs after all reads so the session's list_combos still sees the 2 seeded combos."
+}

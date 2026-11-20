@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-get-combo-metrics",
+  "fixture": true,
+  "transport": "sse",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + fixed test gateway keys + With* options, standard p1/p2 + a/b/c feed; ledger-backed: seeded ledger for the routing-reader and cost-reader keys, prices a $10/$30 and c $5/$15 per 1M, routing group fast; memory seeded with one fixed entry for the destructive memory key) over httptest (loopback) via GET /api/mcp/sse (endpoint event) + POST /api/mcp/sse?session_id= with a test gateway key; message-event data captured verbatim. Recorded data only, no live provider call.",
+  "key": "wide",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 15,
+    "method": "tools/call",
+    "params": {
+      "name": "get_combo_metrics",
+      "arguments": {
+        "name": "fast"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 15,
+    "result": {
+      "content": [
+        {
+          "text": "{\"metrics\":{\"name\":\"fast\",\"requests\":4,\"ok\":4,\"errors\":0,\"success_rate\":1,\"prompt_tokens\":2200,\"completion_tokens\":1000,\"total_tokens\":3200,\"cost_usd\":0.051000000000000004,\"cost_known\":true,\"unpriced_tokens\":0,\"mean_latency_ms\":105,\"latency_known\":true,\"latency_events\":4,\"window\":\"all_time\"}}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "metrics": {
+          "name": "fast",
+          "requests": 4,
+          "ok": 4,
+          "errors": 0,
+          "success_rate": 1,
+          "prompt_tokens": 2200,
+          "completion_tokens": 1000,
+          "total_tokens": 3200,
+          "cost_usd": 0.051000000000000004,
+          "cost_known": true,
+          "unpriced_tokens": 0,
+          "mean_latency_ms": 105,
+          "latency_known": true,
+          "latency_events": 4,
+          "window": "all_time"
+        }
+      }
+    }
+  },
+  "recorded_http_status": 202,
+  "assert": {
+    "id": 15,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.metrics.latency_known": true,
+      "result.structuredContent.metrics.mean_latency_ms": 105,
+      "result.structuredContent.metrics.requests": 4
+    },
+    "http_status": 202
+  },
+  "notes": "get_combo_metrics aggregates the ledger over combo fast across all keys: 4 requests, mean latency 105 ms ((120+90+120+90)/4)."
+}

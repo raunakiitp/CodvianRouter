@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/raunakiitp/codvian-router/internal/catalog"
 	"github.com/raunakiitp/codvian-router/internal/crypto"
 )
 
@@ -406,6 +408,96 @@ func TestRegistryAddCatalogRefusals(t *testing.T) {
 	}
 }
 
+// TestCT3AddCatalogRefusesRetiredIDs — CT-3 registry half: adding a
+// retired catalog ID fails with the retirement reason, not a generic
+// "unknown catalog provider". The retired check lives in lookupCatalog,
+// so it also fires for add-by-alias ("bb" → blackbox) and the
+// config-file load path (TestCT3LoadRefusesRetiredID). A genuinely
+// unknown ID still reports "unknown catalog provider" with no
+// "retired" in it, and the CT-2 removed-provider refusals are
+// unaffected (removed and retired are disjoint lists; see
+// TestCT2AddCatalogRefusesRemovedIDs).
+func TestCT3AddCatalogRefusesRetiredIDs(t *testing.T) {
+	reg, _ := newCatalogTestRegistry(t)
+
+	for _, tc := range []struct {
+		id      string
+		wantSub string
+	}{
+		{"blackbox", "retired"},
+		{"bb", "retired"}, // alias resolves to the same retired entry
+		{"galadriel", "retired"},
+		{"ai21", "retired"},
+		{"bytez", "retired"},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			_, err := reg.AddCatalog(context.Background(), tc.id, "k")
+			if err == nil {
+				t.Fatalf("AddCatalog(%q) succeeded, want a retired-provider error", tc.id)
+			}
+			if !strings.Contains(err.Error(), tc.wantSub) {
+				t.Errorf("AddCatalog(%q) error = %v, want it to say %q", tc.id, err, tc.wantSub)
+			}
+			if strings.Contains(err.Error(), "unknown catalog provider") {
+				t.Errorf("AddCatalog(%q) error = %v, want the retirement reason, not \"unknown catalog provider\"", tc.id, err)
+			}
+		})
+	}
+
+	// The retired reason must name the provider and say what happened.
+	t.Run("blackbox reason", func(t *testing.T) {
+		_, err := reg.AddCatalog(context.Background(), "blackbox", "k")
+		if err == nil {
+			t.Fatal("AddCatalog(blackbox) succeeded, want a retired-provider error")
+		}
+		if !strings.Contains(err.Error(), "Blackbox AI") || !strings.Contains(err.Error(), "404") {
+			t.Errorf("AddCatalog(blackbox) error = %v, want it to name the provider and its retirement reason", err)
+		}
+	})
+
+	// Negative: a genuinely unknown ID still reports "unknown catalog
+	// provider" — and must NOT mention retirement.
+	t.Run("unknown id is not retired", func(t *testing.T) {
+		_, err := reg.AddCatalog(context.Background(), "no-such-provider", "k")
+		if err == nil {
+			t.Fatal("AddCatalog(no-such-provider) succeeded, want an error")
+		}
+		if !strings.Contains(err.Error(), "unknown catalog provider") {
+			t.Errorf("AddCatalog(no-such-provider) error = %v, want \"unknown catalog provider\"", err)
+		}
+		if strings.Contains(err.Error(), "retired") {
+			t.Errorf("AddCatalog(no-such-provider) error = %v, must not mention retirement", err)
+		}
+	})
+}
+
+// TestCT3LoadRefusesRetiredID — CT-3 registry half, config-file load
+// path: a config file naming a retired provider fails at LOAD with
+// the retirement reason (resolveCatalogForLoad shares lookupCatalog
+// with the add path), not with a generic "unknown catalog provider".
+func TestCT3LoadRefusesRetiredID(t *testing.T) {
+	_, dir := newCatalogTestRegistry(t)
+	vault, err := crypto.NewFromSecret([]byte("test-master-secret-for-registry!"), dir)
+	if err != nil {
+		t.Fatalf("test vault: %v", err)
+	}
+	cipher := NewVaultCipher(vault)
+
+	path := writeStoreFile(t, dir, []ProviderConfig{{
+		ID:        "prov-blackbox",
+		Name:      "Blackbox AI",
+		CatalogID: "blackbox",
+		Enabled:   true,
+	}})
+	if _, err := NewFileRegistry(path, WithCipher(cipher)); err == nil {
+		t.Fatal("expected load error for retired catalog blackbox, got nil")
+	} else if !strings.Contains(err.Error(), "retired") {
+		t.Errorf("load error = %v, want it to say retired", err)
+	} else if strings.Contains(err.Error(), "unknown catalog provider") {
+		t.Errorf("load error = %v, want the retirement reason, not \"unknown catalog provider\"", err)
+	}
+}
+
 func TestRegistryAddCatalogTemplatedBaseURL(t *testing.T) {
 	reg, _ := newCatalogTestRegistry(t)
 
@@ -433,6 +525,35 @@ func TestRegistryAddCatalogAlias(t *testing.T) {
 	}
 	if p.CatalogID != "xai" {
 		t.Errorf("CatalogID = %q, want xai (alias resolved to the real ID)", p.CatalogID)
+	}
+}
+
+// TestCT2AddCatalogOcAliasResolves — CT-2 nit 1 (reviewer b5b37add):
+// "oc" is the removed register's alias for opencode
+// (catalog/removed.go:98), but the opencode catalog entry is the
+// legitimate authenticated console API, and it carried no Alias
+// field — so AddCatalogWithOptions("oc") failed with a generic
+// "unknown catalog provider" instead of resolving. The entry now
+// carries Alias "oc" (catalog/verified.go:587), so the alias
+// resolves to the authenticated entry and the add succeeds — it
+// is NOT a typed RemovedProviderError, because the removal covers
+// only the keyless "OpenCode Free" variant and
+// RemovedProvider.Matches (catalog/removed.go:128-139) does not
+// match an API-key entry. This pins the scope exception for the
+// alias form, mirroring the "opencode authenticated entry
+// unaffected" subtest in TestCT2AddCatalogRefusesRemovedIDs.
+func TestCT2AddCatalogOcAliasResolves(t *testing.T) {
+	srv, _ := newRecordingServer(t)
+	defer srv.Close()
+	reg, _ := newCatalogTestRegistry(t)
+
+	p, err := reg.AddCatalogWithOptions(context.Background(), "oc", "oc-key",
+		CatalogAddOptions{BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("AddCatalog(oc) = %v, want success (alias resolves to the authenticated opencode console entry)", err)
+	}
+	if p.CatalogID != "opencode" {
+		t.Fatalf("CatalogID = %q, want opencode (alias resolved to the real ID)", p.CatalogID)
 	}
 }
 
@@ -533,6 +654,107 @@ func TestRegistryLoadCatalogBadIDs(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRegistryLoadRemovedProviders — CT-2 acceptance (3): a config
+// file naming a removed provider fails at LOAD
+// (resolveCatalogForLoad / Load), not at first request, with a typed
+// error naming the removal. Covers the catalog-ID path (each removed
+// ID + an alias), the explicit-base-URL path (no catalog link at
+// all, and a catalog-linked provider pointed at a removed host),
+// and the negatives: the authenticated opencode entry and a
+// similar-but-unremoved host load fine.
+func TestRegistryLoadRemovedProviders(t *testing.T) {
+	_, dir := newCatalogTestRegistry(t)
+	vault, err := crypto.NewFromSecret([]byte("test-master-secret-for-registry!"), dir)
+	if err != nil {
+		t.Fatalf("test vault: %v", err)
+	}
+	cipher := NewVaultCipher(vault)
+
+	load := func(cfgs []ProviderConfig) error {
+		path := writeStoreFile(t, dir, cfgs)
+		_, err := NewFileRegistry(path, WithCipher(cipher))
+		return err
+	}
+	assertRemoved := func(t *testing.T, err error, wantID string) {
+		t.Helper()
+		if err == nil {
+			t.Fatalf("expected a removed-provider load error, got nil")
+		}
+		var remErr *catalog.RemovedProviderError
+		if !errors.As(err, &remErr) {
+			t.Fatalf("load error = %v, want typed *catalog.RemovedProviderError", err)
+		}
+		if remErr.Removed.ID != wantID {
+			t.Fatalf("load removal names %q, want %q", remErr.Removed.ID, wantID)
+		}
+		if !strings.Contains(err.Error(), "was removed on") {
+			t.Fatalf("load error = %v, want it to name the removal", err)
+		}
+	}
+
+	// Catalog-ID path: each removed ID, plus an alias.
+	for _, tc := range []struct {
+		catalogID string
+		want      string
+	}{
+		{"puter", "puter"},
+		{"pu", "puter"},
+		{"theoldllm", "theoldllm"},
+		{"gemini-business", "gemini-business"},
+		{"suno", "suno"},
+	} {
+		t.Run("catalog/"+tc.catalogID, func(t *testing.T) {
+			assertRemoved(t, load([]ProviderConfig{{
+				ID: "prov-x", Name: "X", CatalogID: tc.catalogID, Enabled: true,
+			}}), tc.want)
+		})
+	}
+
+	// Explicit base URL, no catalog link at all.
+	t.Run("explicit base URL, no catalog link", func(t *testing.T) {
+		assertRemoved(t, load([]ProviderConfig{{
+			ID: "prov-x", Name: "X", BaseURL: "https://puter.com/v1", Enabled: true,
+		}}), "puter")
+	})
+
+	// Catalog-linked provider whose explicit base URL points at a
+	// removed host (the catalog ID itself is fine).
+	t.Run("catalog-linked, removed base URL override", func(t *testing.T) {
+		assertRemoved(t, load([]ProviderConfig{{
+			ID: "prov-x", Name: "X", CatalogID: "groq",
+			BaseURL: "https://studio-api.suno.ai/v1", Enabled: true,
+		}}), "suno")
+	})
+
+	// Negatives: the authenticated opencode entry loads, and a
+	// similar-but-unremoved host loads.
+	t.Run("opencode authenticated entry loads", func(t *testing.T) {
+		path := writeStoreFile(t, dir, []ProviderConfig{{
+			ID: "prov-oc", Name: "OpenCode", CatalogID: "opencode", Enabled: true,
+		}})
+		reg, err := NewFileRegistry(path, WithCipher(cipher))
+		if err != nil {
+			t.Fatalf("load opencode = %v, want success (authenticated console entry is not the removed variant)", err)
+		}
+		p, ok := reg.Get("prov-oc")
+		if !ok {
+			t.Fatal("opencode provider not loaded")
+		}
+		if p.BaseURL != "https://opencode.ai/inference/openai/v1" {
+			t.Fatalf("BaseURL = %q, want the catalog console base URL", p.BaseURL)
+		}
+	})
+	t.Run("similar host loads", func(t *testing.T) {
+		path := writeStoreFile(t, dir, []ProviderConfig{{
+			ID: "prov-x", Name: "X", CatalogID: "groq",
+			BaseURL: "https://notputer.com/v1", Enabled: true,
+		}})
+		if _, err := NewFileRegistry(path, WithCipher(cipher)); err != nil {
+			t.Fatalf("load similar host = %v, want success", err)
+		}
+	})
 }
 
 func TestRegistryClientForCatalogExchangeError(t *testing.T) {

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-best-combo-for-task-denied",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; no ledger wired) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "read",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 32,
+    "method": "tools/call",
+    "params": {
+      "name": "best_combo_for_task",
+      "arguments": {
+        "task": "fast chat"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 32,
+    "error": {
+      "code": -32002,
+      "message": "scope denied: missing required scope(s): mcp:read:routing"
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 32,
+    "expect_error": true,
+    "error_code": -32002,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32002,
+      "error.message": "scope denied: missing required scope(s): mcp:read:routing",
+      "jsonrpc": "2.0"
+    },
+    "http_status": 200
+  },
+  "notes": "best_combo_for_task with the narrow mcp:read:status key is denied -32002 (mcp:read:routing required)."
+}

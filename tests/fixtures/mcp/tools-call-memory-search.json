@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-memory-search",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 22,
+    "method": "tools/call",
+    "params": {
+      "name": "memory_search",
+      "arguments": {
+        "query": "cache"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 22,
+    "result": {
+      "content": [
+        {
+          "text": "{\"count\":2,\"entries\":[{\"id\":\"mem-2\",\"text\":\"Cache hits are fastest for repeated coding prompts.\",\"created_at\":\"2026-11-19T12:00:00Z\",\"matches\":1},{\"id\":\"mem-1\",\"text\":\"The router caches repeated prompts to save cost.\",\"created_at\":\"2026-11-19T12:00:00Z\",\"matches\":1}]}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "count": 2,
+        "entries": [
+          {
+            "id": "mem-2",
+            "text": "Cache hits are fastest for repeated coding prompts.",
+            "created_at": "2026-11-19T12:00:00Z",
+            "matches": 1
+          },
+          {
+            "id": "mem-1",
+            "text": "The router caches repeated prompts to save cost.",
+            "created_at": "2026-11-19T12:00:00Z",
+            "matches": 1
+          }
+        ]
+      }
+    }
+  },
+  "assert": {
+    "id": 22,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.entries"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.count": 2,
+      "result.structuredContent.entries.0.id": "mem-2",
+      "result.structuredContent.entries.0.matches": 1,
+      "result.structuredContent.entries.1.id": "mem-1",
+      "result.structuredContent.entries.1.matches": 1
+    }
+  },
+  "notes": "memory_search for 'cache': both seeded local-operator memories match once (occurrence count, not a relevance score); equal counts rank the later entry first."
+}

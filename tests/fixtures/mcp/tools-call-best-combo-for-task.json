@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-best-combo-for-task",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 13,
+    "method": "tools/call",
+    "params": {
+      "name": "best_combo_for_task",
+      "arguments": {
+        "task": "fast chat",
+        "max_latency_ms": 200
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 13,
+    "result": {
+      "content": [
+        {
+          "text": "{\"candidates_seen\":2,\"combo\":{\"name\":\"fast\",\"members\":[\"p1\"],\"strategy\":\"fastest\",\"active\":false,\"usable\":true},\"constraints\":{\"max_latency_ms_applied\":true},\"metrics\":{\"name\":\"fast\",\"requests\":10,\"ok\":9,\"errors\":1,\"success_rate\":0.9,\"prompt_tokens\":1000,\"completion_tokens\":500,\"total_tokens\":1500,\"cost_usd\":0.012,\"cost_known\":true,\"unpriced_tokens\":0,\"mean_latency_ms\":120.5,\"latency_known\":true,\"latency_events\":9,\"window\":\"all time\"},\"metrics_known\":true,\"preferred_strategy\":\"fastest\",\"reasons\":[\"strategy fastest matches the task preference (fastest)\",\"measured $0.0012 per request over 10 requests\",\"measured success rate 90.0% over 10 requests\",\"measured mean latency 120.5 ms over 9 recent events\"]}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "candidates_seen": 2,
+        "combo": {
+          "name": "fast",
+          "members": [
+            "p1"
+          ],
+          "strategy": "fastest",
+          "active": false,
+          "usable": true
+        },
+        "constraints": {
+          "max_latency_ms_applied": true
+        },
+        "metrics": {
+          "name": "fast",
+          "requests": 10,
+          "ok": 9,
+          "errors": 1,
+          "success_rate": 0.9,
+          "prompt_tokens": 1000,
+          "completion_tokens": 500,
+          "total_tokens": 1500,
+          "cost_usd": 0.012,
+          "cost_known": true,
+          "unpriced_tokens": 0,
+          "mean_latency_ms": 120.5,
+          "latency_known": true,
+          "latency_events": 9,
+          "window": "all time"
+        },
+        "metrics_known": true,
+        "preferred_strategy": "fastest",
+        "reasons": [
+          "strategy fastest matches the task preference (fastest)",
+          "measured $0.0012 per request over 10 requests",
+          "measured success rate 90.0% over 10 requests",
+          "measured mean latency 120.5 ms over 9 recent events"
+        ]
+      }
+    }
+  },
+  "assert": {
+    "id": 13,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.combo"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.candidates_seen": 2,
+      "result.structuredContent.combo.name": "fast",
+      "result.structuredContent.constraints.max_latency_ms_applied": true,
+      "result.structuredContent.metrics_known": true,
+      "result.structuredContent.preferred_strategy": "fastest"
+    }
+  },
+  "notes": "best_combo_for_task for 'fast chat' with a 200 ms cap: fast wins on strategy match (fastest) with measured latency 120.5 ms; cheap's latency is unknown so the cap is reported not-applied for it, not treated as 0 ms."
+}

@@ -12,23 +12,39 @@
 #     -v codvian-router-config:/home/nonroot/.config/codvian-router \
 #     codvian-router:local init
 # Then serve (see docker-compose.yml for the composed form):
-#   docker run -d --network host codvian-router:local
+#   docker run -d --network host \
+#     -v codvian-router-data:/home/nonroot/.local/share/codvian-router \
+#     -v codvian-router-config:/home/nonroot/.config/codvian-router \
+#     codvian-router:local
+# or with a published port (binds 0.0.0.0 via the binary's explicit opt-in;
+# gateway-key auth stays ON, a warning is printed on startup):
+#   docker run -d -p 127.0.0.1:20128:20128 \
+#     -v codvian-router-data:/home/nonroot/.local/share/codvian-router \
+#     -v codvian-router-config:/home/nonroot/.config/codvian-router \
+#     codvian-router:local serve --listen 0.0.0.0:20128
+#
+# Both volumes are required on EVERY run: the data volume holds the
+# ledger + vault secret, the config volume holds config.json with the
+# gateway key created by `init`. Omitting the config volume makes
+# `serve` LoadOrCreate a fresh empty config (bootstrap PENDING) and
+# the key printed by `init` is dead (PKG-1). The VOLUME declaration
+# below also persists both dirs as anonymous volumes if -v is omitted.
 #
 # NETWORKING NOTE — read this before using `-p` port publishing:
-# the router binds 127.0.0.1 ONLY (config validation enforces loopback;
-# see internal/config). A process bound to a container's loopback cannot
-# be reached through Docker's published-port forwarding, which delivers
-# traffic to the container's eth0 address. So `-p 127.0.0.1:20128:20128`
-# will NOT reach the server. Run with `--network host` (or
-# `network_mode: host` in compose) so the container shares the host's
-# loopback, or put a reverse proxy in the same network namespace. The
-# EXPOSE below is documentation only; the healthcheck runs inside the
+# the router binds 127.0.0.1 by default. A process bound to a container's
+# loopback cannot be reached through Docker's published-port forwarding,
+# which delivers traffic to the container's eth0 address — so
+# `-p 127.0.0.1:20128:20128` does NOT reach the server with the default
+# `serve`. Either run with `--network host` (the container shares the
+# host's loopback), or pass `--listen 0.0.0.0:20128` (the only non-loopback
+# bind the binary accepts; see effectiveListen in cmd/codvian-router).
+# The EXPOSE below is documentation only; the healthcheck runs inside the
 # container against 127.0.0.1 and works in either mode.
 
 # ---------------------------------------------------------------------------
 # Builder
 # ---------------------------------------------------------------------------
-FROM golang:1.22-bookworm AS builder
+FROM golang:1.27.4-bookworm AS builder
 
 WORKDIR /src
 
@@ -95,9 +111,10 @@ COPY --from=builder /out/codvian-router-healthcheck /usr/local/bin/codvian-route
 # The router's default data dir is $HOME/.local/share/codvian-router
 # (ledger.db, vault master secret); the config lives in
 # $HOME/.config/codvian-router/config.json. Persist both with volumes —
-# losing the data dir loses the vault secret and the ledger.
+# losing the data dir loses the vault secret and the ledger; losing the
+# config dir loses the gateway key created by `init` (PKG-1).
 ENV HOME=/home/nonroot
-VOLUME ["/home/nonroot/.local/share/codvian-router"]
+VOLUME ["/home/nonroot/.local/share/codvian-router", "/home/nonroot/.config/codvian-router"]
 
 USER nonroot:nonroot
 

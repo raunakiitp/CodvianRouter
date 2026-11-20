@@ -33,18 +33,44 @@ thing it ever displays is the gateway's state (`running`, `stopped`,
 
 - `supervisor.go` — no build tag. The `Supervisor` API works in every
   build.
+- `supervisor_unix.go` — `//go:build !windows`. Own process group via
+  `Setpgid`; `Stop` signals the whole group (SIGTERM, then SIGKILL).
+- `supervisor_windows.go` — `//go:build windows`. The child runs in
+  its own console control group (`CREATE_NEW_PROCESS_GROUP`); `Stop`
+  sends `CTRL_BREAK_EVENT` to the group (the Go runtime delivers a
+  console control event as SIGINT, and the gateway's `serve` shuts
+  down gracefully on SIGINT — so this is a real graceful stop, not a
+  kill) and escalates to `Process.Kill` (TerminateProcess on the
+  direct child). The event comes from `golang.org/x/sys/windows`
+  (the stdlib `syscall` package has no `GenerateConsoleCtrlEvent`);
+  `golang.org/x/sys` is a direct module dependency because of this
+  file. See the header comment in `supervisor_windows.go` and the
+  Windows limitation below.
 - `headless.go` — `//go:build !tray`. `RunHeadless` is the blocking
   supervisor loop for builds without a GUI.
 - `tray_gui.go` — `//go:build tray`. Would hold the system-tray icon
   (see "Tray icon status" below). It is **not present** in the tree
   right now, so `go build ./...` never needs a GUI toolchain.
+- Test helpers are split the same way:
+  `supervisor_platform_unix_test.go` (`sleep` / `false` / `sh` +
+  `syscall.Kill(pid, 0)` liveness) and
+  `supervisor_platform_windows_test.go` (`cmd.exe` / `timeout` /
+  `exit 1` + `OpenProcess`/`GetExitCodeProcess` liveness), so the
+  tests compile — and run — on Windows too. The Windows tests have
+  not been executed in this VM (no Wine); they run in CI.
 
 ## Restart policy
 
-- The child runs in its own process group (`Setpgid`), so `Stop` can
-  signal the whole group (grandchildren included).
-- `Stop` sends SIGTERM to the process group, waits up to 2s, then
-  escalates to SIGKILL. The monitor goroutine always `Wait()`s on the
+- The child runs in its own process group, so `Stop` can signal the
+  whole group (grandchildren included).
+- On Unix (`Setpgid`): `Stop` sends SIGTERM to the process group,
+  waits up to 2s, then escalates to SIGKILL. On Windows
+  (`CREATE_NEW_PROCESS_GROUP`): `Stop` sends CTRL_BREAK_EVENT to
+  the console control group, waits up to 2s, then escalates to
+  `Process.Kill` on the direct child — and escalates immediately,
+  without waiting, when the break event cannot be delivered at all
+  (the supervisor has no console, e.g. a Windows service or a
+  detached process). The monitor goroutine always `Wait()`s on the
   child, so no zombie process is left behind.
 - If the child exits unexpectedly (anything other than a clean `Stop`),
   the supervisor waits 1s and restarts it **once** per `Start` call.
@@ -93,3 +119,11 @@ To enable the tray icon later, on a machine with a GUI toolchain:
   `Restart` starts a new run that it does not follow.
 - The tray icon does not exist yet (see above); on this VM the
   supervisor is headless-only.
+- Windows has no group SIGKILL: `Process.Kill` terminates only the
+  direct child, so a grandchild that ignored the CTRL_BREAK_EVENT
+  can outlive the gateway. The graceful event still reaches the
+  whole group, which is the case that matters for a well-behaved
+  gateway. The Windows supervisor tests (`supervisor_test.go` via
+  `supervisor_platform_windows_test.go`) have not been executed in
+  this VM (no Wine); they run in CI, and the Windows release binary
+  has not been executed either — built only, unproven until CI.

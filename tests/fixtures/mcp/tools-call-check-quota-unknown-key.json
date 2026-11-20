@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "slice": "m9.0",
+  "name": "tools-call-check-quota-unknown-key",
+  "fixture": true,
+  "recorded_from": "recorded 2026-11-19 by running the real internal/mcp Server (mock-backed deterministic Source: 2 mock providers, 2 mock models, seeded combos fast/cheap, fixed ledger cells with coder-model priced at $3.00/1M and chat-model unpriced, key-1 $10 guard, 10 local-operator cache entries, ledger.db, 2 seeded memories; fixed clock 2026-11-19T12:00:00Z) in-process over stdio via mcp.Serve; response captured verbatim. Mock data only, no live provider call.",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 74,
+    "method": "tools/call",
+    "params": {
+      "name": "check_quota",
+      "arguments": {
+        "key_id": "key-ghost"
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 74,
+    "result": {
+      "content": [
+        {
+          "text": "{\"quota\":{\"key_id\":\"key-ghost\",\"has_budget\":false,\"limit_usd\":0,\"spent_usd\":0,\"at_limit\":false,\"unpriced_policy\":\"fail_closed\",\"active_window\":\"5h\",\"warning_reached\":false,\"unpriced_models\":[\"chat-model\"],\"daily\":{\"spent_usd\":0,\"at_limit\":false},\"weekly\":{\"spent_usd\":0,\"at_limit\":false},\"monthly\":{\"spent_usd\":0,\"at_limit\":false}}}",
+          "type": "text"
+        }
+      ],
+      "structuredContent": {
+        "quota": {
+          "key_id": "key-ghost",
+          "has_budget": false,
+          "limit_usd": 0,
+          "spent_usd": 0,
+          "at_limit": false,
+          "unpriced_policy": "fail_closed",
+          "active_window": "5h",
+          "warning_reached": false,
+          "unpriced_models": [
+            "chat-model"
+          ],
+          "daily": {
+            "spent_usd": 0,
+            "at_limit": false
+          },
+          "weekly": {
+            "spent_usd": 0,
+            "at_limit": false
+          },
+          "monthly": {
+            "spent_usd": 0,
+            "at_limit": false
+          }
+        }
+      }
+    }
+  },
+  "assert": {
+    "id": 74,
+    "expect_error": false,
+    "required_fields": [
+      "result.content",
+      "result.structuredContent.quota"
+    ],
+    "json_paths": {
+      "jsonrpc": "2.0",
+      "result.structuredContent.quota.active_window": "5h",
+      "result.structuredContent.quota.has_budget": false,
+      "result.structuredContent.quota.key_id": "key-ghost",
+      "result.structuredContent.quota.limit_usd": 0,
+      "result.structuredContent.quota.spent_usd": 0,
+      "result.structuredContent.quota.unpriced_policy": "fail_closed"
+    }
+  },
+  "notes": "check_quota for an unknown key (key-ghost): no guard exists, so has_budget=false — the key is reported with $0 spent and no limit, never an error; the unpriced policy stays fail_closed and the window stays 5h."
+}

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "slice": "m9.10",
+  "name": "tools-call-tool-search-non-string-query",
+  "fixture": true,
+  "transport": "streamable",
+  "recorded_from": "recorded 2026-11-19 by running the real internal/server Server (exported API only: server.New + config.IssueKey + With* options, standard p1/p2 + a/b/c feed; no ledger wired) over httptest (loopback) via POST /api/mcp/stream with a test gateway key; response captured verbatim. Recorded data only, no live provider call.",
+  "key": "read",
+  "method": "tools/call",
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 40,
+    "method": "tools/call",
+    "params": {
+      "name": "tool_search",
+      "arguments": {
+        "query": 42
+      }
+    }
+  },
+  "recorded_response": {
+    "jsonrpc": "2.0",
+    "id": 40,
+    "error": {
+      "code": -32602,
+      "message": "tool_search: query must be a string"
+    }
+  },
+  "recorded_http_status": 200,
+  "assert": {
+    "id": 40,
+    "expect_error": true,
+    "error_code": -32602,
+    "required_fields": [
+      "error.message"
+    ],
+    "json_paths": {
+      "error.code": -32602,
+      "error.message": "tool_search: query must be a string",
+      "jsonrpc": "2.0"
+    },
+    "http_status": 200
+  },
+  "notes": "tool_search with a non-string query is refused -32602 naming the query type."
+}

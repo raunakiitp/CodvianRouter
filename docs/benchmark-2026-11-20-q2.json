@@ -1,0 +1,307 @@
+{
+  "limiter_mode": "on",
+  "rig": {
+    "os": "Linux 7.0.0-44-generic x86_64",
+    "cpus": 4,
+    "mem_total_kib": 8124900,
+    "cpu_model": "AMD EPYC 9D25 126-Core Processor",
+    "go_version": "go version go1.27.4 linux/amd64",
+    "loadavg": [
+      "3.04",
+      "1.45",
+      "1.50"
+    ],
+    "loadavg_start": [
+      "0.18",
+      "0.71",
+      "1.31"
+    ],
+    "date": "2026-11-20T05:35:44+00:00",
+    "note": "Shared VM (1.5 shared vCPU budget), not a dedicated 2-vCPU droplet like Geekflare's; numbers are one sample per pass, pass 2 is the stability check."
+  },
+  "ready_ms": {
+    "healthz": 1016.1,
+    "v1_models": 1129.8
+  },
+  "idle_rss_kib": 52240,
+  "passes": {
+    "1": {
+      "direct_latency": {
+        "mode": "latency",
+        "base": "http://127.0.0.1:37541",
+        "model": "model-a",
+        "requests": 1000,
+        "ok": 1000,
+        "errors": 0,
+        "cache_hits": 0,
+        "elapsed_s": 0.082,
+        "mean_ms": 0.078,
+        "p50_ms": 0.071,
+        "p95_ms": 0.113,
+        "p99_ms": 0.16,
+        "min_ms": 0.044,
+        "max_ms": 1.046,
+        "command": "/home/hatch/.tmp/codvian-geekflare-bench.aZtOKV/codvian-bench latency --base http://127.0.0.1:37541 --model model-a --requests 1000 --warmup 25",
+        "go_version": "go1.27.4",
+        "git_head": "0f320edc44a07a6818dc6e1c756237a9331408ce",
+        "git_dirty": true,
+        "loadavg_start": [
+          1.09,
+          0.89,
+          1.36
+        ],
+        "loadavg_end": [
+          1.09,
+          0.89,
+          1.36
+        ],
+        "loadavg_end_high": false,
+        "polluted": false
+      },
+      "router_latency": {
+        "mode": "latency",
+        "base": "http://127.0.0.1:59167",
+        "model": "model-a",
+        "requests": 1000,
+        "ok": 1000,
+        "errors": 0,
+        "cache_hits": 0,
+        "elapsed_s": 2.875,
+        "mean_ms": 2.862,
+        "p50_ms": 1.764,
+        "p95_ms": 2.793,
+        "p99_ms": 29.138,
+        "min_ms": 1.304,
+        "max_ms": 70.42,
+        "command": "/home/hatch/.tmp/codvian-geekflare-bench.aZtOKV/codvian-bench latency --base http://127.0.0.1:59167 --key crk_X3vI6lsrFmopyXmY0lcGbcAFYlMAPZE1 --model model-a --requests 1000 --warmup 25",
+        "go_version": "go1.27.4",
+        "git_head": "0f320edc44a07a6818dc6e1c756237a9331408ce",
+        "git_dirty": true,
+        "loadavg_start": [
+          1.09,
+          0.89,
+          1.36
+        ],
+        "loadavg_end": [
+          1.09,
+          0.89,
+          1.36
+        ],
+        "loadavg_end_high": false,
+        "polluted": false
+      },
+      "added_latency_p50_ms": 1.693,
+      "direct_rps": {
+        "mode": "rps",
+        "base": "http://127.0.0.1:37541",
+        "model": "model-a",
+        "concurrency": 32,
+        "duration_s": 20,
+        "elapsed_s": 20,
+        "completed": 439124,
+        "ok": 439124,
+        "errors": 0,
+        "cache_hits": 0,
+        "rps": 21955.974,
+        "upstream_rps": 21955.974,
+        "mean_ms": 1.411,
+        "p50_ms": 0.488,
+        "p95_ms": 2.039,
+        "p99_ms": 54.661,
+        "command": "/home/hatch/.tmp/codvian-geekflare-bench.aZtOKV/codvian-bench rps --base http://127.0.0.1:37541 --model model-a --concurrency 32 --duration 20s --warmup 25",
+        "go_version": "go1.27.4",
+        "git_head": "0f320edc44a07a6818dc6e1c756237a9331408ce",
+        "git_dirty": true,
+        "loadavg_start": [
+          1.09,
+          0.89,
+          1.36
+        ],
+        "loadavg_end": [
+          0.78,
+          0.83,
+          1.33
+        ],
+        "loadavg_end_high": false,
+        "polluted": false
+      },
+      "router_rps": {
+        "mode": "rps",
+        "base": "http://127.0.0.1:59167",
+        "model": "model-a",
+        "concurrency": 32,
+        "duration_s": 20,
+        "elapsed_s": 20.063,
+        "completed": 11794,
+        "ok": 11633,
+        "errors": 161,
+        "error_kinds": {
+          "http-502": 161
+        },
+        "cache_hits": 0,
+        "rps": 579.811,
+        "upstream_rps": 579.811,
+        "mean_ms": 54.271,
+        "p50_ms": 54.051,
+        "p95_ms": 93.224,
+        "p99_ms": 109.018,
+        "command": "/home/hatch/.tmp/codvian-geekflare-bench.aZtOKV/codvian-bench rps --base http://127.0.0.1:59167 --key crk_X3vI6lsrFmopyXmY0lcGbcAFYlMAPZE1 --model model-a --concurrency 32 --duration 20s --warmup 25",
+        "go_version": "go1.27.4",
+        "git_head": "0f320edc44a07a6818dc6e1c756237a9331408ce",
+        "git_dirty": true,
+        "loadavg_start": [
+          0.78,
+          0.83,
+          1.33
+        ],
+        "loadavg_end": [
+          1.98,
+          1.1,
+          1.41
+        ],
+        "loadavg_end_high": false,
+        "polluted": false
+      },
+      "peak_rss_kib": 90808
+    },
+    "2": {
+      "direct_latency": {
+        "mode": "latency",
+        "base": "http://127.0.0.1:37541",
+        "model": "model-a",
+        "requests": 1000,
+        "ok": 1000,
+        "errors": 0,
+        "cache_hits": 0,
+        "elapsed_s": 0.092,
+        "mean_ms": 0.087,
+        "p50_ms": 0.075,
+        "p95_ms": 0.144,
+        "p99_ms": 0.31,
+        "min_ms": 0.044,
+        "max_ms": 1.238,
+        "command": "/home/hatch/.tmp/codvian-geekflare-bench.aZtOKV/codvian-bench latency --base http://127.0.0.1:37541 --model model-a --requests 1000 --warmup 25",
+        "go_version": "go1.27.4",
+        "git_head": "0f320edc44a07a6818dc6e1c756237a9331408ce",
+        "git_dirty": true,
+        "loadavg_start": [
+          1.98,
+          1.1,
+          1.41
+        ],
+        "loadavg_end": [
+          1.98,
+          1.1,
+          1.41
+        ],
+        "loadavg_end_high": false,
+        "polluted": false
+      },
+      "router_latency": {
+        "mode": "latency",
+        "base": "http://127.0.0.1:59167",
+        "model": "model-a",
+        "requests": 1000,
+        "ok": 1000,
+        "errors": 0,
+        "cache_hits": 0,
+        "elapsed_s": 2.536,
+        "mean_ms": 2.523,
+        "p50_ms": 1.758,
+        "p95_ms": 3.065,
+        "p99_ms": 20.779,
+        "min_ms": 1.281,
+        "max_ms": 27.156,
+        "command": "/home/hatch/.tmp/codvian-geekflare-bench.aZtOKV/codvian-bench latency --base http://127.0.0.1:59167 --key crk_X3vI6lsrFmopyXmY0lcGbcAFYlMAPZE1 --model model-a --requests 1000 --warmup 25",
+        "go_version": "go1.27.4",
+        "git_head": "0f320edc44a07a6818dc6e1c756237a9331408ce",
+        "git_dirty": true,
+        "loadavg_start": [
+          1.98,
+          1.1,
+          1.41
+        ],
+        "loadavg_end": [
+          1.9,
+          1.1,
+          1.4
+        ],
+        "loadavg_end_high": false,
+        "polluted": false
+      },
+      "added_latency_p50_ms": 1.683,
+      "direct_rps": {
+        "mode": "rps",
+        "base": "http://127.0.0.1:37541",
+        "model": "model-a",
+        "concurrency": 32,
+        "duration_s": 20,
+        "elapsed_s": 20.032,
+        "completed": 432992,
+        "ok": 432992,
+        "errors": 0,
+        "cache_hits": 0,
+        "rps": 21614.932,
+        "upstream_rps": 21614.932,
+        "mean_ms": 1.528,
+        "p50_ms": 0.566,
+        "p95_ms": 2.658,
+        "p99_ms": 49.886,
+        "command": "/home/hatch/.tmp/codvian-geekflare-bench.aZtOKV/codvian-bench rps --base http://127.0.0.1:37541 --model model-a --concurrency 32 --duration 20s --warmup 25",
+        "go_version": "go1.27.4",
+        "git_head": "0f320edc44a07a6818dc6e1c756237a9331408ce",
+        "git_dirty": true,
+        "loadavg_start": [
+          1.9,
+          1.1,
+          1.4
+        ],
+        "loadavg_end": [
+          1.43,
+          1.05,
+          1.38
+        ],
+        "loadavg_end_high": false,
+        "polluted": false
+      },
+      "router_rps": {
+        "mode": "rps",
+        "base": "http://127.0.0.1:59167",
+        "model": "model-a",
+        "concurrency": 32,
+        "duration_s": 20,
+        "elapsed_s": 20.071,
+        "completed": 10699,
+        "ok": 10528,
+        "errors": 171,
+        "error_kinds": {
+          "http-502": 171
+        },
+        "cache_hits": 0,
+        "rps": 524.549,
+        "upstream_rps": 524.549,
+        "mean_ms": 59.859,
+        "p50_ms": 60.843,
+        "p95_ms": 104.12,
+        "p99_ms": 154.639,
+        "command": "/home/hatch/.tmp/codvian-geekflare-bench.aZtOKV/codvian-bench rps --base http://127.0.0.1:59167 --key crk_X3vI6lsrFmopyXmY0lcGbcAFYlMAPZE1 --model model-a --concurrency 32 --duration 20s --warmup 25",
+        "go_version": "go1.27.4",
+        "git_head": "0f320edc44a07a6818dc6e1c756237a9331408ce",
+        "git_dirty": true,
+        "loadavg_start": [
+          1.43,
+          1.05,
+          1.38
+        ],
+        "loadavg_end": [
+          3.04,
+          1.45,
+          1.5
+        ],
+        "loadavg_end_high": true,
+        "polluted": false
+      },
+      "peak_rss_kib": 111024
+    }
+  }
+}
