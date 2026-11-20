@@ -206,14 +206,14 @@ func (s *Server) handleBlockedProviders(w http.ResponseWriter, r *http.Request) 
 // ---------------------------------------------------------------------------
 
 type aiSettings struct {
-	ThinkingBudgetTokens int    `json:"thinking_budget_tokens"`
-	DefaultSystemPrompt  string `json:"default_system_prompt"`
+	ThinkingBudgetTokens int      `json:"thinking_budget_tokens"`
+	DefaultSystemPrompt  string   `json:"default_system_prompt"`
 	TemperatureDefault   *float64 `json:"temperature_default,omitempty"`
 	TopPDefault          *float64 `json:"top_p_default,omitempty"`
-	MaxTokensDefault     int    `json:"max_tokens_default"`
-	StreamByDefault      bool   `json:"stream_by_default"`
-	EchoRequestedModel   bool   `json:"echo_requested_model"`
-	WebSearchModel       string `json:"web_search_model"`
+	MaxTokensDefault     int      `json:"max_tokens_default"`
+	StreamByDefault      bool     `json:"stream_by_default"`
+	EchoRequestedModel   bool     `json:"echo_requested_model"`
+	WebSearchModel       string   `json:"web_search_model"`
 }
 
 type aiSettingsStore struct {
@@ -264,12 +264,12 @@ func (s *Server) handleAISettings(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 
 type modalityBridgeSettings struct {
-	Enabled         bool     `json:"enabled"`
-	TextToAudio     bool     `json:"text_to_audio"`
-	AudioToText     bool     `json:"audio_to_text"`
-	TextToImage     bool     `json:"text_to_image"`
-	ImageToText     bool     `json:"image_to_text"`
-	AllowedModels   []string `json:"allowed_models,omitempty"`
+	Enabled       bool     `json:"enabled"`
+	TextToAudio   bool     `json:"text_to_audio"`
+	AudioToText   bool     `json:"audio_to_text"`
+	TextToImage   bool     `json:"text_to_image"`
+	ImageToText   bool     `json:"image_to_text"`
+	AllowedModels []string `json:"allowed_models,omitempty"`
 }
 
 type modalityBridgeStore struct {
@@ -313,13 +313,13 @@ func (s *Server) handleModalityBridge(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 
 type pricingSyncStatus struct {
-	mu          sync.RWMutex
-	LastSync    *time.Time `json:"last_sync,omitempty"`
-	NextSync    *time.Time `json:"next_sync,omitempty"`
-	InProgress  bool       `json:"in_progress"`
-	Source      string     `json:"source"`
-	RowsSynced  int        `json:"rows_synced"`
-	LastError   string     `json:"last_error,omitempty"`
+	mu         sync.RWMutex
+	LastSync   *time.Time `json:"last_sync,omitempty"`
+	NextSync   *time.Time `json:"next_sync,omitempty"`
+	InProgress bool       `json:"in_progress"`
+	Source     string     `json:"source"`
+	RowsSynced int        `json:"rows_synced"`
+	LastError  string     `json:"last_error,omitempty"`
 }
 
 var globalPricingSyncStatus = &pricingSyncStatus{
@@ -767,11 +767,11 @@ func (s *Server) handleGlobalSwitches(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 
 type responseValidationRule struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Pattern   string `json:"pattern"`
-	Must      bool   `json:"must"` // true = must match; false = must not match
-	Enabled   bool   `json:"enabled"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Pattern string `json:"pattern"`
+	Must    bool   `json:"must"` // true = must match; false = must not match
+	Enabled bool   `json:"enabled"`
 }
 
 type responseValidationStore struct {
