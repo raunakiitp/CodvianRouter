@@ -7,7 +7,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/provider"
 )
 
-// G22 wire test (PARITY.md Area 10 row :868): the engine's
+// G22 wire test (parity tracker Area 10 row :868): the engine's
 // compression decision is a production caller of
 // compress.ApplyWithOptions — the cache-aware inputs must come
 // from real signals, not zero options.
@@ -15,7 +15,7 @@ import (
 // A request naming mode "aggressive" against an engine whose
 // configured providers include a prompt-cache-marker provider
 // (anthropic) is downgraded to "standard", so a rewriting mode
-// cannot break the cacheable prefix (OmniRoute #3955: the
+// cannot break the cacheable prefix (the reference router #3955: the
 // provider alone is sufficient — no cache_control marker is
 // required). Against an engine with no caching provider the
 // mode stands. This test FAILS while maybeCompress calls plain

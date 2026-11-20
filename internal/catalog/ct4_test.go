@@ -4,12 +4,12 @@ import "testing"
 
 // CT-4 (GAP-TRACK entry 403): keyless no-auth providers were copied
 // without the ToS-avoid flag or any emulated-tool-calling marker.
-// OmniRoute marks four of them toolCalling "emulated" (noauth.ts) and
+// the reference router marks four of them toolCalling "emulated" (noauth.ts) and
 // states tool calling is unavailable for the fifth (aihorde); all five
 // are flagged ToSGrey and none counts as tool-capable.
 
 // ct4Entry403ToSGrey are the five entry-403 providers: verified against
-// the OmniRoute reference (src/shared/constants/providers/noauth.ts)
+// the the reference router reference (src/shared/constants/providers/noauth.ts)
 // by reading each entry. Four carry toolCalling "emulated"; aihorde
 // carries no toolCalling marker and its notice states tool calling is
 // unavailable — non-native either way, so it belongs to the set.

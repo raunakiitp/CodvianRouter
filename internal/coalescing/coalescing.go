@@ -39,14 +39,14 @@
 // A zero tenant hashes exactly as RequestKey does, so existing
 // callers that cannot supply a tenant yet keep today's behaviour.
 //
-// In-flight cap: at most MaxInFlight flights run at once (OmniRoute's
+// In-flight cap: at most MaxInFlight flights run at once (the reference router's
 // deduplicate() caps at 1,000 in-flight coalesced requests). Past the
 // cap a new request does NOT block and does NOT queue: it runs
 // uncoalesced, as its own flight, and is counted honestly as
 // CapBypassed — never folded into Shared.
 //
 // Flight timeout: every flight runs under a FlightTimeout context
-// (OmniRoute's deduplicate() times out after 60 s). On timeout the
+// (the reference router's deduplicate() times out after 60 s). On timeout the
 // flight fails with context.DeadlineExceeded, every waiter gets that
 // error, the entry is cleaned up, and a later identical request
 // starts a fresh flight. DoCtx hands the timeout context to fn, so
@@ -88,14 +88,14 @@ import (
 
 // MaxInFlight is the cap on concurrent registered flights. Past it a
 // new request runs uncoalesced (see Group.DoCtx) and is counted as
-// CapBypassed. The number is OmniRoute's: its deduplicate() caps at
+// CapBypassed. The number is the reference router's: its deduplicate() caps at
 // 1,000 in-flight coalesced requests (M6 parity, Area 6).
 const MaxInFlight = 1000
 
 // FlightTimeout is the per-flight timeout: the leader's fn runs under
 // a context that expires this long after the flight starts, and on
 // expiry the flight fails with context.DeadlineExceeded. The number
-// is OmniRoute's: its deduplicate() times out after 60 s (M6 parity,
+// is the reference router's: its deduplicate() times out after 60 s (M6 parity,
 // Area 6).
 const FlightTimeout = 60 * time.Second
 

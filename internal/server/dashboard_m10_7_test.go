@@ -651,7 +651,7 @@ func TestDashboardM10_7InlineScriptSyntax(t *testing.T) {
 }
 
 // TestDashboardProvidersKeyLinkServedHTML proves the served dashboard
-// renders the key-creation link (PARITY Area 3, "Key-creation
+// renders the key-creation link (parity tracker Area 3, "Key-creation
 // links"): the provider feed's key_creation_url is mapped into the
 // card model, and the card shows a "Get API key →" link — opening
 // in a new tab — only when the catalog records a key page for that

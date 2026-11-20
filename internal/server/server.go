@@ -629,12 +629,12 @@ type Server struct {
 	// requestRewrite (B3-20, Stage 1): when true, applyGuardrails
 	// rewrites the request in place — PII/secrets the check found
 	// are replaced by placeholders before the request reaches
-	// the provider (OmniRoute's modifiedPayload). Opt-in; off by
+	// the provider (the reference router's modifiedPayload). Opt-in; off by
 	// default, so with blocking off a secret still goes to the
 	// provider verbatim exactly as before. Set only by
 	// WithRequestRewrite.
 	requestRewrite bool
-	// reversibleVault (B3-19, PARITY.md:782): the reversible PII
+	// reversibleVault (B3-19, parity tracker:782): the reversible PII
 	// token vault. When non-nil, the request rewrite mints vault
 	// tokens for PII matches instead of dead placeholders, and
 	// non-streaming responses have their tokens restored at exit.
@@ -645,7 +645,7 @@ type Server struct {
 	reversibleVault *guardrails.Vault
 	// responseSanitization (B3-21/B3-22, Stage 1): when true, the
 	// response guardrail runs in the store's mode (redact/warn/
-	// block, default redact, OmniRoute's PII_RESPONSE_SANITIZATION)
+	// block, default redact, the reference router's PII_RESPONSE_SANITIZATION)
 	// — non-streaming responses are redacted in place before
 	// delivery, and streaming responses run through the
 	// store-wired ResponseStreamRedactor, with tool-call
@@ -1177,7 +1177,7 @@ func WithGuardrails(g *guardrails.Store) Option {
 
 // WithRequestRewrite enables request rewriting (B3-20, Stage 1):
 // when true, applyGuardrails strips PII/secrets from the request
-// before it reaches the provider. Opt-in (OmniRoute's
+// before it reaches the provider. Opt-in (the reference router's
 // modifiedPayload); off by default. Wiring only — main.go and
 // tests choose when to turn it on.
 func WithRequestRewrite(enabled bool) Option {
@@ -1185,7 +1185,7 @@ func WithRequestRewrite(enabled bool) Option {
 }
 
 // WithReversibleVault wires the reversible PII token vault
-// (B3-19, PARITY.md:782): when set, the request rewrite mints
+// (B3-19, parity tracker:782): when set, the request rewrite mints
 // vault tokens for PII matches instead of dead placeholders, and
 // non-streaming responses have their tokens restored at exit. A
 // nil vault (or no call) leaves the plain-placeholder rewrite
@@ -1200,7 +1200,7 @@ func WithReversibleVault(v *guardrails.Vault) Option {
 // store's mode — non-streaming in applyResponseGuardrails,
 // streaming through the store-wired ResponseStreamRedactor in
 // handleChatStream, with tool-call arguments accumulated per
-// call and checked once complete. Opt-in (OmniRoute's
+// call and checked once complete. Opt-in (the reference router's
 // PII_RESPONSE_SANITIZATION); off by default. Wiring only —
 // main.go and tests choose when to turn it on.
 func WithResponseSanitization(enabled bool) Option {
@@ -1445,7 +1445,7 @@ func (s *Server) combosStore() *ComboStore {
 // loopback), so the listen address IS the address clients reach
 // it on. It is never derived from a request: the Host header and
 // X-Forwarded-For can be forged by a caller, and the card's url
-// must name the real endpoint (OmniRoute derives its base URL
+// must name the real endpoint (the reference router derives its base URL
 // from the request; we deliberately do not). Empty when no
 // listen address is configured: the card route is then not
 // registered at all (see New), rather than serving a card whose
@@ -1733,7 +1733,7 @@ func New(engine Engine, opts ...Option) *Server {
 	// M8.5 images.
 	s.register(mux, "POST", "/v1/images/generations", s.handleImagesGenerations)
 	s.register(mux, "POST", "/v1/images/edits", s.handleImagesEdits)
-	// M8.6 audio (canonical ops + OmniRoute aliases).
+	// M8.6 audio (canonical ops + the reference router aliases).
 	s.register(mux, "POST", "/v1/audio/speech", s.handleAudioSpeech)
 	s.register(mux, "POST", "/v1/audio/text-to-speech", s.handleAudioTextToSpeech)
 	s.register(mux, "POST", "/v1/audio/transcriptions", s.handleAudioTranscriptions)
@@ -4905,7 +4905,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	if !s.checkLocalReadiness(w, r, req.Model) {
 		return
 	}
-	// Prefixed-model pin (B2-29, PARITY.md Area 2 row :600): a
+	// Prefixed-model pin (B2-29, parity tracker Area 2 row :600): a
 	// "provider/model" model string narrows the request to that
 	// provider via routing.only, so a prefixed model can never
 	// fail over to another provider on the plain chat path. A
@@ -5019,7 +5019,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	// (session-dedup, CCR, Codex) runs first, at the same point.
 	s.applyCompressionPrePass(r, &req)
 	s.applyCompression(&req)
-	// Per-key access schedule (M5.10, OmniRoute's
+	// Per-key access schedule (M5.10, the reference router's
 	// validateKeyAccessSchedule): a key outside its allowed
 	// hours is refused with a 403 here, before any budget is
 	// touched — the policy chain runs the schedule check before
@@ -5514,7 +5514,7 @@ func rewriteRequest(req *provider.ChatRequest) {
 }
 
 // rewriteRequestWithVault is rewriteRequest with reversible PII
-// tokens (B3-19, PARITY.md:782): PII matches are minted into the
+// tokens (B3-19, parity tracker:782): PII matches are minted into the
 // vault and replaced by their tokens, while secrets keep their
 // dead placeholders — the provider sees tokens, never the PII.
 // It returns how many tokens were minted. A nil vault behaves
@@ -5708,7 +5708,7 @@ func redactResponse(resp *provider.ChatResponse) {
 
 // restoreVaultTokens swaps every known vault token in a
 // completed non-streaming response back for its original value
-// (B3-19, PARITY.md:782) — the exit half of the reversible
+// (B3-19, parity tracker:782) — the exit half of the reversible
 // vault. It runs after the response check, so the check sees
 // only inert tokens and the client's own PII can never trip a
 // block on the way back; and after redactResponse, so a freshly

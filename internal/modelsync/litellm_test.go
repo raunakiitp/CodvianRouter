@@ -17,8 +17,8 @@ const testLiteLLMJSON = `{
   "openai/gpt-next": {"input_cost_per_token": 0.000001, "output_cost_per_token": 0.000002, "litellm_provider": "openai", "max_input_tokens": 100000, "deprecation_date": "2099-01-01"}
 }`
 
-// TestParseLiteLLMCatalog — PARITY.md:505, PARTIAL row: models.dev
-// sync is the only sync source; OmniRoute also syncs LiteLLM.
+// TestParseLiteLLMCatalog — parity tracker:505, PARTIAL row: models.dev
+// sync is the only sync source; the reference router also syncs LiteLLM.
 // This parses LiteLLM's cost map into the same Catalog shape so
 // one Plan can run against either source. Fetch/schedule wiring
 // for the second source is follow-up work.

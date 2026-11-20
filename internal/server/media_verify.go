@@ -51,10 +51,10 @@
 // handlers themselves assume an authorised caller, exactly
 // like handleEmbedRerank.
 //
-// Search caching (G13, PARITY.md Area 6 row "Search cache
+// Search caching (G13, parity tracker Area 6 row "Search cache
 // (60 s)"): POST /v1/search answers are cached for 60 s in a
 // SearchCache[searchCachedResult] (internal/cache/search_cache.go:
-// same keying, TTL, caps and coalescing as OmniRoute's
+// same keying, TTL, caps and coalescing as the reference router's
 // searchCache.ts), in front of the single upstream call below —
 // a repeated identical search inside the TTL is served without
 // dialling Perplexity again, and concurrent identical searches

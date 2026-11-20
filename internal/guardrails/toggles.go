@@ -1,5 +1,5 @@
 // G18 Area 7 — per-type toggles: the engine half of the
-// per-type selection row (OmniRoute: 23 builtin types, per-type
+// per-type selection row (the reference router: 23 builtin types, per-type
 // selection, 8 dashboard presets, GET/PUT /api/settings/pii).
 //
 // What this file does: every built-in pattern label can be

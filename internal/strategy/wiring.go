@@ -2,7 +2,7 @@
 // the ordering implementations built in Phase A (orderings.go, quota.go,
 // affinity.go, scoring16.go) and exposes them through HookFactory.
 //
-// Data honesty — what the hook can and cannot see (see docs/PARITY.md
+// Data honesty — what the hook can and cannot see (see internal parity tracker
 // Area 1 for the per-row verdicts):
 //   - Live per-(provider, model) signals: latency p50, success rate,
 //     price, measured quality, scalar QuotaHint (higher = more
@@ -11,7 +11,7 @@
 //     (ledger PairQuota roll-off). Quota utilisation (5h/7d) stays
 //     unknown (-1): no per-pair limit exists anywhere to divide the
 //     spend by, so headroom ranks everything as full headroom
-//     (OmniRoute's own fail-open) and stays PARTIAL; quota expiry
+//     (the reference router's own fail-open) and stays PARTIAL; quota expiry
 //     times do not exist anywhere, so expiry-first falls back to the
 //     (real) reset time and stays PARTIAL.
 //   - QuotaRemaining is the measured remaining fraction when the
@@ -49,7 +49,7 @@
 //     the model's window, and cacheAffinity reads the measured
 //     warmth func (G19); connection density reads the live
 //     key-pool size (G19).
-//   - "weighted" is the per-target weight draw (OmniRoute
+//   - "weighted" is the per-target weight draw (the reference router
 //     selectWeightedTarget). Per-target weights come from the
 //     process-wide table installed by SetChainWeights
 //     (routing.chain_weights); no entry means weight 1 (uniform).
@@ -171,7 +171,7 @@ func balancedScorer() scoring.Scorer {
 // exhausted/not-exhausted distinction. Attempts is the measured
 // attempt count from the engine's live provider stats (Phase C);
 // unknown (-1) sorts as 0 — least-used treats an unmeasured target
-// as never used (exploration fail-open), matching OmniRoute's
+// as never used (exploration fail-open), matching the reference router's
 // sortTargetsByUsage for unknown usage.
 func toOrderingTargets(chain []router.Attempt, signals scoring.SignalsFunc, scorer scoring.Scorer) []OrderingTarget {
 	out := make([]OrderingTarget, 0, len(chain))
@@ -538,7 +538,7 @@ func wiringHook(st Strategy, signals scoring.SignalsFunc, custom scoring.Weights
 	switch st {
 	case StrategyBalanced:
 		// S1-SCORER16 follow-up: the default ("balanced") chain
-		// now scores 16-factor under OmniRoute's DEFAULT_WEIGHTS
+		// now scores 16-factor under the reference router's DEFAULT_WEIGHTS
 		// (scoring.Hook16Default), replacing the 5-factor
 		// HookWithWeights fallback in strategy.go — the 11
 		// factors with no 5-factor vote now vote on the default
@@ -823,7 +823,7 @@ func wiringHook(st Strategy, signals scoring.SignalsFunc, custom scoring.Weights
 		// fields); a zero context means the defaults, except
 		// an explicitly configured error rate of 0
 		// (SLAMaxErrorRateSet) which is zero-tolerance.
-		// Breaker-OPEN pre-filter (OmniRoute's rule):
+		// Breaker-OPEN pre-filter (the reference router's rule):
 		// candidates positively known OPEN are removed
 		// before scoring; only if every candidate is OPEN
 		// is the full pool scored. A false BreakerOpen means

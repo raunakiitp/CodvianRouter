@@ -7,7 +7,7 @@ import (
 )
 
 // TestPrefixFreezeFreezeChecker proves the adapter the Apply
-// path consumes (PARITY.md Area 10 row :939): FreezeChecker
+// path consumes (parity tracker Area 10 row :939): FreezeChecker
 // turns the observer into the predicate
 // compress.ApplyOptions.FrozenPrefix takes, so the router/server
 // pass-through is one line (pass freeze.FreezeChecker()) with no

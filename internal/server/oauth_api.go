@@ -1,6 +1,6 @@
 package server
 
-// OAuth 2.0 gateway auth (PARITY.md:678, B3-07): the gateway is
+// OAuth 2.0 gateway auth (parity tracker:678, B3-07): the gateway is
 // its own authorization server. An operator registers an OAuth
 // client (POST /oauth/clients), approves a grant at
 // GET /oauth/authorize (authorization code + PKCE S256), the

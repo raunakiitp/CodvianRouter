@@ -1,5 +1,5 @@
 // TestChatCompletionsFailoverSwitchTime measures the TRUE failover-switch
-// time (PARITY.md Area 12 row 18, WRONG): the gap between the dead attempt's
+// time (parity tracker Area 12 row 18, WRONG): the gap between the dead attempt's
 // 429 response being written and the fallback attempt's request arriving at
 // the fallback mock — router decision + dispatch, not end-to-end latency.
 // The old quoted figures ("~53 ms failover / 1–2 ms switch") were

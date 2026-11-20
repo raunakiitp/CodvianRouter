@@ -88,7 +88,7 @@ type Config struct {
 	// A2AEnabled is the operator opt-in for the Agent-to-Agent
 	// endpoint (internal/a2a, M9.8): the /a2a JSON-RPC surface and
 	// its task store are OFF unless this is true. Default false:
-	// OmniRoute's A2A is keyless by default (GHSA-v54m-6rm3-p565)
+	// the reference router's A2A is keyless by default (GHSA-v54m-6rm3-p565)
 	// and that default must never be copied. No validation is
 	// needed beyond the bool itself — false and true are both
 	// valid; the default is what matters.
@@ -1005,7 +1005,7 @@ type GuardrailsConfig struct {
 	ResponseGuardMode string `json:"response_guard_mode,omitempty"`
 	// ReversibleVault mints reversible PII tokens in the
 	// request rewrite instead of dead placeholders (B3-19,
-	// PARITY.md:782 — the capability behind OmniRoute's
+	// parity tracker:782 — the capability behind the reference router's
 	// PII_REVERSIBLE_VAULT_ENABLED). Off by default. It
 	// only takes effect when RequestRewrite is also on:
 	// the tokens are minted by the rewrite, pre-call, and
@@ -1061,7 +1061,7 @@ type ExternalGuardrailConfig struct {
 // remains a valid, selectable strategy, and "code" (cost per
 // solved task) is now accepted by config validation as declared.
 //
-// MIGRATION (M3, 2026-11-18): "weighted" now means OmniRoute's
+// MIGRATION (M3, 2026-11-18): "weighted" now means the reference router's
 // per-target weight draw (uniform until chain per-target weights
 // land in Phase C). The old operator weight-set behaviour moved
 // to "custom-weights" (alias "custom"); configs that set
@@ -1128,7 +1128,7 @@ type ExternalGuardrailConfig struct {
 // ModelLockoutConfig is the operator-facing form of the model
 // lockout (M4.3, router.LockoutConfig): per-(provider, key, model)
 // lockout after repeated failures. Off unless Enabled is true
-// (OmniRoute's default). Zero sub-values mean the router defaults
+// (the reference router's default). Zero sub-values mean the router defaults
 // (403/404/429/502/503/504; base 120 s; max 30 min; max 10 steps).
 type ModelLockoutConfig struct {
 	Enabled        bool  `json:"enabled,omitempty"`
@@ -1141,7 +1141,7 @@ type ModelLockoutConfig struct {
 // WaitBudgetFileConfig is the operator-facing form of the wait
 // budgets (M4.8, router.WaitBudgetConfig). Off unless Enabled is
 // true (the default is fail-fast). Zero sub-values mean the
-// OmniRoute defaults (90 s / 5 retries / 300 s total).
+// the reference router defaults (90 s / 5 retries / 300 s total).
 type WaitBudgetFileConfig struct {
 	Enabled           bool  `json:"enabled,omitempty"`
 	MaxWaitPerRetryMs int64 `json:"max_wait_per_retry_ms,omitempty"`
@@ -1171,11 +1171,11 @@ const maxMediaTimeoutMs = 3600000
 // meaningful explicit 0.
 type SLAConfig struct {
 	// TargetP95Ms is the latency objective in milliseconds.
-	// Nil means the 2000 ms default (OmniRoute
+	// Nil means the 2000 ms default (the reference router
 	// DEFAULT_SLA_TARGET_P95_MS). When set it must be > 0.
 	TargetP95Ms *float64 `json:"target_p95_ms,omitempty"`
 	// MaxErrorRate is the tolerated error fraction in [0, 1].
-	// Nil means the 0.05 default (OmniRoute
+	// Nil means the 0.05 default (the reference router
 	// DEFAULT_SLA_MAX_ERROR_RATE). An explicit 0 is
 	// zero-tolerance: any measured error violates the SLO.
 	MaxErrorRate *float64 `json:"max_error_rate,omitempty"`
@@ -1213,7 +1213,7 @@ const DefaultNadirCooldownMs = 30000
 // the egress destination must be an explicit, reviewed
 // config-file choice, never a silent default that would send
 // the prompt's last user turn to a third party the operator
-// never chose (a deliberate divergence from OmniRoute's
+// never chose (a deliberate divergence from the reference router's
 // fail-open hardcoded https://api.getnadir.com).
 type NadirConfig struct {
 	// Endpoint is the origin of a Nadir-compatible decision
@@ -1253,7 +1253,7 @@ type RoutingConfig struct {
 	// a deliberate opt-out, not a misconfiguration — so it is
 	// accepted, never rejected.
 	StreamMaxLifetimeMs int64 `json:"stream_max_lifetime_ms,omitempty"`
-	// MaxAttempts caps the attempts per request (M4.8, OmniRoute
+	// MaxAttempts caps the attempts per request (M4.8, the reference router
 	// maxGlobalAttempts clamped [1, 200]). 0 means the engine
 	// default (5); the engine clamps any value above 200 to 200,
 	// and Validate rejects values outside [1, 200] when set.
@@ -1286,7 +1286,7 @@ type RoutingConfig struct {
 	// target remains. 0 disables the prediction (default).
 	PredictiveTtftMs int `json:"predictive_ttft_ms,omitempty"`
 	// ModelLockout is the opt-in model-lockout block (M4.3).
-	// Nil means the lockout stays off (OmniRoute's default).
+	// Nil means the lockout stays off (the reference router's default).
 	ModelLockout *ModelLockoutConfig `json:"model_lockout,omitempty"`
 	// WaitBudgets is the opt-in wait-budget block (M4.8). Nil
 	// means fail-fast (the default): 429s fail over at once.
@@ -1295,7 +1295,7 @@ type RoutingConfig struct {
 	// response-start deadline in milliseconds (M4.8): the first
 	// streaming attempt that produces no first byte within this
 	// long rotates to ONE sibling account. 0 disables it
-	// (default); 20000 is the OmniRoute value.
+	// (default); 20000 is the the reference router value.
 	PreferredFailoverAfterMs int64 `json:"preferred_failover_after_ms,omitempty"`
 	// AccountFallbackStrategy is the global account-level
 	// fallback strategy (M3 Area 1, PARITY row 388): how the
@@ -1304,7 +1304,7 @@ type RoutingConfig struct {
 	// values are the 9 account fallback names (priority,
 	// fill-first, round-robin, p2c, random, least-used,
 	// cost-optimized, strict-random, weighted); empty means
-	// the "fill-first" default (OmniRoute's default).
+	// the "fill-first" default (the reference router's default).
 	// "expiry-first" is NOT valid: no per-key quota-expiry
 	// source exists, so it is rejected at load (see Validate).
 	// "weighted" draws uniformly (all weights 1) until a
@@ -1413,19 +1413,19 @@ type RoutingConfig struct {
 	// default (3). Same-provider retries do not consume it.
 	MaxProvidersPerRequest int `json:"max_providers_per_request,omitempty"`
 	// MaxRetries caps same-target retries after the first
-	// failure, per target (B2-30, OmniRoute maxRetries):
+	// failure, per target (B2-30, the reference router maxRetries):
 	// 0 means the engine default (3).
 	MaxRetries int `json:"max_retries,omitempty"`
 	// RetryDelayMs is the base delay between same-target
-	// retries in milliseconds (B2-30, OmniRoute
+	// retries in milliseconds (B2-30, the reference router
 	// retryDelayMs): 0 means the engine default (200 ms).
 	RetryDelayMs int64 `json:"retry_delay_ms,omitempty"`
 	// MaxSetRetries caps same-target retries across the
 	// whole set — the whole chain for this request (B2-30,
-	// OmniRoute maxSetRetries): 0 means no set cap.
+	// the reference router maxSetRetries): 0 means no set cap.
 	MaxSetRetries int `json:"max_set_retries,omitempty"`
 	// FailoverBeforeRetry is the explicit failover-before-
-	// retry switch (B2-30, OmniRoute failoverBeforeRetry):
+	// retry switch (B2-30, the reference router failoverBeforeRetry):
 	// when true AND a next target exists, a retryable
 	// transient failure (502/503/504) fails over immediately
 	// instead of retrying the same target. Default false:
@@ -1436,27 +1436,27 @@ type RoutingConfig struct {
 	// attempt in parallel, in milliseconds (B2-26): 0
 	// means the engine default (150 ms); negative disables
 	// hedging. The 150 ms default is deliberate and is NOT
-	// changed by this wiring (OmniRoute defaults to off;
+	// changed by this wiring (the reference router defaults to off;
 	// see the Stage 1 queue for the open decision).
 	HedgeDelayMs int64 `json:"hedge_delay_ms,omitempty"`
 	// RelayHandoffThreshold is the quota-use fraction at
 	// which a successful turn on a handoff provider starts
-	// relaying context (B2-01, OmniRoute
+	// relaying context (B2-01, the reference router
 	// HANDOFF_WARNING_THRESHOLD): 0 means the engine
 	// default (0.85).
 	RelayHandoffThreshold float64 `json:"relay_handoff_threshold,omitempty"`
 	// RelayExhaustionThreshold is the quota-use fraction
 	// at or above which relaying is pointless (B2-01,
-	// OmniRoute HANDOFF_EXHAUSTION_THRESHOLD): 0 means
+	// the reference router HANDOFF_EXHAUSTION_THRESHOLD): 0 means
 	// the engine default (0.95); it must be above
 	// RelayHandoffThreshold.
 	RelayExhaustionThreshold float64 `json:"relay_exhaustion_threshold,omitempty"`
 	// RelayTTLMs is how long a generated handoff stays
-	// usable, in milliseconds (B2-01, OmniRoute
+	// usable, in milliseconds (B2-01, the reference router
 	// DEFAULT_TTL_MS): 0 means the engine default (5h).
 	RelayTTLMs int64 `json:"relay_ttl_ms,omitempty"`
 	// RelayMaxMessages caps the source messages fed to
-	// the summariser (B2-01, OmniRoute
+	// the summariser (B2-01, the reference router
 	// DEFAULT_MAX_MESSAGES_FOR_SUMMARY): 0 means the
 	// engine default (30).
 	RelayMaxMessages int `json:"relay_max_messages,omitempty"`

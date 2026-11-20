@@ -815,7 +815,7 @@ type ChatRequest struct {
 	// USD, from the X-Codvian-Budget header (CHECKLIST 155):
 	// nil means "no per-request budget". BudgetStrict is the
 	// strict-mode flag from X-Codvian-Budget-Strict (or the
-	// OmniRoute-style Budget-Fallback: strict alias): in strict
+	// reference-style Budget-Fallback: strict alias): in strict
 	// mode the engine stops the chain before any attempt whose
 	// priced prompt estimate would push cumulative spend over
 	// the cap; in non-strict mode the chain continues and the
@@ -1834,7 +1834,7 @@ type chatCompletionResponse struct {
 // It also decodes the two provider-reported exact-cost shapes
 // (G16, Area 11 gateway-reported cost): OpenRouter's usage.cost
 // (bare USD) and xAI's cost_in_usd_ticks (1e10 ticks per USD —
-// OmniRoute costCalculator.ts extractExactCostUsd, verified
+// the reference router costCalculator.ts extractExactCostUsd, verified
 // against the xAI cost-tracking docs, which state
 // TICKS_IN_USD_CENT = 100_000_000, i.e. 1e10 ticks per USD).
 // Either one, when present and valid (>= 0, finite), becomes
@@ -1913,7 +1913,7 @@ func (c *openAIClient) cacheKeyField(req ChatRequest) json.RawMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Prompt-cache markers for OpenRouter (G13, PARITY.md Area 6 row
+// Prompt-cache markers for OpenRouter (G13, parity tracker Area 6 row
 // "Provider prompt-cache markers").
 //
 // OpenRouter's chat-completions API honours explicit cache_control

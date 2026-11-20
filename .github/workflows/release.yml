@@ -2,7 +2,7 @@
 #
 # Runs ONLY on a pushed `v*.*.*` tag. Tags are created by the maintainer
 # alone (the first release happens only when the router is 10x ahead of
-# OmniRoute — no slice, cron, or workflow creates a tag or a release).
+# the reference router — no slice, cron, or workflow creates a tag or a release).
 # Pushing a tag is therefore the release decision, and this workflow is
 # the only thing that publishes.
 #

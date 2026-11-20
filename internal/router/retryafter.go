@@ -72,7 +72,7 @@ const (
 )
 
 // ConcurrencyLimitCooldown is the cooldown a concurrency-limit 429
-// earns (M4.4, OmniRoute concurrencyLimit429.ts COOLDOWN 1,000 ms):
+// earns (M4.4, the reference router concurrencyLimit429.ts COOLDOWN 1,000 ms):
 // fail over now, cool 1 s, no backoff climb, no breaker failure.
 const ConcurrencyLimitCooldown = 1 * time.Second
 

@@ -7,7 +7,7 @@
 // possible rename the providers' own docs prove (novita → novita-ai).
 // The full per-provider record (triaged / added / rejected / pending,
 // with probe codes and reasons) is
-// docs/catalog-triage-2026-11-18-round4.md.
+// internal catalog triage record.
 //
 // Rules this file follows (same as rounds 1–3):
 //   - A new provider is added ONLY when models.dev lists it AND a
@@ -473,7 +473,7 @@ var triageBaseURLFixesRound4 = []triageBaseURLFix{
 
 // triageIDMovesRound4 holds the one possible_rename pair the
 // providers' own docs prove in round 4. Evidence is in
-// docs/catalog-triage-2026-11-18-round4.md; the other four pairs
+// internal catalog triage record; the other four pairs
 // stay pending (three undecided, one decided-keep) with reasons
 // recorded there.
 var triageIDMovesRound4 = []triageIDMove{

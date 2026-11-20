@@ -6,8 +6,8 @@
 // price book, never a hardcoded rate. Usage whose price is
 // unknown is reported as UNKNOWN — CostKnown false, with the
 // unpriced tokens and models listed — never as $0. (Reporting
-// unpriced usage as $0 is the OmniRoute analytics failure
-// PARITY.md records for their usage reporting; the ledger's own
+// unpriced usage as $0 is the the reference router analytics failure
+// parity tracker records for their usage reporting; the ledger's own
 // honesty rules say the same thing — "unpriced ≠ $0" — in
 // internal/ledger/keybudget.go.) A cost figure over a window
 // that mixes priced and unpriced usage is a LOWER BOUND, and

@@ -248,7 +248,7 @@ func TestExpiryFirstAllZeroKeepsInputOrder(t *testing.T) {
 // c (50% used, no reset → urgency 0.5): session 0.3625, weekly
 // 0.3125 → 0.33.
 // So the nearly-empty account about to reset ranks FIRST: this is
-// OmniRoute's recovery signal (scoreResetAwareQuota favours an
+// the reference router's recovery signal (scoreResetAwareQuota favours an
 // account that will be useful again soon), not a bug.
 func TestResetAwareScoreValues(t *testing.T) {
 	a := QuotaSnapshot{Util5h: 0, Util7d: 0, ResetAt: quotaNow.Add(5 * time.Hour)}

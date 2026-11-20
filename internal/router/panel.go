@@ -6,16 +6,16 @@
 // PanelCaller / PipelineCaller that performs one real attempt (and, for
 // fusion/jev, a Judge / JevScorer backed by a real model call).
 //
-// Semantics are taken from the OmniRoute reference clone (study only,
+// Semantics are taken from the the reference router reference clone (study only,
 // no code copied — see the per-section citations):
 //
 //   - fusion:  open-sse/services/fusion.ts — parallel panel + judge
-//     synthesis. OmniRoute defaults there are minPanel 2, straggler
+//     synthesis. the reference router defaults there are minPanel 2, straggler
 //     grace 8 s, hard timeout 90 s, maxPanel 40. This primitive
 //     differs deliberately in two places: the default max panel is 5
-//     (the auto/chaos panel size in PARITY.md Area 1, and the task
+//     (the auto/chaos panel size in parity tracker Area 1, and the task
 //     brief), and collection joins ALL panel members instead of
-//     OmniRoute's quorum-grace early return — the engine can layer
+//     the reference router's quorum-grace early return — the engine can layer
 //     quorum-grace on top later; the primitive guarantees every
 //     fan-out goroutine is joined.
 //   - pipeline: open-sse/services/autoCombo/pipelineRouter.ts +
@@ -73,12 +73,12 @@ func attemptLabel(att Attempt) string {
 // PanelConfig bounds a parallel fan-out. Zero values take the defaults.
 type PanelConfig struct {
 	// MaxPanel caps the fan-out size. <= 0 means DefaultPanelMax.
-	// OmniRoute's fusion default is 40 (fusion.ts FUSION_DEFAULTS);
-	// the default here is 5 (auto/chaos panel size, PARITY.md Area 1).
+	// the reference router's fusion default is 40 (fusion.ts FUSION_DEFAULTS);
+	// the default here is 5 (auto/chaos panel size, parity tracker Area 1).
 	MaxPanel int
 	// Timeout is the per-call deadline applied to the ctx handed to
 	// the caller. 0 means no extra deadline beyond the caller's ctx.
-	// OmniRoute's panel hard timeout is 90 s (fusion.ts).
+	// the reference router's panel hard timeout is 90 s (fusion.ts).
 	Timeout time.Duration
 }
 
@@ -86,7 +86,7 @@ type PanelConfig struct {
 const DefaultPanelMax = 5
 
 // DefaultPanelTimeout is the default per-call deadline for a fan-out
-// member, matching OmniRoute's 90 s panel hard timeout (fusion.ts).
+// member, matching the reference router's 90 s panel hard timeout (fusion.ts).
 const DefaultPanelTimeout = 90 * time.Second
 
 func (c PanelConfig) maxPanel() int {

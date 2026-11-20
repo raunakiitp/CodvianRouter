@@ -1,4 +1,4 @@
-// Per-key device tracking (G15 Area 4, OmniRoute's "{count}
+// Per-key device tracking (G15 Area 4, the reference router's "{count}
 // device(s)" on the key row).
 //
 // A "device" is a distinct client fingerprint: the SHA-256 of

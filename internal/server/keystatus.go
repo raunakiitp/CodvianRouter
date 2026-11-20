@@ -1,6 +1,6 @@
 // Gateway-key self status, expiry, regeneration and per-key traffic
 // limits (CHECKLIST 195-196, competitor-sweep P2 gaps — the
-// operator surfaces OmniRoute/Portkey expose for their keys):
+// operator surfaces the reference router/Portkey expose for their keys):
 //
 //   - GET /v1/me/status — the caller's own key, introspected: id,
 //     fingerprint, created/expiry, spend this period, budget
@@ -86,7 +86,7 @@ type meStatusTraffic struct {
 }
 
 // meStatusUsageWindow is one spend window of GET /v1/me/status
-// (M5.6, OmniRoute's usage.cost / daily / weekly): metered spend
+// (M5.6, the reference router's usage.cost / daily / weekly): metered spend
 // and tokens in [PeriodStart, PeriodEnd), the number of requests
 // that used tokens but had no known metered price, and the same
 // usage repriced at the catalog's list prices. ListPriceUSD is
@@ -118,14 +118,14 @@ type meStatusUsage struct {
 }
 
 // meStatusAccountQuota is one upstream-account quota row of GET
-// /v1/me/status (M5.5, OmniRoute's accountQuotas in
+// /v1/me/status (M5.5, the reference router's accountQuotas in
 // apiKeySelfService.ts): for each fair-share pool the caller
 // belongs to, each dimension reports the per-account limit, the
 // number of backing accounts, the effective limit (per-account ×
 // accounts), the caller's own consumption in the window, the
 // pool-wide consumption, and the caller's fair share of the
 // effective limit. Only the caller's own pools are ever listed —
-// a key cannot see another key's pools. (OmniRoute gates this
+// a key cannot see another key's pools. (the reference router gates this
 // section on scope self:account-quota; we have no such scope —
 // the section is inherently per-caller, so it is included for
 // any key that belongs to a pool.)

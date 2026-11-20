@@ -1,5 +1,5 @@
 // Reversible PII token vault, server plumbing (B3-19,
-// PARITY.md:782): the request rewrite mints tokens and the
+// parity tracker:782): the request rewrite mints tokens and the
 // response restore swaps them back. The full HTTP path is
 // proven by the V lane on the PC; these tests pin the two pure
 // plumbing functions so a refactor cannot silently drop the

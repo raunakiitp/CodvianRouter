@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// M5.8: committed-vs-settled spend (OmniRoute keyQuota.ts
+// M5.8: committed-vs-settled spend (the reference router keyQuota.ts
 // pre-request gate + post-response increment, with the race the
 // ledger-IS-the-counter rule leaves open).
 //

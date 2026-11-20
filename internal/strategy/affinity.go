@@ -5,8 +5,8 @@
 // so the coordinator can wire them into the registry and persistence later
 // without changing their semantics.
 //
-// OmniRoute semantics studied (read-only reference clone
-// ~/workspace/omniroute-reference; no code copied):
+// the reference router semantics studied (read-only reference clone
+// the local reference clone; no code copied):
 //
 //   - lkgp: services/combo/applyStrategyOrdering.ts orderByLkgp (lines
 //     68-122) + src/lib/db/settings/lkgp.ts (LKGPRecord {provider,
@@ -15,7 +15,7 @@
 //     record, a record that matches nothing, or a lookup failure all
 //     leave the input order untouched. Match precedence: provider +
 //     connectionId, then provider alone, then "provider/" model prefix.
-//     OmniRoute persists the record in SQLite; here the store is
+//     the reference router persists the record in SQLite; here the store is
 //     in-memory and mutex-guarded, and the coordinator owns persistence.
 //   - context-optimized: services/combo/comboStructure.ts
 //     sortTargetsByContextSize (lines 1050-1076) over sortModelsByContextSize
@@ -26,7 +26,7 @@
 //     orderByCacheAffinity (lines 206-217) over
 //     promptCacheAffinity.ts applyPromptCacheAffinity (lines 332+):
 //     targets are ranked by a cache-affinity score for the current prompt
-//     prefix, highest first. OmniRoute computes that score itself from
+//     prefix, highest first. the reference router computes that score itself from
 //     the prompt prefix; this function takes the per-target warmth
 //     (0..1) as input and never invents it.
 //   - context-relay: services/combo/strategyRegistry.ts:143
@@ -42,7 +42,7 @@
 //     {summary, keyDecisions, taskProgress, activeEntities}; that call
 //     lives with the caller — this file only carries the relay state
 //     across attempts and builds the next attempt's context from it.
-//     Injection mirrors OmniRoute: chat/completions gets a leading
+//     Injection mirrors the reference router: chat/completions gets a leading
 //     system message, Responses-API bodies get the block prepended to
 //     instructions, Claude-format bodies get the block appended to the
 //     top-level system array with the existing prompt preserved first.
@@ -83,7 +83,7 @@ type LKGPRecord struct {
 }
 
 // LKGPStore is an in-memory, mutex-guarded record of the last successful
-// (provider, model) per chain key (chain key = combo/chain name; OmniRoute
+// (provider, model) per chain key (chain key = combo/chain name; the reference router
 // keys by combo name + combo id, see lkgp.ts). The zero value is not
 // usable; use NewLKGPStore. Persistence is the coordinator's job.
 type LKGPStore struct {
@@ -122,7 +122,7 @@ func (s *LKGPStore) RecordSuccess(chainKey, provider, model, connectionID string
 // with a zero UpdatedAt (hand-built, or written before
 // timestamping existed) cannot prove its age and is treated as
 // fresh — only a stamped record can expire. The TTL is ours,
-// not OmniRoute's: their LKGP persists per combo with no expiry
+// not the reference router's: their LKGP persists per combo with no expiry
 // named in lkgp.ts — expiring pins is a deliberate divergence,
 // because a pin that never expires is a pin that can stick
 // routing to a provider that died hours ago.
@@ -296,7 +296,7 @@ func (s *LKGPStore) OrderByLKGP(chainKey string, targets []AffinityTarget) []Aff
 	return out
 }
 
-// lkgpIndex finds the LKGP target in targets, mirroring OmniRoute's match
+// lkgpIndex finds the LKGP target in targets, mirroring the reference router's match
 // precedence: (1) provider + connectionId, (2) provider + exact model,
 // (3) provider alone, (4) model string starting with "provider/".
 // Returns -1 when nothing matches.
@@ -336,7 +336,7 @@ func lkgpIndex(rec LKGPRecord, targets []AffinityTarget) int {
 // ---------------------------------------------------------------------------
 
 // ContextTarget is one chain target plus its context-window size in
-// tokens. A window of 0 means "unknown" (OmniRoute's `?? 0`).
+// tokens. A window of 0 means "unknown" (the reference router's `?? 0`).
 type ContextTarget struct {
 	AffinityTarget
 	ContextWindow int
@@ -345,7 +345,7 @@ type ContextTarget struct {
 // OrderByContextOptimized returns targets ordered by largest context
 // window first. Ties keep input order (stable sort). Unknown windows (<=0)
 // sort after every known window. When NO target has a known window the
-// input order is returned unchanged, mirroring OmniRoute's
+// input order is returned unchanged, mirroring the reference router's
 // sortTargetsByContextSize early return. The input slice is not mutated.
 func OrderByContextOptimized(targets []ContextTarget) []ContextTarget {
 	out := append([]ContextTarget(nil), targets...)
@@ -403,7 +403,7 @@ func OrderByCacheOptimized(targets []CacheTarget) []CacheTarget {
 // context-relay — carry context from a failed/exhausted attempt to the next
 // ---------------------------------------------------------------------------
 
-// Relay thresholds and defaults, matching OmniRoute's
+// Relay thresholds and defaults, matching the reference router's
 // resolveContextRelayConfig / contextHandoff.ts constants.
 const (
 	// DefaultHandoffThreshold is the quota-use fraction at which a
@@ -422,7 +422,7 @@ const (
 	DefaultHandoffMaxMessages = 30
 )
 
-// DefaultHandoffProviders is OmniRoute's default handoff-provider list:
+// DefaultHandoffProviders is the reference router's default handoff-provider list:
 // context relay only ever fires for these providers unless the operator
 // configures others.
 func DefaultHandoffProviders() []string { return []string{"codex"} }
@@ -451,7 +451,7 @@ type AttemptOutcome struct {
 
 // HandoffSummary is the summarised context that moves from a spent
 // attempt to the next target. It is produced by a summariser-model call
-// owned by the caller (OmniRoute: generateHandoffAsync with
+// owned by the caller (the reference router: generateHandoffAsync with
 // HANDOFF_PROMPT_TEMPLATE) — this package never fabricates one.
 type HandoffSummary struct {
 	Summary        string
@@ -578,7 +578,7 @@ func (r *RelayState) effectiveMaxMessages() int {
 
 // RecordAttempt records one attempt's outcome and reports whether a
 // handoff should now be generated (by the caller's summariser call).
-// The gates mirror OmniRoute's maybeGenerateHandoff: a session must exist,
+// The gates mirror the reference router's maybeGenerateHandoff: a session must exist,
 // the provider must be allowlisted, no handoff may already be active, and
 // the attempt must be a success with quota use in
 // [threshold, exhaustion). With RelayOnError set, a failed attempt on an
@@ -645,7 +645,7 @@ func (r *RelayState) HasHandoff(now time.Time) bool {
 }
 
 // BuildHandoffText renders a handoff summary as the <context_handoff>
-// block OmniRoute injects (buildHandoffSystemMessage), with XML escaping.
+// block the reference router injects (buildHandoffSystemMessage), with XML escaping.
 func BuildHandoffText(s HandoffSummary) string {
 	esc := strings.NewReplacer(
 		`&`, "&amp;",
@@ -730,13 +730,13 @@ func (r *RelayState) BuildNextAttemptContext(now time.Time, format RelayFormat, 
 }
 
 // maxRelayHistoryTokens caps the formatted history fed to the
-// summariser (OmniRoute MAX_HISTORY_TOKENS_FOR_SUMMARY = 8000): the
+// summariser (the reference router MAX_HISTORY_TOKENS_FOR_SUMMARY = 8000): the
 // selection trims oldest non-system messages until the history fits.
 const maxRelayHistoryTokens = 8000
 
 // relayEstimateTokens estimates the token count of text for the
 // history budget: ~4 chars per token, the same rough heuristic
-// OmniRoute's estimateTokens uses. It is a budget guard, not a
+// the reference router's estimateTokens uses. It is a budget guard, not a
 // billing count — the exact number only decides which old messages
 // are trimmed.
 func relayEstimateTokens(text string) int {
@@ -746,7 +746,7 @@ func relayEstimateTokens(text string) int {
 // formatRelayMessagesForEstimate renders messages the way the
 // summariser prompt does ("[n] ROLE:\ncontent"), so the budget
 // measures what the summariser actually receives. Empty messages
-// contribute nothing to the estimate (as in OmniRoute's
+// contribute nothing to the estimate (as in the reference router's
 // formatMessagesForPrompt).
 func formatRelayMessagesForEstimate(messages []RelayMessage) string {
 	var b strings.Builder
@@ -765,7 +765,7 @@ func formatRelayMessagesForEstimate(messages []RelayMessage) string {
 }
 
 // SelectMessagesForSummary chooses the messages a handoff summary is
-// built from, mirroring OmniRoute's selectMessagesForSummary
+// built from, mirroring the reference router's selectMessagesForSummary
 // (contextHandoff.ts, "standard" relay mode): system/developer
 // messages are always pinned (they carry the task), then the most
 // recent non-system messages up to maxMessages; when the formatted
@@ -797,7 +797,7 @@ func SelectMessagesForSummary(messages []RelayMessage, maxMessages int) []RelayM
 	working := append(append([]RelayMessage(nil), system...), recent...)
 	// Trim oldest non-system messages until the history fits the
 	// budget; the system messages plus one non-system message are
-	// the floor (OmniRoute's minWorkingLength).
+	// the floor (the reference router's minWorkingLength).
 	minLen := len(system) + 1
 	for len(working) > minLen && relayEstimateTokens(formatRelayMessagesForEstimate(working)) > maxRelayHistoryTokens {
 		working = append(append([]RelayMessage(nil), system...), working[len(system)+1:]...)

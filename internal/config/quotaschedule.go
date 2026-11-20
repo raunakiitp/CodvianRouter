@@ -3,7 +3,7 @@ package config
 // M5.9: quota schedules (config side) + webhook endpoints.
 //
 // QuotaScheduleConfig is the operator-configured time-aware quota
-// window on a pool (OmniRoute lib/quota/schedules.ts). At startup
+// window on a pool (the reference router lib/quota/schedules.ts). At startup
 // the entries are applied into the ledger (the durable store),
 // and the dashboard's POST /dashboard/quota-schedules writes
 // both the ledger rows and this block, so the two never drift
@@ -49,7 +49,7 @@ type WebhookConfig struct {
 }
 
 // QuotaExceededEvent is one of the two webhook events emitted
-// today (M5.9, OmniRoute "quota.exceeded": "A usage threshold (e.g.
+// today (M5.9, the reference router "quota.exceeded": "A usage threshold (e.g.
 // 95% of quota) was reached."). It fires, best-effort, whenever
 // a quota schedule blocks a request (blackout, outside-window,
 // keep-free reserve, schedule budget).

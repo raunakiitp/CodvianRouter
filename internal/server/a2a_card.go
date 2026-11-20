@@ -10,8 +10,8 @@
 // Field names follow the A2A agent-card shape (name, description,
 // url, version, defaultInputModes, defaultOutputModes,
 // capabilities.streaming / capabilities.pushNotifications, skills
-// with id/name/description/tags) as published by OmniRoute's
-// agent-card route — shape only, no OmniRoute code is copied.
+// with id/name/description/tags) as published by the reference router's
+// agent-card route — shape only, no the reference router code is copied.
 package server
 
 import (

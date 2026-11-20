@@ -35,7 +35,7 @@
 // completion and fails over, never a success with an empty body
 // (entry 97: "fail over on empty completions; never fake one").
 //
-// 200-OK body validation (PARITY.md Area 2 row "200-OK body
+// 200-OK body validation (parity tracker Area 2 row "200-OK body
 // validation predicate → failover"; BURNDOWN Tier 1): the same
 // predicate the non-streaming path applies in callChat
 // (ValidateResponseBody, response_validation.go) is applied here

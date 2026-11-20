@@ -1,7 +1,7 @@
 // Nadir decision strategy (M3 Area 1, PARITY row 396) —
 // FAIL-CLOSED.
 //
-// OmniRoute's nadir strategy (open-sse/services/autoCombo/
+// the reference router's nadir strategy (open-sse/services/autoCombo/
 // nadirStrategy.ts, studied, not copied) asks an external Nadir
 // decision API which model the prompt needs, with a hardcoded
 // default endpoint (https://api.getnadir.com) and fail-open
@@ -27,7 +27,7 @@
 //     order with a note naming the reason. The request is still
 //     served; only the decision is refused, never the request.
 //   - After such a failure the endpoint is cooled down for
-//     30 s (OmniRoute's NADIR_FAILURE_COOLDOWN_MS, same number,
+//     30 s (the reference router's NADIR_FAILURE_COOLDOWN_MS, same number,
 //     own code): requests in the window fall back to priority
 //     WITHOUT another call, so an unreachable endpoint costs
 //     one timeout instead of one per request. The cooldown is
@@ -58,7 +58,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/autorouter"
 )
 
-// Nadir decision-call constants (OmniRoute's documented values,
+// Nadir decision-call constants (the reference router's documented values,
 // same numbers, own code): default timeout 2000 ms, max 30000 ms,
 // at most 100 menu items, prompt capped at 16000 chars.
 const (
@@ -73,14 +73,14 @@ const (
 	// NadirMaxMenuItems caps the model ids sent in the menu.
 	NadirMaxMenuItems = 100
 	// NadirFailureCooldownMs is the default failure cooldown
-	// in milliseconds (OmniRoute's NADIR_FAILURE_COOLDOWN_MS,
+	// in milliseconds (the reference router's NADIR_FAILURE_COOLDOWN_MS,
 	// same number, own code): after a failed decision call
 	// the endpoint is skipped for this long.
 	NadirFailureCooldownMs = 30000
 )
 
 // nadirCooldownKey is the hard-cooldown-map key for one
-// decision endpoint (per base URL, like OmniRoute's per-URL
+// decision endpoint (per base URL, like the reference router's per-URL
 // cooldown): the engine's existing cooldown map (e.cooldowns,
 // guarded by e.mu) holds it, so no new engine state is needed.
 

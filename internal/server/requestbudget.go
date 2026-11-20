@@ -13,7 +13,7 @@
 //     priced prompt estimate would cross the budget (HTTP 402,
 //     the attempt never dialled). Absent/false/0 = non-strict:
 //     the chain continues and the overage is recorded honestly.
-//     The OmniRoute-style alias Budget-Fallback: strict is also
+//     The reference-style alias Budget-Fallback: strict is also
 //     accepted (same meaning); X-Codvian-Budget-Strict wins
 //     when both are present.
 //
@@ -73,9 +73,9 @@ import (
 const (
 	headerRequestBudget       = "X-Codvian-Budget"
 	headerRequestBudgetStrict = "X-Codvian-Budget-Strict"
-	// headerBudgetFallback is the OmniRoute-style alias for the
-	// strict flag (X-OmniRoute-Budget's companion header is
-	// Budget-Fallback: strict). Accepted, never required.
+	// headerBudgetFallback is the reference-style alias for the
+	// strict flag (the reference router's budget companion header
+	// is Budget-Fallback: strict). Accepted, never required.
 	headerBudgetFallback = "Budget-Fallback"
 )
 
@@ -98,7 +98,7 @@ func parseRequestBudget(r *http.Request) (budget *float64, strict bool, err erro
 	budget = &v
 	strictRaw := strings.TrimSpace(r.Header.Get(headerRequestBudgetStrict))
 	if strictRaw == "" {
-		// OmniRoute-style alias: Budget-Fallback: strict.
+		// reference-style alias: Budget-Fallback: strict.
 		if strings.EqualFold(strings.TrimSpace(r.Header.Get(headerBudgetFallback)), "strict") {
 			strict = true
 		}

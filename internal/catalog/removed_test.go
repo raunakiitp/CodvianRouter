@@ -34,13 +34,13 @@ func TestRemovedAddRefusalSemantics(t *testing.T) {
 	}
 }
 
-// TestRemovedProvidersBlocklist — docs/PARITY.md:588, PARTIAL row: no
+// TestRemovedProvidersBlocklist — internal parity tracker:588, PARTIAL row: no
 // provider-removal blocklist / takedown process existed. The
-// register (removed.go) mirrors OmniRoute's REMOVED_PROVIDERS.md
+// register (removed.go) mirrors the reference router's REMOVED_PROVIDERS.md
 // (5 removals) with a regression guard.
 func TestRemovedProvidersBlocklist(t *testing.T) {
 	if len(RemovedProviders) != 5 {
-		t.Fatalf("removed providers = %d, want 5 (OmniRoute REMOVED_PROVIDERS.md v3.8.51)", len(RemovedProviders))
+		t.Fatalf("removed providers = %d, want 5 (the reference router REMOVED_PROVIDERS.md v3.8.51)", len(RemovedProviders))
 	}
 	for id, alias := range map[string]string{
 		"puter": "pu", "theoldllm": "tllm", "gemini-business": "gembiz",

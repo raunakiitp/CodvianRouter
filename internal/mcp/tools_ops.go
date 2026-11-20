@@ -1,8 +1,8 @@
 // M9.4 — cache + DB health + memory tools.
 //
-// Shape studied from OmniRoute for reference only (never copied):
-// omniroute_cache_stats [read:cache], omniroute_cache_flush
-// [write:cache], omniroute_db_health_check [read:health,
+// Shape studied from the reference router for reference only (never copied):
+// cache_stats [read:cache], cache_flush
+// [write:cache], db_health_check [read:health,
 // write:resilience], memory_save/search/update/delete over their
 // Qdrant vector store. Our scopes are our own M9.1 set: the cache
 // tools take mcp:manage:cache, the DB tools mcp:manage:ops, the

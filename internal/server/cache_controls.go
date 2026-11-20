@@ -9,20 +9,20 @@
 //	Bypass (skip lookup AND store AND the stale fallback — a
 //	bypassed request is never served a stale answer and never
 //	poisons the cache):
-//	  - X-Codvian-No-Cache: true — mirrors OmniRoute's
-//	    X-OmniRoute-No-Cache: true (verified: OmniRoute
+//	  - X-Codvian-No-Cache: true — mirrors the reference router's
+//	    X-OmniRoute-No-Cache: true (verified: the reference router
 //	    src/lib/semanticCache.ts isCacheableForRead /
 //	    isCacheableForWrite, both of which refuse the request
 //	    when the header is "true"; docs/reference/
 //	    API_REFERENCE.md:74 and docs/guides/USER_GUIDE.md:868).
 //	    The X-OmniRoute-No-Cache spelling is accepted as an
 //	    alias, the same way X-Codvian-Budget accepts the
-//	    OmniRoute-style Budget-Fallback alias.
+//	    reference-style Budget-Fallback alias.
 //	  - Cache-Control containing a no-cache directive — also
-//	    verified OmniRoute behaviour (same two functions check
+//	    verified the reference router behaviour (same two functions check
 //	    cache-control for "no-cache").
 //	  - Pragma: no-cache — HTTP/1.0 legacy equivalent. NOT
-//	    verified in OmniRoute (their gateway code never reads
+//	    verified in the reference router (their gateway code never reads
 //	    Pragma for caching); accepted here as a Codvian
 //	    extension because a client sending it plainly means
 //	    "do not serve me a cached answer".
@@ -30,16 +30,16 @@
 //	No-store (skip store only; lookup still allowed):
 //	  - X-Codvian-Cache-No-Store: true
 //	  - Cache-Control containing a no-store directive (the
-//	    standard HTTP meaning; OmniRoute does not document it,
+//	    standard HTTP meaning; the reference router does not document it,
 //	    this is a Codvian extension).
 //
 //	Per-request controls (X-Codvian- prefix; no per-request
 //	key/type/threshold/ttl/no-store header was found in
-//	OmniRoute's docs or gateway source — OmniRoute has only the
+//	the reference router's docs or gateway source — the reference router has only the
 //	global semanticCacheThreshold 0.8 and semanticCacheTTL
 //	30 min settings in src/app/api/settings/cache-config/
 //	route.ts — so these are Codvian extensions in the same
-//	naming spirit, not OmniRoute parity):
+//	naming spirit, not the reference router parity):
 //	  - X-Codvian-Cache-Key: caller-chosen exact-cache bucket.
 //	    The value is only a token: the stored key is
 //	    hash(tenant + model + value), so tenants and models
@@ -79,7 +79,7 @@ import (
 // Per-request cache-control header names.
 const (
 	headerCodvianNoCache        = "X-Codvian-No-Cache"
-	headerOmniRouteNoCache      = "X-OmniRoute-No-Cache"
+	headerReferenceNoCache      = "X-OmniRoute-No-Cache"
 	headerCodvianCacheNoStore   = "X-Codvian-Cache-No-Store"
 	headerCodvianCacheKey       = "X-Codvian-Cache-Key"
 	headerCodvianCacheType      = "X-Codvian-Cache-Type"
@@ -152,7 +152,7 @@ func parseCacheControls(r *http.Request) *provider.CacheControls {
 	// Bypass: X-Codvian-No-Cache / X-OmniRoute-No-Cache alias /
 	// Cache-Control: no-cache / Pragma: no-cache.
 	if cacheTruthy(h.Get(headerCodvianNoCache)) ||
-		cacheTruthy(h.Get(headerOmniRouteNoCache)) ||
+		cacheTruthy(h.Get(headerReferenceNoCache)) ||
 		cacheControlHas(h.Get("Cache-Control"), "no-cache") ||
 		cacheControlHas(h.Get("Pragma"), "no-cache") {
 		cc.Bypass = true

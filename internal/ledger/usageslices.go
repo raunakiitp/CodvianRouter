@@ -7,7 +7,7 @@ import (
 )
 
 // M5.6: per-model usage slices for self-service reporting
-// (me/status list-price cost, me/sessions). OmniRoute's
+// (me/status list-price cost, me/sessions). the reference router's
 // listApiKeyUsageSlices returns the same shape — one row per
 // (provider, model) in the window — and summarizeListPrice
 // reprices each slice at the catalog's list prices. The metered

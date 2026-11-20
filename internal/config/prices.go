@@ -204,12 +204,12 @@ func (k PriceKey) String() string {
 }
 
 // SyncedSourceModelsDev / SyncedSourceLiteLLM are the two price-sync
-// sources a synced price can come from (PARITY Area 11, price
+// sources a synced price can come from (parity tracker Area 11, price
 // coverage): the models.dev catalog and LiteLLM's model cost map.
 // A synced price carries its source so the dashboard can name it
 // honestly, and so the two sources can share one PriceBook layer
 // without one wiping the other (see SetSyncedPricesForSource).
-// models.dev outranks LiteLLM for the same pair (PARITY.md:1134
+// models.dev outranks LiteLLM for the same pair (parity tracker:1134
 // resolution order: user > models.dev > LiteLLM-synced >
 // hardcoded defaults). internal/modelsync aliases these as
 // SourceModelsDev / SourceLiteLLM — the strings here are canonical,
@@ -404,7 +404,7 @@ func (b *PriceBook) SetSyncedPrices(entries map[PriceKey]SyncedPrice) {
 // the models.dev and LiteLLM syncers can share one PriceBook
 // without one wiping the other's prices on every run. Precedence
 // for a pair both sources cover is models.dev over LiteLLM
-// (PARITY.md:1134): a LiteLLM entry never overwrites a pair the
+// (parity tracker:1134): a LiteLLM entry never overwrites a pair the
 // models.dev layer already holds, and a models.dev entry
 // overwrites a LiteLLM entry for the same pair. An unknown source
 // stores nothing — a misspelled source must never silently land

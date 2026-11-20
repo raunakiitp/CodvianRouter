@@ -1,4 +1,4 @@
-// G17 Area 11 — X-OmniRoute-Cost-Saved header tests.
+// G17 Area 11 — cost-saved header tests.
 //
 // The header rides in the single choke-point writer
 // (writeResponseHeaders) alongside X-Codvian-Cache-Saved-USD: same
@@ -27,7 +27,7 @@ import (
 )
 
 func TestCostSavedHeaderOnCacheHit(t *testing.T) {
-	// Unit-level: the choke-point writer emits the OmniRoute
+	// Unit-level: the choke-point writer emits the the reference router
 	// name with the same value as the Codvian name.
 	srv := newTestServer(t, &fakeEngine{}, WithVersion("v-test"))
 	w := httptest.NewRecorder()
@@ -50,7 +50,7 @@ func TestCostSavedHeaderOnCacheHit(t *testing.T) {
 	mustHeaderAbsent(t, w, "X-OmniRoute-Cost-Saved")
 
 	// A free ($0-priced) model hit emits an explicit 0 — the
-	// OmniRoute rule that 0 is a valid saved cost.
+	// the reference router rule that 0 is a valid saved cost.
 	w = httptest.NewRecorder()
 	meta = ResponseMeta{
 		Cache: "exact", CacheSavedTokens: 150,
@@ -121,7 +121,7 @@ func TestCostSavedHeaderAbsentOnCacheMiss(t *testing.T) {
 
 func TestCostSavedInStreamTrailer(t *testing.T) {
 	// The SSE trailer carries the same saving under the
-	// OmniRoute name, so a stream reader sees what a header
+	// the reference router name, so a stream reader sees what a header
 	// reader sees.
 	meta := ResponseMeta{
 		Cache: "semantic", CacheSimilarity: 0.923, HasCacheSimilarity: true,

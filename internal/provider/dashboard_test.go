@@ -112,7 +112,7 @@ func TestRegistryDashboardProvidersEmpty(t *testing.T) {
 
 // TestRegistryDashboardProvidersKeyCreationURL proves the dashboard
 // summary carries the catalog entry's key-creation page
-// (PARITY Area 3, "Key-creation links"): a catalog provider whose
+// (parity tracker Area 3, "Key-creation links"): a catalog provider whose
 // entry records one exposes it, a custom provider reports none.
 // The URL is a public key page, never a credential or base URL.
 func TestRegistryDashboardProvidersKeyCreationURL(t *testing.T) {

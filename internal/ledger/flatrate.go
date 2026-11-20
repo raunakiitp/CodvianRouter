@@ -7,17 +7,17 @@
 // from those rows shows an inflated dollar amount that does not
 // match the user's actual bill. For those providers analytics
 // should show $0 instead — opt-in via the flatRateAsZero option,
-// exactly like OmniRoute's flatRateAsZero (src/lib/usage/
+// exactly like the reference router's flatRateAsZero (src/lib/usage/
 // costCalculator.ts + flatRateProviders.ts, issue #5552).
 //
-// The list below follows OmniRoute's classification, read from the
+// The list below follows the reference router's classification, read from the
 // reference clone (study only — this code is our own):
 //
 //   - The explicit subscription / coding-plan provider ids in
 //     FLAT_RATE_SUBSCRIPTION_PROVIDER_IDS (Minimax Coding, Kimi
 //     Coding, Muse Code, Xiaomi MiMo, Alibaba/Qwen token plans,
-//     GLM Coding, Claude Code, OpenCode Go), including OmniRoute's
-//     deliberate EXCLUSIONS: `codex`/`cx` (OmniRoute actively
+//     GLM Coding, Claude Code, OpenCode Go), including the reference router's
+//     deliberate EXCLUSIONS: `codex`/`cx` (the reference router actively
 //     tracks Codex token cost — Fast-tier multipliers and GPT-5.x
 //     pricing — and Codex can be a metered API account), `byteplus`
 //     (metered ModelArk host), `minimax-cn` (the metered Minimax
@@ -31,7 +31,7 @@
 //     from src/shared/constants/providers/web-cookie*.ts.
 //
 // Matching is case-insensitive on a trimmed provider id, like
-// OmniRoute's isFlatRateProvider. The classification never
+// the reference router's isFlatRateProvider. The classification never
 // rewrites a price and never touches quota / rate-limit paths:
 // it only zeroes the DISPLAY/ledger cost when the caller opted
 // in (Ledger.FlatRateAsZero / CostOptions.FlatRateAsZero).
@@ -42,7 +42,7 @@ import "strings"
 
 // flatRateSubscriptionProviderIDs is the explicit set of
 // subscription / coding-plan provider ids whose identity IS a
-// flat-rate plan (OmniRoute flatRateProviders.ts,
+// flat-rate plan (the reference router flatRateProviders.ts,
 // FLAT_RATE_SUBSCRIPTION_PROVIDER_IDS).
 var flatRateSubscriptionProviderIDs = map[string]bool{
 	"minimax":               true, // "Minimax Coding" plan
@@ -59,13 +59,13 @@ var flatRateSubscriptionProviderIDs = map[string]bool{
 	"opencode-go":           true, // OpenCode Go subscription (flat monthly fee)
 }
 
-// webCookieProviderIDs is every web-cookie provider id (OmniRoute
+// webCookieProviderIDs is every web-cookie provider id (the reference router
 // WEB_COOKIE_PROVIDERS, src/shared/constants/providers/
 // web-cookie.ts + web-cookie-chatplayground.ts +
 // web-cookie-notrack.ts, 37 keys). Every web session is
 // subscription-backed, so every id here is flat-rate.
 //
-// Alias policy (decided explicitly, G16 re-review): OmniRoute's
+// Alias policy (decided explicitly, G16 re-review): the reference router's
 // own isFlatRateProvider is keys-only
 // (hasOwnProperty(WEB_COOKIE_PROVIDERS, id)), but this map also
 // includes every alias listed on those entries. In this router an

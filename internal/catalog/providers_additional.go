@@ -1,9 +1,9 @@
-// Additional providers beyond OmniRoute's catalog, each verified against
+// Additional providers beyond the reference router's catalog, each verified against
 // the provider's official docs (2026-11-17). No base URL, prefix, price
 // or free-tier claim here is invented — unknown stays empty.
 package catalog
 
-// additionalProviders holds providers NOT present in OmniRoute's 394-entry
+// additionalProviders holds providers NOT present in the reference router's 394-entry
 // catalog, each verified from the provider's own official documentation.
 var additionalProviders = []Provider{
 	{

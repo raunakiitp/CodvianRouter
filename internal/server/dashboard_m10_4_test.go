@@ -23,8 +23,8 @@
 //     wired auto-router.
 //   - the extracted inline script passes node --check.
 //
-// The 18-missing-OmniRoute-strategies claim in the plan is stale
-// too: OmniRoute's ROUTING_STRATEGY_VALUES has 22 names and only
+// The 18-missing-reference-strategies claim in the plan is stale
+// too: the reference router's ROUTING_STRATEGY_VALUES has 22 names and only
 // 4 of them are absent from our feed — auto, fusion, pipeline,
 // jev (they are not in strategy.All, so the backend rejects them
 // and the picker never offers them). That gap is backend-MISSING
@@ -60,7 +60,7 @@ var m10_4IntentTiers = []string{
 
 // m10_4RejectedNames are names that are neither in the live feed
 // (strategy.All) nor backend aliases: the backend must reject
-// each with a 400. auto/fusion/pipeline/jev are the 4 OmniRoute
+// each with a 400. auto/fusion/pipeline/jev are the 4 the reference router
 // ROUTING_STRATEGY_VALUES names our backend does not have
 // (backend-MISSING, M3); "bogus-strategy" is a plain unknown.
 var m10_4RejectedNames = []string{
@@ -243,7 +243,7 @@ func TestDashboardM10_4PickerEqualsLiveFeed(t *testing.T) {
 		}
 	}
 	// Names outside the feed (and outside the alias set) are
-	// rejected and change nothing — including the 4 OmniRoute
+	// rejected and change nothing — including the 4 the reference router
 	// names the backend does not have.
 	before := getStrategies(t, srv).Global
 	for _, name := range m10_4RejectedNames {

@@ -1,4 +1,4 @@
-// B2-05 (PARITY.md:501): the balanced pick must use the installed
+// B2-05 (parity tracker:501): the balanced pick must use the installed
 // pool ranker — main.go's rankModels closure (16-factor ranking
 // under DefaultWeights16), installed via SetAutoRanker. These tests
 // install a ranker with a KNOWN order (reversal) and assert the

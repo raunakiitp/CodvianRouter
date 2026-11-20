@@ -28,11 +28,11 @@ import (
 //
 // DECISION (M6.12) — per-provider isolation is deliberately NOT
 // implemented; there is intentionally no Provider field here, and
-// the PARITY Area 6 row "Per-provider isolation" is a DIVERGENCE
-// from OmniRoute (default-on cacheByProvider: true), not a gap to
+// the parity tracker Area 6 row "Per-provider isolation" is a DIVERGENCE
+// from the reference router (default-on cacheByProvider: true), not a gap to
 // close by adding a field. Evidence, all verified 2026-11-18:
 //
-//   - No decision record existed in docs/LOG.md, docs/PLAN.md or
+//   - No decision record existed in internal log, internal plan or
 //     git history before M6.12 (PLAN.md M6.12 itself records the
 //     absence). The sharing rationale exists only in code comments
 //     (internal/cache/cache.go, internal/degrade/degrade.go and
@@ -188,7 +188,7 @@ func ScopedKey(in KeyInput) (string, error) {
 // temperature may be cached. Temperature 0 (including unset, which
 // decodes as 0) is always cacheable. Any temperature above 0 is
 // cacheable only when allowNonZeroTemp is true — the per-key explicit
-// allowance (OmniRoute's rule is "temperature 0 only"; we keep the
+// allowance (the reference router's rule is "temperature 0 only"; we keep the
 // same default and let a gateway key opt in). A negative temperature
 // is invalid input and is never cacheable.
 func CacheableTemperature(temperature float64, allowNonZeroTemp bool) bool {

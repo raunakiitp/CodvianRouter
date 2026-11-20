@@ -1,4 +1,4 @@
-// Throughput watchdog on stalled streams (M4.6, OmniRoute
+// Throughput watchdog on stalled streams (M4.6, the reference router
 // streamHealth.ts).
 //
 // A stream that stops delivering bytes is worse than a stream that

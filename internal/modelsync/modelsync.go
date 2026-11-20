@@ -277,8 +277,8 @@ const (
 const LiteLLMStateFileName = "litellm-sync.json"
 
 // DefaultLiteLLMURL is the public LiteLLM model cost map: the
-// second sync source (PARITY Area 3, models.dev sync row —
-// OmniRoute also syncs LiteLLM). It is the default for a LiteLLM
+// second sync source (parity tracker Area 3, models.dev sync row —
+// the reference router also syncs LiteLLM). It is the default for a LiteLLM
 // sync with no URL configured — not a fallback the router reaches
 // for on its own. Prices are USD per token (×1e6 for per-1M).
 const DefaultLiteLLMURL = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
@@ -851,7 +851,7 @@ func (s *Syncer) LastCatalog() *Catalog {
 }
 
 // NewLiteLLMSyncer returns a Syncer for the LiteLLM cost map
-// (PARITY Area 3 / Area 11, price coverage): the second sync
+// (parity tracker Area 3 / Area 11, price coverage): the second sync
 // source, alongside the models.dev Syncer. The source is forced
 // to SourceLiteLLM — the caller cannot misspell it into fetching
 // the wrong catalog — and the URL defaults to DefaultLiteLLMURL

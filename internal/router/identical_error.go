@@ -1,4 +1,4 @@
-// Identical-error early stop (M4.7d, OmniRoute comboPredicates.ts
+// Identical-error early stop (M4.7d, the reference router comboPredicates.ts
 // IDENTICAL_MODEL_ERROR_STREAK / hasIdenticalModelErrorStreak).
 //
 // A malformed/unsupported request shape (e.g. a model no provider
@@ -9,7 +9,7 @@
 // — retrying the remaining fallbacks cannot succeed either; it
 // only burns attempts and wall-clock time. The chain stops early.
 //
-// The signature is exact, like OmniRoute's (their check is
+// The signature is exact, like the reference router's (their check is
 // `e.error === first.error`): status 400, taxonomy reason
 // model_not_found, and the error string verbatim. Other 400s never
 // reach this check — the taxonomy already stops the chain on the
@@ -26,7 +26,7 @@ import (
 )
 
 // identicalModelErrorStreak is how many consecutive identical
-// model-shape 400s stop the chain (OmniRoute: 3).
+// model-shape 400s stop the chain (the reference router: 3).
 const identicalModelErrorStreak = 3
 
 // identicalModelErrorSignature returns the streak signature of err

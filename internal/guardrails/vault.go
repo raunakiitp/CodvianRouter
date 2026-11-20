@@ -1,4 +1,4 @@
-// Reversible PII token vault (B3-19, PARITY.md:782).
+// Reversible PII token vault (B3-19, parity tracker:782).
 //
 // The vault is the opt-in counterpart to plain redaction: where Redact
 // replaces a PII match with a dead placeholder ([REDACTED:EMAIL]), the

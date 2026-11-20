@@ -1,6 +1,6 @@
 // Retry-After hints carried in an upstream error BODY (M4.4).
 //
-// OmniRoute accountFallback.ts:1581-1618 + retryAfterJson.ts parses the
+// the reference router accountFallback.ts:1581-1618 + retryAfterJson.ts parses the
 // hint from the JSON error body when no Retry-After header is present:
 // Gemini's google.rpc.RetryInfo (`retryDelay: "30s"`), free-text
 // "retry in Xs" / "retry after Xs" shapes, ISO 8601 durations, and

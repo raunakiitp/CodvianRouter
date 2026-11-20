@@ -35,7 +35,7 @@ import (
 //
 // M5.2: RequestsPerDay caps requests per UTC calendar day (0 =
 // unlimited); RateLimits are generic sliding-window rules
-// (OmniRoute apiKeys.ts rateLimits[] / rateLimiter.ts: {limit,
+// (the reference router apiKeys.ts rateLimits[] / rateLimiter.ts: {limit,
 // window_seconds}) — at most Limit requests in any sliding
 // WindowSeconds window, checked alongside RPM/TPM/RPD.
 type RateLimitRule struct {
@@ -43,7 +43,7 @@ type RateLimitRule struct {
 	WindowSeconds int `json:"window_seconds"`
 }
 
-// TokenLimit is one per-key token budget (M5.3, OmniRoute
+// TokenLimit is one per-key token budget (M5.3, the reference router
 // lib/db/tokenLimits.ts): at most Limit TOTAL tokens (prompt +
 // completion, as recorded in the ledger) inside one reset window,
 // scoped to a model, a provider, or globally. ScopeValue names
@@ -99,44 +99,44 @@ type GatewayKey struct {
 	// rotating a disabled key cannot silently re-enable it.
 	Disabled bool `json:"disabled,omitempty"`
 	// AllowUsageCommand gates GET /api/usage/om-usage (M5.7,
-	// OmniRoute's allowUsageCommand): the terminal-friendly
+	// the reference router's allowUsageCommand): the terminal-friendly
 	// usage command answers only for keys the operator
 	// explicitly enabled. Default false — a key that never
 	// asked for the command gets a 403, never usage data.
 	AllowUsageCommand bool `json:"allow_usage_command,omitempty"`
 	// AccessSchedule is the per-key allowed-hours window (M5.10,
-	// OmniRoute's accessSchedule: {enabled, from, until, days,
+	// the reference router's accessSchedule: {enabled, from, until, days,
 	// tz}). Outside the window the key is refused with a 403,
 	// before any budget is touched. Nil = no schedule (the key
 	// is usable at any hour).
 	AccessSchedule *AccessScheduleConfig `json:"access_schedule,omitempty"`
 	// ThrottleDelayMs is the per-request artificial delay (M5.10,
-	// OmniRoute's throttleDelayMs): every request the key makes
+	// the reference router's throttleDelayMs): every request the key makes
 	// waits this long before the engine is called. 0 = none.
-	// DIVERGENCE (documented): OmniRoute stores the field but
+	// DIVERGENCE (documented): the reference router stores the field but
 	// does not enforce it in the current checkout; we enforce
 	// it, because a stored throttle that never throttles would
 	// be fake configuration.
 	ThrottleDelayMs int `json:"throttle_delay_ms,omitempty"`
 	// MaxSessions is the concurrent in-flight request cap for
-	// the key (M5.10, OmniRoute's maxSessions): a request past
+	// the key (M5.10, the reference router's maxSessions): a request past
 	// the cap is refused with a 429. 0 = no cap. DIVERGENCE
-	// (documented): OmniRoute stores the field but enforces a
+	// (documented): the reference router stores the field but enforces a
 	// max-sessions cap only for VNC browser-login sessions,
 	// never for gateway keys; our cap counts concurrent gateway
 	// requests, the only reading that means anything here.
 	MaxSessions int `json:"max_sessions,omitempty"`
-	// G15 Area 4 — per-key network + model policy (OmniRoute
+	// G15 Area 4 — per-key network + model policy (the reference router
 	// ApiKeyMetadata apiKeys.ts:108-157). Every field here is
 	// ENFORCED on the request path (see AllowedIP /
 	// ModelAllowed / EndpointAllowed and the server's
 	// checkKeyTrafficModel): a field with no enforcement point
-	// is not added. Empty-list semantics match OmniRoute's
+	// is not added. Empty-list semantics match the reference router's
 	// keyTemplates contract: an empty IP allowlist, model
 	// allowlist (in "all" mode), blocked list or endpoint list
 	// means "no restriction" on that axis — except a
 	// "restricted" model mode with an empty allowlist, which
-	// denies every model (the same rule OmniRoute documents).
+	// denies every model (the same rule the reference router documents).
 	//
 	// IPAllowlist / IPBlocklist are exact IPs ("10.0.0.5") or
 	// CIDRs ("10.0.0.0/8"). The blocklist always wins over the
@@ -171,7 +171,7 @@ type GatewayKey struct {
 	KeyGroups []string `json:"key_groups,omitempty"`
 	// ForcedModel pins the key to one model: a request naming
 	// any other model is refused with a 403 naming the pin.
-	// DIVERGENCE (documented): OmniRoute silently routes a
+	// DIVERGENCE (documented): the reference router silently routes a
 	// forced-model key to the pinned model; we refuse instead,
 	// so a caller is never served a different model than the
 	// one it asked for without knowing.
@@ -179,7 +179,7 @@ type GatewayKey struct {
 }
 
 // AccessScheduleConfig is one key's allowed-hours window
-// (OmniRoute AccessSchedule): From/Until are "HH:MM" in TZ
+// (the reference router AccessSchedule): From/Until are "HH:MM" in TZ
 // (IANA; "" = server local), Days are JS getDay() values
 // (0 = Sunday). Until <= From means an overnight window
 // (e.g. 22:00–06:00).
@@ -293,7 +293,7 @@ func (k GatewayKey) HasScope(scope string) bool {
 // creation (template + overrides), key update and key import: one
 // shape, one validation, one application — so a policy means the
 // same thing whichever endpoint wrote it. It is deliberately the
-// enforceable subset of OmniRoute's ~40 ApiKeyMetadata fields
+// enforceable subset of the reference router's ~40 ApiKeyMetadata fields
 // (apiKeys.ts:108-157): every field here has an enforcement point
 // (AllowedIP / ModelAllowed / EndpointAllowed, called from the
 // server's checkKeyTrafficModel). Fields with no honest
@@ -489,7 +489,7 @@ func (k GatewayKey) AllowedIP(ip string) bool {
 // ModelAllowed reports whether model may be served to this key.
 // BlockedModels always wins over AllowedModels. In "restricted"
 // mode only AllowedModels may be served — and a restricted mode
-// with an empty allowlist denies every model (OmniRoute's
+// with an empty allowlist denies every model (the reference router's
 // documented rule). In "all" mode ("" or "all") every model is
 // allowed unless blocked. An empty model is allowed here: the
 // caller skips the check when the request names no model (the

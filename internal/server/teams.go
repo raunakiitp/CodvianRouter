@@ -5,12 +5,12 @@ package server
 // caller's team section in me/status.
 //
 // The budget is measured on ESTIMATED LIST cost (the team's usage
-// in its window repriced at catalog prices), exactly as OmniRoute's
+// in its window repriced at catalog prices), exactly as the reference router's
 // getCommittedTeamEstimatedListCostUsd does; the metered cost is
 // reported alongside it but never decides the budget. Any unpriced
 // usage in the window fails closed (exceeded), because a team whose
 // usage cannot be priced cannot prove it is under budget. An
-// exceeded team refuses with 400 and OmniRoute's message, in the
+// exceeded team refuses with 400 and the reference router's message, in the
 // policy chain right after the internal-budget gate.
 
 import (

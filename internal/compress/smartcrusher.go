@@ -1,4 +1,4 @@
-// B4-27 — SmartCrusher (PARITY.md:1081): Headroom tabular JSON
+// B4-27 — SmartCrusher (parity tracker:1081): Headroom tabular JSON
 // → columnar, LOSSLESS, stackPriority 15.
 //
 // A JSON array of objects with a uniform key set is rewritten in

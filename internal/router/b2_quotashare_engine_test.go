@@ -1,4 +1,4 @@
-// B2-08 (PARITY.md:508): quota-share ENGINE path. The DRR core is
+// B2-08 (parity tracker:508): quota-share ENGINE path. The DRR core is
 // already pinned (TestQuotaShareDRRMatchesReferenceSequence); what
 // was missing is the engine around it: at-cap gating, the P2C
 // top-two swap, the strategy-tree intercept, and the

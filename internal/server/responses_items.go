@@ -8,7 +8,7 @@
 // There is NO output-items sub-action: a response's output array is
 // already in GET /v1/responses/{id}. POST /v1/responses/input_tokens
 // is a sibling token-count endpoint, not a per-response sub-action,
-// and belongs to the token-count slice (PARITY Area 14 §14a), not this
+// and belongs to the token-count slice (parity tracker Area 14 §14a), not this
 // one.
 //
 // Only input_items is built here, because it is the only sub-action

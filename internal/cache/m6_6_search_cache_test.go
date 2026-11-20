@@ -10,13 +10,13 @@ import (
 	"time"
 )
 
-// M6.6 — search result cache (PARITY.md Area 6, "Search cache
-// (60 s)", OmniRoute searchCache.ts:12,150). Every behaviour here
+// M6.6 — search result cache (parity tracker Area 6, "Search cache
+// (60 s)", the reference router searchCache.ts:12,150). Every behaviour here
 // has a test that fails without the implementation; toggle evidence
 // is recorded in the M6.6 report (expiry check removed /
 // coalescing join removed → these tests go red).
 
-func TestM66SearchDefaultsMatchOmniRoute(t *testing.T) {
+func TestM66SearchDefaultsMatchReference(t *testing.T) {
 	if DefaultSearchTTL != 60*time.Second {
 		t.Fatalf("DefaultSearchTTL = %v, want 60s (SEARCH_CACHE_DEFAULT_TTL_MS)", DefaultSearchTTL)
 	}
@@ -182,7 +182,7 @@ func TestM66SearchTTLZeroBypassesCacheAndCoalescing(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	// ttlMs=0 in OmniRoute: every concurrent call gets its own
+	// ttlMs=0 in the reference router: every concurrent call gets its own
 	// independent fetch — no coalescing, no storing.
 	if fetches.Load() != callers {
 		t.Fatalf("ttl=0 fetch ran %d times for %d callers, want %d (bypass means no coalescing)", fetches.Load(), callers, callers)

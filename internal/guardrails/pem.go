@@ -12,7 +12,7 @@ import "strings"
 // is redacted here as one span: header, body and footer, replaced
 // by a single [REDACTED:SECRET].
 //
-// Why a hand-written scanner instead of a regex: OmniRoute's
+// Why a hand-written scanner instead of a regex: the reference router's
 // whole-block pattern uses a negative lookahead
 // (`(?:[^-]|-(?!----))*`), which Go's RE2 engine does not support.
 // The scanner below is linear (one pass, no backtracking) and

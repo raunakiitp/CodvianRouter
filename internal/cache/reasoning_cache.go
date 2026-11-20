@@ -1,7 +1,7 @@
-// Reasoning replay cache (M6.6, PARITY.md Area 6 row "Reasoning cache
-// (2 h)"): the cache-package half of OmniRoute's reasoningCache.ts.
+// Reasoning replay cache (M6.6, parity tracker Area 6 row "Reasoning cache
+// (2 h)"): the cache-package half of the reference router's reasoningCache.ts.
 //
-// WHAT OMNIROUTE CACHES (open-sse/services/reasoningCache.ts, read-only
+// WHAT THE REFERENCE ROUTER CACHES (open-sse/services/reasoningCache.ts, read-only
 // study — no code copied): reasoning_content strings captured from
 // thinking-mode responses (DeepSeek V4, Kimi K2, Qwen-Thinking, GLM,
 // ...), re-injected on later turns when the client omits them, so the
@@ -37,7 +37,7 @@
 //     tenant-scoped) that the router's Engine consults
 //     (internal/router/reasoning.go: injectReasoning /
 //     captureReasoning). This type ADDS what that store does not
-//     have: the tool-call-id keying (the primary OmniRoute path —
+//     have: the tool-call-id keying (the primary the reference router path —
 //     a multi-turn tool conversation replays by call id, not by
 //     re-digesting the whole transcript), the M6.1 byte caps, and
 //     a cache-package home so the degrade wrapper can consult it
@@ -73,13 +73,13 @@
 //     attached, so the degrade wrapper needs no new type.
 //   - Caps follow the M6.1 pattern (cache.go: DefaultMaxEntryBytes
 //     256 KiB per entry, DefaultMaxTotalBytes 2 MiB total), NOT
-//     OmniRoute's 10,000-char truncation: an entry over the
+//     the reference router's 10,000-char truncation: an entry over the
 //     per-entry cap is REFUSED, never silently truncated —
 //     truncating reasoning text could hand the upstream a
 //     half-thought that fails its own validation. The entry cap
-//     (256 KiB) is far above OmniRoute's 10 KiB truncation point,
+//     (256 KiB) is far above the reference router's 10 KiB truncation point,
 //     so in practice strictly more reasoning is kept, whole.
-//     Eviction is oldest-created first (OmniRoute's evictOldest),
+//     Eviction is oldest-created first (the reference router's evictOldest),
 //     not LRU: a replay entry's value does not grow with reuse
 //     the way a content-cache hit's does.
 //   - Tenant scoping is in the key (SHA-256 of tenant + id /
@@ -108,11 +108,11 @@ import (
 )
 
 // DefaultReasoningTTL is the lifetime of a reasoning entry: 2 h,
-// OmniRoute's reasoningCache.ts TTL_MS.
+// the reference router's reasoningCache.ts TTL_MS.
 const DefaultReasoningTTL = 2 * time.Hour
 
 // DefaultReasoningMaxEntries caps the reasoning cache: 200,
-// OmniRoute's MAX_MEMORY_ENTRIES.
+// the reference router's MAX_MEMORY_ENTRIES.
 const DefaultReasoningMaxEntries = 200
 
 // DefaultReasoningMaxEntryBytes is the per-entry cap (M6.1): an
@@ -167,7 +167,7 @@ func ToolCallKey(tenant, toolCallID string) string {
 // under one tenant: "conversation:" + SHA-256 hex of tenant +
 // "\x1f" + canonical JSON of the turns. It returns "" when the
 // tenant is empty AND turns is empty — callers must pass the
-// scope and at least one turn, as OmniRoute's
+// scope and at least one turn, as the reference router's
 // buildAssistantMessageCacheKey requires (an empty history can
 // never match the read side). The tenant alone is not enough to
 // refuse: an anonymous caller ("") with a real transcript keys

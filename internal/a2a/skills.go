@@ -3,15 +3,15 @@
 // Six handlers over live router state, reached through InvokeSkill
 // by the A2A dispatch (a separate integration slice wires them in
 // after the HTTP layer lands — this file adds no routes and no
-// dispatch of its own). They are the OmniRoute-parity surface in
-// docs/PARITY.md row 829 (their six handlers: smart-routing,
+// dispatch of its own). They are the parity surface in
+// internal parity tracker row 829 (their six handlers: smart-routing,
 // quota-management, provider-discovery, cost-analysis,
 // health-report, list-capabilities). Shapes were studied from the
-// OmniRoute reference clone for reference only; no OmniRoute code
+// the reference router reference clone for reference only; no the reference router code
 // is copied, and two of its behaviours are deliberately NOT
 // reproduced:
 //
-//   - OmniRoute's smart-routing EXECUTES a chat completion through
+//   - the reference router's smart-routing EXECUTES a chat completion through
 //     a self-loop HTTP call to its own /v1/chat/completions, and
 //     its quota/cost/health skills do the same against its own
 //     management routes — carrying the caller's API key on the
@@ -24,7 +24,7 @@
 //     ledger/registry/health state straight from the SkillSource.
 //     There is no key to leak and no allowlist to escape, because
 //     no HTTP call is made at all.
-//   - OmniRoute's smart-routing prices its estimate at a flat
+//   - the reference router's smart-routing prices its estimate at a flat
 //     $3.00/1M prompt tokens. Ours never estimates a price: the
 //     recommendation reports measured cost per request from the
 //     ledger, and unpriced usage is reported unknown, never $0.

@@ -87,7 +87,7 @@ type CustomProvider struct {
 	WireFormat WireFormat
 }
 
-// Custom-provider prefix convention (PARITY Area 3, "Custom-provider
+// Custom-provider prefix convention (parity tracker Area 3, "Custom-provider
 // prefix convention"). A custom provider ID may carry one of three
 // prefixes naming the wire format it speaks, so an operator (or a
 // config file, or the add-provider API) can say what an endpoint is

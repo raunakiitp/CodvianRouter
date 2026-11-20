@@ -11,11 +11,11 @@ func TestValidateAll(t *testing.T) {
 	}
 }
 
-func TestCountExceedsOmniRoute(t *testing.T) {
-	// OmniRoute documents 394 providers (README, Nov 2026). The
+func TestCountExceedsReference(t *testing.T) {
+	// the reference router documents 394 providers (README, Nov 2026). The
 	// catalog must hold MORE than that, plus custom-provider support.
 	if got := Count(); got <= 394 {
-		t.Fatalf("catalog count = %d, want > 394 (OmniRoute's count)", got)
+		t.Fatalf("catalog count = %d, want > 394 (the reference router's count)", got)
 	}
 }
 
@@ -129,7 +129,7 @@ func TestSearch(t *testing.T) {
 }
 
 func TestByCategoryCoversReferenceBreakdown(t *testing.T) {
-	// OmniRoute's own breakdown: 233 API key, 25 OAuth, 35 web-cookie,
+	// the reference router's own breakdown: 233 API key, 25 OAuth, 35 web-cookie,
 	// 14 local, 13 no-auth (+ search/audio/proxy/cloud/system). Our
 	// catalog must hold each family, not just API-key providers.
 	for _, c := range []Category{CategoryAPIKey, CategoryOAuth, CategoryLocal, CategoryNoAuth, CategoryWebCookie} {

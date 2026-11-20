@@ -1,6 +1,6 @@
 // Auto-variant resolution (M3 Phase C, builder C5).
 //
-// This file resolves the `auto/*` ids OmniRoute documents in
+// This file resolves the `auto/*` ids the reference router documents in
 // docs/routing/AUTO-COMBO.md and docs/routing/SUBSCRIPTION_LADDER.md
 // that the local autorouter did not yet cover — auto/offline,
 // auto/lkgp, auto/chaos, auto/subscription, auto/thrifty, the
@@ -32,7 +32,7 @@
 //     subscription, keyless, free, cheap, premium.
 //   - auto/chaos: AUTO-COMBO.md:28 + candidateProjection.ts —
 //     parallel fan-out, one model per provider, panel of 5 by
-//     default (OMNIROUTE_CHAOS_MAX_PANEL, clamped [1,10]). NOT fault
+//     default (CHAOS_MAX_PANEL, clamped [1,10]). NOT fault
 //     injection. This resolver returns the PANEL; it never fakes
 //     panel results.
 //   - auto/smart: quality-first + 10% exploration (AUTO-COMBO.md:26).
@@ -53,7 +53,7 @@
 // The 4-tier fallback cascade (Subscription -> API Key -> Cheap ->
 // Free) and the per-endpoint strategy projection live here too:
 // OrderCascade and StrategiesForEndpoint / ProjectStrategyForEndpoint.
-// The cascade order is the deep-study §1.1 wording (PARITY.md Area 1
+// The cascade order is the deep-study §1.1 wording (parity tracker Area 1
 // notes its exact wording was "not re-verified fresh"); it is NOT
 // the 5-rung ladder order above — the two are different orderings
 // for different purposes, and each function documents which one it
@@ -215,7 +215,7 @@ type VariantResolution struct {
 
 // ChaosPanelSize is the default auto/chaos panel size: one model per
 // provider, 5 by default (candidateProjection.ts,
-// OMNIROUTE_CHAOS_MAX_PANEL, clamped [1,10] there).
+// CHAOS_MAX_PANEL, clamped [1,10] there).
 const ChaosPanelSize = 5
 
 // Ladder cutoffs (subscriptionLadder.ts / SUBSCRIPTION_LADDER.md):
@@ -1158,7 +1158,7 @@ const (
 
 // CascadeOrder is the 4-tier fallback order: Subscription -> API
 // Key -> Cheap -> Free. NOTE: this is the deep-study §1.1 wording
-// (PARITY.md Area 1 records its exact wording as "not re-verified
+// (parity tracker Area 1 records its exact wording as "not re-verified
 // fresh") and is NOT the 5-rung subscription ladder order
 // (subscription, keyless, free, cheap, premium) that auto/thrifty
 // uses. The cascade is a coarse operator-facing escalation; the

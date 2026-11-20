@@ -312,7 +312,7 @@ func TestIsLoopbackURL(t *testing.T) {
 
 func TestLoadTriageSummary(t *testing.T) {
 	dir := t.TempDir()
-	good := `{"date":"2026-11-18","doc":"docs/catalog-triage-2026-11-18.md",` +
+	good := `{"date":"2026-11-18","doc":"internal catalog triage record",` +
 		`"audit_before":{"missing_in_catalog":228,"base_url_missing_in_catalog":44,"renamed":21,"possible_rename":12,"catalog_total":423},` +
 		`"candidates":{"total":228,"triaged":46,"added":32,"added_verified_from_docs":4,"added_reference_only":28,"rejected":12,"pending":2,"untouched":182},` +
 		`"base_urls":{"missing_before":44,"filled":43,"skipped":1},` +
@@ -360,14 +360,14 @@ func TestLoadTriageSummary(t *testing.T) {
 
 func TestWriteMarkdownTriageSection(t *testing.T) {
 	rep := Compare(fixtureLocal(), fixtureRemote())
-	rep.Triage = &TriageSummary{Date: "2026-11-18", Doc: "docs/catalog-triage-2026-11-18.md",
+	rep.Triage = &TriageSummary{Date: "2026-11-18", Doc: "internal catalog triage record",
 		Candidates: TriageCandidates{Total: 228, Triaged: 46, Added: 32, AddedVerifiedFromDocs: 4, AddedReferenceOnly: 28, Rejected: 12, Pending: 2, Untouched: 182},
 		BaseURLs:   TriageBaseURLs{MissingBefore: 44, Filled: 43, Skipped: 1},
 		Renames:    TriageRenames{Total: 21, Applied: 4, Rejected: 17}}
 	var sb strings.Builder
 	WriteMarkdown(rep, &sb)
 	out := sb.String()
-	for _, want := range []string{"## Triage 2026-11-18", "32 (4 verified from docs, 28 reference-only)", "43 of 44", "docs/catalog-triage-2026-11-18.md"} {
+	for _, want := range []string{"## Triage 2026-11-18", "32 (4 verified from docs, 28 reference-only)", "43 of 44", "internal catalog triage record"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("markdown with triage missing %q", want)
 		}

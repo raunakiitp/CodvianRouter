@@ -1,4 +1,4 @@
-// Per-provider v1 surfaces (M8.12, PARITY Area 14 §14a "Per-provider"
+// Per-provider v1 surfaces (M8.12, parity tracker Area 14 §14a "Per-provider"
 // row): address ONE provider explicitly instead of the auto-routed
 // chain.
 //
@@ -334,7 +334,7 @@ func pinProviderV1Body(raw []byte, providerID string) ([]byte, error) {
 
 // applyPrefixedModelRouting translates a "provider/model" model
 // string on the plain chat path into routing.only=[provider]
-// (B2-29, PARITY.md Area 2 row :600 — "prefixed provider/model
+// (B2-29, parity tracker Area 2 row :600 — "prefixed provider/model
 // never rerouted"). The engine enforces the narrowing for any
 // caller that sets routing.only (applyContract narrows the chain
 // before the loop, and the loop guard in

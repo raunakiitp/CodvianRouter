@@ -7,13 +7,13 @@ import (
 	"time"
 )
 
-// M6.6 — reasoning replay cache (PARITY.md Area 6, "Reasoning cache
-// (2 h)", OmniRoute reasoningCache.ts:37). Every behaviour here has
+// M6.6 — reasoning replay cache (parity tracker Area 6, "Reasoning cache
+// (2 h)", the reference router reasoningCache.ts:37). Every behaviour here has
 // a test that fails without the implementation; toggle evidence is
 // recorded in the M6.6 report (expiry check removed / tenant
 // dropped from the key → these tests go red).
 
-func TestM66ReasoningDefaultsMatchOmniRoute(t *testing.T) {
+func TestM66ReasoningDefaultsMatchReference(t *testing.T) {
 	if DefaultReasoningTTL != 2*time.Hour {
 		t.Fatalf("DefaultReasoningTTL = %v, want 2h (reasoningCache.ts TTL_MS)", DefaultReasoningTTL)
 	}
@@ -130,7 +130,7 @@ func TestM66ReasoningEmptyRefused(t *testing.T) {
 func TestM66ReasoningPerEntryCapRefusesNeverTruncates(t *testing.T) {
 	ctx := context.Background()
 	c := NewReasoningCacheWithConfig(ReasoningCacheConfig{MaxEntryBytes: 100})
-	// OmniRoute truncates at 10,000 chars; we refuse over the cap.
+	// the reference router truncates at 10,000 chars; we refuse over the cap.
 	// A truncated half-thought must never be stored as if whole.
 	c.Set(ctx, ToolCallKey("t", "call_1"), "p", "m", strings.Repeat("x", 101))
 	if c.Size() != 0 {

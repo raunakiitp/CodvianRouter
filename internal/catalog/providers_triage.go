@@ -5,7 +5,7 @@
 // with no base URL, and 21 renames. This file lands the first
 // verified batch of fixes. Every fact here cites its source; the
 // full per-provider record (triaged / added / rejected / pending,
-// with probe codes and reasons) is docs/catalog-triage-2026-11-18.md.
+// with probe codes and reasons) is internal catalog triage record.
 //
 // Rules this file follows:
 //   - A new provider is added ONLY when models.dev lists it AND a

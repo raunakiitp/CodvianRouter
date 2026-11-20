@@ -1,7 +1,7 @@
 // Package compress — Lite tool-result truncation cap (G22,
-// PARITY.md Area 10 row :848).
+// parity tracker Area 10 row :848).
 //
-// What OmniRoute does (study only, never copied —
+// What the reference router does (study only, never copied —
 // open-sse/services/compression/lite.ts, compressToolResults /
 // truncateToolText):
 //
@@ -21,7 +21,7 @@
 //
 // What exists here, and how it differs (deliberate divergences):
 //
-//   - Opt-in only, no default cap. OmniRoute caps whenever Lite
+//   - Opt-in only, no default cap. the reference router caps whenever Lite
 //     runs; here the cap applies only when the client sets
 //     tool_result_max_chars on the request (or the caller passes
 //     ToolResultMaxChars on ApplyOptions). 0 / unset means no
@@ -30,12 +30,12 @@
 //   - The cap is in RUNES, not JS string units: the same text
 //     measures the same on both sides of the boundary for
 //     non-ASCII content.
-//   - Out-of-range caps are clamped into OmniRoute's usable
+//   - Out-of-range caps are clamped into the reference router's usable
 //     range [256, 1,000,000] (effectiveToolCap in
 //     apply_options.go) instead of falling back to a default
 //     cap: falling back would invent a cap the client did not
 //     ask for.
-//   - Only role:"tool" messages are capped. OmniRoute also caps
+//   - Only role:"tool" messages are capped. the reference router also caps
 //     tool_result blocks inside role:"user" messages (Anthropic
 //     wire shape); this router's canonical messages carry tool
 //     results as role:"tool", so there is no second shape to
@@ -85,32 +85,32 @@ func toolCapHintMarker(omitted int) string {
 
 // toolCapMarker is appended to a truncated tool result, marking
 // the cut so the model can see text was removed. Mirrors
-// OmniRoute's TRUNCATION_MARKER. It is the fallback marker for
+// the reference router's TRUNCATION_MARKER. It is the fallback marker for
 // caps too small to fit a hint; the head-only cut uses the
 // count-carrying hint above.
 const toolCapMarker = "\n...[truncated]"
 
 // toolCapElisionReserve is room for the middle elision marker
 // ("... [N lines elided] ..."), whatever its line count.
-// Mirrors OmniRoute's ELISION_RESERVE.
+// Mirrors the reference router's ELISION_RESERVE.
 const toolCapElisionReserve = 32
 
 // toolCapTailShare is the share of the truncation budget the
-// tail keeps on multi-line content. Mirrors OmniRoute's
+// tail keeps on multi-line content. Mirrors the reference router's
 // TAIL_SHARE.
 const toolCapTailShare = 0.3
 
 // toolCapMinLinesForTail is the line count above which a
-// truncated result keeps a tail. Mirrors OmniRoute's
+// truncated result keeps a tail. Mirrors the reference router's
 // MIN_LINES_FOR_TAIL.
 const toolCapMinLinesForTail = 10
 
 // toolCapLookback is how far the word-boundary search looks back
-// (then forward) from a hard cut. Mirrors OmniRoute's
+// (then forward) from a hard cut. Mirrors the reference router's
 // TOOL_TRUNCATION_LOOKBACK.
 const toolCapLookback = 80
 
-// toolCapBounds are OmniRoute's usable cap range
+// toolCapBounds are the reference router's usable cap range
 // (isUsableLiteMaxToolLength): below the floor or above the
 // ceiling the value is clamped, never silently replaced by a
 // default.
@@ -202,7 +202,7 @@ func capToolMessage(m provider.Message, maxChars int) (provider.Message, bool) {
 }
 
 // truncateToolText truncates text to at most maxChars runes,
-// mirroring OmniRoute's truncateToolText: a multi-line result
+// mirroring the reference router's truncateToolText: a multi-line result
 // over 10 lines keeps head + tail with an elision marker; a
 // short or single-line result keeps a head-only cut on a word
 // boundary. Text already within the cap is returned unchanged.
@@ -229,7 +229,7 @@ func truncateToolText(text string, maxChars int) string {
 		// equivalence check would refuse the capped output).
 		headCut = trimTrailingSpaceRunes(r, headCut)
 		if tailStart := findTailStart(r, budget-headCut); tailStart > headCut {
-			// Lines elided: OmniRoute counts the split length
+			// Lines elided: the reference router counts the split length
 			// (newlines + 1) of the elided span.
 			elided := strings.Count(string(r[headCut:tailStart]), "\n") + 1
 			var sb strings.Builder

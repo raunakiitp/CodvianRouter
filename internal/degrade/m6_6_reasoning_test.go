@@ -10,7 +10,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/reasoning"
 )
 
-// M6.6 — degrade wiring for the reasoning replay cache (PARITY.md
+// M6.6 — degrade wiring for the reasoning replay cache (parity tracker
 // Area 6, "Reasoning cache (2 h)"). The toggle evidence is
 // recorded in the M6.6 report: with the injectReasoning call in
 // Chat removed, TestM66ReasoningWiringHitInjectsBeforeUpstream

@@ -1,8 +1,8 @@
 // Declarative per-model fallback chains — engine store (G11 Area 2,
-// PARITY.md Area 2 row "Declarative per-model fallback chains API",
+// parity tracker Area 2 row "Declarative per-model fallback chains API",
 // shared with §14b).
 //
-// OmniRoute's evidence is src/domain/fallbackPolicy.ts: a named
+// the reference router's evidence is src/domain/fallbackPolicy.ts: a named
 // chain per model (ordered FallbackEntry{provider, priority,
 // enabled}), persisted in SQLite, resolved with already-tried
 // providers excluded. Ours is the same shape in our own code: an
@@ -45,7 +45,7 @@ type FallbackEntry struct {
 
 // SetFallbackChain replaces the declarative fallback chain for one
 // model (create or update — the same call; there is no separate
-// update path, mirroring OmniRoute's registerFallback). Validation
+// update path, mirroring the reference router's registerFallback). Validation
 // failures name the field: an empty model, an empty chain, an
 // entry with no provider, or a duplicated provider in one chain.
 // Entries are stored priority-sorted (stable: equal priorities

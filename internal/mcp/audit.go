@@ -3,7 +3,7 @@
 // Every tool call — allowed AND denied — is appended to an
 // append-only JSONL log, one entry per line, under the router's
 // data dir at <data-dir>/mcp/audit.jsonl. Shape reference only
-// (never copied code): OmniRoute's SQLite `mcp_tool_audit` table
+// (never copied code): the reference router's SQLite `mcp_tool_audit` table
 // (open-sse/mcp-server/audit.ts) — inputs SHA-256-hashed, outputs
 // truncated to 200 chars. We keep the same two redaction rules
 // and the same 200-char output cap, but persist as JSONL instead
@@ -58,7 +58,7 @@ import (
 )
 
 // MaxOutputSummaryChars is the output-truncation cap, matching
-// OmniRoute's 200-char audit summary.
+// the reference router's 200-char audit summary.
 const MaxOutputSummaryChars = 200
 
 // MaxAuditEntries is the audit-log entry cap (M9.7 rotation): the

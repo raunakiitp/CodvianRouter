@@ -1,7 +1,7 @@
-// Search result cache (M6.6, PARITY.md Area 6 row "Search cache
-// (60 s)"): the cache-package half of OmniRoute's searchCache.ts.
+// Search result cache (M6.6, parity tracker Area 6 row "Search cache
+// (60 s)"): the cache-package half of the reference router's searchCache.ts.
 //
-// WHAT OMNIROUTE CACHES (open-sse/services/searchCache.ts, read-only
+// WHAT THE REFERENCE ROUTER CACHES (open-sse/services/searchCache.ts, read-only
 // study — no code copied): search API results, keyed by SHA-256 of
 // {q: normalized query, p: provider, t: searchType, n: maxResults,
 // c: country, l: language, f: filters}. Query normalization is
@@ -27,12 +27,12 @@
 //     the search parameters. The generic shape stays, because
 //     the cached value is the verbatim upstream answer
 //     (searchCachedResult), not a chat shape.
-//   - Tenant scoping: OmniRoute puts NO tenant in the search key.
-//     This type follows OmniRoute exactly — the key carries the
+//   - Tenant scoping: the reference router puts NO tenant in the search key.
+//     This type follows the reference router exactly — the key carries the
 //     search parameters only — and documents the consequence:
 //     search results are treated as public data (the same query
 //     returns the same results for any caller), exactly as
-//     OmniRoute treats them. If a future search seam serves
+//     the reference router treats them. If a future search seam serves
 //     tenant-private results, the key must gain a tenant field
 //     first (SearchKeyForTenant, mirroring
 //     coalescing.RequestKeyForTenant) — do not wire a private
@@ -42,7 +42,7 @@
 //     encoding, marshalled once at store time; a value that
 //     cannot marshal, or that exceeds the per-entry cap, is
 //     refused, never truncated or approximated. Total-cap
-//     eviction is FIFO (OmniRoute's rule), after an expired-first
+//     eviction is FIFO (the reference router's rule), after an expired-first
 //     purge — not LRU: search freshness is time-ordered.
 //   - Coalescing: internal/coalescing.Group does NOT fit here —
 //     it is typed to provider.ChatResponse / routetrace.RouteTrace
@@ -50,7 +50,7 @@
 //     result is generic data; forcing search results through a
 //     ChatResponse-typed flight would be a misuse, and changing
 //     the Group's signature is outside this slice. The in-flight
-//     map here mirrors OmniRoute searchCache.ts's own inline
+//     map here mirrors the reference router searchCache.ts's own inline
 //     `inflight` map (same single-flight semantics: leader
 //     executes, waiters share, TTL<=0 bypasses both cache and
 //     coalescing, failures are shared but never stored) — it is
@@ -65,7 +65,7 @@
 //     collapse-whitespace only. Two queries that differ only in
 //     Unicode compatibility form (e.g. full-width vs ASCII) key
 //     differently here and would have shared one entry under
-//     OmniRoute — a missed-sharing case, never a wrong serve.
+//     the reference router — a missed-sharing case, never a wrong serve.
 package cache
 
 import (
@@ -80,10 +80,10 @@ import (
 )
 
 // DefaultSearchTTL is the lifetime of a search entry: 60 s,
-// OmniRoute's SEARCH_CACHE_DEFAULT_TTL_MS.
+// the reference router's SEARCH_CACHE_DEFAULT_TTL_MS.
 const DefaultSearchTTL = 60 * time.Second
 
-// DefaultSearchMaxEntries caps the search cache: 500, OmniRoute's
+// DefaultSearchMaxEntries caps the search cache: 500, the reference router's
 // MAX_CACHE_ENTRIES.
 const DefaultSearchMaxEntries = 500
 
@@ -111,7 +111,7 @@ func normalizeQuery(query string) string {
 // produce the same key; any difference produces a different key.
 // There is deliberately NO tenant in the key (see the package
 // doc): search results are treated as public data, exactly as
-// OmniRoute treats them.
+// the reference router treats them.
 func SearchKey(query, provider, searchType string, maxResults int, country, language string, filters any) string {
 	payload := struct {
 		Q string `json:"q"`
@@ -152,7 +152,7 @@ func SearchKey(query, provider, searchType string, maxResults int, country, lang
 // SearchStats is the cache's accounting: counts only, no result
 // content, no keys, no queries. Size is live entries; Hits
 // counts cache hits AND waiters that joined an in-flight request
-// (OmniRoute counts both as hits); Misses counts lookups that
+// (the reference router counts both as hits); Misses counts lookups that
 // found nothing in flight or in cache; Evicted counts entries
 // dropped by the caps. InFlight is the number of fetches running
 // right now. All counters start at zero and move only when real
@@ -327,7 +327,7 @@ func (c *SearchCache[T]) SetWithTTL(ctx context.Context, key string, value T, tt
 // caller's own fresh fetch (false).
 //
 //   - ttl <= 0 bypasses BOTH the cache and the coalescing
-//     (OmniRoute's rule): every concurrent call gets its own
+//     (the reference router's rule): every concurrent call gets its own
 //     independent fetch, and the result is never stored.
 //   - A cache hit returns (value, true, nil) and counts as a hit.
 //   - A waiter that joins an in-flight fetch shares the leader's
@@ -445,7 +445,7 @@ func (c *SearchCache[T]) Size() int {
 }
 
 // purgeExpiredLocked deletes every entry past its TTL. Caller
-// holds mu. It runs on writes only (OmniRoute's evictIfNeeded
+// holds mu. It runs on writes only (the reference router's evictIfNeeded
 // shape): reads delete lazily on access.
 func (c *SearchCache[T]) purgeExpiredLocked(now time.Time) {
 	for key, e := range c.items {

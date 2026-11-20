@@ -62,7 +62,7 @@
       "catalog_id": "cheaperinference",
       "name": "Cheaper Inference",
       "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
-      "source": "https://cheaperinference.com/?utm_source=omniroute"
+      "source": "https://cheaperinference.com/"
     },
     {
       "kind": "possible_rename",
@@ -1090,14 +1090,14 @@
       "catalog_id": "kimi",
       "name": "Kimi (Legacy Moonshot API)",
       "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
-      "source": "https://platform.kimi.ai?aff=omniroute"
+      "source": "https://platform.kimi.ai"
     },
     {
       "kind": "missing_in_modelsdev",
       "catalog_id": "kimi-coding-apikey",
       "name": "Kimi Code API Key",
       "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
-      "source": "https://www.kimi.ai/code?aff=omniroute"
+      "source": "https://www.kimi.ai/code"
     },
     {
       "kind": "renamed",
@@ -1152,7 +1152,7 @@
       "catalog_id": "moonshot",
       "name": "Kimi",
       "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
-      "source": "https://platform.kimi.ai?aff=omniroute"
+      "source": "https://platform.kimi.ai"
     },
     {
       "kind": "renamed",
@@ -1652,7 +1652,7 @@
       "catalog_id": "kimi-coding",
       "name": "Kimi Code CLI",
       "detail": "in the catalog but absent from models.dev (oauth; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
-      "source": "https://www.kimi.ai/code?aff=omniroute"
+      "source": "https://www.kimi.ai/code"
     },
     {
       "kind": "missing_in_modelsdev",
@@ -3125,7 +3125,7 @@
   ],
   "triage": {
     "date": "2026-11-18",
-    "doc": "docs/catalog-triage-2026-11-18-round5.md",
+    "doc": "internal catalog triage record",
     "audit_before": {
       "missing_in_catalog": 81,
       "base_url_missing_in_catalog": 1,

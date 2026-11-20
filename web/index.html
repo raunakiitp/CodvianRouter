@@ -765,7 +765,7 @@
           </div>
         </div>
 
-        <!-- Quick start: 4 steps (OmniRoute Home pattern, local-operator
+        <!-- Quick start: 4 steps (the reference router Home pattern, local-operator
              wording). Step 1 creates a key, step 2 connects a provider,
              step 3 points the client at this router, step 4 monitors.
              Toggle hides it; default is shown. -->
@@ -4154,7 +4154,7 @@ resp = client.chat.completions.create(
         ? '<div class="s"><div class="v">' + p.models + '</div><div class="l">Models</div></div><div class="s"><div class="v mono">' + fmtHistMs(h.p50_ms) + '</div><div class="l">p50 latency</div></div><div class="s"><div class="v">' + fmtHistPct(h.uptime_24h) + '</div><div class="l">24h uptime</div></div>'
         : '<div class="s"><div class="v">' + p.models + '</div><div class="l">Models available</div></div><div class="s"><div class="v">—</div><div class="l">p50 latency</div></div><div class="s"><div class="v">—</div><div class="l">24h uptime</div></div>';
       var hist = p.connected ? historyHTML(p) : "";
-      /* Key-creation link (PARITY Area 3): the feed's
+      /* Key-creation link (parity tracker Area 3): the feed's
          key_creation_url is the provider's key-management /
          signup page from the catalog — a public page, never a
          credential. Shown only when the catalog records one. */
@@ -5099,7 +5099,7 @@ resp = client.chat.completions.create(
           tline += " — Triage complete: all " + tc.total + " candidates triaged";
           if(remain !== undefined) tline += " — " + remain + " findings remain in this audit (ID mismatches and plan entries, not untriaged candidates)";
         } else if(remain !== undefined) tline += " — " + remain + " candidates remain in this audit";
-        tline += ". Full record: " + escHtml(tr.doc || "docs/catalog-triage-2026-11-18.md") + ".";
+        tline += ". Full record: " + escHtml(tr.doc || "internal catalog triage record") + ".";
         html += '<div style="margin-top:6px">' + tline + '</div>';
       }
       var byKind = {};
@@ -10358,7 +10358,7 @@ resp = client.chat.completions.create(
      rendered: the pure helpers below copy only id, model,
      status, previous_response_id, provider, created_at, stream
      and session_tokens. Conversations are CUT (plan §5 M10-16):
-     OmniRoute's Conversations is chat history we do not store;
+     the reference router's Conversations is chat history we do not store;
      Responses is our equivalent, labelled as such in the
      section heading. */
   /* M10-16-START */
@@ -12405,7 +12405,7 @@ resp = client.chat.completions.create(
      keyed-load guard (it only re-reads keyless GETs). Only the
      toggle POST below uses adminHeaders(). The Tools capsule
      shows the live tool/scope counts from this same feed —
-     never OmniRoute's 110/33. A feed that does not answer
+     never the reference router's 110/33. A feed that does not answer
      renders "Could not load", never a stale "Checking…". */
   /* ---------- Headless mode & first-run wizard (CHECKLIST 197-198):
      live from GET /dashboard/headless. A dashboard server always
@@ -12580,7 +12580,7 @@ resp = client.chat.completions.create(
       if(empty) empty.style.display = tools.length ? "none" : "block";
       /* M10-13 Tools capsule: the real numbers from this same
          feed — tool count + distinct scopes across the listed
-         tools — never OmniRoute's 110/33, never hardcoded. */
+         tools — never the reference router's 110/33, never hardcoded. */
       var toolsPill = $("#mcpToolsPill");
       if(toolsPill){
         var seenScopes = {};

@@ -1,6 +1,6 @@
 // Package webhooks delivers outbound webhook events to
 // operator-configured endpoints (M5.9). Today only the
-// "quota.exceeded" event is emitted (OmniRoute webhookDispatcher
+// "quota.exceeded" event is emitted (the reference router webhookDispatcher
 // notifyWebhookEvent): it fires, best-effort, whenever a quota
 // schedule blocks a request. Delivery never blocks the request
 // that triggered it: Notify hands the POST to a goroutine, drops
@@ -11,7 +11,7 @@
 // body is signed with HMAC-SHA256 (header
 // X-Codvian-Signature-256: sha256=<hex>).
 //
-// RETRY POLICY (M8.19 merge follow-up — matches OmniRoute's
+// RETRY POLICY (M8.19 merge follow-up — matches the reference router's
 // deliverWebhook, src/lib/webhookDispatcher.ts:83-140, in
 // capability, not copied code): one delivery is retried up to
 // webhookMaxRetries times (3 retries, 4 attempts total) with
@@ -40,7 +40,7 @@ import (
 )
 
 // QuotaExceededEvent is the event name for a quota threshold
-// being reached (OmniRoute "quota.exceeded").
+// being reached (the reference router "quota.exceeded").
 const QuotaExceededEvent = "quota.exceeded"
 
 // Endpoint is one subscribed webhook endpoint.
@@ -60,12 +60,12 @@ type Dispatcher struct {
 
 // webhookMaxRetries is the retry budget for one delivery: 3
 // retries after the first attempt (4 attempts total),
-// matching OmniRoute's deliverWebhook default (maxRetries = 3,
+// matching the reference router's deliverWebhook default (maxRetries = 3,
 // src/lib/webhookDispatcher.ts:83).
 const webhookMaxRetries = 3
 
 // webhookAttemptTimeout bounds ONE delivery attempt (10s,
-// matching OmniRoute's per-attempt AbortController timeout,
+// matching the reference router's per-attempt AbortController timeout,
 // webhookDispatcher.ts:101). The budget belongs to each
 // attempt, not to the whole sequence: the attempt count bounds
 // the sequence instead.
@@ -73,7 +73,7 @@ const webhookAttemptTimeout = 10 * time.Second
 
 // webhookRetryBackoff is the delay before the next attempt
 // after failedAttempts failed attempts: 2^(n-1) seconds —
-// 1s, 2s, 4s — matching OmniRoute (Math.pow(2, attempt) *
+// 1s, 2s, 4s — matching the reference router (Math.pow(2, attempt) *
 // 1000, webhookDispatcher.ts:125,134). A variable, not a
 // const, so tests can shrink it to zero; production never
 // reassigns it.
@@ -160,7 +160,7 @@ func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
 			// attempt). The URL itself was validated at
 			// registration, so there is no permanently
 			// blocked target to fail closed on here —
-			// unlike OmniRoute, which never retries its
+			// unlike the reference router, which never retries its
 			// OutboundUrlGuardError.
 			if attempt == webhookMaxRetries {
 				d.logf("webhook %s: delivery failed after %d attempts: %v", ep.ID, webhookMaxRetries+1, err)

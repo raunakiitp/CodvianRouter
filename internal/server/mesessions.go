@@ -34,7 +34,7 @@ import (
 // Costs differ by source, honestly: a Responses row's
 // ListPriceUSD is the list-price cost (each turn repriced at the
 // catalog's current list prices, so it differs from me/status
-// when prices changed in between — the same rule OmniRoute
+// when prices changed in between — the same rule the reference router
 // documents for its /v1/me/sessions costUsd). A ledger row
 // reports CostUSD instead: the cost as recorded on its usage
 // rows (record-time cost, not a reprice), with ListPriceUSD left
@@ -51,7 +51,7 @@ import (
 // cmd/codvian-router/main.go) records usage rows with no
 // attribution, so explicit client-session rows never form and
 // project/branch stay empty until a slice wires a carrier
-// through (see docs/GAP-TRACK.md §14 AK-3). The idle-window
+// through (see internal gap tracker §14 AK-3). The idle-window
 // grouping still works (one session per key per 30-minute
 // window), and the moment a carrier exists the same rollup
 // groups by it with no handler change.

@@ -1,4 +1,4 @@
-// Predictive TTFT breaker (M4.7a, OmniRoute comboPredicates.ts).
+// Predictive TTFT breaker (M4.7a, the reference router comboPredicates.ts).
 //
 // A provider whose streams are slow to produce a first byte will
 // be slow again: the engine records every stream's time-to-first-
@@ -19,7 +19,7 @@ package router
 import "time"
 
 // ttftMinSamples is the fewest samples before a prediction is
-// trusted (OmniRoute: min 5).
+// trusted (the reference router: min 5).
 const ttftMinSamples = 5
 
 // ttftWindow is how many recent TTFT samples are kept per provider.

@@ -1,4 +1,4 @@
-// B2-34 (PARITY.md:534): with OrderedExplicit on, dispatch order is
+// B2-34 (parity tracker:534): with OrderedExplicit on, dispatch order is
 // preserved — no quota-hint sort, no strategy hook, no hedge may
 // re-rank a dispatched multi-model chain (auto/chaos panel, thrifty
 // ladder). These tests drive the real chat path with a panel whose

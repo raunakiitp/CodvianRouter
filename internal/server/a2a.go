@@ -1,8 +1,8 @@
 // M9.8 A2A HTTP layer: POST /a2a, a single JSON-RPC 2.0 endpoint on
 // top of the transport-free core in internal/a2a.
 //
-// Methods (shapes only, studied from OmniRoute's a2a/route.ts — no
-// OmniRoute code is copied):
+// Methods (shapes only, studied from the reference router's a2a/route.ts — no
+// the reference router code is copied):
 //
 //   - message/send     — create the task, run it synchronously through
 //     the real router, return the task.
@@ -10,12 +10,12 @@
 //     state transitions stream back as SSE.
 //   - tasks/get        — return one task.
 //   - tasks/cancel     — cancel a Submitted/Working task.
-//   - SendMessage / SendStreamingMessage — the v1.0 aliases OmniRoute
+//   - SendMessage / SendStreamingMessage — the v1.0 aliases the reference router
 //     ships (route.ts V1_METHOD_ALIASES). Those two are the whole
 //     alias set: route.ts defines no aliases for tasks/get or
 //     tasks/cancel, and neither do we.
 //
-// Two OmniRoute behaviours are deliberately NOT reproduced (see
+// Two the reference router behaviours are deliberately NOT reproduced (see
 // internal/a2a/a2a.go): the endpoint is never keyless — every call
 // requires a valid gateway key, the owner is the FULL SHA-256 hex of
 // the resolved gateway key id, and a task belonging to another owner
@@ -295,7 +295,7 @@ func a2aIsTerminal(st a2a.State) bool {
 }
 
 // a2aV1Task rebuilds the A2A 1.0 Task shape for a SendMessage
-// response (OmniRoute's buildV1Task shape, reimplemented): the
+// response (the reference router's buildV1Task shape, reimplemented): the
 // reply text lives in task.status.message.parts[].text, the state
 // is the TASK_STATE_* enum, and the same text is repeated in
 // task.artifacts. The text is the router reply's content field,
@@ -383,7 +383,7 @@ func a2aMessageText(m a2aRawMessage) (string, bool) {
 
 // a2aSendParams is the params object of message/send and
 // message/stream: messages[] or a single message, plus an optional
-// model (params.model, or params.metadata.model as OmniRoute
+// model (params.model, or params.metadata.model as the reference router
 // accepts) and the v1.0 contextId carried on the message.
 type a2aSendParams struct {
 	Message  json.RawMessage `json:"message"`
@@ -396,7 +396,7 @@ type a2aSendParams struct {
 // messages the router runs, the requested model ("" when the
 // caller named none — the engine then applies its normal routing
 // for that key), and the v1.0 contextId when present. It mirrors
-// OmniRoute's toMessageArray shapes (messages[] first, then a
+// the reference router's toMessageArray shapes (messages[] first, then a
 // single message) without copying its code.
 func a2aExtractMessages(params json.RawMessage) (msgs []provider.Message, model, contextID string, err error) {
 	var p a2aSendParams
@@ -449,7 +449,7 @@ func a2aExtractMessages(params json.RawMessage) (msgs []provider.Message, model,
 }
 
 // a2aTaskIDParam reads a task id from tasks/get / tasks/cancel
-// params: taskId or id, as OmniRoute accepts both.
+// params: taskId or id, as the reference router accepts both.
 func a2aTaskIDParam(params json.RawMessage) (string, error) {
 	var p struct {
 		TaskID string `json:"taskId"`

@@ -1,6 +1,6 @@
 // M6.3 truncated-response guard audit tests.
 //
-// PARITY Area 6 ("Truncated-response guard") was MISSING on a stale note
+// parity tracker Area 6 ("Truncated-response guard") was MISSING on a stale note
 // claiming store() stores any success. Since M1.4, store()
 // (degrade.go:934) refuses finish_reason="length" via
 // cache.ShouldStore (degrade.go:951) before writing EITHER layer.

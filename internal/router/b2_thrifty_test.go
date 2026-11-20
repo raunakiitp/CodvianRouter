@@ -1,4 +1,4 @@
-// B2-36 (PARITY.md:536): auto/thrifty must serve from the quota-hinted
+// B2-36 (parity tracker:536): auto/thrifty must serve from the quota-hinted
 // rung. The resolver-level ladder is already covered in
 // internal/autorouter (TestAutoVariantThriftyRungOrder); what was
 // missing is the ENGINE path: the registry quota hint (HasQuota +

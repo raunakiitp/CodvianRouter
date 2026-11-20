@@ -4,8 +4,8 @@
 // removed or returns the input order unchanged. All randomness is
 // seeded (math/rand with a fixed seed) so the tests are reproducible.
 //
-// OmniRoute semantics under test (read-only reference,
-// ~/workspace/omniroute-reference):
+// the reference router semantics under test (read-only reference,
+// the local reference clone):
 //   - random:        fisherYatesShuffle, applyStrategyOrdering.ts "random"
 //   - strict-random: shuffleDeck.ts getNextFromDeck — deck + mutex, no
 //     repeat until exhausted, last-of-cycle != first-of-next;
@@ -362,11 +362,11 @@ func TestOrderingP2CPreservesRestOrder(t *testing.T) {
 	}
 }
 
-// TestWeightedDrawMatchesOmniRouteSemantics: the per-target weight
+// TestWeightedDrawMatchesReferenceSemantics: the per-target weight
 // draw of targetSorters.ts:28 selectWeightedTarget — NOT the old
 // "weighted" behaviour in strategy.go (WeightsFor re-weighting 5
 // scoring factors, which has no per-target weight or draw at all).
-func TestWeightedDrawMatchesOmniRouteSemantics(t *testing.T) {
+func TestWeightedDrawMatchesReferenceSemantics(t *testing.T) {
 	// Weight concentrated on one target: that target always wins.
 	onlyFirst := []OrderingTarget{
 		{Provider: "a", Model: "m1", Weight: 1},
@@ -389,7 +389,7 @@ func TestWeightedDrawMatchesOmniRouteSemantics(t *testing.T) {
 		t.Fatalf("WeightedDraw(weight 0,0,1) = %v, want c/m3", got.Key())
 	}
 
-	// Total weight <= 0: uniform pick among all targets (OmniRoute
+	// Total weight <= 0: uniform pick among all targets (the reference router
 	// fallback branch) — result must be a member, never an error.
 	zero := []OrderingTarget{
 		{Provider: "a", Model: "m1", Weight: 0},

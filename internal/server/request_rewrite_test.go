@@ -62,7 +62,7 @@ func rewriteCaptureContent(t *testing.T, eng *rewriteCaptureEngine) string {
 }
 
 // TestRequestRewriteRedactsBeforeProvider proves the B3-20 request
-// rewrite (PARITY.md:783): with WithRequestRewrite on, a chat
+// rewrite (parity tracker:783): with WithRequestRewrite on, a chat
 // request carrying PII + a secret reaches the engine with both
 // stripped — the provider never sees the raw values. Blocking stays
 // off (the default), so the request flows with a "flagged" header
@@ -171,7 +171,7 @@ func TestRewriteRequestRedactsAllSurfaces(t *testing.T) {
 }
 
 // TestDetectionsByTypeCardFeed proves the data the dashboard's
-// "Detections by type" card (PARITY.md:797, B3-25) renders from —
+// "Detections by type" card (parity tracker:797, B3-25) renders from —
 // the /dashboard/guardrails feed's by_pattern per-pattern totals,
 // grouped by kind via the types list. A chat carrying an email and
 // an API key must land in by_pattern under both labels, with the

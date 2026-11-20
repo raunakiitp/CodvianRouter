@@ -1,7 +1,7 @@
 // M9.6 client-side hardening: allowlist + spend controls for the
 // MCP client executor.
 //
-// The gap this closes (PARITY.md Area 9, "Spend controls on MCP
+// The gap this closes (parity tracker Area 9, "Spend controls on MCP
 // tools", PARTIAL): Execute used to run any tool on any connected
 // server with no cap, no estimate and no allowlist. All three
 // controls now live in the single execution choke point —

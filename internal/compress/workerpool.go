@@ -1,15 +1,15 @@
 // Package compress — M7.8 worker pool / async compression
-// (PARITY.md Area 10, "Worker pool / async compression", MISSING).
+// (parity tracker Area 10, "Worker pool / async compression", MISSING).
 //
 // CompressionPool runs stacked-pipeline jobs OFF the request hot
 // path, on a bounded set of goroutines — Go's equivalent of
-// OmniRoute's worker-thread pool. It does NOT wire itself into
+// the reference router's worker-thread pool. It does NOT wire itself into
 // Apply or any handler; the coordinator decides at merge time
 // which calls go through the pool (the pool is for work that may
 // wait, e.g. background / pre-compression — a request that needs
 // its compressed prompt now must not be parked behind a queue).
 //
-// What was read in OmniRoute (study only — no code copied):
+// What was read in the reference router (study only — no code copied):
 //
 //   - open-sse/services/compression/compressionWorkerPool.ts —
 //     CompressionWorkerPool: size default 2 (env
@@ -52,7 +52,7 @@
 //     until space frees or the caller's context ends.
 //   - Every job carries a context and a timeout: the effective
 //     timeout is the job's Timeout, else the pool's JobTimeout
-//     (default 120 s, mirroring OmniRoute's worker timeout).
+//     (default 120 s, mirroring the reference router's worker timeout).
 //     A job that exceeds it resolves with ErrJobTimeout and the
 //     pool keeps working. A job whose context is cancelled
 //     resolves with the context error. The timed-out job's
@@ -67,7 +67,7 @@
 //   - Shutdown drains: Shutdown stops accepting new jobs and
 //     waits for queued and in-flight jobs to finish, so every
 //     submitted future resolves. It never abandons a submitted
-//     job. (OmniRoute's close() resolves pending jobs with the
+//     job. (the reference router's close() resolves pending jobs with the
 //     unchanged body instead; draining is the stricter choice
 //     here because a queued stacked job is cheap CPU work and
 //     its caller is waiting on the future — resolving it with
@@ -99,7 +99,7 @@ var (
 	ErrJobTimeout = errors.New("compression job timed out")
 )
 
-// DefaultJobTimeout mirrors OmniRoute's worker timeout
+// DefaultJobTimeout mirrors the reference router's worker timeout
 // (compressionWorkerPool.ts: 120_000 ms).
 const DefaultJobTimeout = 120 * time.Second
 
@@ -163,7 +163,7 @@ type CompressionJob struct {
 // success; on failure Result is the zero StackedResult and the
 // original messages are NOT smuggled in as a fake success — the
 // caller decides the fallback (usually: send the original
-// messages uncompressed), exactly like OmniRoute's fail-open
+// messages uncompressed), exactly like the reference router's fail-open
 // contract, but reported as an error instead of a silent
 // "unchanged" success.
 type CompressionJobResult struct {

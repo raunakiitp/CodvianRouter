@@ -1,7 +1,7 @@
 package config
 
 // M5.11: internal scoped budgets (config side) — the operator's
-// own caps on total spend (OmniRoute lib/usage/budgetGuard.ts:
+// own caps on total spend (the reference router lib/usage/budgetGuard.ts:
 // InternalBudgetLimit). At startup the entries are applied into
 // the ledger (the durable store), and the dashboard's POST
 // /dashboard/internal-budgets writes both the ledger rows and

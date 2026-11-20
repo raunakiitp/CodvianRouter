@@ -1,29 +1,29 @@
 package ledger
 
 // Team cost centers (M5.12): teams as key groupings with a shared
-// rolling 1d/7d/30d USD budget, ported from OmniRoute's team model
+// rolling 1d/7d/30d USD budget, ported from the reference router's team model
 // (src/lib/db/teams.ts, src/lib/usage/teamUsageLimits.ts).
 //
 // Membership is a history table, not a flag on the key: a key has at
 // most one ACTIVE binding (valid_to_ms IS NULL); reassigning closes
 // the old binding and opens a new one, so past usage stays attributed
 // to the team the key belonged to when it was spent — the same rule
-// OmniRoute's resolveBillingTeamIdForApiKeyAt applies. Usage rows
+// the reference router's resolveBillingTeamIdForApiKeyAt applies. Usage rows
 // carry the team id at record time (usage_events.team_id), resolved
 // inside RecordUsage, so the attribution never depends on the
 // membership at read time.
 //
 // The budget is measured on ESTIMATED LIST cost: the team's usage in
 // the window repriced at the catalog's published per-model prices,
-// exactly as OmniRoute's getCommittedTeamEstimatedListCostUsd does.
+// exactly as the reference router's getCommittedTeamEstimatedListCostUsd does.
 // The metered cost (the operator price book at record time) is
 // reported alongside it for the cost-center view, but it never
 // decides the budget. Any unpriced usage in the window fails closed:
-// OmniRoute's exceeded rule is `listCost >= max || hasUnpricedUsage`,
+// the reference router's exceeded rule is `listCost >= max || hasUnpricedUsage`,
 // and the same rule is used here — a team whose usage cannot be
 // priced cannot prove it is under budget.
 //
-// Enforcement mode is "soft_committed_usage" in OmniRoute's words:
+// Enforcement mode is "soft_committed_usage" in the reference router's words:
 // soft because the cost is an estimate, not because the refusal is
 // soft — an exceeded team refuses with 400. Windows roll: when now
 // passes budget_reset_at the window advances by the duration until
@@ -37,7 +37,7 @@ import (
 	"time"
 )
 
-// TeamBudgetDuration values, matching OmniRoute's TeamBudgetDuration.
+// TeamBudgetDuration values, matching the reference router's TeamBudgetDuration.
 const (
 	TeamBudget1d  = "1d"
 	TeamBudget7d  = "7d"
@@ -390,7 +390,7 @@ func (l *Ledger) TeamMembers(ctx context.Context, teamID string) ([]TeamMember, 
 // AdvanceTeamBudgetWindow rolls a budgeted team's window forward by
 // whole durations until its end is in the future, persisting the
 // move. A team with no budget, or a window still open, is returned
-// unchanged. This is OmniRoute's advanceTeamBudgetWindow.
+// unchanged. This is the reference router's advanceTeamBudgetWindow.
 func (l *Ledger) AdvanceTeamBudgetWindow(ctx context.Context, team Team, now time.Time) (Team, error) {
 	if team.MaxBudgetUSD == nil || team.BudgetResetAt == nil || team.BudgetDuration == "" {
 		return team, nil

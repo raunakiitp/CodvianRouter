@@ -1,5 +1,5 @@
 // G13 — reasoning-cache DB tier + stored-bytes budget tests
-// (PARITY.md Area 6 row "Reasoning cache (2 h)").
+// (parity tracker Area 6 row "Reasoning cache (2 h)").
 package cache
 
 import (

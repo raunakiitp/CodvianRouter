@@ -362,7 +362,7 @@ func anthropicMarkerCount(anthReq *wire.AnthropicRequest) int {
 // once 4 markers are present):
 //
 //  1. Last user message's last text block (M6.9c). Placement
-//     mirrors cache.Prepare (LAST user message) and OmniRoute's
+//     mirrors cache.Prepare (LAST user message) and the reference router's
 //     markLastCacheableBlock: walk back from the last user
 //     message, then back through its blocks to the last
 //     non-empty TEXT block — thinking/redacted_thinking, blank

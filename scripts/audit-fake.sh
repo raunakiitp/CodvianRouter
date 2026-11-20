@@ -11,7 +11,7 @@
 #      registration in internal/server/*.go (read-only greps).
 #      It NEVER starts a server, runs go test, or runs go build.
 #   3. Prints a "UI without backend" findings list, each item written so
-#      it can feed docs/PARITY.md as a WRONG/MISSING row.
+#      it can feed the internal parity tracker as a WRONG/MISSING row.
 #
 # Honesty rule (§0.3): a route whose existence is ambiguous from static
 # greps is reported UNVERIFIED, never as a finding. Only controls proven
@@ -289,15 +289,15 @@ unverified "per-view honest-empty-state coverage (every dashboard view on a fres
 say ""
 
 # ------------------------------------------------------------------
-# 6. FINDINGS SUMMARY — feeds docs/PARITY.md as WRONG/MISSING rows
+# 6. FINDINGS SUMMARY — feeds the internal parity tracker as WRONG/MISSING rows
 # ------------------------------------------------------------------
-say "--- 6. FINDINGS: UI without backend (feed to PARITY.md) ---"
+say "--- 6. FINDINGS: UI without backend (feed to parity tracker) ---"
 if [ "$FINDINGS" -eq 0 ]; then
   say "  (none — zero UI controls without a live backend)"
 else
   say "  $FINDINGS confirmed finding(s) — see the [FINDING] lines in §2/§4 above;"
   say "  each names its live file:line. Do NOT copy rows from memory: verify"
-  say "  each finding against the current tree before committing to PARITY.md"
+  say "  each finding against the current tree before committing to the parity tracker"
   say "  (a hardcoded list here went stale twice — new-key + revoke were"
   say "  wired while this section still called them MISSING)."
 fi

@@ -2,7 +2,7 @@ package catalog
 
 import "testing"
 
-// TestParseCustomPrefix — PARITY.md:508, PARTIAL row: no
+// TestParseCustomPrefix — parity tracker:508, PARTIAL row: no
 // openai-compatible-* prefix convention existed. The three
 // prefixes now parse to their wire format.
 func TestParseCustomPrefix(t *testing.T) {

@@ -11,7 +11,7 @@ import "strings"
 // of the block is emitted until its END footer arrives, at which
 // point a single [REDACTED:SECRET] is emitted in its place. An
 // unclosed block is withheld until Flush, which redacts it — the
-// OmniRoute "CredentialOverflow withholds unclosed PEM" behaviour.
+// the reference router "CredentialOverflow withholds unclosed PEM" behaviour.
 // Clean text passes through unchanged at any chunking, except a
 // trailing partial "-----begin" prefix, which is held for the next
 // chunk (or emitted verbatim by Flush: a fragment of a header with

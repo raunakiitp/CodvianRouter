@@ -2,14 +2,14 @@
 // PARITY "Modality bridges (vision/audio/video reroute)"): when a
 // request carries content in a modality its target model cannot
 // serve, the request is rerouted to a model that can — the same
-// shape as OmniRoute's Vision/Audio/VideoBridge guardrails
+// shape as the reference router's Vision/Audio/VideoBridge guardrails
 // (registry.ts:308-310), which reroute image-bearing requests to
 // the fastest available vision-capable model and describe media
 // via a capable model for combos.
 //
 // What this slice builds: request-modality detection, the
 // capability check, and the reroute decision + pool pick — plus
-// the describe/transcribe machinery (OmniRoute's combo
+// the describe/transcribe machinery (the reference router's combo
 // behaviour): building the describe/transcribe request for a
 // capable model, replacing media parts with the returned text,
 // a result cache for descriptions, and bridge stats. The

@@ -5,7 +5,7 @@
 //     templates (read-only, standard, admin). Templates are
 //     built-in presets, not stored records: a template is a
 //     secret-free snapshot of a complete key policy, and
-//     selecting one prefills a draft key (OmniRoute's
+//     selecting one prefills a draft key (the reference router's
 //     keyTemplates contract). Editing a template never changes
 //     keys created from it, because the policy is copied onto
 //     the key at creation. Custom templates need a store on the
@@ -20,7 +20,7 @@
 //     never echoes the raw key: the caller supplied it, so
 //     there is nothing to show once. A duplicate ID with the
 //     same key hash is an idempotent retry (200, created=false,
-//     OmniRoute's rule); a duplicate ID with a different key,
+//     the reference router's rule); a duplicate ID with a different key,
 //     or a duplicate key hash under another ID, is a 409.
 //
 // Route registration + guard-table rows for these two routes
@@ -110,7 +110,7 @@ func (s *Server) handleKeyTemplates(w http.ResponseWriter, r *http.Request) {
 	type templatesResponse struct {
 		Templates []keyTemplate `json:"templates"`
 		// NotImplemented surfaces the deliberate-omission list
-		// (G15 re-review nit 7): the OmniRoute policy fields
+		// (G15 re-review nit 7): the the reference router policy fields
 		// this router does not carry, with the reason each one
 		// is absent — so an operator reading the templates
 		// endpoint sees what a template can never set.
@@ -228,7 +228,7 @@ func keyPolicyViewOf(k config.GatewayKey) keyPolicyView {
 	}
 }
 
-// keyPolicyOmission is one OmniRoute ApiKeyMetadata field we
+// keyPolicyOmission is one the reference router ApiKeyMetadata field we
 // deliberately do NOT carry as a per-key policy field, with the
 // reason. The rule is: no field without an honest enforcement
 // point in a local single-binary router — a stored field that
@@ -238,9 +238,9 @@ type keyPolicyOmission struct {
 	Reason string `json:"reason"`
 }
 
-// keyPolicyNotImplemented is the full omission list (OmniRoute
+// keyPolicyNotImplemented is the full omission list (the reference router
 // apiKeys.ts:108-157 fields not in config.KeyPolicy). Fields
-// OmniRoute has that we already enforce elsewhere — budgets
+// the reference router has that we already enforce elsewhere — budgets
 // (Area 5, ledger), RPM/TPM/RPD + rateLimits (keytraffic.go),
 // accessSchedule / throttleDelayMs / maxSessions (keyaccess.go,
 // keysessions.go), scopes, Disabled — are not omissions.
@@ -602,7 +602,7 @@ func (s *Server) handleKeyImport(w http.ResponseWriter, r *http.Request) {
 
 	s.keyMu.Lock()
 	defer s.keyMu.Unlock()
-	// Idempotent retry (OmniRoute's rule): the same ID with the
+	// Idempotent retry (the reference router's rule): the same ID with the
 	// same key hash is a no-op 200, never a duplicate row — but
 	// only when the retry agrees with what is stored (G15
 	// re-review nit 11). A retry that disagrees on any carried

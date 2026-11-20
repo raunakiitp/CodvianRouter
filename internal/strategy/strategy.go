@@ -24,7 +24,7 @@
 //   - least-latency: pure latency with a reliability tiebreak
 //     (latency .80, success .20, everything else 0) — unlike
 //     fastest, cost/quality/quota never move the order.
-//   - weighted: the per-target weight draw (OmniRoute
+//   - weighted: the per-target weight draw (the reference router
 //     selectWeightedTarget): one target is drawn with
 //     probability proportional to its weight. Per-target weights
 //     do not exist in chain config yet, so every target draws
@@ -102,7 +102,7 @@ const (
 	// StrategyPriority is the operator's declared chain order:
 	// no re-ranking, the first target in the chain is tried
 	// first. This is the default when nothing is set (M1.11):
-	// OmniRoute's default is priority, and ours was backwards
+	// the reference router's default is priority, and ours was backwards
 	// (balanced re-ranked every request). Balanced remains
 	// selectable; priority simply honours the order the
 	// operator wrote down.
@@ -133,7 +133,7 @@ const (
 	StrategyLatencyAware Strategy = "latency-aware"
 	// StrategyWeighted uses the operator's own weights (see
 	// WeightsFor): every component weight is theirs to set.
-	// NOTE (M3): "weighted" now means OmniRoute's per-target
+	// NOTE (M3): "weighted" now means the reference router's per-target
 	// weight draw (selectWeightedTarget); the operator weight-set
 	// behaviour moved to StrategyCustomWeights ("custom-weights").
 	// WeightsFor(StrategyWeighted) still returns the custom
@@ -149,7 +149,7 @@ const (
 	// StrategyCustomWeights is the operator's own weight set
 	// (config routing weighted_weights, normalised to sum to 1).
 	// Before M3 this behaviour was named "weighted"; M3 renames
-	// it so "weighted" can mean OmniRoute's per-target weight
+	// it so "weighted" can mean the reference router's per-target weight
 	// draw (see StrategyWeighted). Pre-1.0 rename, see LOG.md.
 	StrategyCustomWeights Strategy = "custom-weights"
 	// M3 ordering strategies (see wiring.go for the data each
@@ -510,7 +510,7 @@ func HookFactoryWithCacheAffinity(signals scoring.SignalsFunc, custom scoring.We
 		st, ok := Parse(strategyName)
 		if !ok {
 			// RT-5: the fallback itself is unchanged (unknown ->
-			// priority, matching OmniRoute), but it must not be
+			// priority, matching the reference router), but it must not be
 			// silent: one warning naming the unknown string and
 			// the fallback, so a future surface that forgets to
 			// validate leaves a trace.

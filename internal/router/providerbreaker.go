@@ -1,4 +1,4 @@
-// Provider-level failure-window breaker (M4.2, OmniRoute
+// Provider-level failure-window breaker (M4.2, the reference router
 // PROVIDER_PROFILES providerFailureThreshold / providerFailureWindowMs
 // / providerCooldownMs).
 //

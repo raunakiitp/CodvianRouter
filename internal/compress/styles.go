@@ -1,6 +1,6 @@
-// B4-49 — Output styles (PARITY.md:1104): Terse prose, Less
+// B4-49 — Output styles (parity tracker:1104): Terse prose, Less
 // code, Ponytail, "I have ADHD", Terse CJK. Five output styles
-// from OmniRoute's outputStyles catalog — mutually exclusive
+// from the reference router's outputStyles catalog — mutually exclusive
 // alternatives: a request picks exactly one style, never the
 // whole set. Each is a registry engine (stack priorities 19-23,
 // after Relevance 18) and runs only when selected explicitly via
