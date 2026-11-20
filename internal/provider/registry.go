@@ -1447,6 +1447,56 @@ func (r *Registry) ApplySyncedVision(providerID, model string, vision, known boo
 	return fmt.Errorf("provider: model %q not offered by provider %q", model, providerID)
 }
 
+// ApplySyncedAudio sets one model's audio capability from the
+// opt-in models.dev sync (B3-24 modality bridges), in memory
+// ONLY — the same contract as ApplySyncedVision: the sync state
+// file (models-dev-sync.json) is the durable record, and the
+// flag is re-applied from it at startup. A feed entry that
+// affirmatively reports a modalities table without audio input
+// clears a previously synced flag; only a known report sets
+// AudioKnown, so the modality bridge can tell "the feed said
+// no-audio" (known=true, audio=false) from "never reported"
+// (known=false).
+func (r *Registry) ApplySyncedAudio(providerID, model string, audio, known bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.providers[providerID]
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrProviderNotFound, providerID)
+	}
+	for i := range p.Models {
+		if p.Models[i].ID == model {
+			p.Models[i].Audio = audio
+			p.Models[i].AudioKnown = known
+			return nil
+		}
+	}
+	return fmt.Errorf("provider: model %q not offered by provider %q", model, providerID)
+}
+
+// ApplySyncedVideo sets one model's video capability from the
+// opt-in models.dev sync (B3-24 modality bridges), in memory
+// ONLY — the same contract as ApplySyncedVision. A feed entry
+// that affirmatively reports a modalities table without video
+// input clears a previously synced flag; only a known report
+// sets VideoKnown.
+func (r *Registry) ApplySyncedVideo(providerID, model string, video, known bool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.providers[providerID]
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrProviderNotFound, providerID)
+	}
+	for i := range p.Models {
+		if p.Models[i].ID == model {
+			p.Models[i].Video = video
+			p.Models[i].VideoKnown = known
+			return nil
+		}
+	}
+	return fmt.Errorf("provider: model %q not offered by provider %q", model, providerID)
+}
+
 // ApplySyncedContextWindow sets one model's context window from
 // the opt-in models.dev sync (CHECKLIST 179), in memory ONLY —
 // it deliberately does NOT persist: the sync state file

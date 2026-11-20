@@ -119,6 +119,35 @@ type Model struct {
 	// an operator-set flag is treated as unknown to the
 	// bridge, exactly like an unsynced one.
 	VisionKnown bool `json:"vision_known,omitempty"`
+	// Audio reports whether the model accepts audio input
+	// (B3-24 modality bridges): set from the models.dev
+	// [modalities] table by the opt-in sync
+	// (ApplySyncedAudio), mirroring Vision. False means "not
+	// known audio-capable", never a claim of no-audio — a model
+	// the sync never reported modalities for stays false, and
+	// the bridge fails open on it. Never guessed from the
+	// model id.
+	Audio bool `json:"audio,omitempty"`
+	// AudioKnown reports whether the audio capability above
+	// was affirmatively reported by a source: true only when
+	// the models.dev sync saw a [modalities] table for this
+	// model (ApplySyncedAudio with known=true). False means
+	// "never reported". An operator-set Audio flag does NOT
+	// set this, exactly like VisionKnown.
+	AudioKnown bool `json:"audio_known,omitempty"`
+	// Video reports whether the model accepts video input
+	// (B3-24 modality bridges): set from the models.dev
+	// [modalities] table by the opt-in sync
+	// (ApplySyncedVideo), mirroring Vision. False means "not
+	// known video-capable", never a claim of no-video.
+	Video bool `json:"video,omitempty"`
+	// VideoKnown reports whether the video capability above
+	// was affirmatively reported by a source: true only when
+	// the models.dev sync saw a [modalities] table for this
+	// model (ApplySyncedVideo with known=true). False means
+	// "never reported". An operator-set Video flag does NOT
+	// set this, exactly like VisionKnown.
+	VideoKnown bool `json:"video_known,omitempty"`
 	// Tools reports whether the model accepts tool/function calls
 	// (CT-1, GAP-TRACK): tri-state — nil means UNKNOWN, never a
 	// guess from the model id. A model the live probe / models.dev
