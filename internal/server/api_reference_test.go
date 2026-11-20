@@ -37,7 +37,7 @@ func readRepoFile(t *testing.T, rel string) string {
 	if err != nil {
 		t.Fatalf("read %s: %v (regenerate with: python3 scripts/gen-api-docs.py)", rel, err)
 	}
-	return string(b)
+	return strings.ReplaceAll(string(b), "\r\n", "\n")
 }
 
 // routeSection returns the doc text for one route's "### `METHOD path`"

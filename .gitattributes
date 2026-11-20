@@ -4,3 +4,4 @@
 # converted by git. Mark them as binary so git's autocrlf / LF
 # normalisation never touches them on any platform.
 *.tiktoken  binary
+

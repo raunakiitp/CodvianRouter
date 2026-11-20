@@ -31,3 +31,14 @@ Each entry: date, decision, reason, alternatives rejected.
 **Reason:** `go test -race` requires CGo which requires gcc. Windows machine has no gcc. Race testing happens on CI.
 
 ---
+
+## 2026-11-20 ~17:13 IST — Sync API reference docs and test CRLF normalization
+
+**Decision:**
+1. Regenerated `docs/API_REFERENCE.md`, `docs/llm.txt`, `tests/fixtures/v1/m8.21/routes.json`, and `web/tryit.html` via `python scripts/gen-api-docs.py` to sync with updated `/v1/me/sessions` descriptions from commit `7cfc391`.
+2. In `internal/server/api_reference_test.go` (`readRepoFile`) and `internal/server/decision_price_display_test.go`, normalize `\r\n` -> `\n` to ensure exact substring/boundary checks pass consistently across platforms.
+
+**Reason:** Guard table descriptions and doc fixtures were out of sync since AK-3; CRLF normalization prevents Windows-specific string index failures.
+
+---
+
