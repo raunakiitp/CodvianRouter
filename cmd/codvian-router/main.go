@@ -3365,6 +3365,8 @@ func openStack(opts options) (*stack, error) {
 		RelaySummariser:        relaySummariser,
 		VisionCapability:       router.VisionCapabilityFunc(reg),
 		VisionPool:             router.VisionPoolFunc(reg),
+		ModalityCapability:     router.ModalityCapabilityFunc(reg),
+		ModalityPool:           router.ModalityPoolFunc(reg),
 		StrategyHook:           strategy.HookFactory(signalsFn, customWeights),
 		StrategyHookForRequest: strategy.HookFactoryWithCacheAffinity(signalsFn, customWeights, warmthSnap.warmth),
 		// LKGP failure-clear (RT-2): a hard failure against

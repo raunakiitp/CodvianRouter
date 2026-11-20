@@ -16,11 +16,11 @@
 // describe/transcribe TRANSPORT lives behind the MediaDescriber
 // interface: this package owns the request shape, the cache and
 // the stats; the router owns the upstream call and wires a real
-// describer in later (its request-path hook —
-// modelVisionCapable/VisionCapability/VisionPool — is still
-// vision-only, so the live path reroutes on vision alone until
-// that hook is extended; audio/video decisions are correct in
-// this package and fail open live, exactly as before).
+// describer (Engine.Describer, backed by its upstream chat path).
+// The live request path is modality-aware too: the router's
+// ModalityCapability/ModalityPool hooks report the full
+// Vision/Audio/Video record, so audio/video reroute live and
+// fail open when unknown, exactly as vision does.
 // Audio and video capability now HAS a source: the models.dev
 // [modalities] table (the same table vision comes from) lists
 // audio/video input, and the sync carries it into

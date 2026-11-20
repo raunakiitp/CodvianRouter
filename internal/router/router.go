@@ -555,6 +555,31 @@ type Config struct {
 	// to be vision-capable, in registry order (the pool order
 	// is the pick ranking). If nil, the bridge never fires.
 	VisionPool func() []modality.Candidate
+	// ModalityCapability, if set, reports one model's full
+	// modality capability record (B3-24 modality bridges):
+	// the Vision/Audio/Video flags with their Known markers,
+	// as the models.dev sync reported them, plus whether the
+	// model is known to the registry at all. It drives the
+	// bridge for every modality: an audio/video-bearing
+	// request never dials a confirmed-incapable model when a
+	// capable alternative exists. Unknown models fail open
+	// exactly as vision does. If nil, the bridge falls back
+	// to the vision-only VisionCapability/VisionPool hooks;
+	// if those are nil too, the bridge never fires.
+	// Consulted on the request path, so it must be cheap and
+	// non-blocking.
+	ModalityCapability func(providerID, model string) (provider.Model, bool)
+	// ModalityPool, if set, returns the pool of models the
+	// bridge may reroute to: every model the registry knows
+	// to be capable of at least one modality (vision, audio
+	// or video, each known && capable), in registry order
+	// (the pool order is the pick ranking). modality.Decide
+	// filters the pool per request — a candidate only wins
+	// when it serves every blocking modality and is
+	// incapable of none required — so a vision-only
+	// candidate never wins an audio-blocked request. If nil,
+	// the bridge falls back to the vision-only pool.
+	ModalityPool func() []modality.Candidate
 	// EffortBudgetFor, if set, returns the operator-declared
 	// thinking-token budget for one (wire, effort) pair
 	// (CHECKLIST 285-286): the `reasoning.effort_budgets`
@@ -1969,6 +1994,18 @@ func (e *Engine) modelVisionCapable(providerID, model string) (capable, known bo
 	return e.cfg.VisionCapability(providerID, model)
 }
 
+// modelModalityCapable reports one attempt target's full modality
+// capability record via Config.ModalityCapability: the model's
+// Vision/Audio/Video flags with their Known markers, plus whether
+// the registry knows the model at all. A nil hook means unknown —
+// the bridge falls back to the vision-only hook.
+func (e *Engine) modelModalityCapable(providerID, model string) (provider.Model, bool) {
+	if e.cfg.ModalityCapability == nil {
+		return provider.Model{}, false
+	}
+	return e.cfg.ModalityCapability(providerID, model)
+}
+
 // capabilityFailoverIndex returns the index of the first attempt
 // at or after from whose model is CONFIRMED tool-capable
 // (known && capable), or -1 when the chain holds no such target.
@@ -2550,6 +2587,62 @@ func VisionPoolFunc(reg *provider.Registry) func() []modality.Candidate {
 		for _, p := range reg.List() {
 			for _, m := range p.Models {
 				if m.Vision && m.VisionKnown {
+					out = append(out, modality.Candidate{ProviderID: p.ID, ModelID: m.ID, Model: m})
+				}
+			}
+		}
+		return out
+	}
+}
+
+// ModalityCapabilityFunc adapts a provider registry to
+// Config.ModalityCapability (B3-24 modality bridges), mirroring
+// VisionCapabilityFunc but for every modality at once: it returns
+// the model's full capability record — Vision/VisionKnown,
+// Audio/AudioKnown, Video/VideoKnown — as the registry reports
+// it, plus whether the model is known to the registry at all.
+// The engine reads live flags on every request, so a sync /
+// operator edit takes effect without restarting the engine (or
+// the process). An unknown provider, an unknown model, or a model
+// the registry does not know reports a zero record + false —
+// never a guessed capability. A nil registry reports unknown for
+// every model.
+func ModalityCapabilityFunc(reg *provider.Registry) func(providerID, model string) (provider.Model, bool) {
+	return func(providerID, model string) (provider.Model, bool) {
+		if reg == nil {
+			return provider.Model{}, false
+		}
+		p, ok := reg.Get(providerID)
+		if !ok || p == nil {
+			return provider.Model{}, false
+		}
+		for _, m := range p.Models {
+			if m.ID == model {
+				return m, true
+			}
+		}
+		return provider.Model{}, false
+	}
+}
+
+// ModalityPoolFunc adapts a provider registry to Config.ModalityPool
+// (B3-24 modality bridges): every model the registry knows to be
+// capable of at least one modality (vision, audio or video, each
+// known && capable), in registry order — the pool order is the
+// bridge's pick ranking. modality.Decide filters the pool per
+// request (a candidate must serve every blocking modality and be
+// incapable of none required), so a vision-only candidate never
+// wins an audio-blocked request. A nil registry yields no
+// candidates, so the bridge never fires.
+func ModalityPoolFunc(reg *provider.Registry) func() []modality.Candidate {
+	return func() []modality.Candidate {
+		if reg == nil {
+			return nil
+		}
+		var out []modality.Candidate
+		for _, p := range reg.List() {
+			for _, m := range p.Models {
+				if (m.Vision && m.VisionKnown) || (m.Audio && m.AudioKnown) || (m.Video && m.VideoKnown) {
 					out = append(out, modality.Candidate{ProviderID: p.ID, ModelID: m.ID, Model: m})
 				}
 			}
