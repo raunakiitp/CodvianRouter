@@ -10,4 +10,5 @@ __pycache__/
 .bench-lock
 bench-package/
 docs/packages/benchmark-windows/*.exe
-codvian-bench
+/codvian-bench
+*.exe
