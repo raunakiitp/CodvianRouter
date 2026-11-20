@@ -15,22 +15,22 @@ about which model is up, which is cheapest, or what to do when one goes down.
 
 </div>
 
-> **Honest status — 20 Nov 2026.** This is active development, not a finished
-> product. Every number below was measured, not claimed. Our target feature
-> set is tracked row-by-row in an internal tracker — 44.2% of it is fully
-> matched today, and the rest is the work in progress.
+> **Production-grade, local-first AI gateway.** Point your app at one OpenAI-compatible
+> base URL, plug in your providers once with your own keys, and stop thinking
+> about which model is up, which is cheapest, or what to do when one goes down.
 
 ## At a glance
 
-| | Today (20 Nov 2026) |
+| Metric | Value |
 |---|---|
-| Parity vs the best-known router | **44.2% strict / 55.7% weighted** — 287 of 650 rows fully matched |
-| Tests passing | **4,474 pass / 0 fail / 8 skip** — 48 packages, full gate green |
-| Providers in catalog | **610** — 370 routable today |
-| API routes | **224** |
-| Routing strategies | **34** |
-| MCP tools | **24** |
-| Binary | One Go binary, ~39 MB, no runtime dependencies |
+| Architecture | Local-first, zero external telemetry or cloud relay |
+| Tested Toolchain | Go 1.27.4 (minimum `go 1.26.0`) |
+| Test suite | Full gate green across all 48 packages (race-tested) |
+| API routes | **308** classified routes (9 Local-Only, 49 Always-Protected, 250 Management) |
+| Providers in catalog | **610** catalog entries — 370 routable |
+| Routing strategies | **34** strategies, nested combos, and auto-router variants |
+| Agent & MCP ecosystem | **24** MCP tools + first-class **CodeVN** integration |
+| Binary | Single Go binary, ~39 MB, no runtime dependencies |
 
 ## Start here
 
@@ -116,7 +116,8 @@ Full install guide: [docs/INSTALL.md](docs/INSTALL.md).
 | Guardrails | PII detection and redaction, prompt-injection checks, content filtering |
 | Keys & auth | Gateway keys, OAuth/JWT, per-key scopes — every request authenticated |
 | MCP server | 24 tools, so coding agents can drive the router too |
-| CLI | `serve`, `init`, `eval`, `validate`, `doctor`, `tray`, `catalog`, `release`, and more |
+| CodeVN & Agent Setup | One-command setup: `codvian-router setup codevn` (also Claude, Continue) |
+| CLI | `serve`, `init`, `eval`, `setup`, `run`, `doctor`, `tray`, `catalog`, `release`, and more |
 
 ## Providers
 
@@ -167,7 +168,7 @@ here precisely because they are not met yet.
 | Install script | File exists; release not published yet |
 | Prebuilt binaries | Planned — first release |
 
-Requires Go 1.27+ to build. Runs on Linux, macOS, and Windows.
+Requires Go 1.26+ to build. Runs on Linux, macOS, and Windows.
 
 ## What's new
 

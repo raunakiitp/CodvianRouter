@@ -364,12 +364,11 @@ func (m *PoolManager) TransportFor(providerID, apiKey string) *pooledTransport {
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	size := m.cfg.Size()
-	idlePerHost := size
-	if idlePerHost < 64 {
-		idlePerHost = 64
+	tr.MaxIdleConnsPerHost = size
+	tr.MaxIdleConns = size * 4
+	if tr.MaxIdleConns < 100 {
+		tr.MaxIdleConns = 100
 	}
-	tr.MaxIdleConnsPerHost = idlePerHost
-	tr.MaxIdleConns = idlePerHost * 4
 	tr.IdleConnTimeout = 90 * time.Second
 	// IdleConnTimeout stays the Go default (90 s): a pool warmed at
 	// boot stays warm across the health checker's 60 s probe
