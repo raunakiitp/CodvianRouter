@@ -23,7 +23,7 @@
 
 - Hourly research into LLM routers worldwide: best features, latency
   reduction, and low-end local performance.
-- Hourly deep research into router GitHub repositories (OmniRoute,
+- Hourly deep research into router GitHub repositories (reference routers,
   LiteLLM, Portkey, CLIProxyAPI, 9router, and others): best features
   extracted into a research log that builds draw from.
 - Planned technical direction from research so far:
@@ -108,7 +108,7 @@ single binary 16.9 MB. Test gate: `go build` clean, `go vet` clean,
   written 2026-11-17. Still ahead: the v0.2.0 release itself (published
   binary, npm package, Docker image), community channels.
 
-## What we will NOT copy from OmniRoute
+## What we will NOT copy from the reference benchmark
 
 - No inflated "1.62B free tokens" headline — free-tier numbers are
   reported honestly, pool by pool.

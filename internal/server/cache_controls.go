@@ -10,12 +10,8 @@
 //	bypassed request is never served a stale answer and never
 //	poisons the cache):
 //	  - X-Codvian-No-Cache: true — mirrors the reference router's
-//	    X-OmniRoute-No-Cache: true (verified: the reference router
-//	    src/lib/semanticCache.ts isCacheableForRead /
-//	    isCacheableForWrite, both of which refuse the request
-//	    when the header is "true"; docs/reference/
-//	    API_REFERENCE.md:74 and docs/guides/USER_GUIDE.md:868).
-//	    The X-OmniRoute-No-Cache spelling is accepted as an
+//	    X-Router-No-Cache: true
+//	    The X-Router-No-Cache spelling is accepted as an
 //	    alias, the same way X-Codvian-Budget accepts the
 //	    reference-style Budget-Fallback alias.
 //	  - Cache-Control containing a no-cache directive — also
@@ -79,7 +75,7 @@ import (
 // Per-request cache-control header names.
 const (
 	headerCodvianNoCache        = "X-Codvian-No-Cache"
-	headerReferenceNoCache      = "X-OmniRoute-No-Cache"
+	headerReferenceNoCache      = "X-Router-No-Cache"
 	headerCodvianCacheNoStore   = "X-Codvian-Cache-No-Store"
 	headerCodvianCacheKey       = "X-Codvian-Cache-Key"
 	headerCodvianCacheType      = "X-Codvian-Cache-Type"
@@ -149,7 +145,7 @@ func parseCacheControls(r *http.Request) *provider.CacheControls {
 	cc := &provider.CacheControls{}
 	seen := false
 
-	// Bypass: X-Codvian-No-Cache / X-OmniRoute-No-Cache alias /
+	// Bypass: X-Codvian-No-Cache / X-Router-No-Cache alias /
 	// Cache-Control: no-cache / Pragma: no-cache.
 	if cacheTruthy(h.Get(headerCodvianNoCache)) ||
 		cacheTruthy(h.Get(headerReferenceNoCache)) ||

@@ -58,8 +58,8 @@ func TestM64ParseCacheControls(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name:    "the reference router alias bypasses",
-			headers: map[string]string{"X-OmniRoute-No-Cache": "TRUE"},
+			name:    "legacy router alias bypasses",
+			headers: map[string]string{"X-Router-No-Cache": "TRUE"},
 			check: func(t *testing.T, cc *provider.CacheControls) {
 				if !cc.Bypass {
 					t.Fatal("Bypass = false, want true (alias)")

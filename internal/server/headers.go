@@ -77,7 +77,7 @@ const (
 	headerCodvianCacheSimilarity  = "X-Codvian-Cache-Similarity"
 	headerCodvianCacheSavedTokens = "X-Codvian-Cache-Saved-Tokens"
 	headerCodvianCacheSavedUSD    = "X-Codvian-Cache-Saved-USD"
-	// headerReferenceCostSaved is the the reference router name for the same
+	// headerReferenceCostSaved is the legacy compatibility name for the same
 	// figure (parity tracker Area 11, cost-saved reporting): the USD cost
 	// a cache hit saved, priced from the real ledger price map —
 	// the same value as X-Codvian-Cache-Saved-USD, byte for byte.
@@ -85,10 +85,10 @@ const (
 	// on a cache miss, or when no price is configured for the
 	// model, it stays absent — never a fabricated 0. A genuinely
 	// free ($0-priced) model hit emits "0.0000000000", matching
-	// the reference router's rule that 0 is a valid saved cost
+	// the reference rule that 0 is a valid saved cost
 	// (reference implementation: costSavedUsd "pass 0 to
 	// explicitly mark a free-model HIT that saved nothing").
-	headerReferenceCostSaved = "X-OmniRoute-Cost-Saved"
+	headerReferenceCostSaved = "X-Router-Cost-Saved"
 )
 
 // ---------------------------------------------------------------------------

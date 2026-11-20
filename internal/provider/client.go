@@ -558,7 +558,7 @@ func NormalizeReasoningEffort(s string) string {
 //
 // Header mapping (X-Codvian- prefix; see server/cache_controls.go):
 //
-//   - Bypass: X-Codvian-No-Cache (or the X-OmniRoute-No-Cache alias),
+//   - Bypass: X-Codvian-No-Cache (or the X-Router-No-Cache alias),
 //     Cache-Control containing no-cache, Pragma: no-cache.
 //   - NoStore: X-Codvian-Cache-No-Store, or Cache-Control containing
 //     no-store.
