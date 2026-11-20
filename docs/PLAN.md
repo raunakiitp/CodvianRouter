@@ -126,14 +126,14 @@ weighted 34.2%; P0-8 CLOSED).
 
 Area 1 baseline: 63 rows, FULL 3, PARTIAL 24, MISSING 35, WRONG 1; strict 4.8%,
 weighted 23.8%. Ours: 7 named strategies (priority, balanced, cheapest, fastest,
-most-reliable, least-latency, weighted, code) vs OmniRoute's 22 + mode packs +
+most-reliable, least-latency, weighted, code) vs reference router's 22 + mode packs +
 auto/* family. Exit gate: strategy conformance suite green; Area 1 ≥ 80% weighted.
 
 SEQUENCING: Phase A — S1–S4 build in parallel, DISJOINT new files only, NO edits to
 shared files (internal/config/config.go, internal/router/router.go,
 internal/server/server.go, internal/strategy/strategy.go — coordinator wires those
 in Phase B). Each builder writes acceptance tests FIRST (test fails when the
-strategy is removed), reads the OmniRoute semantics from the cited reference files
+strategy is removed), reads reference router semantics from the cited reference files
 (study only — never copy code), and reports file:line evidence + PARITY rows.
 Phase B — coordinator wires registry/config/router, runs the conformance suite +
 full gate, flips PARITY rows, commits M3. Phase C — S5 combos (fusion/pipeline/
@@ -141,7 +141,7 @@ jev/quota-share/chaos) + S6 conformance suite, same pattern.
 
 | Agent | Owns (NEW files only) | Tasks |
 |---|---|---|
-| S1 | internal/strategy/orderings.go + orderings_test.go | round-robin (stateful), random, strict-random (deck), fill-first, least-used, p2c; fix `weighted` WRONG-NAME (per-target weight draw, OmniRoute targetSorters.ts:28) |
+| S1 | internal/strategy/orderings.go + orderings_test.go | round-robin (stateful), random, strict-random (deck), fill-first, least-used, p2c; fix `weighted` WRONG-NAME (per-target weight draw, reference targetSorters.ts:28) |
 | S2 | internal/strategy/quota.go + quota_test.go | quota-weighted (draw score/(1+load)), headroom (1 − max(util5h, util7d)), expiry-first, reset-aware, reset-window — pure ordering over a QuotaSnapshot interface (no ledger writes) |
 | S3 | internal/scoring/scoring16.go + scoring16_test.go | 16-factor auto scoring (add the 11 missing factors) + 6 mode packs (ship-fast, cost-saver, quality-first, offline-friendly, reliability-first, chaos-mode weights) |
 | S4 | internal/strategy/affinity.go + affinity_test.go | lkgp (last-known-good-provider stickiness), context-optimized (largest context first), cache-optimized (affinity ordering), context-relay |
@@ -152,7 +152,7 @@ Phase A DONE 2026-11-18 (verified by coordinator, package tests green):
 S1 orderings (15 tests), S2 quota (16 tests), S3 16-factor + packs (27 tests),
 S4 affinity (24 tests, -race). Phase B DONE (same day, gate running):
 wiring.go + conformance suite (wiring_test.go, 10 tests), registry/config/tree
-allowlists extended to 31 strategies, "weighted" renamed to OmniRoute's
+allowlists extended to 31 strategies, "weighted" renamed to reference router's
 per-target draw with old custom-weights behaviour moved to "custom-weights"
 (pre-1.0 rename, migration note in LOG.md). Phase B honest verdicts: 14 rows →
 FULL (Area 1 FULL 3 → 17), 11 rows → PARTIAL (data-limited wiring), WRONG 1 → 0.
@@ -325,7 +325,7 @@ parallel requests. That gate DEPENDS on M5.8 (committed-spend reservation):
 today CheckKeyBudget reads spent-then-proceeds, so parallel requests can
 all pass before any ledger row lands — the reservation is the fix, the
 race tests are the proof. M5.14 runs last.
-OmniRoute evidence verified fresh 2026-11-18: apiKeys.ts fields
+Reference router evidence verified fresh 2026-11-18: apiKeys.ts fields
 (daily/weekly/fiveHourUsageLimitUsd, maxRequestsPerDay/Minute,
 throttleDelayMs, maxSessions, accessSchedule, rateLimits[]);
 keyQuota.ts (pre-request gate tpm/rpm/monthly, fail-open on infra error,
@@ -436,7 +436,7 @@ savings half and M6.11 (property tests) for the correctness half.
 | M6.9 | Token-cost engine: cache-write tiers 5m/1h split + provider prompt-cache markers (extend beyond anthropic/claude/openrouter) | cache-write tiers; provider prompt-cache markers |
 | M6.10 | Dedup/coalescing: per-key isolation + in-flight cap + timeout | dedup / coalescing |
 | M6.11 | Correctness property tests (exit gate, correctness half): no cross-tenant, no temp leaks, no truncated serves; cross-provider SHARING pinned as documented (M6.12 decided DIVERGENCE — same model shared across providers by design) | (exit gate) |
-| M6.12 | Per-provider isolation: the row says "Deliberately NO" but no decision record was found in LOG.md/PLAN.md — audit first. If genuinely deliberate → flip to DIVERGENCE with the evidence; else add provider to ScopedKey (OmniRoute default-on) | per-provider isolation |
+| M6.12 | Per-provider isolation: the row says "Deliberately NO" but no decision record was found in LOG.md/PLAN.md — audit first. If genuinely deliberate → flip to DIVERGENCE with the evidence; else add provider to ScopedKey (reference router default-on) | per-provider isolation |
 
 Deliberate non-goals / evaluate-don't-force: semantic similarity method
 (neural embeddings) — wiring real provider embeddings into the semantic
@@ -533,7 +533,7 @@ Current MCP state: stdio + SSE + Streamable HTTP server with 24 tools (3 built-i
 | Slice | Scope | Files (disjoint) |
 |---|---|---|
 | M9.0 | MCP fixture harness (JSON-RPC recorded pairs over stdio) + Area 9 reconciliation | internal/apitest/mcp_fixture.go (new), tests/fixtures/mcp/ (new) |
-| M9.1 | SECURITY BASELINE: per-tool scope system (own scope set, wildcard matching), enforcement ON by default (never copy OmniRoute's OFF default), audit log of tool calls (inputs hashed, outputs truncated), per-client identity; then an independent SECURITY REVIEW — A2A is gated on it | internal/mcp/scopes.go, internal/mcp/audit.go (new) |
+| M9.1 | SECURITY BASELINE: per-tool scope system (own scope set, wildcard matching), enforcement ON by default (never copy reference router's OFF default), audit log of tool calls (inputs hashed, outputs truncated), per-client identity; then an independent SECURITY REVIEW — A2A is gated on it | internal/mcp/scopes.go, internal/mcp/audit.go (new) |
 | M9.2 | Remote transports: SSE (GET/POST /api/mcp/sse) + Streamable HTTP (POST/GET/DELETE /api/mcp/stream), gateway-key auth, forced scope enforcement for narrow keys | internal/server/mcp_http.go (new) |
 | M9.3 | Routing/combo + cost/quota tools: list/create/switch combos, combo metrics, set_routing_strategy, explain_route, simulate_route, best_combo_for_task, pick_fastest_model, cost_report, check_quota, set_budget_guard (scoped manage) | internal/mcp/tools_routing.go, internal/mcp/tools_cost.go (new) |
 | M9.4 | Cache + DB health + memory tools: cache_stats, cache_flush, db_health, db_stats, memory_search/add/clear — destructive ones (cache_flush, memory_clear, db autoRepair) ONLY under a separate destructive grant, never the default tool scope | internal/mcp/tools_ops.go (new) |
@@ -544,7 +544,7 @@ Current MCP state: stdio + SSE + Streamable HTTP server with 24 tools (3 built-i
 | M9.9 | A2A skills (smart-routing, quota-management, provider-discovery, cost-analysis, health-report, list-capabilities) + agent card (/.well-known/agent.json) + /api/a2a/status + dashboard | internal/a2a/skills.go (new), internal/server/a2a.go |
 | M9.10 | Exit gate: full CI + MCP fixture coverage audit + live stdio/SSE/Streamable-HTTP smoke + PARITY Area 9 flips | — (coordinator) |
 
-Deliberately OUT of M9 (recorded, not forgotten): `route_request` spending tool — deliberate divergence, "a tool call can never spend quota", NEVER build; plugin install/activate/uninstall over MCP — contradicts compiled-in plugins (plugin/load is 501 by design: loading arbitrary code = arbitrary code execution); context-source tools (Notion/Obsidian/local-corpus) — external SaaS, not router core; gamification tools — not router core; skills execution / dynamic `skill_*` tools — arbitrary code execution surface, needs its own security design (M12); Perplexity research tool — third-party key, research feature (M12). NEVER-copy from OmniRoute in M9: destructive MCP tools without a separate grant, lossy compression of MCP tool descriptions (ours stay byte-exact), client-controlled guardrail disable, keyless-by-default /v1 and A2A, cookie-session providers.
+Deliberately OUT of M9 (recorded, not forgotten): `route_request` spending tool — deliberate divergence, "a tool call can never spend quota", NEVER build; plugin install/activate/uninstall over MCP — contradicts compiled-in plugins (plugin/load is 501 by design: loading arbitrary code = arbitrary code execution); context-source tools (Notion/Obsidian/local-corpus) — external SaaS, not router core; gamification tools — not router core; skills execution / dynamic `skill_*` tools — arbitrary code execution surface, needs its own security design (M12); Perplexity research tool — third-party key, research feature (M12). NEVER-copy from the reference benchmark in M9: destructive MCP tools without a separate grant, lossy compression of MCP tool descriptions (ours stay byte-exact), client-controlled guardrail disable, keyless-by-default /v1 and A2A, cookie-session providers.
 
 ## Leftover / deferred from M0
 
@@ -552,7 +552,7 @@ Deliberately OUT of M9 (recorded, not forgotten): `route_request` spending tool 
   when it finishes; then M0 commits (one per task) + M0 exit gate. M0.3/M0.4 DONE above.
 - PARITY.md per-area rows for Areas 8a/8b are condensed (sub-tallies + key rows) — the full
   38 + 139 row-level detail lives in the source comparison report
-  (`~/workspace/goals/codvian-router/hidden_files/omniroute-full-comparison-2026-11-18.md`).
+  (`~/workspace/goals/codvian-router/hidden_files/reference-full-comparison-2026-11-18.md`).
   Expand to full row level only if a later task requires it; do not re-run the comparison.
 
 ## Raunak's order — one agent per feature (2026-11-19 ~21:57 IST, voice call)

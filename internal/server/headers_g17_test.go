@@ -37,7 +37,7 @@ func TestCostSavedHeaderOnCacheHit(t *testing.T) {
 	}
 	srv.writeResponseHeaders(w, nil, meta)
 	mustHeader(t, w, "X-Codvian-Cache-Saved-USD", "0.0001500000")
-	mustHeader(t, w, "X-OmniRoute-Cost-Saved", "0.0001500000")
+	mustHeader(t, w, "X-Router-Cost-Saved", "0.0001500000")
 
 	// Tokens known but cost unpriced (no price for the model):
 	// the token header stays, both USD headers stay absent —
@@ -47,17 +47,17 @@ func TestCostSavedHeaderOnCacheHit(t *testing.T) {
 	srv.writeResponseHeaders(w, nil, meta)
 	mustHeaderInt(t, w, "X-Codvian-Cache-Saved-Tokens", 150)
 	mustHeaderAbsent(t, w, "X-Codvian-Cache-Saved-USD")
-	mustHeaderAbsent(t, w, "X-OmniRoute-Cost-Saved")
+	mustHeaderAbsent(t, w, "X-Router-Cost-Saved")
 
 	// A free ($0-priced) model hit emits an explicit 0 — the
-	// the reference router rule that 0 is a valid saved cost.
+	// reference router rule that 0 is a valid saved cost.
 	w = httptest.NewRecorder()
 	meta = ResponseMeta{
 		Cache: "exact", CacheSavedTokens: 150,
 		CacheSavedUSD: 0, HasCacheSavings: true, HasCacheSavedUSD: true,
 	}
 	srv.writeResponseHeaders(w, nil, meta)
-	mustHeader(t, w, "X-OmniRoute-Cost-Saved", "0.0000000000")
+	mustHeader(t, w, "X-Router-Cost-Saved", "0.0000000000")
 }
 
 func TestCostSavedHeaderUsesPairPriceFirst(t *testing.T) {
@@ -102,7 +102,7 @@ func TestCostSavedHeaderEndToEndCacheHit(t *testing.T) {
 	mustHeader(t, rec, "X-Codvian-Cache", "exact")
 	mustHeader(t, rec, "X-Codvian-Cost-USD", "0.0000000000")
 	mustHeader(t, rec, "X-Codvian-Cache-Saved-USD", "0.0002000000")
-	mustHeader(t, rec, "X-OmniRoute-Cost-Saved", "0.0002000000")
+	mustHeader(t, rec, "X-Router-Cost-Saved", "0.0002000000")
 }
 
 func TestCostSavedHeaderAbsentOnCacheMiss(t *testing.T) {
@@ -115,7 +115,7 @@ func TestCostSavedHeaderAbsentOnCacheMiss(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 	mustHeaderAbsent(t, rec, "X-Codvian-Cache-Saved-USD")
-	mustHeaderAbsent(t, rec, "X-OmniRoute-Cost-Saved")
+	mustHeaderAbsent(t, rec, "X-Router-Cost-Saved")
 	mustHeaderAbsent(t, rec, "X-Codvian-Cache")
 }
 
