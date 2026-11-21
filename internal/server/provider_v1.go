@@ -388,6 +388,26 @@ func (s *Server) applyPrefixedModelRouting(req *provider.ChatRequest) error {
 		return nil
 	}
 	pinned := info.ID
+	// A full model ID that a registered provider actually serves is a
+	// model, not a pin. Aggregators (OpenRouter first among them) list
+	// nested vendor/model IDs verbatim in /v1/models, and their first
+	// segment is a vendor namespace — often also a catalog entry
+	// ("liquid/lfm-…", "openai/gpt-…") — not one of our providers.
+	// Treating every slash as a pin made those listed IDs
+	// unaddressable (400 unknown provider "liquid", found by live
+	// verification 2026-11-21). The prefix is only a pin when the
+	// named provider serves the BARE model; otherwise, when the full
+	// string is a served model ID, leave the request untouched so the
+	// chain builder matches it verbatim. Explicit pins keep working:
+	// "openrouter/liquid/lfm-…" still pins OpenRouter because
+	// OpenRouter serves the bare nested ID. Adders without the offer
+	// surface (test fakes) keep the historical pin behaviour.
+	if offers, ok := s.providerAdder.(interface {
+		ProviderOffersModel(providerID, modelID string) bool
+		OffersModel(modelID string) bool
+	}); ok && !offers.ProviderOffersModel(pinned, bare) && offers.OffersModel(req.Model) {
+		return nil
+	}
 	rc := req.Routing
 	if rc == nil {
 		req.Routing = &provider.RequestRouting{Only: []string{pinned}}

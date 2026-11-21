@@ -1058,6 +1058,64 @@ func (r *Registry) List() []*Provider {
 	return out
 }
 
+// OffersModel reports whether any enabled provider serves the exact
+// model ID. It mirrors the chain builder's offer rule: a provider
+// with an empty model list serves any model. Used by the server to
+// tell a full nested model ID (e.g. an aggregator's "vendor/model")
+// apart from a "provider/model" routing pin — a listed model ID must
+// stay addressable verbatim.
+func (r *Registry) OffersModel(modelID string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, id := range r.order {
+		p, ok := r.providers[id]
+		if !ok || !p.Enabled {
+			continue
+		}
+		if providerOffersModelLocked(p, modelID) {
+			return true
+		}
+	}
+	return false
+}
+
+// ProviderOffersModel reports whether the named enabled provider
+// serves the exact model ID (empty model list = serves any model).
+// The name may be a registry ID, a catalog ID or a display name:
+// resolveProviderV1 resolves catalog entries too, and the registry
+// stores generated IDs, so a catalog-ID pin must still find its
+// provider (same matching the engine's ResolveProvider does).
+func (r *Registry) ProviderOffersModel(providerID, modelID string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	p, ok := r.providers[providerID]
+	if !ok {
+		for _, id := range r.order {
+			c := r.providers[id]
+			if c != nil && (strings.EqualFold(c.CatalogID, providerID) || strings.EqualFold(c.Name, providerID)) {
+				p, ok = c, true
+				break
+			}
+		}
+	}
+	if !ok || !p.Enabled {
+		return false
+	}
+	return providerOffersModelLocked(p, modelID)
+}
+
+func providerOffersModelLocked(p *Provider, modelID string) bool {
+	if len(p.Models) == 0 {
+		return true
+	}
+	for _, m := range p.Models {
+		if m.ID == modelID {
+			return true
+		}
+	}
+	return false
+}
+
 // SetEnabled enables or disables a provider and persists the change.
 func (r *Registry) SetEnabled(id string, enabled bool) error {
 	r.mu.Lock()

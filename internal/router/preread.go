@@ -192,6 +192,18 @@ func isContentEvent(ev StreamEvent) bool {
 	return ev.Delta != "" || len(ev.ToolCalls) > 0
 }
 
+// doneHasReasoning reports whether a Done event's reassembled
+// response carries reasoning output (StreamEvent.Resp is set on Done
+// only). A reasoning-only stream — the model spent its whole budget
+// thinking and finished with `length` before answering — served real
+// output, so it must commit, not fail over as an empty stream: the
+// same budget on another target cannot do better (live OpenRouter
+// verification, 2026-11-21; the non-streaming twin is
+// isEmptyCompletion).
+func doneHasReasoning(resp *provider.ChatResponse) bool {
+	return resp != nil && !resp.Reasoning.Empty()
+}
+
 // validatePrereadPrefix applies the prefix-sound subset of the
 // 200-OK body validation predicate (response_validation.go) to text
 // that is about to be committed to the client. Only checks whose
@@ -312,6 +324,9 @@ func (e *Engine) forwardStreamPreread(ctx context.Context, out chan<- StreamEven
 			return streamFailed, first.Err, pr
 		}
 		if first.Done {
+			if doneHasReasoning(first.Resp) {
+				return commit(first)
+			}
 			pr = prereadInfo{state: "empty", events: len(buf), bytes: bufBytes}
 			return streamEmpty, &provider.EmptyStreamError{FinishReason: first.FinishReason}, pr
 		}
@@ -349,6 +364,9 @@ func (e *Engine) forwardStreamPreread(ctx context.Context, out chan<- StreamEven
 				return streamFailed, ev.Err, pr
 			}
 			if ev.Done {
+				if doneHasReasoning(ev.Resp) {
+					return commit(&ev)
+				}
 				pr = prereadInfo{state: "empty", events: len(buf), bytes: bufBytes}
 				return streamEmpty, &provider.EmptyStreamError{FinishReason: finishReason}, pr
 			}

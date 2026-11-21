@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/provider"
+	"github.com/raunakiitp/codvian-router/internal/reasoning"
 )
 
 // tickChunkClient is a slow upstream stand-in: it emits one chunk
@@ -341,6 +342,50 @@ func TestNonStreamingEmptyCompletionFailsOver(t *testing.T) {
 		}
 	})
 
+	t.Run("reasoning-only-is-not-empty", func(t *testing.T) {
+		// A model that spent its whole budget thinking serves real
+		// output (reasoning) even with no answer text: it must NOT
+		// fail over — the same budget on another target cannot do
+		// better (live OpenRouter verification, 2026-11-21).
+		a := &fakeClient{chatFn: func(ctx context.Context, req provider.ChatRequest) (*provider.ChatResponse, error) {
+			return &provider.ChatResponse{
+				Content: "", FinishReason: "length",
+				Reasoning: &reasoning.State{Blocks: []reasoning.Block{{Kind: reasoning.KindThought, Text: "thinking until the budget ran out"}}},
+			}, nil
+		}}
+		b := okClient("bee")
+		eng := newEngine(a, b)
+		resp, trace, err := eng.ChatWithChain(context.Background(), chain, testReq())
+		if err != nil {
+			t.Fatalf("ChatWithChain: %v", err)
+		}
+		if resp.Reasoning.Empty() {
+			t.Fatal("reasoning lost on the reasoning-only completion")
+		}
+		if resp.FinishReason != "length" {
+			t.Fatalf("finish reason = %q, want length", resp.FinishReason)
+		}
+		if b.chatCalls() != 0 {
+			t.Fatalf("b chat calls = %d, want 0 (no failover on reasoning output)", b.chatCalls())
+		}
+		if trace == nil || len(trace.Attempts) != 1 {
+			t.Fatalf("trace = %+v, want 1 attempt", trace)
+		}
+	})
+
+	t.Run("empty-reasoning-state-still-fails-over", func(t *testing.T) {
+		// A reasoning state with no blocks is still nothing served.
+		a := &fakeClient{chatFn: func(ctx context.Context, req provider.ChatRequest) (*provider.ChatResponse, error) {
+			return &provider.ChatResponse{Content: "", FinishReason: "length", Reasoning: &reasoning.State{}}, nil
+		}}
+		b := okClient("bee")
+		eng := newEngine(a, b)
+		resp, _, err := eng.ChatWithChain(context.Background(), chain, testReq())
+		if err != nil || resp.Content != "bee" {
+			t.Fatalf("content = %q err = %v, want bee/nil", resp.Content, err)
+		}
+	})
+
 	t.Run("tool-call-is-not-empty", func(t *testing.T) {
 		// A reply that carries a tool call is real content: the
 		// client will execute that call, so it must NOT fail over.
@@ -419,4 +464,44 @@ func TestNonStreamingEmptyCompletionFailsOver(t *testing.T) {
 			t.Fatalf("b chat calls = %d, want 0 (exempt requests are never replayed)", b.chatCalls())
 		}
 	})
+}
+
+// TestStreamingReasoningOnlyIsNotEmpty is the streaming twin of the
+// reasoning-only subtest above: a stream with no content deltas whose
+// Done event carries reasoning (the model spent its budget thinking,
+// finish_reason length) must COMMIT, not fail over as an empty
+// stream. The Done event's reassembled response (StreamEvent.Resp)
+// is where the reasoning rides — bridgeStream sets it on Done only.
+func TestStreamingReasoningOnlyIsNotEmpty(t *testing.T) {
+	rs := &reasoning.State{Blocks: []reasoning.Block{{Kind: reasoning.KindThought, Text: "budget spent thinking"}}}
+	a := &prereadChunkClient{chunkFn: func(ctx context.Context, req provider.ChatRequest, onChunk func(provider.StreamChunk) error) (*provider.ChatResponse, error) {
+		// One finish-only chunk, no content deltas — exactly the
+		// wire shape of a reasoning-exhausted free-tier completion.
+		if err := onChunk(provider.StreamChunk{FinishReason: "length"}); err != nil {
+			return nil, err
+		}
+		return &provider.ChatResponse{FinishReason: "length", Reasoning: rs}, nil
+	}}
+	b := streamClient([]string{"bee"}, nil)
+	eng := NewEngine(map[string]provider.Client{"a": a, "b": b}, nil, testConfig())
+	chain := []Attempt{{ProviderID: "a", Model: "m"}, {ProviderID: "b", Model: "m"}}
+
+	ch, err := eng.ChatStreamWithChain(context.Background(), chain, testReq())
+	if err != nil {
+		t.Fatalf("ChatStreamWithChain: %v", err)
+	}
+	out, err := collectStream(t, ch)
+	if err != nil {
+		t.Fatalf("stream err = %v, want nil (reasoning-only is not empty)", err)
+	}
+	if out != "" {
+		t.Fatalf("deltas = %q, want no content deltas", out)
+	}
+	if a.streamCalls() != 1 || b.streamCalls() != 0 {
+		t.Fatalf("calls a=%d b=%d, want 1/0 (no failover)", a.streamCalls(), b.streamCalls())
+	}
+	trace := eng.LastTrace()
+	if trace == nil || len(trace.Attempts) != 1 {
+		t.Fatalf("trace = %+v, want 1 attempt", trace)
+	}
 }
