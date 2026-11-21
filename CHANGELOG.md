@@ -13,6 +13,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 0 security closure (2026-11-21)
+
+- **Webhook SSRF / DNS rebinding fixed.** Delivery used a plain
+  `http.Client`, so a URL validated at registration was resolved again
+  at delivery and on every retry; a rebinding host could then reach
+  loopback, private or cloud-metadata addresses. The egress guard now
+  lives in `internal/egress` and is shared by `/v1/web/fetch` and webhook
+  delivery: every connection (including retries) dials only the IP it
+  validated, mixed public/private answers are refused, redirects are not
+  followed, environment proxies are ignored, TLS still verifies the
+  hostname. A blocked destination is terminal (no retries). Registration
+  validates with the same policy, so reserved ranges such as TEST-NET are
+  now refused there too, and config-file loopback webhooks are no longer
+  delivered.
+- **`/admin/update` with no published release.** GitHub's 404 for
+  `releases/latest` is confirmed against the repository endpoint; only
+  "repository exists, no release" answers 200 with `latest: null`,
+  `release_available: false`, `status: no_published_release`. Rate
+  limits (503 + Retry-After), timeouts (504), network, auth, 5xx,
+  malformed responses and a missing repository (502) each keep their own
+  `error.code` (`internal/release/latest.go`, shared with the CLI).
+
 ### Phase 0 cleanup (2026-11-21)
 
 - **Removed fabricated endpoints:** `POST /v1/systemone` (returned a canned

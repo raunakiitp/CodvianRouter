@@ -71,6 +71,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/plugins"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/readiness"
+	"github.com/raunakiitp/codvian-router/internal/release"
 	"github.com/raunakiitp/codvian-router/internal/router"
 	"github.com/raunakiitp/codvian-router/internal/scoring"
 	"github.com/raunakiitp/codvian-router/internal/server"
@@ -5183,7 +5184,7 @@ func runServe(opts options) int {
 		// CLI, which verifies signature + checksum.
 		server.WithUpdateCheck(Version, func(ctx context.Context) (string, error) {
 			client := &http.Client{Timeout: 15 * time.Second}
-			return resolveLatestTag(updateAPIBase(), client)
+			return release.LatestTag(ctx, client, updateAPIBase(), release.DefaultRepo)
 		}),
 	)
 	// Responses transcripts (CHECKLIST 315–316): restore the

@@ -112,7 +112,10 @@ func TestDispatcherDownEndpointDoesNotBlock(t *testing.T) {
 	}), "", 0)
 	// No server listens on this port: delivery fails, Notify
 	// must still return immediately.
-	d := New([]Endpoint{{ID: "down", URL: "http://127.0.0.1:1/hook", Events: []string{QuotaExceededEvent}}}, nil, logger)
+	// A plain client: this test is about the retry sequence on a
+	// down endpoint, not the egress policy (the default client
+	// refuses loopback outright - TestDefaultClientRefusesLoopback).
+	d := New([]Endpoint{{ID: "down", URL: "http://127.0.0.1:1/hook", Events: []string{QuotaExceededEvent}}}, &http.Client{}, logger)
 	done := make(chan struct{})
 	go func() {
 		d.Notify(QuotaExceededEvent, map[string]any{"reason": "budget"})

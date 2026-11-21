@@ -31,7 +31,7 @@ func (s *Server) webFetchClient() *http.Client {
 	if s.webFetchTLS != nil {
 		tlsCfg = s.webFetchTLS.Clone()
 	}
-	return g.client(webFetchTimeout, webFetchMaxRedirects, tlsCfg)
+	return g.Client(webFetchTimeout, webFetchMaxRedirects, tlsCfg)
 }
 
 // handleWebFetch serves POST /v1/web/fetch: fetches one public

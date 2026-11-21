@@ -38,7 +38,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -83,26 +83,16 @@ func updateHTTPClient() *http.Client {
 
 // resolveLatestTag returns the latest release tag (v-prefixed) from
 // the GitHub releases API.
+// The lookup itself lives in internal/release (LatestTag) so the CLI
+// and POST /admin/update classify failures the same way; a confirmed
+// "no published release" is a *release.LookupError of kind
+// KindNoRelease, never a guessed tag.
 func resolveLatestTag(apiBase string, client *http.Client) (string, error) {
-	url := strings.TrimSuffix(apiBase, "/") + "/repos/" + release.DefaultRepo + "/releases/latest"
-	resp, err := client.Get(url)
-	if err != nil {
-		return "", fmt.Errorf("could not resolve the latest release from the GitHub API: %w", err)
+	tag, err := release.LatestTag(context.Background(), client, apiBase, release.DefaultRepo)
+	if release.IsNoRelease(err) {
+		return "", fmt.Errorf("%s has no published release yet: nothing to update to", release.DefaultRepo)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GitHub API %s: HTTP %s", url, resp.Status)
-	}
-	var v struct {
-		TagName string `json:"tag_name"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&v); err != nil {
-		return "", fmt.Errorf("GitHub API %s: bad response: %w", url, err)
-	}
-	if v.TagName == "" {
-		return "", fmt.Errorf("GitHub API %s: latest release has no tag_name", url)
-	}
-	return release.NormalizeTag(v.TagName)
+	return tag, err
 }
 
 // downloadWithRetries GETs url to dest, retrying 3 attempts with

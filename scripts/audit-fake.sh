@@ -372,11 +372,22 @@ if [ -f "$WF" ]; then
   if grep -nE 'net\.LookupIP|http\.DefaultClient|&http\.Client\{|http\.Get\(' "$WF" >/dev/null; then
     p0_finding "web_fetch.go builds its own client or resolves DNS itself (DNS-rebinding risk)"
   fi
-  grep -q 'DialContext:[[:space:]]*g\.dialContext' "$ROOT/internal/server/egress_guard.go" 2>/dev/null \
-    || p0_finding "egress_guard.go transport does not dial through the validating dialContext"
-  grep -qE 'Proxy:[[:space:]]*nil' "$ROOT/internal/server/egress_guard.go" 2>/dev/null \
-    || p0_finding "egress_guard.go transport does not disable environment proxies"
+  EG="$ROOT/internal/egress/egress.go"
+  grep -q 'DialContext:[[:space:]]*g\.DialContext' "$EG" 2>/dev/null \
+    || p0_finding "internal/egress transport does not dial through the validating DialContext"
+  grep -qE 'Proxy:[[:space:]]*nil' "$EG" 2>/dev/null \
+    || p0_finding "internal/egress transport does not disable environment proxies"
 fi
+# P6b. Webhook delivery must default to the egress client (validated
+# IP dial at delivery, not only at registration), and must not follow
+# redirects.
+WH="$ROOT/internal/webhooks/webhooks.go"
+grep -q 'egress\.Default()\.Client(0, 0, nil)' "$WH" 2>/dev/null \
+  || p0_finding "webhooks.New does not default to the egress client with redirects disabled"
+grep -nE '&http\.Client\{\}' "$WH" >/dev/null 2>&1 \
+  && p0_finding "webhooks.go builds a plain http.Client (DNS rebinding at delivery)"
+grep -nE 'net\.LookupIP|checkWebhookIP' "$ROOT/internal/server/webhooks_api.go" >/dev/null 2>&1 \
+  && p0_finding "webhooks_api.go validates with its own DNS lookup instead of the egress guard"
 
 # P7. /admin/restart: spawn-capable pattern present, and the handler
 # never falls back to the shutdown hook while saying "restarting".

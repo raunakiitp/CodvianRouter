@@ -58,15 +58,16 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/config"
 	"github.com/raunakiitp/codvian-router/internal/guardrails"
@@ -151,46 +152,21 @@ func validateWebhookURL(raw string) error {
 	if host == "" {
 		return fmt.Errorf("url %q has no host", raw)
 	}
-	if strings.EqualFold(host, "localhost") {
-		return fmt.Errorf("url %q targets localhost, which is not an allowed webhook target (loopback targets are rejected by default; register one through the config file instead)", raw)
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		if err := checkWebhookIP(ip); err != nil {
-			return fmt.Errorf("url %q targets %s: %v", raw, ip, err)
-		}
-		return nil
-	}
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return fmt.Errorf("url %q: host %q does not resolve: %v", raw, host, err)
-	}
-	for _, ip := range ips {
-		if err := checkWebhookIP(ip); err != nil {
-			return fmt.Errorf("url %q resolves to %s: %v", raw, ip, err)
-		}
+	// Same policy as delivery (internal/egress): registration is an
+	// early, user-facing check; the real boundary is delivery, which
+	// resolves again on every connection and dials only a validated
+	// IP. A resolution failure is a rejection, not a pass.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, err := webhookEgress().Resolve(ctx, host); err != nil {
+		return fmt.Errorf("url %q is not an allowed webhook target: %v", raw, err)
 	}
 	return nil
 }
 
-// checkWebhookIP rejects the addresses a webhook must never be
-// pointed at by default: loopback, private (RFC 1918), link-local
-// and multicast. The caller names the URL; this names the reason.
-func checkWebhookIP(ip net.IP) error {
-	switch {
-	case ip.IsLoopback():
-		return fmt.Errorf("loopback addresses are not allowed webhook targets")
-	case ip.IsPrivate():
-		return fmt.Errorf("private-network addresses are not allowed webhook targets")
-	case ip.IsLinkLocalUnicast(), ip.IsLinkLocalMulticast():
-		return fmt.Errorf("link-local addresses are not allowed webhook targets")
-	case ip.IsMulticast():
-		return fmt.Errorf("multicast addresses are not allowed webhook targets")
-	case ip.IsUnspecified():
-		return fmt.Errorf("unspecified addresses are not allowed webhook targets")
-	default:
-		return nil
-	}
-}
+// webhookEgress is the guard used to validate webhook targets; a
+// variable so tests can inject deterministic DNS.
+var webhookEgress = defaultEgressGuard
 
 // validateWebhookEvents requires at least one event and rejects
 // any name outside the fixed list, naming the first unknown one.
@@ -270,7 +246,9 @@ func (s *Server) rebuildWebhookDispatcher() {
 	for _, w := range s.cfg.Webhooks {
 		endpoints = append(endpoints, webhooks.Endpoint{ID: w.ID, URL: w.URL, Events: w.Events, Secret: w.Secret})
 	}
-	s.webhooks = webhooks.New(endpoints, nil, s.logger)
+	// nil client = the SSRF-safe egress client (production). Tests
+	// that deliver to a loopback httptest receiver set webhookClient.
+	s.webhooks = webhooks.New(endpoints, s.webhookClient, s.logger)
 }
 
 // persistWebhooks saves the config file after a mutation, or
