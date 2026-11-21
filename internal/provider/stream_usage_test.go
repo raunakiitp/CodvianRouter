@@ -145,6 +145,28 @@ func TestOpenAIStreamNoUsageStaysZero(t *testing.T) {
 	}
 }
 
+func TestUsageNonNegative(t *testing.T) {
+	u := Usage{
+		PromptTokens: -10, CompletionTokens: 5, TotalTokens: -5,
+		CachedTokens: -2, ReasoningTokens: -1, CacheWriteTokens: -3,
+		CacheWriteTokens5m: -1, CacheWriteTokens1h: 2,
+	}
+	got := u.NonNegative()
+	if got.PromptTokens != 0 || got.CompletionTokens != 5 || got.TotalTokens != 0 ||
+		got.CachedTokens != 0 || got.ReasoningTokens != 0 || got.CacheWriteTokens != 0 ||
+		got.CacheWriteTokens5m != 0 || got.CacheWriteTokens1h != 2 {
+		t.Fatalf("NonNegative = %+v, want negatives clamped, valid counts kept", got)
+	}
+	// The receiver is a value copy: the original is untouched.
+	if u.PromptTokens != -10 {
+		t.Fatalf("NonNegative mutated its receiver: %+v", u)
+	}
+	valid := Usage{PromptTokens: 10, CompletionTokens: 5, TotalTokens: 15, CachedTokens: 3}
+	if valid.NonNegative() != valid {
+		t.Fatal("NonNegative changed a valid report")
+	}
+}
+
 func TestChatRequestStreamOptionsDecode(t *testing.T) {
 	cases := []struct {
 		name string

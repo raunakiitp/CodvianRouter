@@ -1159,6 +1159,30 @@ type Usage struct {
 	AutoVariant string `json:"-"`
 }
 
+// NonNegative returns u with every token count clamped to >= 0
+// (P1-09 security review): a malformed or hostile upstream report
+// can carry negative counts, which must never price as negative
+// spend or reach a client as negative tokens. Valid reports are
+// returned unchanged. Subset-vs-parent clamping stays the ledger's
+// job (normalizeUsage); this is the display/telemetry sanitization.
+func (u Usage) NonNegative() Usage {
+	clamp := func(n int) int {
+		if n < 0 {
+			return 0
+		}
+		return n
+	}
+	u.PromptTokens = clamp(u.PromptTokens)
+	u.CompletionTokens = clamp(u.CompletionTokens)
+	u.TotalTokens = clamp(u.TotalTokens)
+	u.CachedTokens = clamp(u.CachedTokens)
+	u.ReasoningTokens = clamp(u.ReasoningTokens)
+	u.CacheWriteTokens = clamp(u.CacheWriteTokens)
+	u.CacheWriteTokens5m = clamp(u.CacheWriteTokens5m)
+	u.CacheWriteTokens1h = clamp(u.CacheWriteTokens1h)
+	return u
+}
+
 // ChatResponse is a completed (non-streaming or reassembled streaming)
 // chat completion. ToolCalls carries the model's tool calls (empty
 // for a plain text turn) and FinishReason the upstream finish reason

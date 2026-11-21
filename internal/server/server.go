@@ -6891,16 +6891,19 @@ type clientCompletionTokensDetails struct {
 
 // projectClientUsage projects a provider-reported usage block into
 // the client-facing shape. A zero usage block projects to zero
-// counts (the caller decides whether to emit it at all).
+// counts (the caller decides whether to emit it at all). Negative
+// counts are malformed upstream output and clamp to 0 — the client
+// never sees negative tokens (P1-09; the ledger clamps identically).
 func projectClientUsage(u provider.Usage) clientUsageBlock {
+	u = u.NonNegative()
 	b := clientUsageBlock{
 		PromptTokens:     u.PromptTokens,
 		CompletionTokens: u.CompletionTokens,
 		TotalTokens:      u.TotalTokens,
 		CachedTokens:     u.CachedTokens,
 	}
-	if u.CachedTokens > 0 {
-		b.PromptTokensDetails = &clientPromptTokensDetails{CachedTokens: u.CachedTokens}
+	if b.CachedTokens > 0 {
+		b.PromptTokensDetails = &clientPromptTokensDetails{CachedTokens: b.CachedTokens}
 	}
 	if u.ReasoningTokens > 0 {
 		b.CompletionTokensDetails = &clientCompletionTokensDetails{ReasoningTokens: u.ReasoningTokens}

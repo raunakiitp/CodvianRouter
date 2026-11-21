@@ -1512,9 +1512,24 @@ func normalizeUsage(u Usage, prices Prices, flatRateAsZero bool) normalizedRow {
 	}
 	r.latencyMs = u.LatencyMS
 	if u.SplitKnown {
+		// Parent counts are clamped to >= 0 (P1-09 security
+		// review): a malformed or hostile upstream report can
+		// carry negative token counts, and a negative prompt or
+		// completion would price as negative spend and corrupt
+		// budgets/analytics. Subsets below are clamped to these
+		// sanitized parents in turn. Valid reports are unchanged.
 		r.promptTokens = u.PromptTokens
+		if r.promptTokens < 0 {
+			r.promptTokens = 0
+		}
 		r.completionTokens = u.CompletionTokens
+		if r.completionTokens < 0 {
+			r.completionTokens = 0
+		}
 		r.totalTokens = u.TotalTokens
+		if r.totalTokens < 0 {
+			r.totalTokens = 0
+		}
 		if r.totalTokens == 0 {
 			r.totalTokens = r.promptTokens + r.completionTokens
 		}

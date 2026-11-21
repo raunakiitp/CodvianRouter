@@ -299,4 +299,13 @@ func TestProjectClientUsageNoInventedDetails(t *testing.T) {
 	if z.PromptTokens != 0 || z.TotalTokens != 0 || z.PromptTokensDetails != nil {
 		t.Fatalf("zero usage projected wrong: %+v", z)
 	}
+	// P1-09: negative counts are malformed upstream output — the
+	// client never sees negative tokens or a negative detail.
+	n := projectClientUsage(provider.Usage{PromptTokens: -10, CompletionTokens: -2, TotalTokens: -12, CachedTokens: -3, ReasoningTokens: -1})
+	if n.PromptTokens != 0 || n.CompletionTokens != 0 || n.TotalTokens != 0 || n.CachedTokens != 0 {
+		t.Fatalf("negative usage projected wrong: %+v", n)
+	}
+	if n.PromptTokensDetails != nil || n.CompletionTokensDetails != nil {
+		t.Fatalf("negative details invented: %+v", n)
+	}
 }
