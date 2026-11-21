@@ -4311,6 +4311,11 @@ func openStack(opts options) (*stack, error) {
 	// avoided per shared request); the dashboard's coalescing
 	// section reads the same numbers from the engine.
 	engine.SetCoalescingMetrics(recorder)
+	// T7 usage/cost metrics: every attempt's provider-reported token
+	// split and exact reported cost reach /metrics from the engine's
+	// single recordAttempt path (chat and streaming alike). Computed
+	// pricing stays in the ledger analytics API, never duplicated here.
+	engine.SetUsageMetrics(recorder)
 	// Adaptive concurrency: the limiter's per-provider cap is
 	// exposed as codvian_router_concurrency_limit{provider} and
 	// every shed call as
@@ -5205,6 +5210,12 @@ func runServe(opts options) int {
 	// persisted store before serving — a restart resumes the
 	// pre-restart conversations instead of 404ing them.
 	srv.RestoreResponses()
+	// T7 provider-health webhooks: the engine's genuine circuit-breaker
+	// transitions (CLOSED->OPEN / OPEN->CLOSED) become the
+	// "provider.degraded" / "provider.recovered" webhook events,
+	// delivered best-effort to subscribed endpoints with no secret or
+	// payload content in the body.
+	st.engine.SetBreakerEvents(srv.BreakerEventsWire())
 	httpSrv := &http.Server{Addr: st.listen, Handler: srv}
 	// The listener is created explicitly (instead of
 	// ListenAndServe) so it can be wrapped with

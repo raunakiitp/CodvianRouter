@@ -46,6 +46,19 @@ import (
 // being reached (the reference router "quota.exceeded").
 const QuotaExceededEvent = "quota.exceeded"
 
+// ProviderDegradedEvent fires when a provider's circuit breaker first
+// trips (CLOSED -> OPEN), with only the provider id and the real
+// consecutive-failure/trip counts and open duration in the payload.
+// ProviderRecoveredEvent fires when that OPEN breaker later clears on
+// a real success. Both are edge-triggered: steady failures while the
+// breaker is already open, and ordinary successes by a healthy
+// provider, never emit an event. Neither payload contains a key, a
+// prompt or any provider credential.
+const (
+	ProviderDegradedEvent  = "provider.degraded"
+	ProviderRecoveredEvent = "provider.recovered"
+)
+
 // Endpoint is one subscribed webhook endpoint.
 type Endpoint struct {
 	ID     string

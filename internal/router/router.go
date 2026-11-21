@@ -1062,6 +1062,26 @@ func (c Config) withDefaults() Config {
 	return c
 }
 
+// BreakerEvents is optionally implemented by a sink that wants
+// edge-triggered provider-health notifications (a server webhook
+// adapter satisfies it). Only CLOSED->OPEN and OPEN->CLOSED
+// transitions are reported — steady failures while open, and routine
+// successes on a healthy provider, never emit events. A nil sink
+// disables reporting without changing breaker behavior.
+type BreakerEvents interface {
+	ProviderDegraded(provider string, consecutiveFailures, trips int, openFor time.Duration)
+	ProviderRecovered(provider string)
+}
+
+// UsageMetrics is optionally implemented by a metrics sink that wants
+// per-attempt token and upstream-reported-cost counters
+// (metrics.Recorder satisfies it). Wiring is best-effort: a nil sink
+// disables reporting, never routing or ledger accounting.
+type UsageMetrics interface {
+	IncUsageTokens(provider, model, kind string, tokens int)
+	AddReportedCost(provider, model string, usd float64)
+}
+
 // CoalescingMetrics is optionally implemented by a metrics sink that
 // wants one counter per shared waiter (metrics.Recorder satisfies it).
 type CoalescingMetrics interface {
@@ -1347,6 +1367,14 @@ type Engine struct {
 	// coalescingMetrics, when set, receives one IncCoalescedShared
 	// per waiter served from a shared flight. Nil disables it.
 	coalescingMetrics CoalescingMetrics
+	// usageMetrics, when set, receives token usage and upstream-
+	// reported cost from recordAttempt — the engine's single
+	// accounting point for both chat and streaming requests.
+	usageMetrics UsageMetrics
+	// breakerEvents, when set, receives genuine CLOSED->OPEN and
+	// OPEN->CLOSED circuit-breaker transitions (e.g. the server's
+	// webhook adapter). Nil disables notifications only.
+	breakerEvents BreakerEvents
 
 	// limiter is the per-(provider, key) adaptive concurrency
 	// limiter (internal/adaptive, Gradient2). It caps in-flight
@@ -1494,6 +1522,38 @@ func (e *Engine) SetCoalescingMetrics(m CoalescingMetrics) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.coalescingMetrics = m
+}
+
+// SetUsageMetrics wires the metrics sink for per-attempt token usage and
+// upstream-reported cost (e.g. *metrics.Recorder). A nil value disables
+// reporting only; the ledger still records every attempt. Safe to call
+// after NewEngine — recordAttempt reads the field on every attempt.
+func (e *Engine) SetUsageMetrics(m UsageMetrics) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.usageMetrics = m
+}
+
+// SetBreakerEvents wires an edge-triggered provider-health sink (e.g.
+// the server's webhook adapter). A nil value disables notifications
+// only; breakers still open, probe and recover exactly as before.
+func (e *Engine) SetBreakerEvents(s BreakerEvents) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.breakerEvents = s
+}
+
+// notifyDegradedLocked reports a CLOSED->OPEN (or HALF_OPEN->OPEN)
+// transition to the optional sink. Called under e.mu, so it copies
+// the numbers and dispatches asynchronously — no sink can re-enter
+// the engine and deadlock.
+func (e *Engine) notifyDegradedLocked(provider string, st *breakerState, wasOpen, wasProbe bool) {
+	if e.breakerEvents == nil || (wasOpen && !wasProbe) {
+		return
+	}
+	sink := e.breakerEvents
+	n, trips, openFor := st.consecutiveFailures, st.trips, st.openFor
+	go sink.ProviderDegraded(provider, n, trips, openFor)
 }
 
 // SetConcurrencyMetrics wires the metrics sink that counts shed
@@ -3080,11 +3140,20 @@ func (e *Engine) breakerOpen(provider string) bool {
 
 func (e *Engine) breakerSuccess(provider string) {
 	e.mu.Lock()
-	_, had := e.breakers[provider]
+	st, had := e.breakers[provider]
+	wasOpen := had && !st.openedAt.IsZero()
+	sink := e.breakerEvents
 	// Deleting the state resets the escalation: a provider that
 	// recovered earns the base reset on its next trip (M4.2).
 	delete(e.breakers, provider)
 	e.mu.Unlock()
+	// Edge-triggered recovery: only a success that actually clears
+	// an OPEN breaker is reported; ordinary healthy successes are
+	// silent. Dispatch outside e.mu so a sink cannot re-enter the
+	// engine and deadlock.
+	if sink != nil && wasOpen {
+		go sink.ProviderRecovered(provider)
+	}
 	// G11 Area 2: persist the cleared state, but only when
 	// there was state to clear — a healthy provider's steady
 	// successes cost no I/O.
@@ -3202,18 +3271,22 @@ func (e *Engine) breakerFailureLocked(provider, reason string) {
 		// Half-open probe failed: reopen immediately, as the
 		// NEXT trip (escalated — the probe failure is a new
 		// open cycle, not the same one).
+		wasOpen, wasProbe := !st.openedAt.IsZero(), st.probeInFlight
 		st.probeInFlight = false
 		st.consecutiveFailures = threshold
 		st.trips++
 		st.openedAt = time.Now()
 		st.openFor = e.breakerOpenFor(provider, st.trips)
+		e.notifyDegradedLocked(provider, st, wasOpen, wasProbe)
 		return
 	}
 	st.consecutiveFailures++
 	if st.consecutiveFailures >= threshold {
+		wasOpen := !st.openedAt.IsZero()
 		st.trips++
 		st.openedAt = time.Now()
 		st.openFor = e.breakerOpenFor(provider, st.trips)
+		e.notifyDegradedLocked(provider, st, wasOpen, false)
 	}
 }
 
@@ -3834,6 +3907,23 @@ func isEmptyCompletion(resp *provider.ChatResponse) bool {
 // place the engine writes ledger rows, so the keyed and unkeyed
 // paths can never drift apart on what a row means.
 func (e *Engine) recordAttempt(keyID string, att Attempt, ok bool, latencyMs int64, usage provider.Usage) {
+	// Token/cost metrics are independent of ledger availability: a
+	// nil ledger must not hide usage from /metrics. The sink reads
+	// only provider, model and numeric counters — never a key or
+	// any message content. Both chat and streaming calls funnel
+	// through here, so each attempt is counted exactly once.
+	e.mu.Lock()
+	sink := e.usageMetrics
+	e.mu.Unlock()
+	if sink != nil {
+		sink.IncUsageTokens(att.ProviderID, att.Model, "prompt", usage.PromptTokens)
+		sink.IncUsageTokens(att.ProviderID, att.Model, "completion", usage.CompletionTokens)
+		sink.IncUsageTokens(att.ProviderID, att.Model, "cached", usage.CachedTokens)
+		sink.IncUsageTokens(att.ProviderID, att.Model, "reasoning", usage.ReasoningTokens)
+		if usage.Cost != nil {
+			sink.AddReportedCost(att.ProviderID, att.Model, *usage.Cost)
+		}
+	}
 	if e.ledger == nil {
 		return
 	}

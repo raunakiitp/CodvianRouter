@@ -85,7 +85,7 @@ const BudgetWarningEvent = "budget.warning"
 
 // webhookKnownEvents is the fixed event list a registration may
 // subscribe to. Unknown events are a 400 naming the event.
-var webhookKnownEvents = []string{webhooks.QuotaExceededEvent, BudgetWarningEvent}
+var webhookKnownEvents = []string{webhooks.QuotaExceededEvent, BudgetWarningEvent, webhooks.ProviderDegradedEvent, webhooks.ProviderRecoveredEvent}
 
 // webhookMaxBody caps a registration request body (1 MiB, the
 // same cap the quota-schedule handler uses).
@@ -297,7 +297,7 @@ func (s *Server) handleWebhookCreate(w http.ResponseWriter, r *http.Request) {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid webhook registration: expected {\"url\": string, \"events\": [\"quota.exceeded\"|\"budget.warning\"], \"secret\": string}")
+		writeError(w, http.StatusBadRequest, "invalid webhook registration: expected {\"url\": string, \"events\": [\"quota.exceeded\"|\"budget.warning\"|\"provider.degraded\"|\"provider.recovered\"], \"secret\": string}")
 		return
 	}
 	req.URL = strings.TrimSpace(req.URL)
@@ -427,7 +427,7 @@ func (s *Server) handleWebhookUpdate(w http.ResponseWriter, r *http.Request, sto
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid webhook update: expected {\"url\": string (optional), \"events\": [\"quota.exceeded\"|\"budget.warning\"] (optional), \"secret\": string (optional)}")
+		writeError(w, http.StatusBadRequest, "invalid webhook update: expected {\"url\": string (optional), \"events\": [\"quota.exceeded\"|\"budget.warning\"|\"provider.degraded\"|\"provider.recovered\"] (optional), \"secret\": string (optional)}")
 		return
 	}
 	next := stored
