@@ -28,7 +28,7 @@ about which model is up, which is cheapest, or what to do when one goes down.
 | Architecture | Local-first, zero external telemetry or cloud relay |
 | Tested toolchain | Go 1.27.4 (minimum `go 1.26.0`) |
 | Test suite | `go test ./...` passes on all 49 packages (Windows, 2026-11-21) |
-| API routes | **313** classified routes (10 Local-Only, 49 Always-Protected, 254 Management), of which **64** answer `501 feature_unavailable` on purpose |
+| API routes | **314** classified routes (11 Local-Only, 49 Always-Protected, 254 Management), of which **63** answer `501 feature_unavailable` on purpose |
 | Providers in catalog | **610** catalog entries; 370 have a base URL the router can call with your key |
 | Routing strategies | **35** strategies, nested combos, and auto-router variants |
 | Agent & MCP ecosystem | **24** MCP tools over HTTP (3 on stdio) + **CodeVN** setup |
@@ -116,7 +116,7 @@ Full install guide: [docs/INSTALL.md](docs/INSTALL.md).
 |---|---|
 | Local dashboard | Providers, models, usage, and health at `http://127.0.0.1:20128` |
 | Guardrails | PII detection and redaction, prompt-injection checks, content filtering |
-| Keys & auth | Gateway keys, OAuth/JWT clients for the gateway, per-key scopes and IP lists — every request authenticated. Provider sign-in (subscription OAuth) is not supported |
+| Keys & auth | Gateway keys, OAuth/JWT clients for the gateway, per-key scopes and IP lists — every request authenticated. Provider account login: OpenRouter OAuth PKCE (`provider login openrouter`); Azure OpenAI via Microsoft Entra ID client credentials. Subscription/cookie sign-in remains unsupported |
 | MCP server | 24 tools, so coding agents can drive the router too |
 | CodeVN & Agent Setup | One-command setup: `codvian-router setup codevn` (also Claude, Continue) |
 | CLI | `serve`, `init`, `eval`, `setup`, `run`, `doctor`, `tray`, `catalog`, `release`, and more |
@@ -130,9 +130,18 @@ and 231 have none yet (metadata only). A catalog entry is a starting point,
 not a promise: an entry is routed only after you add it with your own key,
 and the router tests that key against the provider when you add it.
 Web-session-cookie providers are catalogued but refused as routing
-targets. OAuth-style entries need a token exchange; the interactive
-subscription sign-in flows (device code / browser login) are not built
-yet, so those entries are not usable through a login. Nothing is faked.
+targets. Two credential exchanges are implemented (Phase 1): OpenRouter
+account login via the official OAuth PKCE flow (`codvian-router provider
+login openrouter` or `POST /admin/provider/login` — the exchanged API key
+is live-tested and stored encrypted, and further logins join the same
+provider's key pool as additional accounts), and Azure OpenAI with
+Microsoft Entra ID client credentials (store `{tenant_id, client_id,
+client_secret}` JSON as the key; the router mints the Bearer token and
+re-mints it on expiry). The interactive subscription sign-in flows
+(device code / browser cookie) are still not built, so those entries are
+not usable through a login. Nothing is faked. See
+[docs/PROVIDER_LOGIN.md](docs/PROVIDER_LOGIN.md) and the evidence-tiered
+[docs/PROVIDER_AUTH_MATRIX.md](docs/PROVIDER_AUTH_MATRIX.md).
 
 ## How it works
 
@@ -183,10 +192,10 @@ Requires Go 1.26+ to build. Runs on Linux, macOS, and Windows.
 
 | Status | What it covers |
 |---|---|
-| Implemented and verified (tests + local run) | OpenAI-compatible chat, models, embeddings, rerank, Responses API; routing strategies and combos; failover, hedging, health checks; exact and semantic cache; compression; ledger, cost tracking, per-key budgets and quota pools; guardrails; gateway keys and OAuth/JWT clients; `/admin/restart` (graceful relaunch); `/admin/update` (release check only); SSRF-safe `/v1/web/fetch` |
+| Implemented and verified (tests + local run) | OpenAI-compatible chat, models, embeddings, rerank, Responses API; routing strategies and combos; failover, hedging, health checks; exact and semantic cache; compression; ledger, cost tracking, per-key budgets and quota pools; guardrails; gateway keys and OAuth/JWT clients; `/admin/restart` (graceful relaunch); `/admin/update` (release check only); SSRF-safe `/v1/web/fetch`; OpenRouter OAuth PKCE account login and Azure Entra ID client-credentials auth (deterministic mock auth-host/upstream tests — see the auth matrix for evidence tiers) |
 | Implemented, not verified against a real provider in this repo's checks | Provider-specific wires (Anthropic, Gemini, Vertex, Bedrock, Cohere), audio, images, video and music passthroughs. They are tested against mock upstreams |
-| Metadata only | Catalog entries without a base URL (231), web-cookie entries, and OAuth entries that need a sign-in flow |
-| Unsupported or deferred (`501 feature_unavailable`) | Provider sign-in, system service install, dynamic plugin loading, and 61 dashboard settings routes whose values were never applied (budget templates, management tokens, key pools, global IP filter, feature flags, CORS, stickiness, log destinations, and others). Each 501 names the route to use instead when one exists. The full list is `internal/server/unavailable_routes.go` |
+| Metadata only | Catalog entries without a base URL (231), web-cookie entries, and subscription OAuth entries that need an unbuilt sign-in flow |
+| Unsupported or deferred (`501 feature_unavailable`) | System service install, dynamic plugin loading, and 61 dashboard settings routes whose values were never applied (budget templates, management tokens, key pools, global IP filter, feature flags, CORS, stickiness, log destinations, and others). Each 501 names the route to use instead when one exists. The full list is `internal/server/unavailable_routes.go` |
 
 `scripts/audit-fake.sh` checks this contract statically and fails if a
 known fake (canned success text, fixed metrics, an undocumented 501) comes
