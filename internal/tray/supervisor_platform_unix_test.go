@@ -20,6 +20,18 @@ func failCommand() (string, []string) {
 	return "false", nil
 }
 
+// restartRequestCommand runs ~2s, then exits with RestartExitCode,
+// like a gateway answering POST /admin/restart.
+func restartRequestCommand() (string, []string) {
+	return "sh", []string{"-c", "sleep 2; exit 75"}
+}
+
+// fastRestartCodeCommand exits with RestartExitCode at once: a
+// broken child, which must not count as a requested restart.
+func fastRestartCodeCommand() (string, []string) {
+	return "sh", []string{"-c", "exit 75"}
+}
+
 // shellSleepCommand returns a shell that spawns a sleep grandchild
 // in the same process group, so TestStopKillsProcessGroup proves
 // Stop kills the group, not just the direct child.

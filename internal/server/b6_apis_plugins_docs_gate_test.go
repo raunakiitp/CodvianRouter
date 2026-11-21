@@ -265,7 +265,9 @@ func TestBlockB6APIsPluginsAndDocsGate(t *testing.T) {
 
 		// 3.2 Safety Enforcements: Dynamic/Arbitrary code loading rejected with 501 Not Implemented
 		// per Section D.4 Rule #5 (deliberate security design divergence).
-		for _, endpoint := range []string{"/admin/plugin/load", "/admin/service/install", "/admin/update"} {
+		// /admin/update is a check-only route since Phase 0 (it never
+		// installs; 503 without a checker) - see TestAdminUpdateCheck.
+		for _, endpoint := range []string{"/admin/plugin/load", "/admin/service/install"} {
 			rec = doB6Req(srv, http.MethodPost, endpoint, "{}", rawAdminKey)
 			if rec.Code != http.StatusNotImplemented {
 				t.Fatalf("POST %s code = %d, want 501 (honest safety refusal against dynamic code loading)", endpoint, rec.Code)

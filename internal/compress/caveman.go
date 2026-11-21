@@ -740,7 +740,7 @@ var cavemanRules = []Rule{
 		"it is important to", "you should", "remember to",
 	}, false),
 	// ", and also" / ", as well as" -> "," (subset: punctuation only).
-	Rule{Name: "list_conjunction", Level: LevelFull, apply: func(r []rune) ([]rune, bool) {
+	{Name: "list_conjunction", Level: LevelFull, apply: func(r []rune) ([]rune, bool) {
 		alts := []phraseAlt{
 			{words: []string{",", "and", "also"}, replacement: ",", noBoundaryLeft: true},
 			{words: []string{",", "as", "well", "as"}, replacement: ",", noBoundaryLeft: true},

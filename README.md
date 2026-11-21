@@ -15,22 +15,24 @@ about which model is up, which is cheapest, or what to do when one goes down.
 
 </div>
 
-> **Production-grade, local-first AI gateway.** Point your app at one OpenAI-compatible
-> base URL, plug in your providers once with your own keys, and stop thinking
-> about which model is up, which is cheapest, or what to do when one goes down.
+> **Status: pre-release, local-first AI gateway.** It builds, its test suite
+> passes, and it routes real OpenAI-compatible traffic to providers you add
+> with your own API keys. It is not a published release yet, and several
+> dashboard-era settings routes are honestly marked unavailable (see
+> [Feature status](#feature-status)).
 
 ## At a glance
 
 | Metric | Value |
 |---|---|
 | Architecture | Local-first, zero external telemetry or cloud relay |
-| Tested Toolchain | Go 1.27.4 (minimum `go 1.26.0`) |
-| Test suite | Full gate green across all 48 packages (race-tested) |
-| API routes | **308** classified routes (9 Local-Only, 49 Always-Protected, 250 Management) |
-| Providers in catalog | **610** catalog entries — 370 routable |
-| Routing strategies | **34** strategies, nested combos, and auto-router variants |
-| Agent & MCP ecosystem | **24** MCP tools + first-class **CodeVN** integration |
-| Binary | Single Go binary, ~39 MB, no runtime dependencies |
+| Tested toolchain | Go 1.27.4 (minimum `go 1.26.0`) |
+| Test suite | `go test ./...` passes on all 49 packages (Windows, 2026-11-21) |
+| API routes | **313** classified routes (10 Local-Only, 49 Always-Protected, 254 Management), of which **64** answer `501 feature_unavailable` on purpose |
+| Providers in catalog | **610** catalog entries; 370 have a base URL the router can call with your key |
+| Routing strategies | **35** strategies, nested combos, and auto-router variants |
+| Agent & MCP ecosystem | **24** MCP tools over HTTP (3 on stdio) + **CodeVN** setup |
+| Binary | Single Go binary, no runtime dependencies |
 
 ## Start here
 
@@ -39,7 +41,7 @@ about which model is up, which is cheapest, or what to do when one goes down.
 | Run it in 5 minutes | [Quick start](#quick-start) |
 | See what it can do | [What it does](#what-it-does) |
 | Know how fast it is | [Performance](#performance) |
-| Read the honest status | See the note above |
+| Read the honest status | [Feature status](#feature-status) |
 | Install it properly | [docs/INSTALL.md](docs/INSTALL.md) |
 | Build on it | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 
@@ -85,10 +87,10 @@ Full install guide: [docs/INSTALL.md](docs/INSTALL.md).
 | Feature | In one line |
 |---|---|
 | OpenAI-compatible API | `/v1/chat/completions`, `/v1/models`, `/v1/responses` — point any OpenAI client at it |
-| 34 routing strategies | Cheapest, fastest, most reliable, latency-aware, priority, weighted, and more |
+| 35 routing strategies | Cheapest, fastest, most reliable, latency-aware, priority, weighted, and more |
 | Combos | Chain strategies — e.g. cheapest first, then fastest on failure |
 | Auto-router | Picks the model for you from cost, context, and capability |
-| Provider catalog | 610 providers; 370 routable today; add any custom provider |
+| Provider catalog | 610 entries; 370 have a base URL; add any custom OpenAI-compatible provider |
 
 ### Stay up
 
@@ -103,7 +105,7 @@ Full install guide: [docs/INSTALL.md](docs/INSTALL.md).
 
 | Feature | In one line |
 |---|---|
-| Budgets & quotas | Per-key and global caps; requests stop at the limit, not after it |
+| Budgets & quotas | Per-key calendar budgets (`/api/usage/budget`), rolling 5-hour budgets (`/dashboard/key-budgets`), quota pools; requests stop at the limit |
 | Caching | Exact-match and semantic cache — repeat prompts don't re-bill |
 | Compression | Prompt compression from lite to ultra, plus tool-output compression |
 | Cost tracking | Every request logged with its real cost in the local ledger |
@@ -114,17 +116,23 @@ Full install guide: [docs/INSTALL.md](docs/INSTALL.md).
 |---|---|
 | Local dashboard | Providers, models, usage, and health at `http://127.0.0.1:20128` |
 | Guardrails | PII detection and redaction, prompt-injection checks, content filtering |
-| Keys & auth | Gateway keys, OAuth/JWT, per-key scopes — every request authenticated |
+| Keys & auth | Gateway keys, OAuth/JWT clients for the gateway, per-key scopes and IP lists — every request authenticated. Provider sign-in (subscription OAuth) is not supported |
 | MCP server | 24 tools, so coding agents can drive the router too |
 | CodeVN & Agent Setup | One-command setup: `codvian-router setup codevn` (also Claude, Continue) |
 | CLI | `serve`, `init`, `eval`, `setup`, `run`, `doctor`, `tray`, `catalog`, `release`, and more |
 
 ## Providers
 
-610 providers in the catalog, 370 routable today (379 have a base URL;
-9 are template-only for now). Any provider — or a custom one of your own —
-works with your own API key. Providers that refuse local routing on
-terms-of-service grounds are excluded, not faked.
+The catalog has 610 entries (catalog audit 2026-11-21,
+[docs/catalog-audit-2026-11-21.md](docs/catalog-audit-2026-11-21.md)):
+370 have a callable base URL, 9 have a templated base URL you fill in,
+and 231 have none yet (metadata only). A catalog entry is a starting point,
+not a promise: an entry is routed only after you add it with your own key,
+and the router tests that key against the provider when you add it.
+Web-session-cookie providers are catalogued but refused as routing
+targets. OAuth-style entries need a token exchange; the interactive
+subscription sign-in flows (device code / browser login) are not built
+yet, so those entries are not usable through a login. Nothing is faked.
 
 ## How it works
 
@@ -163,20 +171,36 @@ here precisely because they are not met yet.
 | Method | Status |
 |---|---|
 | Build from source (`go build`) | Works today |
-| Docker image | Planned — first release |
-| npm install | Not published yet — planned |
-| Install script | File exists; release not published yet |
-| Prebuilt binaries | Planned — first release |
+| Background gateway (`codvian-router restart`, `tray`) | Works today (supervised child process) |
+| Docker | `Dockerfile` and `docker-compose.yml` in the repo; no published image yet |
+| System service (systemd / launchd / Windows service) | Not supported yet (`POST /admin/service/install` answers 501) |
+| npm install | Not published |
+| Install script / prebuilt binaries | Files exist; no release published yet |
 
 Requires Go 1.26+ to build. Runs on Linux, macOS, and Windows.
 
+## Feature status
+
+| Status | What it covers |
+|---|---|
+| Implemented and verified (tests + local run) | OpenAI-compatible chat, models, embeddings, rerank, Responses API; routing strategies and combos; failover, hedging, health checks; exact and semantic cache; compression; ledger, cost tracking, per-key budgets and quota pools; guardrails; gateway keys and OAuth/JWT clients; `/admin/restart` (graceful relaunch); `/admin/update` (release check only); SSRF-safe `/v1/web/fetch` |
+| Implemented, not verified against a real provider in this repo's checks | Provider-specific wires (Anthropic, Gemini, Vertex, Bedrock, Cohere), audio, images, video and music passthroughs. They are tested against mock upstreams |
+| Metadata only | Catalog entries without a base URL (231), web-cookie entries, and OAuth entries that need a sign-in flow |
+| Unsupported or deferred (`501 feature_unavailable`) | Provider sign-in, system service install, dynamic plugin loading, and 61 dashboard settings routes whose values were never applied (budget templates, management tokens, key pools, global IP filter, feature flags, CORS, stickiness, log destinations, and others). Each 501 names the route to use instead when one exists. The full list is `internal/server/unavailable_routes.go` |
+
+`scripts/audit-fake.sh` checks this contract statically and fails if a
+known fake (canned success text, fixed metrics, an undocumented 501) comes
+back.
+
 ## What's new
 
-- **20 Nov 2026 — first block complete.** All 44 features of the second
-  build block built, tested, and verified; full gate green (4,474 tests).
-- **Keys & auth live.** Key creation and OAuth/JWT gateway auth verified
-  end to end on real runs.
-- **On GitHub.** The first two build blocks are merged to `main`
+- **21 Nov 2026 — Phase 0 cleanup.** Removed fabricated endpoints (a canned
+  "SystemOne" reply, fixed video "drilldown" metrics, a static voice list),
+  fixed a DNS-rebinding hole in `/v1/web/fetch`, made `/admin/restart` a
+  real relaunch and `/admin/update` a real release check, and turned 61
+  settings routes that stored values nothing read into honest
+  `501 feature_unavailable` answers.
+- **On GitHub.** The first build blocks are merged to `main`
   ([PR #2](https://github.com/raunakiitp/CodvianRouter/pull/2)).
 
 ## Documentation

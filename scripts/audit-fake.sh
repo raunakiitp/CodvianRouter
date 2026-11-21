@@ -12,6 +12,12 @@
 #      It NEVER starts a server, runs go test, or runs go build.
 #   3. Prints a "UI without backend" findings list, each item written so
 #      it can feed the internal parity tracker as a WRONG/MISSING row.
+#   4. (§5b, Phase 0) Checks production Go code for the known backend
+#      fakes removed on 2026-11-21 and the contracts that replaced them:
+#      fabricated values, removed routes, 501s outside
+#      internal/server/unavailable_routes.go, unavailable routes whose
+#      guard description hides it, process-global settings stores,
+#      the web-fetch egress guard, and /admin/restart classification.
 #
 # Honesty rule (§0.3): a route whose existence is ambiguous from static
 # greps is reported UNVERIFIED, never as a finding. Only controls proven
@@ -76,6 +82,13 @@ for _f in "$ROOT"/internal/server/*.go; do
     | grep -vE '^[[:space:]]*//' || true
 done | grep -oE 's\.register\(mux, "[A-Z]+", "[^"]+"' \
   | sed 's/s\.register(mux, "//; s/", "/ /; s/"$//' | sort -u > "$TMP/registered.txt"
+# Routes registered in a loop by registerUnavailable (Phase 0): the
+# "METHOD path" keys of unavailableRoutes in unavailable_routes.go.
+UNAV="$ROOT/internal/server/unavailable_routes.go"
+[ -f "$UNAV" ] || { say "ERROR: $UNAV not found"; exit 2; }
+grep -oE '^[[:space:]]*"[A-Z]+ /[^"]+":' "$UNAV" \
+  | sed -E 's/^[[:space:]]*"([A-Z]+) ([^"]+)":/\1 \2/' | sort -u > "$TMP/unavailable.txt"
+sort -u "$TMP/registered.txt" "$TMP/unavailable.txt" -o "$TMP/registered.txt"
 # Guard classification table: {Method: "M", Path: "P", ...} in guard.go.
 # register() panics at startup for a route with no table entry, so the
 # two lists must agree; a mismatch is a consistency flag, not a finding.
@@ -94,11 +107,10 @@ if ! diff -q "$TMP/registered.txt" "$TMP/guardtable.txt" >/dev/null 2>&1; then
 else
   say "  Guard table and register() calls agree exactly."
 fi
-# Routes whose handler is the honest-501 stub (notImplementedAdmin).
-grep -oE 's\.register\(mux, "POST", "/admin/[^"]+", s\.notImplementedAdmin\("[^"]+"\)\)' "$SRV" \
-  | sed -E 's/.*"(POST)", "([^"]+)".*notImplementedAdmin\("([^"]+)"\).*/\1 \2 (\3)/' \
-  | sort -u > "$TMP/routes501.txt"
-say "Routes answering 501 (notImplementedAdmin — feature does not exist yet):"
+# Routes whose handler is the documented 501 feature_unavailable
+# handler (unavailable_routes.go): "METHOD path" per line.
+cp "$TMP/unavailable.txt" "$TMP/routes501.txt"
+say "Routes answering 501 feature_unavailable (unavailable_routes.go): $(wc -l < "$TMP/routes501.txt")"
 if [ -s "$TMP/routes501.txt" ]; then sed 's/^/    /' "$TMP/routes501.txt"; else say "    (none)"; fi
 say ""
 
@@ -289,13 +301,103 @@ unverified "per-view honest-empty-state coverage (every dashboard view on a fres
 say ""
 
 # ------------------------------------------------------------------
+# 5b. PHASE 0 PRODUCTION CONTRACT — known fake backend behaviour
+# ------------------------------------------------------------------
+# Targets the specific fabrications removed in Phase 0 (2026-11-21)
+# and the route contracts that replaced them. Production code only:
+# *_test.go files are skipped (test mocks and fixtures are allowed).
+# Each check names one prohibited behaviour, so a hit is a finding,
+# not a fuzzy "TODO"/"mock" word match. Limitations: these are static
+# greps; they catch the known patterns and their contracts, not every
+# possible fake. The Go tests (TestUnavailableRoutesHonest,
+# TestRemovedFakeRoutesAre404, the TestWebFetch* SSRF suite) prove the
+# runtime behaviour.
+say "--- 5b. Phase 0 production contract (backend fakes) ---"
+prod_go() { # every non-test .go file under internal/ and cmd/
+  find "$ROOT/internal" "$ROOT/cmd" -name '*.go' ! -name '*_test.go' -print 2>/dev/null
+}
+prod_grep() { # $1 = ERE; prints file:line matches in production Go
+  prod_go | while IFS= read -r f; do grep -nE "$1" "$f" 2>/dev/null | sed "s|^|${f#$ROOT/}:|"; done
+}
+P0=0
+p0_finding() { P0=$((P0+1)); finding "$*"; }
+
+# P1. Fabricated responses and metrics removed in Phase 0.
+for pat in 'processed successfully' '"motion_score"' '"frames_total"' 'systemone\.completion' \
+           'standardAudioVoices' '"elo":[[:space:]]*1000' 'Value:[[:space:]]*0\.95'; do
+  hits="$(prod_grep "$pat")"
+  [ -n "$hits" ] && p0_finding "fabricated value pattern /$pat/ in production code: $(printf '%s' "$hits" | head -3 | tr '\n' ' ')"
+done
+
+# P2. Removed fake routes must stay removed (guard table AND register).
+for r in "POST /v1/systemone" "GET /v1/video-bridge/drilldown" "POST /v1/video-bridge/drilldown" \
+         "GET /v1/audio/voices" "GET /v1/voices"; do
+  if grep -qxF "$r" "$TMP/registered.txt" || grep -qxF "$r" "$TMP/guardtable.txt"; then
+    p0_finding "removed fake route is back: $r"
+  fi
+done
+
+# P3. Every 501 in production server code must come from the
+# documented unavailable handler. Allowed: unavailable_routes.go, and
+# resilience_api.go's breaker-reset refusal (an engine without a
+# reset method - a real capability check, not a stub).
+hits="$(prod_grep 'StatusNotImplemented' | grep '^internal/server/' \
+        | grep -vE '^internal/server/(unavailable_routes|resilience_api)\.go:')"
+[ -n "$hits" ] && p0_finding "501 answered outside unavailable_routes.go: $(printf '%s' "$hits" | head -3 | tr '\n' ' ')"
+hits="$(prod_grep 'notImplementedAdmin')"
+[ -n "$hits" ] && p0_finding "legacy notImplementedAdmin stub still present: $(printf '%s' "$hits" | head -2 | tr '\n' ' ')"
+
+# P4. Each unavailable route is in the guard table and its description
+# says it is unavailable (so the generated API docs say so too).
+while IFS= read -r r; do
+  m="${r%% *}"; p="${r#* }"
+  line="$(grep -F "{Method: \"$m\", Path: \"$p\"," "$GUARD" | head -1)"
+  if [ -z "$line" ]; then
+    p0_finding "unavailable route $r has no guard-table row"
+  elif ! printf '%s' "$line" | grep -q 'Description: "Unavailable: answers 501 feature_unavailable'; then
+    p0_finding "unavailable route $r: guard description does not say it is unavailable"
+  fi
+done < "$TMP/unavailable.txt"
+
+# P5. In-memory settings stores nothing reads (the B8 pattern): a
+# process-global "var globalX = &..." in production server code.
+hits="$(prod_grep '^var global[A-Z][A-Za-z0-9_]* = &' | grep '^internal/server/')"
+[ -n "$hits" ] && p0_finding "process-global settings store in server code (verify something reads it, or list the route as unavailable): $(printf '%s' "$hits" | head -3 | tr '\n' ' ')"
+
+# P6. SSRF: web fetch must use the egress guard (validated-IP dial),
+# never a plain client or a separate DNS pre-check.
+WF="$ROOT/internal/server/web_fetch.go"
+if [ -f "$WF" ]; then
+  grep -q 'webFetchClient()' "$WF" || p0_finding "web_fetch.go does not use webFetchClient() (egress guard)"
+  if grep -nE 'net\.LookupIP|http\.DefaultClient|&http\.Client\{|http\.Get\(' "$WF" >/dev/null; then
+    p0_finding "web_fetch.go builds its own client or resolves DNS itself (DNS-rebinding risk)"
+  fi
+  grep -q 'DialContext:[[:space:]]*g\.dialContext' "$ROOT/internal/server/egress_guard.go" 2>/dev/null \
+    || p0_finding "egress_guard.go transport does not dial through the validating dialContext"
+  grep -qE 'Proxy:[[:space:]]*nil' "$ROOT/internal/server/egress_guard.go" 2>/dev/null \
+    || p0_finding "egress_guard.go transport does not disable environment proxies"
+fi
+
+# P7. /admin/restart: spawn-capable pattern present, and the handler
+# never falls back to the shutdown hook while saying "restarting".
+grep -qF 'regexp.MustCompile(`^/admin/restart$`)' "$GUARD" \
+  || p0_finding "/admin/restart is missing from spawnCapablePatterns"
+grep -q 'shutdownHook' "$ROOT/internal/server/restart.go" 2>/dev/null \
+  && p0_finding "restart.go references shutdownHook (restart must not silently become shutdown)"
+
+if [ "$P0" -eq 0 ]; then
+  say "  Phase 0 contract: all checks pass (P1-P7)."
+fi
+say ""
+
+# ------------------------------------------------------------------
 # 6. FINDINGS SUMMARY — feeds the internal parity tracker as WRONG/MISSING rows
 # ------------------------------------------------------------------
 say "--- 6. FINDINGS: UI without backend (feed to parity tracker) ---"
 if [ "$FINDINGS" -eq 0 ]; then
   say "  (none — zero UI controls without a live backend)"
 else
-  say "  $FINDINGS confirmed finding(s) — see the [FINDING] lines in §2/§4 above;"
+  say "  $FINDINGS confirmed finding(s) — see the [FINDING] lines in §2/§4/§5b above;"
   say "  each names its live file:line. Do NOT copy rows from memory: verify"
   say "  each finding against the current tree before committing to the parity tracker"
   say "  (a hardcoded list here went stale twice — new-key + revoke were"
@@ -304,11 +406,11 @@ fi
 say ""
 say "--- Summary ---"
 say "Routes registered: $NREG (guard table: $NGUARD) | UI literal paths: $(wc -l < "$TMP/ui_paths.txt") | fetch() sites: $(grep -c 'fetch(' "$UI")"
-say "FINDINGS (UI without backend): $FINDINGS | UNVERIFIED: $UNVERIFIED | REVIEW notes: $REVIEW"
+say "FINDINGS (UI without backend + Phase 0 backend fakes): $FINDINGS (Phase 0: $P0) | UNVERIFIED: $UNVERIFIED | REVIEW notes: $REVIEW"
 say "NOTE: this is a STATIC audit. Re-run after the Sprint gate; the tree may be mid-flight."
 if [ "$FINDINGS" -gt 0 ]; then
-  say "RESULT: FAIL — $FINDINGS UI control(s) without a live backend (M10 gate: must be 0)."
+  say "RESULT: FAIL — $FINDINGS finding(s): UI controls without a live backend and/or Phase 0 backend fakes (gate: must be 0)."
   exit 1
 fi
-say "RESULT: PASS — zero UI controls without a live backend."
+say "RESULT: PASS — zero UI controls without a live backend, Phase 0 contract holds."
 exit 0

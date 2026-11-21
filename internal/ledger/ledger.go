@@ -2789,6 +2789,56 @@ func (l *Ledger) Buckets(ctx context.Context, since time.Time, width time.Durati
 	return out, nil
 }
 
+// DayBuckets aggregates usage_events into UTC calendar days: exactly
+// `days` buckets, the last one being today (partial). Unlike Buckets,
+// whose bucket count is the floor of the window, a row recorded today
+// always lands in today's bucket, never in yesterday's.
+func (l *Ledger) DayBuckets(ctx context.Context, days int, now time.Time) ([]TimeBucket, error) {
+	if days < 1 || days > 366 {
+		return nil, fmt.Errorf("ledger: day buckets: days must be 1..366")
+	}
+	const dayMs = int64(24 * time.Hour / time.Millisecond)
+	start := now.UTC().Truncate(24*time.Hour).AddDate(0, 0, -(days - 1))
+	out := make([]TimeBucket, days)
+	for i := range out {
+		out[i].Start = start.AddDate(0, 0, i)
+	}
+	startMs := start.UnixMilli()
+	rows, err := l.db.QueryContext(ctx, `
+		SELECT CAST((ts - ?) / ? AS INTEGER) AS b, COUNT(*),
+		       COALESCE(SUM(CASE WHEN ok = 0 AND cancelled = 0 THEN 1 ELSE 0 END), 0),
+		       COALESCE(SUM(latency_ms), 0),
+		       COALESCE(SUM(cost_usd), 0),
+		       COALESCE(SUM(total_tokens), 0)
+		FROM usage_events WHERE ts >= ?
+		GROUP BY b ORDER BY b`, startMs, dayMs, startMs)
+	if err != nil {
+		return nil, fmt.Errorf("ledger: day buckets: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var b, count, errs, tokens int
+		var latSum, cost float64
+		if err := rows.Scan(&b, &count, &errs, &latSum, &cost, &tokens); err != nil {
+			return nil, fmt.Errorf("ledger: day buckets: %w", err)
+		}
+		if b < 0 || b >= days {
+			continue // a row stamped after now (clock skew) is not today's
+		}
+		out[b].Requests += count
+		out[b].Errors += errs
+		out[b].CostUSD += cost
+		out[b].Tokens += tokens
+		if out[b].Requests > 0 {
+			out[b].MeanLatencyMS = latSum / float64(out[b].Requests)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("ledger: day buckets: %w", err)
+	}
+	return out, nil
+}
+
 // WipeResult is what Ledger.Wipe removed: usage-event rows deleted
 // and budget rows whose running spend was reset to zero.
 type WipeResult struct {

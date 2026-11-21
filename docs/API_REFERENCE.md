@@ -8,9 +8,9 @@ the per-route sections; regenerate instead:
 python3 scripts/gen-api-docs.py
 ```
 
-Coverage: **308 routes** (163 GET, 98 POST, 21 DELETE, 21 PATCH, 5 PUT) —
-9 `LOCAL_ONLY`, 49 `ALWAYS_PROTECTED`,
-250 `MANAGEMENT`; 58 auth-exempt, 240 scope-gated, 10 key-only (gateway key, no scope).
+Coverage: **313 routes** (163 GET, 103 POST, 21 DELETE, 21 PATCH, 5 PUT) —
+10 `LOCAL_ONLY`, 49 `ALWAYS_PROTECTED`,
+254 `MANAGEMENT`; 58 auth-exempt, 245 scope-gated, 10 key-only (gateway key, no scope).
 Enforced by `TestAPIReferenceCoversEveryRoute`
 (`internal/server/api_reference_test.go`): the test reads the guard
 table and this doc and FAILS if any route is missing. That test is
@@ -494,6 +494,22 @@ its key field; the key is kept only in page memory, never stored.
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
 
+### `POST /v1/multimodal-embeddings`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `chat` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Multimodal embeddings (text + image/media inputs) — routed through the engine, replay-exempt. Gateway-key auth required.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/v1/multimodal-embeddings
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
 ### `POST /v1/rerank`
 
 - **Tier:** `MANAGEMENT`
@@ -534,6 +550,22 @@ its key field; the key is kept only in page memory, never stored.
 
   ```sh
   curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/v1/completions
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `POST /v1/relay/chat/completions`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `chat` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Chat completions explicitly routed with context-relay strategy. Gateway-key auth required.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/v1/relay/chat/completions
   ```
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
@@ -650,6 +682,22 @@ its key field; the key is kept only in page memory, never stored.
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
 
+### `POST /v1/audio/text-to-speech/{voiceId}`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `chat` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Text-to-speech with the voice id in the URL path: the id is written into the JSON body's voice field (a conflicting body voice is refused 400), then the request follows POST /v1/audio/speech. Gateway-key auth required.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/v1/audio/text-to-speech/{voiceId}
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
 ### `POST /v1/audio/transcriptions`
 
 - **Tier:** `MANAGEMENT`
@@ -726,6 +774,22 @@ its key field; the key is kept only in page memory, never stored.
 
   ```sh
   curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/v1/search
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `POST /v1/web/fetch`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `chat` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Fetches and extracts clean text from a web URL with SSRF protection. Gateway-key auth required.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/v1/web/fetch
   ```
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
@@ -2420,7 +2484,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Feature flags status (B8-134).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (these feature flags were not wired to the features they name). Use instead: the config file (each feature's own setting).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2436,7 +2500,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Updates feature flags (B8-134).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (these feature flags were not wired to the features they name). Use instead: the config file (each feature's own setting).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2452,7 +2516,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** CORS allowed origins setting (B8-129).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (CORS origin settings are not implemented: the stored list was never applied).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2468,7 +2532,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Updates CORS allowed origins (B8-129).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (CORS origin settings are not implemented: the stored list was never applied).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2484,7 +2548,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Blocked providers setting (B8-130).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (the stored blocked-provider list was never applied). Use instead: POST /api/providers/{id}/enabled (disable a provider).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2500,7 +2564,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Updates blocked providers (B8-130).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (the stored blocked-provider list was never applied). Use instead: POST /api/providers/{id}/enabled (disable a provider).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2516,7 +2580,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** AI settings (B8-136).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (these AI defaults were never applied to requests).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2532,7 +2596,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Updates AI settings (B8-136).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (these AI defaults were never applied to requests).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2548,7 +2612,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Modality bridge settings (B8-137).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (modality bridge settings are not implemented).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2564,7 +2628,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Updates modality bridge settings (B8-137).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (modality bridge settings are not implemented).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2580,7 +2644,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
 - **Spawn-capable:** no
-- **Description:** Trigger pricing catalog sync (B8-117).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (this route reported a sync without fetching any prices). Use instead: PATCH /api/pricing (set rates) or GET /api/pricing (current book).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2596,7 +2660,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Pricing catalog sync status (B8-117).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (no pricing sync runs, so there is no status). Use instead: GET /api/pricing.
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2612,7 +2676,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Transform pipeline operations (B8-70).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (the transform pipeline is not implemented: stored operations were never applied).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2628,7 +2692,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Sets transform pipeline operations (B8-70).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (the transform pipeline is not implemented: stored operations were never applied).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2644,7 +2708,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Sidebar navigation configuration (B8-139).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (sidebar customisation is not implemented: the dashboard never read it).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2660,7 +2724,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Updates sidebar configuration (B8-139).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (sidebar customisation is not implemented: the dashboard never read it).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2676,7 +2740,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Advanced router settings (B8-141).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (these advanced settings (body cap, lockout, aliases) were never applied).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2692,7 +2756,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Updates advanced router settings (B8-141).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (these advanced settings (body cap, lockout, aliases) were never applied).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2740,7 +2804,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Session stickiness settings (B8-5).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (session stickiness settings are not implemented: stored values were never applied).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2756,7 +2820,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Updates session stickiness (B8-5).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (session stickiness settings are not implemented: stored values were never applied).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2772,7 +2836,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Global operational switches (B8-30).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (these global switches were not wired to anything).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2788,7 +2852,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Updates global switches (B8-30).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (these global switches were not wired to anything).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2804,7 +2868,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Response validation rules (B8-67).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (response validation rules are not implemented: stored rules were never evaluated).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2820,7 +2884,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Updates response validation rules (B8-67).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (response validation rules are not implemented: stored rules were never evaluated).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2868,7 +2932,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** IP filter allowlist/blocklist (B8-131).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (a global IP filter is not implemented: the stored lists filtered nothing). Use instead: per-key ip_allowlist / ip_blocklist on the gateway key (enforced at auth).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2884,7 +2948,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Updates IP filter (B8-131).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (a global IP filter is not implemented: the stored lists filtered nothing). Use instead: per-key ip_allowlist / ip_blocklist on the gateway key (enforced at auth).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -2964,7 +3028,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Spend grouped by provider account (B8-114).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (spend is not partitioned by provider account in the ledger). Use instead: GET /api/analytics/cost-by-key.
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3092,7 +3156,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Proxy request logs (B8-22).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (no proxy log is recorded). Use instead: GET /dashboard/logs (ledger-backed request log).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3108,7 +3172,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Console output feed (B8-23).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (no console feed is recorded here). Use instead: GET /api/logs (captured server log lines).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3124,7 +3188,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Request step-by-step timeline (B8-24).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (per-request step timelines are not recorded). Use instead: GET /dashboard/trace (route trace of the last request).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3140,7 +3204,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Activity feed (B8-25).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (no activity feed is recorded). Use instead: GET /dashboard/logs.
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3156,7 +3220,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Conversations view (B8-26).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (conversation transcripts are not recorded here). Use instead: GET /v1/responses (stored Responses API conversations).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3172,7 +3236,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Compression savings log (B8-27).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (no per-request compression log is recorded). Use instead: GET /api/analytics/compression.
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3188,7 +3252,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Admin audit log (B8-28).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (this audit feed was never written). Use instead: GET /dashboard/audit.
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3220,7 +3284,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Lists log export destinations (B8-127).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (log export destinations are not implemented: nothing shipped logs to them). Use instead: GET /api/logs/export.
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3236,7 +3300,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
 - **Spawn-capable:** no
-- **Description:** Creates log export destination (B8-127).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (log export destinations are not implemented). Use instead: GET /api/logs/export.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3252,7 +3316,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Retrieves log export destination (B8-127).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (log export destinations are not implemented). Use instead: GET /api/logs/export.
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3268,7 +3332,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
 - **Spawn-capable:** no
-- **Description:** Updates log export destination (B8-127).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (log export destinations are not implemented). Use instead: GET /api/logs/export.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3284,7 +3348,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
 - **Spawn-capable:** no
-- **Description:** Deletes log export destination (B8-127).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (log export destinations are not implemented). Use instead: GET /api/logs/export.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3300,7 +3364,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Capability-specific combo behavior (B8-3).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (capability-specific combo behaviour is not implemented).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3316,7 +3380,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Sets capability-specific combo behavior (B8-3).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (capability-specific combo behaviour is not implemented).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3332,7 +3396,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Combo tuning settings (B8-58, B8-61..66).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (combo tuning settings are not implemented: stored values never reached the router).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3348,7 +3412,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Updates combo tuning settings (B8-58, B8-61..66).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (combo tuning settings are not implemented: stored values never reached the router).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3380,7 +3444,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Account fallback strategy (B8-79).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (account fallback strategy selection is not implemented).
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -3396,7 +3460,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Updates account fallback strategy (B8-79).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (account fallback strategy selection is not implemented).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -4499,13 +4563,29 @@ its key field; the key is kept only in page memory, never stored.
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
 
+### `POST /admin/restart`
+
+- **Tier:** `LOCAL_ONLY`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required, AND loopback-only (checked before auth)
+- **Spawn-capable:** yes
+- **Description:** Graceful restart: answers 202, stops the HTTP server, flushes caches, then starts a replacement process (under the tray supervisor: exits with the restart code and the supervisor relaunches the gateway; unsupervised: re-launches the same binary with the same arguments). 503 when the process has no restart hook.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/admin/restart
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
 ### `POST /admin/service/install`
 
 - **Tier:** `LOCAL_ONLY`
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required, AND loopback-only (checked before auth)
 - **Spawn-capable:** yes
-- **Description:** Installs a system service — not implemented yet (501 behind the guard).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (system service installation is not supported in this build). Use instead: `codvian-router restart` starts a supervised background gateway.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -4521,7 +4601,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required, AND loopback-only (checked before auth)
 - **Spawn-capable:** yes
-- **Description:** Dynamic plugin loading is intentionally unsupported: plugins are compiled-in Go registered from config at startup (CHECKLIST 201, docs/plugins.md) — loading arbitrary code from config would be arbitrary code execution. Answers 501 by design, never loads code.
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (dynamic plugin loading is unsupported by design: plugins are compiled-in and enabled from config at startup (docs/plugins.md)).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -4537,7 +4617,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required, AND loopback-only (checked before auth)
 - **Spawn-capable:** yes
-- **Description:** Auto-update (checkout + install) — not implemented yet (501 behind the guard).
+- **Description:** Update check: asks the GitHub releases API for the latest release and answers {current, latest, update_available, release_url}. It never downloads or installs anything; installing is `codvian-router update` (signature + checksum verified). 503 when no update checker is wired, 502 when the release API cannot be read.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -4601,7 +4681,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required, AND loopback-only (checked before auth)
 - **Spawn-capable:** yes
-- **Description:** Launches a browser for a provider login flow — not implemented yet (501 behind the guard).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (provider sign-in (OAuth / device-code login) is not supported in this build). Use instead: POST /api/providers with an API key.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -4981,7 +5061,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
 - **Spawn-capable:** no
-- **Description:** Per-key daily/weekly/monthly spend limits (B8-11,12,13).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (this route stored limits in memory and nothing enforced them). Use instead: POST /api/usage/budget (calendar budgets) or POST /dashboard/key-budgets (rolling 5-hour budget); both are enforced.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -4997,7 +5077,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
 - **Spawn-capable:** no
-- **Description:** Sets key budget warning threshold (B8-100).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (this route stored a threshold in memory and nothing read it). Use instead: POST /api/usage/budget (warning threshold field).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -5013,7 +5093,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
 - **Spawn-capable:** no
-- **Description:** Sets key budget reset window (B8-101).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (this route stored a reset window in memory and nothing read it). Use instead: POST /api/usage/budget (reset interval field).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -5029,7 +5109,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Lists budget templates (B8-102).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (budget templates are not implemented). Use instead: POST /api/usage/budget (calendar budgets) or POST /dashboard/key-budgets (rolling 5-hour budget); both are enforced.
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -5045,7 +5125,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
 - **Spawn-capable:** no
-- **Description:** Creates a budget template (B8-102).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (budget templates are not implemented). Use instead: POST /api/usage/budget (calendar budgets) or POST /dashboard/key-budgets (rolling 5-hour budget); both are enforced.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -5061,7 +5141,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
 - **Spawn-capable:** no
-- **Description:** Applies a budget template to keys (B8-102).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (budget templates are not implemented). Use instead: POST /api/usage/budget (calendar budgets) or POST /dashboard/key-budgets (rolling 5-hour budget); both are enforced.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -5077,7 +5157,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
 - **Spawn-capable:** no
-- **Description:** Sets exclusive lease badge on key (B8-85).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (exclusive key leases are not implemented: nothing enforced the stored flag).
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -5093,7 +5173,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Lists management access tokens (B8-99).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (management tokens are not implemented: issued tokens never authenticated). Use instead: POST /admin/keys with the admin scope.
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -5109,7 +5189,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
 - **Spawn-capable:** no
-- **Description:** Creates a management access token (B8-99).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (management tokens are not implemented: issued tokens never authenticated). Use instead: POST /admin/keys with the admin scope.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -5125,7 +5205,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Retrieves management access token (B8-99).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (management tokens are not implemented). Use instead: POST /admin/keys with the admin scope.
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -5141,7 +5221,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
 - **Spawn-capable:** no
-- **Description:** Revokes management access token (B8-99).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (management tokens are not implemented). Use instead: DELETE /admin/keys/{id}.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -5157,7 +5237,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Lists key fair-share pools (B8-97).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (key fair-share pools are not implemented: stored pools never affected routing). Use instead: GET /api/quota-pools.
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -5173,7 +5253,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
 - **Spawn-capable:** no
-- **Description:** Creates key fair-share pool (B8-97).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (key fair-share pools are not implemented). Use instead: POST /api/quota-pools.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -5189,7 +5269,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Retrieves key pool details (B8-97).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (key fair-share pools are not implemented). Use instead: GET /api/quota-pools.
 - **Request:** no body.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -5205,7 +5285,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
 - **Spawn-capable:** no
-- **Description:** Updates key pool (B8-97).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (key fair-share pools are not implemented). Use instead: POST /api/quota-pools.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
@@ -5221,7 +5301,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
 - **Spawn-capable:** no
-- **Description:** Deletes key pool (B8-97).
+- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (key fair-share pools are not implemented). Use instead: POST /api/quota-pools.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 

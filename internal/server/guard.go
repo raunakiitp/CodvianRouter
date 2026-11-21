@@ -312,9 +312,11 @@ var guardRouteTable = []GuardRoute{
 	// trusts Host headers a caller can forge.
 	{Method: "GET", Path: "/.well-known/agent.json", Tier: TierManagement, Description: "A2A agent card (discovery document for the POST /a2a task interface): name, description, url, version, input/output modes, capabilities and the six skill descriptors — public, no auth; no task data, no keys, no provider details.", AuthExempt: true},
 	{Method: "POST", Path: "/v1/embeddings", Tier: TierManagement, Description: "Embeddings — OpenAI-compatible, routed through the same engine as chat completions (budgets, guardrails, ledger, route trace) but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "POST", Path: "/v1/multimodal-embeddings", Tier: TierManagement, Description: "Multimodal embeddings (text + image/media inputs) — routed through the engine, replay-exempt. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/rerank", Tier: TierManagement, Description: "Rerank — Cohere/LiteLLM shape (model, query, documents, top_n, return_documents), routed through the same engine as chat completions but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.", Scopes: []string{"chat"}},
 	// M8.2 legacy completions + routing introspection.
 	{Method: "POST", Path: "/v1/completions", Tier: TierManagement, Description: "Legacy completions — gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "POST", Path: "/v1/relay/chat/completions", Tier: TierManagement, Description: "Chat completions explicitly routed with context-relay strategy. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "GET", Path: "/v1/classify", Tier: TierManagement, Description: "Routing classification — gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "GET", Path: "/v1/explain/routing", Tier: TierManagement, Description: "Routing explanation — gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "GET", Path: "/v1/segment", Tier: TierManagement, Description: "Prompt segmentation + classification — gateway-key auth required.", Scopes: []string{"chat"}},
@@ -325,6 +327,7 @@ var guardRouteTable = []GuardRoute{
 	// M8.6 audio (canonical ops + the reference router alias names).
 	{Method: "POST", Path: "/v1/audio/speech", Tier: TierManagement, Description: "Audio speech (text-to-speech) — OpenAI-compatible, routed through the same engine as chat completions but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/audio/text-to-speech", Tier: TierManagement, Description: "Alias of POST /v1/audio/speech — not an OpenAI endpoint; gateway route name, same handler and operation. Gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "POST", Path: "/v1/audio/text-to-speech/{voiceId}", Tier: TierManagement, Description: "Text-to-speech with the voice id in the URL path: the id is written into the JSON body's voice field (a conflicting body voice is refused 400), then the request follows POST /v1/audio/speech. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/audio/transcriptions", Tier: TierManagement, Description: "Audio transcriptions (speech-to-text) — OpenAI-compatible multipart upload, replay-exempt: exactly one upstream attempt. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/audio/speech-to-text", Tier: TierManagement, Description: "Alias of POST /v1/audio/transcriptions — not an OpenAI endpoint; gateway route name, same handler and operation. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/audio/translations", Tier: TierManagement, Description: "Audio translations (translate audio to English) — OpenAI-compatible multipart upload, replay-exempt: exactly one upstream attempt. Gateway-key auth required.", Scopes: []string{"chat"}},
@@ -333,6 +336,7 @@ var guardRouteTable = []GuardRoute{
 	{Method: "POST", Path: "/v1/moderations", Tier: TierManagement, Description: "Moderations — OpenAI-shaped, backed ONLY by the router's local guardrails (PII / secret / injection patterns); no upstream call, no input stored or echoed. The 13 OpenAI categories are not judged (all false, score 0); the real verdict is in results[].local_guardrails and results[].flagged reflects it. Gateway-key auth required.", Scopes: []string{"chat"}},
 	// M8.20 media verify (search / OCR / video / music).
 	{Method: "POST", Path: "/v1/search", Tier: TierManagement, Description: "Search — Perplexity Search API passthrough, verbatim, replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "POST", Path: "/v1/web/fetch", Tier: TierManagement, Description: "Fetches and extracts clean text from a web URL with SSRF protection. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/ocr", Tier: TierManagement, Description: "OCR — Mistral OCR API passthrough, verbatim, replay-exempt: exactly one upstream attempt. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/videos/generations", Tier: TierManagement, Description: "Video generations — Runway text-to-video passthrough, returns a task id; replay-exempt: exactly one upstream attempt. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "GET", Path: "/v1/videos/{id}", Tier: TierManagement, Description: "Video task status — Runway task poll by id; unknown ids answer 404. Gateway-key auth required.", Scopes: []string{"chat"}},
@@ -388,13 +392,14 @@ var guardRouteTable = []GuardRoute{
 
 	// Tier 1 — LOCAL_ONLY (spawn-capable / system-changing).
 	{Method: "POST", Path: "/admin/shutdown", Tier: TierLocalOnly, SpawnCapable: true, Description: "Terminates the server process.", Scopes: []string{"admin"}},
-	{Method: "POST", Path: "/admin/service/install", Tier: TierLocalOnly, SpawnCapable: true, Description: "Installs a system service — not implemented yet (501 behind the guard).", Scopes: []string{"admin"}},
-	{Method: "POST", Path: "/admin/plugin/load", Tier: TierLocalOnly, SpawnCapable: true, Description: "Dynamic plugin loading is intentionally unsupported: plugins are compiled-in Go registered from config at startup (CHECKLIST 201, docs/plugins.md) — loading arbitrary code from config would be arbitrary code execution. Answers 501 by design, never loads code.", Scopes: []string{"admin"}},
-	{Method: "POST", Path: "/admin/update", Tier: TierLocalOnly, SpawnCapable: true, Description: "Auto-update (checkout + install) — not implemented yet (501 behind the guard).", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/admin/restart", Tier: TierLocalOnly, SpawnCapable: true, Description: "Graceful restart: answers 202, stops the HTTP server, flushes caches, then starts a replacement process (under the tray supervisor: exits with the restart code and the supervisor relaunches the gateway; unsupervised: re-launches the same binary with the same arguments). 503 when the process has no restart hook.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/admin/service/install", Tier: TierLocalOnly, SpawnCapable: true, Description: "Unavailable: answers 501 feature_unavailable, does nothing (system service installation is not supported in this build). Use instead: `codvian-router restart` starts a supervised background gateway.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/admin/plugin/load", Tier: TierLocalOnly, SpawnCapable: true, Description: "Unavailable: answers 501 feature_unavailable, does nothing (dynamic plugin loading is unsupported by design: plugins are compiled-in and enabled from config at startup (docs/plugins.md)).", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/admin/update", Tier: TierLocalOnly, SpawnCapable: true, Description: "Update check: asks the GitHub releases API for the latest release and answers {current, latest, update_available, release_url}. It never downloads or installs anything; installing is `codvian-router update` (signature + checksum verified). 503 when no update checker is wired, 502 when the release API cannot be read.", Scopes: []string{"admin"}},
 	{Method: "POST", Path: "/admin/tunnel/start", Tier: TierLocalOnly, SpawnCapable: true, Description: "Starts the local TCP tunnel: forwards a loopback port to the gateway's listen address (real TCP proxy, loopback-only, stdlib only).", Scopes: []string{"admin"}},
 	{Method: "POST", Path: "/admin/tunnel/stop", Tier: TierLocalOnly, SpawnCapable: true, Description: "Stops the running local TCP tunnel and reports the bytes it forwarded.", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/admin/tunnel/status", Tier: TierLocalOnly, SpawnCapable: true, Description: "Live tunnel status (running/stopped, ports, bytes forwarded) — loopback-only like the other tunnel routes.", Scopes: []string{"admin"}},
-	{Method: "POST", Path: "/admin/provider/login", Tier: TierLocalOnly, SpawnCapable: true, Description: "Launches a browser for a provider login flow — not implemented yet (501 behind the guard).", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/admin/provider/login", Tier: TierLocalOnly, SpawnCapable: true, Description: "Unavailable: answers 501 feature_unavailable, does nothing (provider sign-in (OAuth / device-code login) is not supported in this build). Use instead: POST /api/providers with an API key.", Scopes: []string{"admin"}},
 	{Method: "POST", Path: "/admin/bootstrap", Tier: TierLocalOnly, SpawnCapable: true, Description: "Fresh-install first-key setup — only while no gateway key exists; claims with the one-shot bootstrap token printed to stdout at first boot (loopback-only).", Bootstrap: true},
 
 	// Tier 2 — ALWAYS_PROTECTED (destructive; auth always required).
@@ -431,66 +436,66 @@ var guardRouteTable = []GuardRoute{
 
 	// B8 Dashboard Part 2 routes:
 	// b8_settings_api.go
-	{Method: "GET", Path: "/api/features", Tier: TierManagement, Description: "Feature flags status (B8-134).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/api/features", Tier: TierManagement, Description: "Updates feature flags (B8-134).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/settings/cors", Tier: TierManagement, Description: "CORS allowed origins setting (B8-129).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/api/settings/cors", Tier: TierManagement, Description: "Updates CORS allowed origins (B8-129).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/settings/blocked-providers", Tier: TierManagement, Description: "Blocked providers setting (B8-130).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/api/settings/blocked-providers", Tier: TierManagement, Description: "Updates blocked providers (B8-130).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/settings/ai", Tier: TierManagement, Description: "AI settings (B8-136).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/api/settings/ai", Tier: TierManagement, Description: "Updates AI settings (B8-136).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/settings/modality", Tier: TierManagement, Description: "Modality bridge settings (B8-137).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/api/settings/modality", Tier: TierManagement, Description: "Updates modality bridge settings (B8-137).", Scopes: []string{"admin"}},
-	{Method: "POST", Path: "/api/pricing/sync", Tier: TierAlwaysProtected, Description: "Trigger pricing catalog sync (B8-117).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/pricing/sync/status", Tier: TierManagement, Description: "Pricing catalog sync status (B8-117).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/settings/transform", Tier: TierManagement, Description: "Transform pipeline operations (B8-70).", Scopes: []string{"admin"}},
-	{Method: "PUT", Path: "/api/settings/transform", Tier: TierManagement, Description: "Sets transform pipeline operations (B8-70).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/settings/sidebar", Tier: TierManagement, Description: "Sidebar navigation configuration (B8-139).", Scopes: []string{"admin"}},
-	{Method: "PUT", Path: "/api/settings/sidebar", Tier: TierManagement, Description: "Updates sidebar configuration (B8-139).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/settings/advanced", Tier: TierManagement, Description: "Advanced router settings (B8-141).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/api/settings/advanced", Tier: TierManagement, Description: "Updates advanced router settings (B8-141).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/features", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (these feature flags were not wired to the features they name). Use instead: the config file (each feature's own setting).", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/api/features", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (these feature flags were not wired to the features they name). Use instead: the config file (each feature's own setting).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/settings/cors", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (CORS origin settings are not implemented: the stored list was never applied).", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/api/settings/cors", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (CORS origin settings are not implemented: the stored list was never applied).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/settings/blocked-providers", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (the stored blocked-provider list was never applied). Use instead: POST /api/providers/{id}/enabled (disable a provider).", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/api/settings/blocked-providers", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (the stored blocked-provider list was never applied). Use instead: POST /api/providers/{id}/enabled (disable a provider).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/settings/ai", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (these AI defaults were never applied to requests).", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/api/settings/ai", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (these AI defaults were never applied to requests).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/settings/modality", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (modality bridge settings are not implemented).", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/api/settings/modality", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (modality bridge settings are not implemented).", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/api/pricing/sync", Tier: TierAlwaysProtected, Description: "Unavailable: answers 501 feature_unavailable, does nothing (this route reported a sync without fetching any prices). Use instead: PATCH /api/pricing (set rates) or GET /api/pricing (current book).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/pricing/sync/status", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (no pricing sync runs, so there is no status). Use instead: GET /api/pricing.", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/settings/transform", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (the transform pipeline is not implemented: stored operations were never applied).", Scopes: []string{"admin"}},
+	{Method: "PUT", Path: "/api/settings/transform", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (the transform pipeline is not implemented: stored operations were never applied).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/settings/sidebar", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (sidebar customisation is not implemented: the dashboard never read it).", Scopes: []string{"admin"}},
+	{Method: "PUT", Path: "/api/settings/sidebar", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (sidebar customisation is not implemented: the dashboard never read it).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/settings/advanced", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (these advanced settings (body cap, lockout, aliases) were never applied).", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/api/settings/advanced", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (these advanced settings (body cap, lockout, aliases) were never applied).", Scopes: []string{"admin"}},
 	{Method: "DELETE", Path: "/api/lkgp/cache", Tier: TierAlwaysProtected, Description: "Clears LKGP learned routing cache (B8-69).", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/routing/strategies", Tier: TierManagement, Description: "Lists all supported routing strategies (B8-35..56).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/settings/stickiness", Tier: TierManagement, Description: "Session stickiness settings (B8-5).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/api/settings/stickiness", Tier: TierManagement, Description: "Updates session stickiness (B8-5).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/settings/switches", Tier: TierManagement, Description: "Global operational switches (B8-30).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/api/settings/switches", Tier: TierManagement, Description: "Updates global switches (B8-30).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/settings/response-validation", Tier: TierManagement, Description: "Response validation rules (B8-67).", Scopes: []string{"admin"}},
-	{Method: "PUT", Path: "/api/settings/response-validation", Tier: TierManagement, Description: "Updates response validation rules (B8-67).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/settings/stickiness", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (session stickiness settings are not implemented: stored values were never applied).", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/api/settings/stickiness", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (session stickiness settings are not implemented: stored values were never applied).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/settings/switches", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (these global switches were not wired to anything).", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/api/settings/switches", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (these global switches were not wired to anything).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/settings/response-validation", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (response validation rules are not implemented: stored rules were never evaluated).", Scopes: []string{"admin"}},
+	{Method: "PUT", Path: "/api/settings/response-validation", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (response validation rules are not implemented: stored rules were never evaluated).", Scopes: []string{"admin"}},
 	{Method: "DELETE", Path: "/api/cache/{model}", Tier: TierAlwaysProtected, Description: "Evicts cache entries for a specific model.", Scopes: []string{"admin"}},
 
 	// b8_key_extended.go
 	{Method: "POST", Path: "/admin/keys/{id}/disable", Tier: TierAlwaysProtected, Description: "Disables a single gateway key (B8-10).", Scopes: []string{"admin"}},
 	{Method: "POST", Path: "/admin/keys/{id}/enable", Tier: TierAlwaysProtected, Description: "Enables a single gateway key (B8-10).", Scopes: []string{"admin"}},
 	{Method: "POST", Path: "/admin/keys/{id}/revoke", Tier: TierAlwaysProtected, Description: "Revokes a single gateway key (B8-10).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/admin/keys/{id}/budget", Tier: TierAlwaysProtected, Description: "Per-key daily/weekly/monthly spend limits (B8-11,12,13).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/admin/keys/{id}/budget-warn", Tier: TierAlwaysProtected, Description: "Sets key budget warning threshold (B8-100).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/admin/keys/{id}/budget-reset", Tier: TierAlwaysProtected, Description: "Sets key budget reset window (B8-101).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/admin/budget-templates", Tier: TierManagement, Description: "Lists budget templates (B8-102).", Scopes: []string{"admin"}},
-	{Method: "POST", Path: "/admin/budget-templates", Tier: TierAlwaysProtected, Description: "Creates a budget template (B8-102).", Scopes: []string{"admin"}},
-	{Method: "POST", Path: "/admin/budget-templates/{id}/apply", Tier: TierAlwaysProtected, Description: "Applies a budget template to keys (B8-102).", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/admin/keys/{id}/budget", Tier: TierAlwaysProtected, Description: "Unavailable: answers 501 feature_unavailable, does nothing (this route stored limits in memory and nothing enforced them). Use instead: POST /api/usage/budget (calendar budgets) or POST /dashboard/key-budgets (rolling 5-hour budget); both are enforced.", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/admin/keys/{id}/budget-warn", Tier: TierAlwaysProtected, Description: "Unavailable: answers 501 feature_unavailable, does nothing (this route stored a threshold in memory and nothing read it). Use instead: POST /api/usage/budget (warning threshold field).", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/admin/keys/{id}/budget-reset", Tier: TierAlwaysProtected, Description: "Unavailable: answers 501 feature_unavailable, does nothing (this route stored a reset window in memory and nothing read it). Use instead: POST /api/usage/budget (reset interval field).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/admin/budget-templates", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (budget templates are not implemented). Use instead: POST /api/usage/budget (calendar budgets) or POST /dashboard/key-budgets (rolling 5-hour budget); both are enforced.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/admin/budget-templates", Tier: TierAlwaysProtected, Description: "Unavailable: answers 501 feature_unavailable, does nothing (budget templates are not implemented). Use instead: POST /api/usage/budget (calendar budgets) or POST /dashboard/key-budgets (rolling 5-hour budget); both are enforced.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/admin/budget-templates/{id}/apply", Tier: TierAlwaysProtected, Description: "Unavailable: answers 501 feature_unavailable, does nothing (budget templates are not implemented). Use instead: POST /api/usage/budget (calendar budgets) or POST /dashboard/key-budgets (rolling 5-hour budget); both are enforced.", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/keys/{id}/devices", Tier: TierManagement, Description: "Device tracking per key (B8-87).", Scopes: []string{"admin"}},
-	{Method: "POST", Path: "/admin/keys/{id}/lease", Tier: TierAlwaysProtected, Description: "Sets exclusive lease badge on key (B8-85).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/admin/management-tokens", Tier: TierManagement, Description: "Lists management access tokens (B8-99).", Scopes: []string{"admin"}},
-	{Method: "POST", Path: "/admin/management-tokens", Tier: TierAlwaysProtected, Description: "Creates a management access token (B8-99).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/admin/management-tokens/{id}", Tier: TierManagement, Description: "Retrieves management access token (B8-99).", Scopes: []string{"admin"}},
-	{Method: "DELETE", Path: "/admin/management-tokens/{id}", Tier: TierAlwaysProtected, Description: "Revokes management access token (B8-99).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/admin/key-pools", Tier: TierManagement, Description: "Lists key fair-share pools (B8-97).", Scopes: []string{"admin"}},
-	{Method: "POST", Path: "/admin/key-pools", Tier: TierAlwaysProtected, Description: "Creates key fair-share pool (B8-97).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/admin/key-pools/{id}", Tier: TierManagement, Description: "Retrieves key pool details (B8-97).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/admin/key-pools/{id}", Tier: TierAlwaysProtected, Description: "Updates key pool (B8-97).", Scopes: []string{"admin"}},
-	{Method: "DELETE", Path: "/admin/key-pools/{id}", Tier: TierAlwaysProtected, Description: "Deletes key pool (B8-97).", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/admin/keys/{id}/lease", Tier: TierAlwaysProtected, Description: "Unavailable: answers 501 feature_unavailable, does nothing (exclusive key leases are not implemented: nothing enforced the stored flag).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/admin/management-tokens", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (management tokens are not implemented: issued tokens never authenticated). Use instead: POST /admin/keys with the admin scope.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/admin/management-tokens", Tier: TierAlwaysProtected, Description: "Unavailable: answers 501 feature_unavailable, does nothing (management tokens are not implemented: issued tokens never authenticated). Use instead: POST /admin/keys with the admin scope.", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/admin/management-tokens/{id}", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (management tokens are not implemented). Use instead: POST /admin/keys with the admin scope.", Scopes: []string{"admin"}},
+	{Method: "DELETE", Path: "/admin/management-tokens/{id}", Tier: TierAlwaysProtected, Description: "Unavailable: answers 501 feature_unavailable, does nothing (management tokens are not implemented). Use instead: DELETE /admin/keys/{id}.", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/admin/key-pools", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (key fair-share pools are not implemented: stored pools never affected routing). Use instead: GET /api/quota-pools.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/admin/key-pools", Tier: TierAlwaysProtected, Description: "Unavailable: answers 501 feature_unavailable, does nothing (key fair-share pools are not implemented). Use instead: POST /api/quota-pools.", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/admin/key-pools/{id}", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (key fair-share pools are not implemented). Use instead: GET /api/quota-pools.", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/admin/key-pools/{id}", Tier: TierAlwaysProtected, Description: "Unavailable: answers 501 feature_unavailable, does nothing (key fair-share pools are not implemented). Use instead: POST /api/quota-pools.", Scopes: []string{"admin"}},
+	{Method: "DELETE", Path: "/admin/key-pools/{id}", Tier: TierAlwaysProtected, Description: "Unavailable: answers 501 feature_unavailable, does nothing (key fair-share pools are not implemented). Use instead: POST /api/quota-pools.", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/dashboard/keys/{id}/routing", Tier: TierManagement, Description: "Per-key routing dashboard page (B8-94).", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/dashboard/keys/{id}/access", Tier: TierManagement, Description: "Per-key access configuration page (B8-95).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/settings/ip-filter", Tier: TierManagement, Description: "IP filter allowlist/blocklist (B8-131).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/api/settings/ip-filter", Tier: TierManagement, Description: "Updates IP filter (B8-131).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/settings/ip-filter", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (a global IP filter is not implemented: the stored lists filtered nothing). Use instead: per-key ip_allowlist / ip_blocklist on the gateway key (enforced at auth).", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/api/settings/ip-filter", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (a global IP filter is not implemented: the stored lists filtered nothing). Use instead: per-key ip_allowlist / ip_blocklist on the gateway key (enforced at auth).", Scopes: []string{"admin"}},
 
 	// b8_analytics_extended.go
 	{Method: "GET", Path: "/api/analytics/cost-explorer", Tier: TierManagement, Description: "Cost explorer analytics (B8-19).", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/analytics/spend-projection", Tier: TierManagement, Description: "Monthly spend projection (B8-18,103).", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/analytics/budget-table", Tier: TierManagement, Description: "Key budget tracking table (B8-105).", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/analytics/cost-by-key", Tier: TierManagement, Description: "Spend grouped by gateway key (B8-113).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/analytics/cost-by-account", Tier: TierManagement, Description: "Spend grouped by provider account (B8-114).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/analytics/cost-by-account", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (spend is not partitioned by provider account in the ledger). Use instead: GET /api/analytics/cost-by-key.", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/analytics/weekly-pattern", Tier: TierManagement, Description: "Weekly usage patterns (B8-115).", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/analytics/heatmap", Tier: TierManagement, Description: "Activity heatmap (B8-115).", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/analytics/utilization", Tier: TierManagement, Description: "Provider quota utilization (B8-118).", Scopes: []string{"admin"}},
@@ -500,28 +505,28 @@ var guardRouteTable = []GuardRoute{
 	{Method: "GET", Path: "/api/analytics/candidates", Tier: TierManagement, Description: "Candidate targets for auto-combo (B8-82).", Scopes: []string{"admin"}},
 
 	// b8_logs_extended.go
-	{Method: "GET", Path: "/api/logs/proxy", Tier: TierManagement, Description: "Proxy request logs (B8-22).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/logs/console", Tier: TierManagement, Description: "Console output feed (B8-23).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/logs/timeline/{id}", Tier: TierManagement, Description: "Request step-by-step timeline (B8-24).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/logs/activity", Tier: TierManagement, Description: "Activity feed (B8-25).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/logs/conversations", Tier: TierManagement, Description: "Conversations view (B8-26).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/logs/compression", Tier: TierManagement, Description: "Compression savings log (B8-27).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/logs/audit", Tier: TierManagement, Description: "Admin audit log (B8-28).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/logs/proxy", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (no proxy log is recorded). Use instead: GET /dashboard/logs (ledger-backed request log).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/logs/console", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (no console feed is recorded here). Use instead: GET /api/logs (captured server log lines).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/logs/timeline/{id}", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (per-request step timelines are not recorded). Use instead: GET /dashboard/trace (route trace of the last request).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/logs/activity", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (no activity feed is recorded). Use instead: GET /dashboard/logs.", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/logs/conversations", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (conversation transcripts are not recorded here). Use instead: GET /v1/responses (stored Responses API conversations).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/logs/compression", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (no per-request compression log is recorded). Use instead: GET /api/analytics/compression.", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/logs/audit", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (this audit feed was never written). Use instead: GET /dashboard/audit.", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/logs/export", Tier: TierManagement, Description: "Export logs JSON (B8-126).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/logs/destinations", Tier: TierManagement, Description: "Lists log export destinations (B8-127).", Scopes: []string{"admin"}},
-	{Method: "POST", Path: "/api/logs/destinations", Tier: TierAlwaysProtected, Description: "Creates log export destination (B8-127).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/logs/destinations/{id}", Tier: TierManagement, Description: "Retrieves log export destination (B8-127).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/api/logs/destinations/{id}", Tier: TierAlwaysProtected, Description: "Updates log export destination (B8-127).", Scopes: []string{"admin"}},
-	{Method: "DELETE", Path: "/api/logs/destinations/{id}", Tier: TierAlwaysProtected, Description: "Deletes log export destination (B8-127).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/logs/destinations", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (log export destinations are not implemented: nothing shipped logs to them). Use instead: GET /api/logs/export.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/api/logs/destinations", Tier: TierAlwaysProtected, Description: "Unavailable: answers 501 feature_unavailable, does nothing (log export destinations are not implemented). Use instead: GET /api/logs/export.", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/logs/destinations/{id}", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (log export destinations are not implemented). Use instead: GET /api/logs/export.", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/api/logs/destinations/{id}", Tier: TierAlwaysProtected, Description: "Unavailable: answers 501 feature_unavailable, does nothing (log export destinations are not implemented). Use instead: GET /api/logs/export.", Scopes: []string{"admin"}},
+	{Method: "DELETE", Path: "/api/logs/destinations/{id}", Tier: TierAlwaysProtected, Description: "Unavailable: answers 501 feature_unavailable, does nothing (log export destinations are not implemented). Use instead: GET /api/logs/export.", Scopes: []string{"admin"}},
 
 	// b8_combos_extended.go
-	{Method: "GET", Path: "/api/combos/{id}/capabilities", Tier: TierManagement, Description: "Capability-specific combo behavior (B8-3).", Scopes: []string{"admin"}},
-	{Method: "PUT", Path: "/api/combos/{id}/capabilities", Tier: TierManagement, Description: "Sets capability-specific combo behavior (B8-3).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/settings/combo-tuning", Tier: TierManagement, Description: "Combo tuning settings (B8-58, B8-61..66).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/api/settings/combo-tuning", Tier: TierManagement, Description: "Updates combo tuning settings (B8-58, B8-61..66).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/combos/{id}/capabilities", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (capability-specific combo behaviour is not implemented).", Scopes: []string{"admin"}},
+	{Method: "PUT", Path: "/api/combos/{id}/capabilities", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (capability-specific combo behaviour is not implemented).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/settings/combo-tuning", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (combo tuning settings are not implemented: stored values never reached the router).", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/api/settings/combo-tuning", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (combo tuning settings are not implemented: stored values never reached the router).", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/settings/scoring-modes", Tier: TierManagement, Description: "Scoring factors and mode packs (B8-77).", Scopes: []string{"admin"}},
-	{Method: "GET", Path: "/api/settings/account-fallback", Tier: TierManagement, Description: "Account fallback strategy (B8-79).", Scopes: []string{"admin"}},
-	{Method: "PATCH", Path: "/api/settings/account-fallback", Tier: TierManagement, Description: "Updates account fallback strategy (B8-79).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/settings/account-fallback", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (account fallback strategy selection is not implemented).", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/api/settings/account-fallback", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (account fallback strategy selection is not implemented).", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/combos/{id}/studio-cascade", Tier: TierManagement, Description: "Live cascade view for combo studio (B8-83).", Scopes: []string{"admin"}},
 }
 
@@ -628,6 +633,7 @@ func (s *Server) requireAuthUnlessRelaxed(next http.HandlerFunc) http.HandlerFun
 // path template (with {param} segments), not the request URL.
 var spawnCapablePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^/admin/shutdown$`),
+	regexp.MustCompile(`^/admin/restart$`),
 	regexp.MustCompile(`^/admin/service(/.*)?$`),
 	regexp.MustCompile(`^/admin/plugin(/.*)?$`),
 	regexp.MustCompile(`^/admin/update$`),
@@ -980,21 +986,6 @@ func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
 	// until the current prune pass finishes.
 	s.a2aStopPruneLoop()
 	go s.shutdownHook()
-}
-
-// notImplementedAdmin is the handler for Tier 1 routes whose feature
-// does not exist yet (service install, plugin load, auto-update,
-// tunnel start, browser login flow). The guard in front of them is
-// real and enforced; the 501 is honest — the route is classified
-// local-only today so the feature lands guarded, not exposed.
-func (s *Server) notImplementedAdmin(feature string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-			return
-		}
-		writeError(w, http.StatusNotImplemented, feature+" is not implemented yet")
-	}
 }
 
 // settingsExportProvider is one provider row in the settings export:

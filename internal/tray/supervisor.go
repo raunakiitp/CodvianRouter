@@ -20,6 +20,7 @@ package tray
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -36,6 +37,16 @@ const (
 	maxAutoRestarts = 1
 	// restartBackoff is the delay before an automatic restart attempt.
 	restartBackoff = time.Second
+	// RestartExitCode is the exit status a supervised gateway uses
+	// to ask for a restart (POST /admin/restart). 75 is EX_TEMPFAIL
+	// from sysexits.h: "try again".
+	RestartExitCode = 75
+	// minRequestedRestartUptime is how long a child must have run
+	// for RestartExitCode to count as a requested restart.
+	minRequestedRestartUptime = time.Second
+	// SupervisedEnv is set to "1" in every child the supervisor
+	// starts, so the gateway knows a supervisor will relaunch it.
+	SupervisedEnv = "CODVIAN_ROUTER_SUPERVISED"
 	// stopGrace is how long Stop waits for a graceful exit before
 	// escalating to a force-kill (SIGTERM then SIGKILL to the whole
 	// process group on Unix; CTRL_BREAK_EVENT to the group then
@@ -59,6 +70,11 @@ type Supervisor struct {
 	stopping     bool
 	autoRestarts int
 	lastErr      error
+	// childStarted is when the current child was started;
+	// requestedRestarts counts RestartExitCode relaunches (these
+	// do not spend the autoRestarts crash budget).
+	childStarted      time.Time
+	requestedRestarts int
 
 	// doneCh is closed when the monitor goroutine for the current run
 	// exits terminally (clean stop, or retries exhausted). It is
@@ -270,6 +286,27 @@ func (s *Supervisor) LastError() error {
 	return s.lastErr
 }
 
+// RequestedRestarts returns how many restarts the child asked for
+// (exit status RestartExitCode) in the current run.
+func (s *Supervisor) RequestedRestarts() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.requestedRestarts
+}
+
+// exitCodeOf returns the child's exit status from cmd.Wait's error,
+// or -1 when err is not an exit status (nil means status 0).
+func exitCodeOf(err error) int {
+	if err == nil {
+		return 0
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return ee.ExitCode()
+	}
+	return -1
+}
+
 // AutoRestarts returns how many automatic restarts have been attempted in
 // the current run (at most 1; see the restart policy in README.md).
 func (s *Supervisor) AutoRestarts() int {
@@ -299,9 +336,11 @@ func (s *Supervisor) Start(ctx context.Context) error {
 		return fmt.Errorf("tray: failed to start gateway: %w", err)
 	}
 	s.cmd = cmd
+	s.childStarted = time.Now()
 	s.state = "running"
 	s.stopping = false
 	s.autoRestarts = 0
+	s.requestedRestarts = 0
 	s.lastErr = nil
 	s.doneCh = make(chan struct{})
 	s.stopReq = make(chan struct{})
@@ -394,6 +433,7 @@ func (s *Supervisor) buildCmd() (*exec.Cmd, error) {
 	// lives in supervisor_unix.go (Setpgid) and
 	// supervisor_windows.go (CREATE_NEW_PROCESS_GROUP).
 	configureChildProcessGroup(cmd)
+	cmd.Env = append(os.Environ(), SupervisedEnv+"=1")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = nil
@@ -424,29 +464,42 @@ func (s *Supervisor) monitor() {
 			s.removePIDFile()
 			return
 		}
-		// Unexpected exit.
-		s.lastErr = err
-		if s.autoRestarts >= maxAutoRestarts {
-			s.state = "stopped"
-			s.cmd = nil
-			doneCh := s.doneCh
-			s.mu.Unlock()
-			close(doneCh)
-			s.removePIDFile()
-			return
+		// A child that ran at least minRequestedRestartUptime and
+		// exited with RestartExitCode asked for a restart (POST
+		// /admin/restart): relaunch at once, without spending the
+		// crash-restart budget. A child that exits with that code
+		// immediately is treated as a crash, so a broken binary
+		// cannot spin the supervisor in a tight loop.
+		requested := exitCodeOf(err) == RestartExitCode && time.Since(s.childStarted) >= minRequestedRestartUptime
+		if requested {
+			s.lastErr = nil
+		} else {
+			// Unexpected exit.
+			s.lastErr = err
+			if s.autoRestarts >= maxAutoRestarts {
+				s.state = "stopped"
+				s.cmd = nil
+				doneCh := s.doneCh
+				s.mu.Unlock()
+				close(doneCh)
+				s.removePIDFile()
+				return
+			}
+			s.autoRestarts++
 		}
-		s.autoRestarts++
 		s.state = "unknown"
 		stopReq := s.stopReq
 		s.mu.Unlock()
 
-		timer := time.NewTimer(restartBackoff)
-		select {
-		case <-timer.C:
-		case <-stopReq:
-			timer.Stop()
-			s.finishStopped(nil)
-			return
+		if !requested {
+			timer := time.NewTimer(restartBackoff)
+			select {
+			case <-timer.C:
+			case <-stopReq:
+				timer.Stop()
+				s.finishStopped(nil)
+				return
+			}
 		}
 
 		s.mu.Lock()
@@ -480,6 +533,10 @@ func (s *Supervisor) monitor() {
 			return
 		}
 		s.cmd = next
+		s.childStarted = time.Now()
+		if requested {
+			s.requestedRestarts++
+		}
 		s.state = "running"
 		// The child pid changed: refresh the PID file before
 		// publishing the running state (see Start), so a reader

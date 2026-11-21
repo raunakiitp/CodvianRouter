@@ -70,6 +70,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -130,6 +131,70 @@ func (s *Server) handleAudioSpeechToText(w http.ResponseWriter, r *http.Request)
 // {"text": ...} out). No alias.
 func (s *Server) handleAudioTranslations(w http.ResponseWriter, r *http.Request) {
 	s.handleAudio(w, r, router.AudioTranslations)
+}
+
+// No voice-listing route is served: the audio surface is an
+// OpenAI-wire passthrough, and the OpenAI audio API has no voice
+// discovery endpoint. A fixed list here would present static data
+// as live provider capability, so voice discovery is deferred until
+// a provider with a real voices API (e.g. ElevenLabs) is wired.
+
+// audioVoiceIDRe bounds the {voiceId} path segment to the
+// characters real provider voice ids use.
+var audioVoiceIDRe = regexp.MustCompile(`^[A-Za-z0-9_.\-]{1,128}$`)
+
+// handleAudioTextToSpeechWithVoice serves POST
+// /v1/audio/text-to-speech/{voiceId}: the path's voice id is written
+// into the JSON body's "voice" field and the request then follows
+// the normal speech path. A body that already names a DIFFERENT
+// voice is refused 400 rather than silently overridden.
+func (s *Server) handleAudioTextToSpeechWithVoice(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	voice := r.PathValue("voiceId")
+	if !audioVoiceIDRe.MatchString(voice) {
+		writeError(w, http.StatusBadRequest, "invalid voice id in path")
+		return
+	}
+	// Admission before I/O, as in handleAudio (the check only
+	// peeks, so handleAudio repeating it records nothing twice).
+	if s.preBodyAdmission(w, r) {
+		return
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, audioMaxUploadBytes))
+	if err != nil {
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			writeError(w, http.StatusRequestEntityTooLarge, "request body too large: one audio upload is capped at 25 MiB")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "could not read request body")
+		return
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil || fields == nil {
+		writeError(w, http.StatusBadRequest, "invalid request: body must be a JSON object")
+		return
+	}
+	if raw, ok := fields["voice"]; ok {
+		var existing string
+		if err := json.Unmarshal(raw, &existing); err != nil || existing != voice {
+			writeError(w, http.StatusBadRequest, "body voice conflicts with the voice id in the path")
+			return
+		}
+	}
+	vb, _ := json.Marshal(voice)
+	fields["voice"] = vb
+	rewritten, err := json.Marshal(fields)
+	if err != nil {
+		writeServerError(w, http.StatusInternalServerError, "could not encode request")
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(rewritten))
+	r.ContentLength = int64(len(rewritten))
+	s.handleAudio(w, r, router.AudioSpeech)
 }
 
 // audioSpeechWire is the JSON shape parsed from a speech

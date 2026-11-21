@@ -350,7 +350,13 @@ func TestSyncGuardrailsNeverAsync(t *testing.T) {
 	if err := store.RegisterChecker("sync-guard", &fakeChecker{verdict: AsyncVerdict{Blocked: true}}); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	if err := store.RegisterChecker("async-guard", &fakeChecker{verdict: AsyncVerdict{Blocked: true}}); err != nil {
+	// The async checker is held until the first byte is marked
+	// delivered: without the hold, a checker that answers at once
+	// can record its verdict before MarkDelivered under load, and
+	// the test flaked (blocked_before_delivery instead of
+	// blocked_after_start) in a full -p 2 run.
+	release := make(chan struct{})
+	if err := store.RegisterChecker("async-guard", &fakeChecker{verdict: AsyncVerdict{Blocked: true}, released: release}); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	// The async run only contains the async entry. The stream is
@@ -358,6 +364,7 @@ func TestSyncGuardrailsNeverAsync(t *testing.T) {
 	// blocked_after_start.
 	run := store.StartAsync("prompt", true)
 	run.MarkDelivered()
+	close(release)
 	run.Wait()
 	if got := store.Stats().Async; len(got) != 2 {
 		t.Fatalf("stats async views = %d, want 2 (both entries listed)", len(got))

@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/raunakiitp/codvian-router/internal/ledger"
+	"github.com/raunakiitp/codvian-router/internal/scoring"
 	"github.com/raunakiitp/codvian-router/internal/strategy"
 )
 
@@ -276,97 +276,6 @@ func b8DaysInMonth(year int, month time.Month) int {
 // Budget table (B8-105)
 // ---------------------------------------------------------------------------
 
-type budgetTableRow struct {
-	KeyID        string  `json:"key_id"`
-	KeyName      string  `json:"key_name"`
-	TodayUSD     float64 `json:"today_usd"`
-	MonthUSD     float64 `json:"month_usd"`
-	DailyLimit   float64 `json:"daily_limit,omitempty"`
-	MonthlyLimit float64 `json:"monthly_limit,omitempty"`
-	UsedPct      float64 `json:"used_pct"`
-	Status       string  `json:"status"` // "ok", "warning", "over"
-}
-
-// handleBudgetTable serves GET /api/analytics/budget-table.
-func (s *Server) handleBudgetTable(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	rows := []budgetTableRow{}
-	if s.cfg == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"rows": rows, "count": 0})
-		return
-	}
-
-	now := time.Now()
-	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-
-	// Fetch global summaries once.
-	var daySum, monSum ledger.UsageSummary
-	if s.ledger != nil {
-		ctx := r.Context()
-		daySum, _ = s.ledger.Summary(ctx, startOfDay, now)
-		monSum, _ = s.ledger.Summary(ctx, startOfMonth, now)
-	}
-
-	for _, k := range s.cfg.GatewayKeys {
-		row := budgetTableRow{
-			KeyID:   k.ID,
-			KeyName: k.Name,
-		}
-		for _, tl := range k.TokenLimits {
-			switch tl.ResetInterval {
-			case "daily":
-				row.DailyLimit = float64(tl.Limit) // token count, not USD
-			case "monthly":
-				row.MonthlyLimit = float64(tl.Limit) // token count, not USD
-			}
-		}
-		// Use per-key ByKey aggregates if available; fall back to global totals.
-		for _, ku := range daySum.ByKey {
-			if ku.GatewayKeyID == k.ID {
-				row.TodayUSD += ku.CostUSD
-			}
-		}
-		for _, ku := range monSum.ByKey {
-			if ku.GatewayKeyID == k.ID {
-				row.MonthUSD += ku.CostUSD
-			}
-		}
-
-		limitForPct := row.MonthlyLimit
-		spendForPct := row.MonthUSD
-		if row.DailyLimit > 0 && (limitForPct == 0 || row.DailyLimit < limitForPct) {
-			limitForPct = row.DailyLimit
-			spendForPct = row.TodayUSD
-		}
-		if limitForPct > 0 {
-			row.UsedPct = math.Min(spendForPct/limitForPct*100, 999)
-		}
-
-		warnPct := 80.0
-		globalBudgetWarn.mu.RLock()
-		if wp, ok := globalBudgetWarn.thresholds[k.ID]; ok {
-			warnPct = wp
-		}
-		globalBudgetWarn.mu.RUnlock()
-		switch {
-		case row.UsedPct >= 100:
-			row.Status = "over"
-		case row.UsedPct >= warnPct:
-			row.Status = "warning"
-		default:
-			row.Status = "ok"
-		}
-		rows = append(rows, row)
-	}
-
-	sort.Slice(rows, func(i, j int) bool { return rows[i].UsedPct > rows[j].UsedPct })
-	writeJSON(w, http.StatusOK, map[string]any{"rows": rows, "count": len(rows)})
-}
-
 // ---------------------------------------------------------------------------
 // Cost by API key (B8-113)
 // ---------------------------------------------------------------------------
@@ -423,19 +332,6 @@ func (s *Server) handleAnalyticsCostByKey(w http.ResponseWriter, r *http.Request
 // Cost by account (B8-114)
 // ---------------------------------------------------------------------------
 
-// handleAnalyticsCostByAccount serves GET /api/analytics/cost-by-account.
-func (s *Server) handleAnalyticsCostByAccount(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"rows":  []map[string]any{},
-		"count": 0,
-		"note":  "account-level partitioning uses key groups as accounts",
-	})
-}
-
 // ---------------------------------------------------------------------------
 // Weekly pattern / 365-day heatmap / period comparison (B8-115)
 // ---------------------------------------------------------------------------
@@ -446,32 +342,73 @@ func (s *Server) handleAnalyticsWeeklyPattern(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	days := []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
-	pattern := make([]map[string]any, 7)
-	for i := range pattern {
-		pattern[i] = map[string]any{"day": days[i], "requests": 0, "cost_usd": 0.0}
+	// Real data: the last 12 weeks of daily ledger buckets, summed
+	// by UTC weekday. Without a ledger the feed says so instead of
+	// returning seven zero rows that look like measured traffic.
+	if s.ledger == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"pattern": []any{}, "available": false, "note": "no usage ledger on this server"})
+		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"pattern": pattern})
+	const weeks = 12
+	buckets, err := s.ledger.DayBuckets(r.Context(), 7*weeks, time.Now())
+	if err != nil {
+		writeServerError(w, http.StatusInternalServerError, "weekly pattern: "+err.Error())
+		return
+	}
+	var reqs [7]int
+	var cost [7]float64
+	for _, b := range buckets {
+		d := b.Start.UTC().Weekday()
+		reqs[d] += b.Requests
+		cost[d] += b.CostUSD
+	}
+	pattern := make([]map[string]any, 7)
+	for i := 0; i < 7; i++ {
+		pattern[i] = map[string]any{"day": time.Weekday(i).String(), "requests": reqs[i], "cost_usd": cost[i]}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"pattern": pattern, "available": true, "window_days": len(buckets), "timezone": "UTC"})
 }
 
-// handleAnalyticsHeatmap serves GET /api/analytics/heatmap.
+// handleAnalyticsHeatmap serves GET /api/analytics/heatmap: one
+// bucket per UTC day for the last 365 days, from the ledger.
+// level is a 0-4 intensity relative to the busiest day.
 func (s *Server) handleAnalyticsHeatmap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	now := time.Now()
-	buckets := make([]map[string]any, 365)
-	for i := range buckets {
-		day := now.AddDate(0, 0, -(364 - i))
-		buckets[i] = map[string]any{
-			"date":     day.Format("2006-01-02"),
-			"requests": 0,
-			"cost_usd": 0.0,
-			"level":    0,
+	if s.ledger == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"buckets": []any{}, "count": 0, "available": false, "note": "no usage ledger on this server"})
+		return
+	}
+	days, err := s.ledger.DayBuckets(r.Context(), 365, time.Now())
+	if err != nil {
+		writeServerError(w, http.StatusInternalServerError, "heatmap: "+err.Error())
+		return
+	}
+	peak := 0
+	for _, d := range days {
+		if d.Requests > peak {
+			peak = d.Requests
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"buckets": buckets, "count": len(buckets)})
+	buckets := make([]map[string]any, len(days))
+	for i, d := range days {
+		level := 0
+		if peak > 0 && d.Requests > 0 {
+			level = 1 + int(math.Floor(3*float64(d.Requests)/float64(peak)))
+			if level > 4 {
+				level = 4
+			}
+		}
+		buckets[i] = map[string]any{
+			"date":     d.Start.UTC().Format("2006-01-02"),
+			"requests": d.Requests,
+			"cost_usd": d.CostUSD,
+			"level":    level,
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"buckets": buckets, "count": len(buckets), "available": true, "timezone": "UTC"})
 }
 
 // ---------------------------------------------------------------------------
@@ -535,12 +472,13 @@ func (s *Server) handleAnalyticsSearch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	// Search requests are not tagged separately in the ledger, so
+	// there is nothing measured to report: say so rather than
+	// answer zero queries as if that were a measurement.
 	writeJSON(w, http.StatusOK, map[string]any{
-		"queries":     0,
-		"results_avg": 0,
-		"cost_usd":    0.0,
-		"providers":   []string{},
-		"note":        "search analytics available when web-search routing is enabled",
+		"available": false,
+		"providers": []string{},
+		"note":      "search analytics are not recorded yet: POST /v1/search traffic is not tagged separately in the usage ledger",
 	})
 }
 
@@ -559,11 +497,14 @@ func (s *Server) handleAnalyticsFreeRankings(w http.ResponseWriter, r *http.Requ
 		for _, p := range s.cfg.Providers {
 			for _, m := range p.Models {
 				if m.InputPriceUSD == 0 && m.OutputPriceUSD == 0 {
+					// Only what is known: the model is configured
+					// with a zero price. No rating or success rate
+					// is invented; rankable fields stay absent until
+					// they are measured.
 					rows = append(rows, map[string]any{
-						"provider":    p.ID,
-						"model":       m.ID,
-						"elo":         1000,
-						"success_pct": 0.0,
+						"provider": p.ID,
+						"model":    m.ID,
+						"free":     true,
 					})
 				}
 			}
@@ -579,15 +520,14 @@ func (s *Server) handleAnalyticsFreeRankings(w http.ResponseWriter, r *http.Requ
 type scoringFactor struct {
 	Name   string  `json:"name"`
 	Weight float64 `json:"weight"`
-	Value  float64 `json:"value"`
-	Score  float64 `json:"score"`
 }
 
 type scoringInspectorResponse struct {
-	Strategy string          `json:"strategy"`
-	Factors  []scoringFactor `json:"factors"`
-	Total    float64         `json:"total_score"`
-	Mode     string          `json:"mode"`
+	Strategy        string          `json:"strategy"`
+	Factors         []scoringFactor `json:"factors"`
+	Mode            string          `json:"mode"`
+	ValuesAvailable bool            `json:"values_available"`
+	Note            string          `json:"note"`
 }
 
 // handleScoringInspector serves GET /api/analytics/scoring-inspector.
@@ -596,30 +536,36 @@ func (s *Server) handleScoringInspector(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	// The weights are the ones the engine actually uses for the
+	// global strategy (strategy.WeightsFor, the same call behind
+	// /dashboard/strategies). Per-candidate factor values are live
+	// router signals that this feed does not read, so they are
+	// reported as unavailable rather than invented.
 	globalStrat := strategy.StrategyPriority
-	if s.cfg != nil && s.cfg.Routing != nil {
-		if gs := s.cfg.Routing.GlobalStrategy; gs != "" {
+	var custom scoring.Weights
+	if rc := s.routingConfig(); rc != nil {
+		if gs := rc.GlobalStrategy; gs != "" {
 			globalStrat = strategy.Strategy(gs)
+		}
+		if ww := rc.WeightedWeights; ww != nil {
+			custom = scoring.Weights{Latency: ww.Latency, Success: ww.Success, Cost: ww.Cost, Quality: ww.Quality, Quota: ww.Quota}
 		}
 	}
 	_, desc := strategy.Describe(globalStrat)
-	resp := scoringInspectorResponse{
+	wt := strategy.WeightsFor(globalStrat, custom)
+	writeJSON(w, http.StatusOK, scoringInspectorResponse{
 		Strategy: string(globalStrat),
 		Mode:     desc,
 		Factors: []scoringFactor{
-			{Name: "success_rate", Weight: 0.30, Value: 0.95, Score: 0.285},
-			{Name: "quota_headroom", Weight: 0.25, Value: 0.80, Score: 0.200},
-			{Name: "latency_p95", Weight: 0.20, Value: 0.70, Score: 0.140},
-			{Name: "cost_rank", Weight: 0.15, Value: 0.60, Score: 0.090},
-			{Name: "cache_affinity", Weight: 0.10, Value: 0.50, Score: 0.050},
+			{Name: "latency", Weight: wt.Latency},
+			{Name: "success", Weight: wt.Success},
+			{Name: "cost", Weight: wt.Cost},
+			{Name: "quality", Weight: wt.Quality},
+			{Name: "quota", Weight: wt.Quota},
 		},
-	}
-	total := 0.0
-	for _, f := range resp.Factors {
-		total += f.Score
-	}
-	resp.Total = total
-	writeJSON(w, http.StatusOK, resp)
+		ValuesAvailable: false,
+		Note:            "weights are the live configured weights; per-candidate factor values are not exposed by this feed",
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -635,13 +581,12 @@ func (s *Server) handleAnalyticsCandidates(w http.ResponseWriter, r *http.Reques
 	candidates := []map[string]any{}
 	if s.cfg != nil {
 		for _, p := range s.cfg.Providers {
+			// Score, quota and latency are not read by this feed,
+			// so they are left out instead of reported as zero.
 			candidates = append(candidates, map[string]any{
-				"provider":   p.ID,
-				"name":       p.Name,
-				"score":      0.0,
-				"quota_pct":  0.0,
-				"latency_ms": 0,
-				"status":     "unknown",
+				"provider": p.ID,
+				"name":     p.Name,
+				"status":   "unknown",
 			})
 		}
 	}
@@ -657,7 +602,6 @@ func (s *Server) registerB8AnalyticsRoutes(mux *http.ServeMux) {
 	s.register(mux, "GET", "/api/analytics/spend-projection", s.handleSpendProjection)
 	s.register(mux, "GET", "/api/analytics/budget-table", s.handleBudgetTable)
 	s.register(mux, "GET", "/api/analytics/cost-by-key", s.handleAnalyticsCostByKey)
-	s.register(mux, "GET", "/api/analytics/cost-by-account", s.handleAnalyticsCostByAccount)
 	s.register(mux, "GET", "/api/analytics/weekly-pattern", s.handleAnalyticsWeeklyPattern)
 	s.register(mux, "GET", "/api/analytics/heatmap", s.handleAnalyticsHeatmap)
 	s.register(mux, "GET", "/api/analytics/utilization", s.handleAnalyticsUtilization)

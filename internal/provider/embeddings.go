@@ -94,22 +94,26 @@ func (r EmbeddingRequest) Validate() error {
 		if t == "" {
 			return fmt.Errorf("provider: embeddings request input must not be empty")
 		}
+	case map[string]any:
+		if len(t) == 0 {
+			return fmt.Errorf("provider: embeddings request input must not be empty")
+		}
 	case []any:
 		if len(t) == 0 {
 			return fmt.Errorf("provider: embeddings request input must not be empty")
 		}
 	default:
-		return fmt.Errorf("provider: embeddings request input must be a string or an array")
+		return fmt.Errorf("provider: embeddings request input must be a string, object, or an array")
 	}
 	return nil
 }
 
 // TextInputs decodes the string forms of the input for the
-// guardrail scan and the local token estimate: a single string, or
-// an array of strings. Token-ID inputs (an array of ints, or an
-// array of int arrays) carry no text, so they return nil — there
-// is nothing to scan, and the token estimate counts the IDs
-// directly instead (see EstimateTokens).
+// guardrail scan and the local token estimate: a single string,
+// an array of strings, or text fields from multimodal maps.
+// Token-ID inputs (an array of ints, or an array of int arrays)
+// carry no text, so they return nil — there is nothing to scan,
+// and the token estimate counts the IDs directly instead (see EstimateTokens).
 func (r EmbeddingRequest) TextInputs() []string {
 	var v any
 	if err := json.Unmarshal(r.Input, &v); err != nil {
@@ -118,16 +122,31 @@ func (r EmbeddingRequest) TextInputs() []string {
 	switch t := v.(type) {
 	case string:
 		return []string{t}
+	case map[string]any:
+		for _, k := range []string{"text", "prompt", "content", "query"} {
+			if s, ok := t[k].(string); ok && s != "" {
+				return []string{s}
+			}
+		}
+		return nil
 	case []any:
 		out := []string{}
 		for _, item := range t {
-			s, ok := item.(string)
-			if !ok {
-				return nil
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			} else if m, ok := item.(map[string]any); ok {
+				for _, k := range []string{"text", "prompt", "content", "query"} {
+					if s, ok := m[k].(string); ok && s != "" {
+						out = append(out, s)
+						break
+					}
+				}
 			}
-			out = append(out, s)
 		}
-		return out
+		if len(out) > 0 {
+			return out
+		}
+		return nil
 	}
 	return nil
 }
