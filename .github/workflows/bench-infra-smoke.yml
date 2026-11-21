@@ -30,5 +30,9 @@ jobs:
           # executing them: a timing/execution gate across packages is
           # brittle and is not a published performance number. The full
           # rig is scripts/bench.sh (Linux, quiet machine only).
-          go test -c -o /dev/null ./internal/ledger/ ./internal/tokencount/
-          go test -c -o /dev/null ./internal/router/ ./internal/cache/
+          # go test -c accepts ONE package with -o; loop over the
+          # benchmark-bearing packages and compile each test binary.
+          for pkg in ./internal/ledger/ ./internal/tokencount/ ./internal/router/ ./internal/cache/; do
+            go test -c -o /tmp/bench.test "$pkg" || exit 1
+          done
+          echo "benchmark binaries compiled: ledger tokencount router cache"
