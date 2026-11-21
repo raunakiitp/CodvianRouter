@@ -1,11 +1,8 @@
 name: bench-infra-smoke
 on:
   push:
-  paths:
-    - 'internal/**'
-    - 'scripts/bench*.sh'
-    - 'go.mod'
-    - '.github/workflows/bench-infra-smoke.yml'
+  pull_request:
+  workflow_dispatch:
   schedule:
     - cron: '0 5 * * 1'
 permissions:
@@ -26,12 +23,8 @@ jobs:
           echo "loadavg: $(cat /proc/loadavg 2>/dev/null || echo MISSING)"
       - name: Benchmark infrastructure smoke (compile only, no timing gate)
         run: |
-          # Proves the Go benchmark binaries COMPILE on Linux without
-          # executing them: a timing/execution gate across packages is
-          # brittle and is not a published performance number. The full
-          # rig is scripts/bench.sh (Linux, quiet machine only).
-          # go test -c accepts ONE package with -o; loop over the
-          # benchmark-bearing packages and compile each test binary.
+          # Proves the Go benchmark binaries COMPILE on Linux; execution
+          # and timing live in the full rig (scripts/bench.sh, quiet Linux).
           for pkg in ./internal/ledger/ ./internal/tokencount/ ./internal/router/ ./internal/cache/; do
             go test -c -o /tmp/bench.test "$pkg" || exit 1
           done
