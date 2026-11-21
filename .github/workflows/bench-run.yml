@@ -1,0 +1,37 @@
+name: bench-run
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-bench:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.27.4"
+      - name: Environment metadata
+        run: |
+          echo "commit: $(git rev-parse --short HEAD)"
+          echo "os: $(uname -srm)"
+          nproc; lscpu | grep -E 'Model name|Architecture|CPU\(s\)' || true
+          go version
+      - name: Run the real benchmark (scripts/bench.sh)
+        id: bench
+        run: |
+          # bench.sh has its own quiet-gate (loadavg + flock); if the
+          # shared runner is noisy it REFUSES honestly rather than
+          # publishing bad numbers. We capture that outcome as-is.
+          ./scripts/bench.sh --out docs/benchmark-phase3-ci.json || echo "BENCH_REFUSED (quiet-gate)"
+          echo "--- raw output ---"
+          cat docs/benchmark-phase3-ci.json 2>/dev/null || true
+      - name: Upload raw benchmark JSON
+        if: always()
+        uses: actions/upload-artifact@5d5d22a31266e3d07fbf8d1f8f6f6f6f6f6f6f6f # v4.8.3
+        with:
+          name: benchmark-phase3-ci
+          path: docs/benchmark-phase3-ci.json
+          if-no-files-found: warn
