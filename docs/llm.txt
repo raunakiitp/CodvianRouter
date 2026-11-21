@@ -7,7 +7,7 @@
 # Scope `admin` implies every scope. LOCAL_ONLY = loopback-only
 # even with a valid key. Destructive routes need a typed
 # {"confirm": "<phrase>"} body in addition to the key.
-# Routes: 308
+# Routes: 318
 
 ## Auth
 header: Authorization: Bearer <gateway-key>
@@ -156,8 +156,11 @@ POST /a2a | MANAGEMENT | scopes=chat | auth=key | A2A JSON-RPC endpoint (message
 GET /api/a2a/status | MANAGEMENT | scopes=admin | auth=key | A2A operator status: enabled flag, live per-state task counts (operator-only aggregates across all owners), the six skill ids and the protocol version. Management auth (admin scope) required; while A2A is disabled it answers enabled:false with all-zero counts and never touches the store.
 GET /.well-known/agent.json | MANAGEMENT | scopes=- | auth=exempt | A2A agent card (discovery document for the POST /a2a task interface): name, description, url, version, input/output modes, capabilities and the six skill descriptors — public, no auth; no task data, no keys, no provider details.
 POST /v1/embeddings | MANAGEMENT | scopes=chat | auth=key | Embeddings — OpenAI-compatible, routed through the same engine as chat completions (budgets, guardrails, ledger, route trace) but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.
+POST /v1/multimodal-embeddings | MANAGEMENT | scopes=chat | auth=key | Multimodal embeddings (text + image/media inputs) — routed through the engine, replay-exempt. Gateway-key auth required.
 POST /v1/rerank | MANAGEMENT | scopes=chat | auth=key | Rerank — Cohere/LiteLLM shape (model, query, documents, top_n, return_documents), routed through the same engine as chat completions but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.
 POST /v1/completions | MANAGEMENT | scopes=chat | auth=key | Legacy completions — gateway-key auth required.
+POST /v1/systemone | MANAGEMENT | scopes=chat | auth=key | SystemOne legacy AI integration surface. Gateway-key auth required.
+POST /v1/relay/chat/completions | MANAGEMENT | scopes=chat | auth=key | Chat completions explicitly routed with context-relay strategy. Gateway-key auth required.
 GET /v1/classify | MANAGEMENT | scopes=chat | auth=key | Routing classification — gateway-key auth required.
 GET /v1/explain/routing | MANAGEMENT | scopes=chat | auth=key | Routing explanation — gateway-key auth required.
 GET /v1/segment | MANAGEMENT | scopes=chat | auth=key | Prompt segmentation + classification — gateway-key auth required.
@@ -165,14 +168,20 @@ POST /v1/images/generations | MANAGEMENT | scopes=chat | auth=key | Images gener
 POST /v1/images/edits | MANAGEMENT | scopes=chat | auth=key | Images edits — OpenAI-compatible multipart/form-data, forwarded verbatim (never decoded and rebuilt), routed through the same engine as chat completions but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.
 POST /v1/audio/speech | MANAGEMENT | scopes=chat | auth=key | Audio speech (text-to-speech) — OpenAI-compatible, routed through the same engine as chat completions but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.
 POST /v1/audio/text-to-speech | MANAGEMENT | scopes=chat | auth=key | Alias of POST /v1/audio/speech — not an OpenAI endpoint; gateway route name, same handler and operation. Gateway-key auth required.
+POST /v1/audio/text-to-speech/{voiceId...} | MANAGEMENT | scopes=chat | auth=key | Text-to-speech with explicit voice in URL path. Gateway-key auth required.
+GET /v1/audio/voices | MANAGEMENT | scopes=chat | auth=key | Lists available audio voices for text-to-speech. Gateway-key auth required.
+GET /v1/voices | MANAGEMENT | scopes=chat | auth=key | Alias of GET /v1/audio/voices. Gateway-key auth required.
 POST /v1/audio/transcriptions | MANAGEMENT | scopes=chat | auth=key | Audio transcriptions (speech-to-text) — OpenAI-compatible multipart upload, replay-exempt: exactly one upstream attempt. Gateway-key auth required.
 POST /v1/audio/speech-to-text | MANAGEMENT | scopes=chat | auth=key | Alias of POST /v1/audio/transcriptions — not an OpenAI endpoint; gateway route name, same handler and operation. Gateway-key auth required.
 POST /v1/audio/translations | MANAGEMENT | scopes=chat | auth=key | Audio translations (translate audio to English) — OpenAI-compatible multipart upload, replay-exempt: exactly one upstream attempt. Gateway-key auth required.
 POST /v1/moderations | MANAGEMENT | scopes=chat | auth=key | Moderations — OpenAI-shaped, backed ONLY by the router's local guardrails (PII / secret / injection patterns); no upstream call, no input stored or echoed. The 13 OpenAI categories are not judged (all false, score 0); the real verdict is in results[].local_guardrails and results[].flagged reflects it. Gateway-key auth required.
 POST /v1/search | MANAGEMENT | scopes=chat | auth=key | Search — Perplexity Search API passthrough, verbatim, replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.
+POST /v1/web/fetch | MANAGEMENT | scopes=chat | auth=key | Fetches and extracts clean text from a web URL with SSRF protection. Gateway-key auth required.
 POST /v1/ocr | MANAGEMENT | scopes=chat | auth=key | OCR — Mistral OCR API passthrough, verbatim, replay-exempt: exactly one upstream attempt. Gateway-key auth required.
 POST /v1/videos/generations | MANAGEMENT | scopes=chat | auth=key | Video generations — Runway text-to-video passthrough, returns a task id; replay-exempt: exactly one upstream attempt. Gateway-key auth required.
 GET /v1/videos/{id} | MANAGEMENT | scopes=chat | auth=key | Video task status — Runway task poll by id; unknown ids answer 404. Gateway-key auth required.
+GET /v1/video-bridge/drilldown | MANAGEMENT | scopes=chat | auth=key | Video generation task progress and frame drilldown metadata. Gateway-key auth required.
+POST /v1/video-bridge/drilldown | MANAGEMENT | scopes=chat | auth=key | Video generation task progress and frame drilldown metadata. Gateway-key auth required.
 POST /v1/music/generations | MANAGEMENT | scopes=chat | auth=key | Music generations — MiniMax music generation passthrough, synchronous; replay-exempt: exactly one upstream attempt. Gateway-key auth required.
 POST /v1/messages | MANAGEMENT | scopes=chat | auth=key | Anthropic Messages dialect — byte-for-byte native relay to a Messages provider (only the model field rewritten; cache_control and the SSE envelope pass through untouched), translate path through the engine when a feature needs the canonical form. Gateway-key auth required.
 POST /v1/messages/count_tokens | MANAGEMENT | scopes=chat | auth=key | Token count for a Messages request body — counted locally, never sent upstream. Gateway-key auth required.
@@ -211,6 +220,7 @@ POST /v1/combos/{id}/test-run | MANAGEMENT | scopes=models | auth=key | Simulate
 POST /v1/combos/{id}/enable | MANAGEMENT | scopes=admin | auth=key | Enables one named routing combo and re-mirrors its stored chain + strategy. Management auth (admin scope) required — it rewrites routing state.
 POST /v1/combos/{id}/disable | MANAGEMENT | scopes=admin | auth=key | Disables one named routing combo (unmirrors it from routing). Management auth (admin scope) required — it rewrites routing state.
 POST /admin/shutdown | LOCAL_ONLY | scopes=admin | auth=key | Terminates the server process.
+POST /admin/restart | LOCAL_ONLY | scopes=admin | auth=key | Graceful restart of the supervised gateway process.
 POST /admin/service/install | LOCAL_ONLY | scopes=admin | auth=key | Installs a system service — not implemented yet (501 behind the guard).
 POST /admin/plugin/load | LOCAL_ONLY | scopes=admin | auth=key | Dynamic plugin loading is intentionally unsupported: plugins are compiled-in Go registered from config at startup (CHECKLIST 201, docs/plugins.md) — loading arbitrary code from config would be arbitrary code execution. Answers 501 by design, never loads code.
 POST /admin/update | LOCAL_ONLY | scopes=admin | auth=key | Auto-update (checkout + install) — not implemented yet (501 behind the guard).

@@ -8,9 +8,9 @@ the per-route sections; regenerate instead:
 python3 scripts/gen-api-docs.py
 ```
 
-Coverage: **308 routes** (163 GET, 98 POST, 21 DELETE, 21 PATCH, 5 PUT) —
-9 `LOCAL_ONLY`, 49 `ALWAYS_PROTECTED`,
-250 `MANAGEMENT`; 58 auth-exempt, 240 scope-gated, 10 key-only (gateway key, no scope).
+Coverage: **318 routes** (166 GET, 105 POST, 21 DELETE, 21 PATCH, 5 PUT) —
+10 `LOCAL_ONLY`, 49 `ALWAYS_PROTECTED`,
+259 `MANAGEMENT`; 58 auth-exempt, 250 scope-gated, 10 key-only (gateway key, no scope).
 Enforced by `TestAPIReferenceCoversEveryRoute`
 (`internal/server/api_reference_test.go`): the test reads the guard
 table and this doc and FAILS if any route is missing. That test is
@@ -494,6 +494,22 @@ its key field; the key is kept only in page memory, never stored.
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
 
+### `POST /v1/multimodal-embeddings`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `chat` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Multimodal embeddings (text + image/media inputs) — routed through the engine, replay-exempt. Gateway-key auth required.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/v1/multimodal-embeddings
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
 ### `POST /v1/rerank`
 
 - **Tier:** `MANAGEMENT`
@@ -534,6 +550,38 @@ its key field; the key is kept only in page memory, never stored.
 
   ```sh
   curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/v1/completions
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `POST /v1/systemone`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `chat` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** SystemOne legacy AI integration surface. Gateway-key auth required.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/v1/systemone
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `POST /v1/relay/chat/completions`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `chat` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Chat completions explicitly routed with context-relay strategy. Gateway-key auth required.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/v1/relay/chat/completions
   ```
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
@@ -650,6 +698,54 @@ its key field; the key is kept only in page memory, never stored.
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
 
+### `POST /v1/audio/text-to-speech/{voiceId...}`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `chat` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Text-to-speech with explicit voice in URL path. Gateway-key auth required.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/v1/audio/text-to-speech/{voiceId...}
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `GET /v1/audio/voices`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `chat` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Lists available audio voices for text-to-speech. Gateway-key auth required.
+- **Request:** no body.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X GET -H "Authorization: Bearer $CODVIAN_KEY" http://127.0.0.1:8080/v1/audio/voices
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `GET /v1/voices`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `chat` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Alias of GET /v1/audio/voices. Gateway-key auth required.
+- **Request:** no body.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X GET -H "Authorization: Bearer $CODVIAN_KEY" http://127.0.0.1:8080/v1/voices
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
 ### `POST /v1/audio/transcriptions`
 
 - **Tier:** `MANAGEMENT`
@@ -730,6 +826,22 @@ its key field; the key is kept only in page memory, never stored.
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
 
+### `POST /v1/web/fetch`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `chat` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Fetches and extracts clean text from a web URL with SSRF protection. Gateway-key auth required.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/v1/web/fetch
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
 ### `POST /v1/ocr`
 
 - **Tier:** `MANAGEMENT`
@@ -774,6 +886,38 @@ its key field; the key is kept only in page memory, never stored.
 
   ```sh
   curl -X GET -H "Authorization: Bearer $CODVIAN_KEY" http://127.0.0.1:8080/v1/videos/{id}
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `GET /v1/video-bridge/drilldown`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `chat` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Video generation task progress and frame drilldown metadata. Gateway-key auth required.
+- **Request:** no body.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X GET -H "Authorization: Bearer $CODVIAN_KEY" http://127.0.0.1:8080/v1/video-bridge/drilldown
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `POST /v1/video-bridge/drilldown`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `chat` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Video generation task progress and frame drilldown metadata. Gateway-key auth required.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/v1/video-bridge/drilldown
   ```
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
@@ -4495,6 +4639,22 @@ its key field; the key is kept only in page memory, never stored.
 
   ```sh
   curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/admin/shutdown
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `POST /admin/restart`
+
+- **Tier:** `LOCAL_ONLY`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required, AND loopback-only (checked before auth)
+- **Spawn-capable:** yes
+- **Description:** Graceful restart of the supervised gateway process.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/admin/restart
   ```
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.

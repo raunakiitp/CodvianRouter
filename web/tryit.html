@@ -1687,6 +1687,18 @@ const ROUTES = [
   },
   {
     "method": "POST",
+    "path": "/v1/multimodal-embeddings",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Multimodal embeddings (text + image/media inputs) \u2014 routed through the engine, replay-exempt. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
     "path": "/v1/rerank",
     "tier": "MANAGEMENT",
     "spawn_capable": false,
@@ -1703,6 +1715,30 @@ const ROUTES = [
     "tier": "MANAGEMENT",
     "spawn_capable": false,
     "description": "Legacy completions \u2014 gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/systemone",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "SystemOne legacy AI integration surface. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/relay/chat/completions",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Chat completions explicitly routed with context-relay strategy. Gateway-key auth required.",
     "auth_exempt": false,
     "scopes": [
       "chat"
@@ -1795,6 +1831,42 @@ const ROUTES = [
   },
   {
     "method": "POST",
+    "path": "/v1/audio/text-to-speech/{voiceId...}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Text-to-speech with explicit voice in URL path. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/audio/voices",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Lists available audio voices for text-to-speech. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/voices",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Alias of GET /v1/audio/voices. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
     "path": "/v1/audio/transcriptions",
     "tier": "MANAGEMENT",
     "spawn_capable": false,
@@ -1855,6 +1927,18 @@ const ROUTES = [
   },
   {
     "method": "POST",
+    "path": "/v1/web/fetch",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Fetches and extracts clean text from a web URL with SSRF protection. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
     "path": "/v1/ocr",
     "tier": "MANAGEMENT",
     "spawn_capable": false,
@@ -1883,6 +1967,30 @@ const ROUTES = [
     "tier": "MANAGEMENT",
     "spawn_capable": false,
     "description": "Video task status \u2014 Runway task poll by id; unknown ids answer 404. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/v1/video-bridge/drilldown",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Video generation task progress and frame drilldown metadata. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/v1/video-bridge/drilldown",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Video generation task progress and frame drilldown metadata. Gateway-key auth required.",
     "auth_exempt": false,
     "scopes": [
       "chat"
@@ -2335,6 +2443,18 @@ const ROUTES = [
     "tier": "LOCAL_ONLY",
     "spawn_capable": true,
     "description": "Terminates the server process.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/restart",
+    "tier": "LOCAL_ONLY",
+    "spawn_capable": true,
+    "description": "Graceful restart of the supervised gateway process.",
     "auth_exempt": false,
     "scopes": [
       "admin"

@@ -5164,6 +5164,11 @@ func runServe(opts options) int {
 				doShutdown()
 			}
 		}),
+		server.WithRestartHook(func() {
+			if doShutdown != nil {
+				doShutdown()
+			}
+		}),
 	)
 	// Responses transcripts (CHECKLIST 315–316): restore the
 	// persisted store before serving — a restart resumes the

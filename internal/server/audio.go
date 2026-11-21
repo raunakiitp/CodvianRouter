@@ -132,6 +132,40 @@ func (s *Server) handleAudioTranslations(w http.ResponseWriter, r *http.Request)
 	s.handleAudio(w, r, router.AudioTranslations)
 }
 
+// AudioVoice describes one available text-to-speech voice.
+type AudioVoice struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Gender      string `json:"gender,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// standardAudioVoices is the canonical list of text-to-speech voices across OpenAI and supported TTS providers.
+var standardAudioVoices = []AudioVoice{
+	{ID: "alloy", Name: "Alloy", Gender: "neutral", Description: "Versatile, balanced voice"},
+	{ID: "echo", Name: "Echo", Gender: "male", Description: "Warm, conversational voice"},
+	{ID: "fable", Name: "Fable", Gender: "neutral", Description: "British accent, expressive storytelling voice"},
+	{ID: "onyx", Name: "Onyx", Gender: "male", Description: "Deep, authoritative voice"},
+	{ID: "nova", Name: "Nova", Gender: "female", Description: "Energetic, bright voice"},
+	{ID: "shimmer", Name: "Shimmer", Gender: "female", Description: "Clear, resonant voice"},
+}
+
+// handleAudioVoices serves GET /v1/audio/voices and GET /v1/voices.
+func (s *Server) handleAudioVoices(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"voices": standardAudioVoices,
+	})
+}
+
+// handleAudioTextToSpeechWithVoice serves POST /v1/audio/text-to-speech/{voiceId...}.
+func (s *Server) handleAudioTextToSpeechWithVoice(w http.ResponseWriter, r *http.Request) {
+	s.handleAudio(w, r, router.AudioSpeech)
+}
+
 // audioSpeechWire is the JSON shape parsed from a speech
 // request: only model + input are needed (validation, the
 // guardrail scan, chain resolution). Every other field (voice,

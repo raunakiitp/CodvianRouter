@@ -847,6 +847,7 @@ type Server struct {
 	bootstrapToken   string
 	bootstrapMu      sync.Mutex
 	shutdownHook     func()
+	restartHook      func()
 	startedAt        time.Time
 	localOnlyDenials atomic.Uint64
 	// CHECKLIST 243 server-side counters (see failover_243.go):
@@ -1398,6 +1399,12 @@ func WithShutdownHook(hook func()) Option {
 	return func(s *Server) { s.shutdownHook = hook }
 }
 
+// WithRestartHook wires the function POST /admin/restart invokes
+// after answering 202 (production: gracefully restart the HTTP server).
+func WithRestartHook(hook func()) Option {
+	return func(s *Server) { s.restartHook = hook }
+}
+
 // RoutingUpdate is one POST /dashboard/strategies change: a new
 // global strategy (nil = unchanged, "" = clear back to the
 // configured default) and/or per-chain overrides ("" value =
@@ -1759,9 +1766,12 @@ func New(engine Engine, opts ...Option) *Server {
 		s.register(mux, "GET", "/.well-known/agent.json", AgentCardHandler(a2a.SkillDescriptors(), baseURL, version))
 	}
 	s.register(mux, "POST", "/v1/embeddings", s.handleEmbeddings)
+	s.register(mux, "POST", "/v1/multimodal-embeddings", s.handleMultimodalEmbeddings)
 	s.register(mux, "POST", "/v1/rerank", s.handleRerank)
 	// M8.2 legacy completions + routing introspection.
 	s.register(mux, "POST", "/v1/completions", s.handleLegacyCompletions)
+	s.register(mux, "POST", "/v1/systemone", s.handleSystemOne)
+	s.register(mux, "POST", "/v1/relay/chat/completions", s.handleChatCompletions)
 	s.register(mux, "GET", "/v1/classify", s.handleClassify)
 	s.register(mux, "GET", "/v1/explain/routing", s.handleExplainRouting)
 	s.register(mux, "GET", "/v1/segment", s.handleSegment)
@@ -1771,6 +1781,9 @@ func New(engine Engine, opts ...Option) *Server {
 	// M8.6 audio (canonical ops + the reference router aliases).
 	s.register(mux, "POST", "/v1/audio/speech", s.handleAudioSpeech)
 	s.register(mux, "POST", "/v1/audio/text-to-speech", s.handleAudioTextToSpeech)
+	s.register(mux, "POST", "/v1/audio/text-to-speech/{voiceId...}", s.handleAudioTextToSpeechWithVoice)
+	s.register(mux, "GET", "/v1/audio/voices", s.handleAudioVoices)
+	s.register(mux, "GET", "/v1/voices", s.handleAudioVoices)
 	s.register(mux, "POST", "/v1/audio/transcriptions", s.handleAudioTranscriptions)
 	s.register(mux, "POST", "/v1/audio/speech-to-text", s.handleAudioSpeechToText)
 	s.register(mux, "POST", "/v1/audio/translations", s.handleAudioTranslations)
@@ -1778,9 +1791,12 @@ func New(engine Engine, opts ...Option) *Server {
 	s.register(mux, "POST", "/v1/moderations", s.handleModerations)
 	// M8.20 media verify.
 	s.register(mux, "POST", "/v1/search", s.handleSearch)
+	s.register(mux, "POST", "/v1/web/fetch", s.handleWebFetch)
 	s.register(mux, "POST", "/v1/ocr", s.handleOCR)
 	s.register(mux, "POST", "/v1/videos/generations", s.handleVideoGenerations)
 	s.register(mux, "GET", "/v1/videos/{id}", s.handleVideoTask)
+	s.register(mux, "GET", "/v1/video-bridge/drilldown", s.handleVideoDrilldown)
+	s.register(mux, "POST", "/v1/video-bridge/drilldown", s.handleVideoDrilldown)
 	s.register(mux, "POST", "/v1/music/generations", s.handleMusic)
 	s.register(mux, "POST", "/v1/messages", s.handleMessages)
 	// M8.3 token counting (Messages body).
@@ -1834,6 +1850,7 @@ func New(engine Engine, opts ...Option) *Server {
 	s.register(mux, "GET", "/dashboard/readiness", s.handleReadiness)
 	s.register(mux, "GET", "/dashboard/headless", s.handleHeadlessStatus)
 	s.register(mux, "POST", "/admin/shutdown", s.handleShutdown)
+	s.register(mux, "POST", "/admin/restart", s.handleRestart)
 	s.register(mux, "POST", "/admin/service/install", s.notImplementedAdmin("service install"))
 	s.register(mux, "POST", "/admin/plugin/load", s.notImplementedAdmin("plugin load"))
 	s.register(mux, "POST", "/admin/update", s.notImplementedAdmin("auto-update"))

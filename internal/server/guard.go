@@ -312,9 +312,12 @@ var guardRouteTable = []GuardRoute{
 	// trusts Host headers a caller can forge.
 	{Method: "GET", Path: "/.well-known/agent.json", Tier: TierManagement, Description: "A2A agent card (discovery document for the POST /a2a task interface): name, description, url, version, input/output modes, capabilities and the six skill descriptors — public, no auth; no task data, no keys, no provider details.", AuthExempt: true},
 	{Method: "POST", Path: "/v1/embeddings", Tier: TierManagement, Description: "Embeddings — OpenAI-compatible, routed through the same engine as chat completions (budgets, guardrails, ledger, route trace) but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "POST", Path: "/v1/multimodal-embeddings", Tier: TierManagement, Description: "Multimodal embeddings (text + image/media inputs) — routed through the engine, replay-exempt. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/rerank", Tier: TierManagement, Description: "Rerank — Cohere/LiteLLM shape (model, query, documents, top_n, return_documents), routed through the same engine as chat completions but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.", Scopes: []string{"chat"}},
 	// M8.2 legacy completions + routing introspection.
 	{Method: "POST", Path: "/v1/completions", Tier: TierManagement, Description: "Legacy completions — gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "POST", Path: "/v1/systemone", Tier: TierManagement, Description: "SystemOne legacy AI integration surface. Gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "POST", Path: "/v1/relay/chat/completions", Tier: TierManagement, Description: "Chat completions explicitly routed with context-relay strategy. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "GET", Path: "/v1/classify", Tier: TierManagement, Description: "Routing classification — gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "GET", Path: "/v1/explain/routing", Tier: TierManagement, Description: "Routing explanation — gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "GET", Path: "/v1/segment", Tier: TierManagement, Description: "Prompt segmentation + classification — gateway-key auth required.", Scopes: []string{"chat"}},
@@ -325,6 +328,9 @@ var guardRouteTable = []GuardRoute{
 	// M8.6 audio (canonical ops + the reference router alias names).
 	{Method: "POST", Path: "/v1/audio/speech", Tier: TierManagement, Description: "Audio speech (text-to-speech) — OpenAI-compatible, routed through the same engine as chat completions but replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/audio/text-to-speech", Tier: TierManagement, Description: "Alias of POST /v1/audio/speech — not an OpenAI endpoint; gateway route name, same handler and operation. Gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "POST", Path: "/v1/audio/text-to-speech/{voiceId...}", Tier: TierManagement, Description: "Text-to-speech with explicit voice in URL path. Gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "GET", Path: "/v1/audio/voices", Tier: TierManagement, Description: "Lists available audio voices for text-to-speech. Gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "GET", Path: "/v1/voices", Tier: TierManagement, Description: "Alias of GET /v1/audio/voices. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/audio/transcriptions", Tier: TierManagement, Description: "Audio transcriptions (speech-to-text) — OpenAI-compatible multipart upload, replay-exempt: exactly one upstream attempt. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/audio/speech-to-text", Tier: TierManagement, Description: "Alias of POST /v1/audio/transcriptions — not an OpenAI endpoint; gateway route name, same handler and operation. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/audio/translations", Tier: TierManagement, Description: "Audio translations (translate audio to English) — OpenAI-compatible multipart upload, replay-exempt: exactly one upstream attempt. Gateway-key auth required.", Scopes: []string{"chat"}},
@@ -333,9 +339,12 @@ var guardRouteTable = []GuardRoute{
 	{Method: "POST", Path: "/v1/moderations", Tier: TierManagement, Description: "Moderations — OpenAI-shaped, backed ONLY by the router's local guardrails (PII / secret / injection patterns); no upstream call, no input stored or echoed. The 13 OpenAI categories are not judged (all false, score 0); the real verdict is in results[].local_guardrails and results[].flagged reflects it. Gateway-key auth required.", Scopes: []string{"chat"}},
 	// M8.20 media verify (search / OCR / video / music).
 	{Method: "POST", Path: "/v1/search", Tier: TierManagement, Description: "Search — Perplexity Search API passthrough, verbatim, replay-exempt: exactly one upstream attempt, never replayed onto another target. Gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "POST", Path: "/v1/web/fetch", Tier: TierManagement, Description: "Fetches and extracts clean text from a web URL with SSRF protection. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/ocr", Tier: TierManagement, Description: "OCR — Mistral OCR API passthrough, verbatim, replay-exempt: exactly one upstream attempt. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/videos/generations", Tier: TierManagement, Description: "Video generations — Runway text-to-video passthrough, returns a task id; replay-exempt: exactly one upstream attempt. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "GET", Path: "/v1/videos/{id}", Tier: TierManagement, Description: "Video task status — Runway task poll by id; unknown ids answer 404. Gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "GET", Path: "/v1/video-bridge/drilldown", Tier: TierManagement, Description: "Video generation task progress and frame drilldown metadata. Gateway-key auth required.", Scopes: []string{"chat"}},
+	{Method: "POST", Path: "/v1/video-bridge/drilldown", Tier: TierManagement, Description: "Video generation task progress and frame drilldown metadata. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/music/generations", Tier: TierManagement, Description: "Music generations — MiniMax music generation passthrough, synchronous; replay-exempt: exactly one upstream attempt. Gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/messages", Tier: TierManagement, Description: "Anthropic Messages dialect — byte-for-byte native relay to a Messages provider (only the model field rewritten; cache_control and the SSE envelope pass through untouched), translate path through the engine when a feature needs the canonical form. Gateway-key auth required.", Scopes: []string{"chat"}},
 	// M8.3 token counting (local counting only, no upstream call).
@@ -388,6 +397,7 @@ var guardRouteTable = []GuardRoute{
 
 	// Tier 1 — LOCAL_ONLY (spawn-capable / system-changing).
 	{Method: "POST", Path: "/admin/shutdown", Tier: TierLocalOnly, SpawnCapable: true, Description: "Terminates the server process.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/admin/restart", Tier: TierLocalOnly, SpawnCapable: true, Description: "Graceful restart of the supervised gateway process.", Scopes: []string{"admin"}},
 	{Method: "POST", Path: "/admin/service/install", Tier: TierLocalOnly, SpawnCapable: true, Description: "Installs a system service — not implemented yet (501 behind the guard).", Scopes: []string{"admin"}},
 	{Method: "POST", Path: "/admin/plugin/load", Tier: TierLocalOnly, SpawnCapable: true, Description: "Dynamic plugin loading is intentionally unsupported: plugins are compiled-in Go registered from config at startup (CHECKLIST 201, docs/plugins.md) — loading arbitrary code from config would be arbitrary code execution. Answers 501 by design, never loads code.", Scopes: []string{"admin"}},
 	{Method: "POST", Path: "/admin/update", Tier: TierLocalOnly, SpawnCapable: true, Description: "Auto-update (checkout + install) — not implemented yet (501 behind the guard).", Scopes: []string{"admin"}},
