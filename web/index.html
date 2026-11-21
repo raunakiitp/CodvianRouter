@@ -474,6 +474,16 @@
   .danger-dialog label{display:block; font-size:12.5px; font-weight:600; margin-bottom:6px}
   .danger-dialog input{width:100%; height:38px; border:0; border-radius:12px; padding:0 12px; font:inherit; font-size:13.5px; background:var(--surface); color:var(--text); box-shadow:inset 0 0 0 1px var(--ring)}
   .danger-dialog input:focus{outline:none; box-shadow:0 0 0 4px var(--blue-bg)}
+  /* G-02 keyboard accessibility: visible focus only when the user is
+     navigating by keyboard (`:focus-visible`), so the design is
+     unchanged for mouse/touch. Ring uses existing tokens (accent
+     --blue, surface, radius-sm) — no new palette or component. */
+  :focus-visible{outline:2px solid var(--blue); outline-offset:2px; border-radius:var(--radius-sm)}
+  button:focus:not(:focus-visible),a:focus:not(:focus-visible),input:focus:not(:focus-visible),select:focus:not(:focus-visible),textarea:focus:not(:focus-visible){outline:none}
+  .skip-link{position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden}
+  .skip-link:focus-visible{left:16px; top:16px; width:auto; height:auto; padding:10px 14px;
+    background:var(--surface); color:var(--text); border:2px solid var(--blue);
+    border-radius:var(--radius-sm); box-shadow:var(--shadow-lg); z-index:9999; outline:none}
   .danger-dialog .err{display:none; margin:12px 0 0; color:var(--red); font-size:13px; font-weight:600}
 
   /* Toast */
@@ -532,7 +542,8 @@
 </style>
 </head>
 <body>
-<div class="shell">
+  <a class="skip-link" href="#mainContent">Skip to main content</a>
+  <div class="shell">
 
   <!-- ============ SIDEBAR ============ -->
   <aside class="sidebar" id="sidebar" aria-label="Main navigation">
@@ -712,7 +723,7 @@
       </div>
     </header>
 
-    <div class="content">
+    <div class="content" id="mainContent">
 
       <!-- ================= OVERVIEW ================= -->
       <section class="view on" id="view-overview">
@@ -4674,12 +4685,13 @@ resp = client.chat.completions.create(
      provider in the group. */
   function testProvidersInGroup(group){
     var modal = $("#provTestModal"), summary = $("#provTestModalSummary"), body = $("#provTestModalBody");
-    var show = function(passed, total, rowsHtml, note){
-      if(!modal || !summary || !body) return;
-      summary.textContent = passed + "/" + total + " passed" + (note ? " — " + note : "");
-      body.innerHTML = rowsHtml;
-      modal.hidden = false;
-    };
+        var show = function(passed, total, rowsHtml, note){
+              if(!modal || !summary || !body) return;
+              summary.textContent = passed + "/" + total + " passed" + (note ? " — " + note : "");
+              body.innerHTML = rowsHtml;
+              modal.hidden = false;
+              openModalWithFocus(modal.runner || modal);
+            };
     if(!window.fetch){ show(0, 0, '<div class="feed-empty">Could not reach the router to test.</div>', "fetch unavailable"); return; }
     fetch("/api/providers").then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function(d){
       var list = (d && Array.isArray(d.providers)) ? d.providers : [];
@@ -4764,9 +4776,10 @@ resp = client.chat.completions.create(
   var testAllFreeTierBtn = $("#testAllFreeTierBtn");
   if(testAllFreeTierBtn){ testAllFreeTierBtn.addEventListener("click", function(){ testProvidersInGroup("free"); }); }
   var provTestModalClose = $("#provTestModalClose");
-  if(provTestModalClose){ provTestModalClose.addEventListener("click", function(){ $("#provTestModal").hidden = true; }); }
+  if(provTestModalClose){ provTestModalClose.addEventListener("click", function(){ $("#provTestModal").hidden = true; closeModalReturnFocus(provTestModalEl); }); }
   var provTestModalEl = $("#provTestModal");
-  if(provTestModalEl){ provTestModalEl.addEventListener("click", function(e){ if(e.target === provTestModalEl) provTestModalEl.hidden = true; }); }
+  if(provTestModalEl){ provTestModalEl.addEventListener("click", function(e){ if(e.target === provTestModalEl){ provTestModalEl.hidden = true; closeModalReturnFocus(provTestModalEl); } }); }
+  if(provTestModalEl){ provTestModalEl.addEventListener("keydown", function(e){ if(e.key === "Escape" && !provTestModalEl.hidden){ provTestModalEl.hidden = true; closeModalReturnFocus(provTestModalEl); } }); }
   $("#addProvMode").addEventListener("change", function(){ addProvClearError(); addProvSyncMode(); });
   $("#addProvCatalog").addEventListener("change", addProvSyncCatalogHint);
   $("#addProvSubmit").addEventListener("click", function(){
@@ -8826,10 +8839,38 @@ resp = client.chat.completions.create(
       saveStrategies({global_strategy: settingsStrategySel.value});
     });
   }
-  /* ---------- Settings danger zone: real destructive actions ----------
-     Both buttons open a typed-confirmation dialog and POST to a real
-     Tier 2 endpoint (POST /admin/keys/revoke-all,
-     POST /admin/config/reset) with the typed phrase in the body and
+  /* G-02 keyboard accessibility: both dialogs in this file are plain
+       <div hidden> overlays, so keyboard users get no focus management.
+       These top-level helpers keep focus inside an open dialog (Tab
+       trap), return focus to the invoking control on close, and no-op
+       when there is nothing focusable. Design untouched. */
+    var lastFocusedElement = null;
+    function focusableIn(root){
+      return Array.prototype.filter.call((root || document).querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'),
+        function(el){ return !el.disabled && el.offsetParent !== null; });
+    }
+    function trapFocusIn(root){
+      var els = focusableIn(root);
+      if(!els.length) return;
+      els[0].focus();
+      root._focusTrap = function(e){
+        if(e.key !== "Tab") return;
+        var f = focusableIn(root);
+        if(!f.length) return;
+        var first = f[0], last = f[f.length-1];
+        if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+        else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+      };
+      root.addEventListener("keydown", root._focusTrap);
+    }
+    function untrapFocus(root){ if(root && root._focusTrap){ root.removeEventListener("keydown", root._focusTrap); root._focusTrap = null; } }
+    function openModalWithFocus(root){ lastFocusedElement = document.activeElement; trapFocusIn(root); }
+    function closeModalReturnFocus(root){ untrapFocus(root); if(lastFocusedElement && lastFocusedElement.focus){ lastFocusedElement.focus(); lastFocusedElement = null; } }
+    /* ---------- Settings danger zone: real destructive actions ----------
+       Both buttons open a typed-confirmation dialog and POST to a real
+       Tier 2 endpoint (POST /admin/keys/revoke-all,
+       POST /admin/config/reset) with the typed phrase in the body and
      the gateway key as Authorization: Bearer. The key is typed fresh
      for each action, sent once with that request, and never stored
      in the browser — the dashboard holds no key of its own. The old
@@ -8856,6 +8897,7 @@ resp = client.chat.completions.create(
     $("#dangerConfirmInput").value = "";
     $("#dangerKeyInput").value = ""; /* never retain the typed key */
     $("#dangerDialogError").style.display = "none";
+    closeModalReturnFocus(dangerDialog);
   }
   function dangerSyncConfirmBtn(){
     var phraseOk = dangerCurrent && $("#dangerConfirmInput").value === dangerCurrent.phrase;
@@ -8875,6 +8917,7 @@ resp = client.chat.completions.create(
     $("#dangerConfirmBtn").disabled = true;
     $("#dangerConfirmBtn").textContent = "Confirm";
     dangerDialog.hidden = false;
+    openModalWithFocus(dangerDialog);
     $("#dangerConfirmInput").focus();
   }
   $("#dangerConfirmInput").addEventListener("input", dangerSyncConfirmBtn);
