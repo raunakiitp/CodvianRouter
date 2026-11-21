@@ -60,3 +60,14 @@ const QuotaExceededEvent = "quota.exceeded"
 // It fires, best-effort and edge-triggered (once per crossing),
 // from the budget machinery via notifyBudgetWarning.
 const BudgetWarningEvent = "budget.warning"
+
+// ProviderDegradedEvent / ProviderRecoveredEvent are the third and
+// fourth webhook events: edge-triggered provider-health signals fired
+// from genuine circuit-breaker CLOSED->OPEN / OPEN->CLOSED
+// transitions (see router.Engine.SetBreakerEvents and the server
+// adapter that turns them into dispatcher.Notify calls). They share
+// the config-validation list with quota.exceeded and budget.warning.
+const (
+	ProviderDegradedEvent  = "provider.degraded"
+	ProviderRecoveredEvent = "provider.recovered"
+)

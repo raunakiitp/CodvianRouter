@@ -2857,8 +2857,11 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("config: webhooks[%q].url %q is not an http(s) URL", w.ID, w.URL)
 		}
 		for _, ev := range w.Events {
-			if ev != QuotaExceededEvent && ev != BudgetWarningEvent {
-				return fmt.Errorf("config: webhooks[%q] subscribes to unknown event %q (known: %q, %q)", w.ID, ev, QuotaExceededEvent, BudgetWarningEvent)
+			switch ev {
+			case QuotaExceededEvent, BudgetWarningEvent,
+				ProviderDegradedEvent, ProviderRecoveredEvent:
+			default:
+				return fmt.Errorf("config: webhooks[%q] subscribes to unknown event %q (known: %q, %q, %q, %q)", w.ID, ev, QuotaExceededEvent, BudgetWarningEvent, ProviderDegradedEvent, ProviderRecoveredEvent)
 			}
 		}
 	}

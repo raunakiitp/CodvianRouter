@@ -12,6 +12,7 @@ package metrics
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"sort"
 	"strings"
@@ -36,6 +37,17 @@ type failoverKey struct {
 type latencyKey struct {
 	provider string
 	model    string
+}
+
+// usageKey is one token/cost series. The kind is drawn from a fixed
+// vocabulary (prompt/completion/cached/reasoning for tokens, reported
+// for cost), so a provider-controlled string can never create an
+// unbounded number of series. Provider and model are sanitized through
+// normalizeProviderModel — no key, prompt or payload ever reaches here.
+type usageKey struct {
+	provider string
+	model    string
+	kind     string
 }
 
 type concurrencyKey struct {
@@ -109,6 +121,12 @@ type Recorder struct {
 	// actually happens: an empty map is the honest "no panics"
 	// state, never an invented series.
 	panics map[string]uint64
+	// Token usage by (provider, model, kind) and upstream-REPORTED
+	// cost in micro-USD by (provider, model, "reported"). Computed
+	// pricing lives in the ledger (/api/analytics), never here:
+	// the metrics recorder must not duplicate pricing logic.
+	usageTokens     map[usageKey]uint64
+	usageCostMicros map[usageKey]uint64
 }
 
 // NewRecorder returns an initialized Recorder.
@@ -125,6 +143,8 @@ func NewRecorder() *Recorder {
 		guardrailBlocked:    make(map[string]uint64),
 		guardrailEvals:      make(map[guardrailEvalKey]uint64),
 		panics:              make(map[string]uint64),
+		usageTokens:         make(map[usageKey]uint64),
+		usageCostMicros:     make(map[usageKey]uint64),
 	}
 }
 
@@ -163,6 +183,61 @@ func normalizeProviderModel(s string) string {
 // "ok", "error" and "rate_limited".
 func normalizeOutcome(s string) string {
 	return sanitizeLabel(s)
+}
+
+// normalizeUsageKind maps a token/cost kind to a FIXED vocabulary. An
+// unexpected value never becomes a new label — it collapses to "other",
+// keeping cardinality bounded even if a future caller passes junk.
+func normalizeUsageKind(kind string) string {
+	switch kind {
+	case "prompt", "completion", "cached", "reasoning", "reported":
+		return kind
+	default:
+		return "other"
+	}
+}
+
+// IncUsageTokens adds tokens to codvian_router_usage_tokens_total for a
+// provider/model and one of the fixed kinds: prompt, completion, cached
+// or reasoning. Zero/negative counts are ignored (no invented series),
+// and both label values pass through the same sanitizer as every other
+// metric — provider-supplied model names cannot inject keys or payload.
+// The engine calls this from its single recordAttempt path, so streaming
+// and non-streaming requests are counted exactly once each.
+func (r *Recorder) IncUsageTokens(provider, model, kind string, tokens int) {
+	if tokens <= 0 {
+		return
+	}
+	k := usageKey{normalizeProviderModel(provider), normalizeProviderModel(model), normalizeUsageKind(kind)}
+	r.mu.Lock()
+	if r.usageTokens == nil {
+		r.usageTokens = make(map[usageKey]uint64)
+	}
+	r.usageTokens[k] += uint64(tokens)
+	r.mu.Unlock()
+}
+
+// AddReportedCost adds an upstream-reported cost to
+// codvian_router_usage_cost_usd_total{source="reported"}. Only a real,
+// finite, positive USD amount is counted — a nil/NaN/Inf/negative
+// report is ignored, never rounded into a fake $0 series. Hand-computed
+// pricing is deliberately NOT duplicated here: it belongs to the ledger
+// and its analytics API, which already reconciles reported vs priced.
+func (r *Recorder) AddReportedCost(provider, model string, usd float64) {
+	if usd <= 0 || math.IsNaN(usd) || math.IsInf(usd, 0) {
+		return
+	}
+	micros := uint64(math.Round(usd * 1e6))
+	if micros == 0 {
+		return
+	}
+	k := usageKey{normalizeProviderModel(provider), normalizeProviderModel(model), "reported"}
+	r.mu.Lock()
+	if r.usageCostMicros == nil {
+		r.usageCostMicros = make(map[usageKey]uint64)
+	}
+	r.usageCostMicros[k] += micros
+	r.mu.Unlock()
 }
 
 // IncRequest increments codvian_router_requests_total for the given
@@ -510,6 +585,16 @@ func (r *Recorder) WriteTo(b *strings.Builder) {
 			formatLabels("provider", k.provider, "model", k.model, "outcome", k.outcome), r.requests[k])
 	}
 
+	// Token usage and upstream-reported cost counters. Only real
+	// values are ever recorded (see IncUsageTokens/AddReportedCost):
+	// an empty map emits HELP/TYPE but no fake zero series.
+	b.WriteString("# HELP codvian_router_usage_tokens_total Tokens processed by provider, model and token kind (prompt/completion/cached/reasoning) from provider-reported usage.\n")
+	b.WriteString("# TYPE codvian_router_usage_tokens_total counter\n")
+	writeUsageCounter(b, "codvian_router_usage_tokens_total", "kind", r.usageTokens, false)
+	b.WriteString("# HELP codvian_router_usage_cost_usd_total Upstream-reported cost in USD by provider and model; excludes computed pricing, which the ledger analytics API reports.\n")
+	b.WriteString("# TYPE codvian_router_usage_cost_usd_total counter\n")
+	writeUsageCounter(b, "codvian_router_usage_cost_usd_total", "source", r.usageCostMicros, true)
+
 	// Failovers counter.
 	b.WriteString("# HELP codvian_router_failovers_total Total failovers between providers.\n")
 	b.WriteString("# TYPE codvian_router_failovers_total counter\n")
@@ -665,6 +750,35 @@ func (r *Recorder) WriteTo(b *strings.Builder) {
 			formatLabels("provider", k.provider, "model", k.model), h.sum)
 		fmt.Fprintf(b, "codvian_router_request_latency_ms_count%s %d\n",
 			formatLabels("provider", k.provider, "model", k.model), h.count)
+	}
+}
+
+// writeUsageCounter renders usage series in deterministic order.
+// micro=true converts the stored micro-USD integer back to a decimal
+// USD value; tokens (micro=false) are emitted as exact integers.
+func writeUsageCounter(b *strings.Builder, name, label string, m map[usageKey]uint64, micro bool) {
+	keys := make([]usageKey, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].provider != keys[j].provider {
+			return keys[i].provider < keys[j].provider
+		}
+		if keys[i].model != keys[j].model {
+			return keys[i].model < keys[j].model
+		}
+		return keys[i].kind < keys[j].kind
+	})
+	for _, k := range keys {
+		if micro {
+			fmt.Fprintf(b, "%s%s %v\n", name,
+				formatLabels("provider", k.provider, "model", k.model, label, k.kind),
+				float64(m[k])/1e6)
+		} else {
+			fmt.Fprintf(b, "%s%s %d\n", name,
+				formatLabels("provider", k.provider, "model", k.model, label, k.kind), m[k])
+		}
 	}
 }
 
