@@ -24,10 +24,11 @@ jobs:
         run: |
           echo "flock: $(command -v flock || echo MISSING)"
           echo "loadavg: $(cat /proc/loadavg 2>/dev/null || echo MISSING)"
-      - name: Benchmark infrastructure smoke (one iteration each, no unit tests)
+      - name: Benchmark infrastructure smoke (compile only, no timing gate)
         run: |
-          # Proves the Go benchmarks compile and execute on Linux; this is
-          # infrastructure validation, NOT a published performance number.
-          # Scoped to stable benchmark packages so the gate is not brittle;
-          # the full rig is scripts/bench.sh (Linux, quiet machine only).
-          go test -bench=. -benchtime=1x -run='^$' ./internal/ledger/ ./internal/tokencount/
+          # Proves the Go benchmark binaries COMPILE on Linux without
+          # executing them: a timing/execution gate across packages is
+          # brittle and is not a published performance number. The full
+          # rig is scripts/bench.sh (Linux, quiet machine only).
+          go test -c -o /dev/null ./internal/ledger/ ./internal/tokencount/
+          go test -c -o /dev/null ./internal/router/ ./internal/cache/
