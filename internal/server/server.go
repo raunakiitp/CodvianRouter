@@ -752,7 +752,11 @@ type Server struct {
 	// WithTelemetryLogger.
 	obsCollector *observability.Collector
 	obsLogger    *observability.Logger
-	ledger       *ledger.Ledger // nil = no request history yet; feeds answer empty
+	// tracer records one root span per request when built with
+	// -tags otel (Phase 2 observability); no-op in the default build.
+	// Overridden in tests via WithTracer.
+	tracer *observability.Tracer
+	ledger *ledger.Ledger // nil = no request history yet; feeds answer empty
 	// Responses store (CHECKLIST 169-170): the served Responses
 	// objects (transcript + served object) keyed by gateway
 	// response id, for retrieve + continuation. Never nil after
@@ -1526,6 +1530,10 @@ func New(engine Engine, opts ...Option) *Server {
 	// request logger on os.Stderr — never a new file.
 	s.obsCollector = observability.NewCollector()
 	s.obsLogger = observability.NewLogger(os.Stderr)
+	// Tracing default: the build-tagged tracer (no-op unless -tags
+	// otel). main wires a configured one (OTLP endpoint) via
+	// WithTracer when the operator sets one.
+	s.tracer = observability.NewTracer()
 	// Hybrid SSE batching (items 135-136) is on by default:
 	// flush at most every 8 ms or every 3 tokens. Options
 	// applied below may turn it off (WithSSEBatching(false),
@@ -7652,6 +7660,13 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 		// always tell which gateway build answered it.
 		reqID := requestIDFor(r)
 		r = r.WithContext(context.WithValue(r.Context(), ctxKeyRequestID{}, reqID))
+		// Root span per request (otel build only; no-op otherwise):
+		// the span ends when this wrapper returns, i.e. when the
+		// handler has written the full response (SSE included).
+		spanCtx, span := s.tracer.StartRequestSpan(r.Context(), reqID)
+		span.SetAttribute("http.route", r.URL.Path)
+		defer span.End()
+		r = r.WithContext(spanCtx)
 		w.Header().Set(headerCodvianRequestID, reqID)
 		w.Header().Set("X-Request-Id", reqID)
 		if s.version != "" {

@@ -85,6 +85,19 @@ type Config struct {
 	// provider config.
 	AllowClientVertexOverride bool `json:"allow_client_vertex_override,omitempty"`
 	TelemetryEnabled          bool `json:"telemetry_enabled"`
+	// TracingOTLPEndpoint is the operator-configured OTLP/HTTP
+	// collector for request traces, e.g.
+	// http://localhost:4318/v1/traces. Empty (the default) keeps
+	// tracing in-process only: spans still record to the bounded
+	// ring behind -tags otel, but nothing leaves the gateway. Only
+	// meaningful in an otel-tagged build; the default build ignores
+	// it. Headers carry static collector auth (e.g. an
+	// Authorization or api-key header). Timeout bounds one export
+	// POST; a failed POST never blocks a request (bounded queue,
+	// dropped spans counted via the /api/observability metrics).
+	TracingOTLPEndpoint  string            `json:"tracing_otlp_endpoint,omitempty"`
+	TracingOTLPHeaders   map[string]string `json:"tracing_otlp_headers,omitempty"`
+	TracingOTLPTimeoutMs int               `json:"tracing_otlp_timeout_ms,omitempty"`
 	// A2AEnabled is the operator opt-in for the Agent-to-Agent
 	// endpoint (internal/a2a, M9.8): the /a2a JSON-RPC surface and
 	// its task store are OFF unless this is true. Default false:

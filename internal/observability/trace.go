@@ -22,6 +22,11 @@ type Tracer struct{}
 // NewTracer returns a Tracer. In the default build it never records.
 func NewTracer() *Tracer { return &Tracer{} }
 
+// NewConfiguredTracer returns the tracer for this build. In the default
+// build the endpoint is recorded nowhere and tracing stays a no-op; the
+// parameter exists so main.go wires configuration without build tags.
+func NewConfiguredTracer(cfg TracerConfig) *Tracer { return NewTracer() }
+
 // Enabled reports whether tracing records anything. Always false without
 // the otel build tag.
 func (t *Tracer) Enabled() bool { return false }

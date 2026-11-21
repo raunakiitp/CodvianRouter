@@ -51,6 +51,18 @@ func (s SpanData) Duration() time.Duration {
 	return s.End.Sub(s.Start)
 }
 
+// TracerConfig configures an OTLP/HTTP trace exporter: endpoint is the
+// collector's /v1/traces URL, headers carry static auth, TimeoutMs
+// bounds one export POST. Empty endpoint disables export.
+//
+// Shared by both builds: TracerConfig lives here (untagged) so the
+// otel-tagged tracer and the no-op tracer expose identical wiring.
+type TracerConfig struct {
+	Endpoint  string
+	Headers   map[string]string
+	TimeoutMs int
+}
+
 type spanContextKey struct{}
 
 // contextWithSpanContext stores sc in ctx for traceparent propagation.
