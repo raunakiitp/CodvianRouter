@@ -12,3 +12,8 @@ bench-package/
 docs/packages/benchmark-windows/*.exe
 /codvian-bench
 *.exe
+
+# Playwright browser-smoke (G-04): local deps + results
+tests/playwright/node_modules/
+tests/playwright/test-results/
+tests/playwright/package-lock.json
