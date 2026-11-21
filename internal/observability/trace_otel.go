@@ -115,11 +115,11 @@ func (t *Tracer) record(sd SpanData) {
 		sd.Attributes = attrs
 	}
 	t.spans = append(t.spans, sd)
-		if t.exporter != nil {
-			// Never block the request path on export pressure.
-			t.exporter.enqueue(sd)
-		}
+	if t.exporter != nil {
+		// Never block the request path on export pressure.
+		t.exporter.enqueue(sd)
 	}
+}
 
 // StartSpan starts a span named name. Its parent is the span carried by
 // ctx (if any); a root span starts a new trace. The returned ctx carries

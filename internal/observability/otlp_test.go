@@ -27,11 +27,11 @@ type collectedPayload struct {
 		} `json:"resource"`
 		ScopeSpans []struct {
 			Spans []struct {
-				TraceID      string `json:"traceId"`
-				SpanID       string `json:"spanId"`
-				Name         string `json:"name"`
-				Kind         int    `json:"kind"`
-				Attributes   []struct {
+				TraceID    string `json:"traceId"`
+				SpanID     string `json:"spanId"`
+				Name       string `json:"name"`
+				Kind       int    `json:"kind"`
+				Attributes []struct {
 					Key   string `json:"key"`
 					Value struct {
 						StringValue string `json:"stringValue"`
