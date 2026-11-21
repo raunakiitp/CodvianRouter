@@ -13,6 +13,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 1 Provider Quirks Audit Slice (2026-11-21)
+
+- **Fix: nested model IDs are addressable verbatim.** Aggregator model
+  IDs listed in `/v1/models` (e.g. OpenRouter's `liquid/lfm-3-1.7b:free`)
+  were mis-pinned to catalog providers by the B2-29 prefix rule and
+  400'd with `routing.only: unknown provider`. The prefix is now only
+  a pin when the named provider serves the bare model; a full ID a
+  registered provider serves verbatim routes untouched. Explicit
+  `openrouter/<id>` pins and all conflict rules are preserved.
+  New registry queries `OffersModel`/`ProviderOffersModel`; tests:
+  `TestPrefixedModelRoutingNestedIDs`, `TestRegistryOffersModel`.
+- **Fix: reasoning-only completions are not empty streams.** A model
+  that spent its whole budget thinking (`finish_reason: length`, no
+  answer text) served real output; both the non-streaming
+  (`isEmptyCompletion`) and streaming preread (`doneHasReasoning`)
+  paths now commit it instead of failing over every target and
+  erroring. Empty reasoning states still fail over. Tests:
+  `reasoning-only-is-not-empty`, `TestStreamingReasoningOnlyIsNotEmpty`.
+- **429 retry storms: root cause was the PR #20 pool-join bug**
+  (single-key chain). The bounded, body-classified 429 policy
+  (quota-exhausted / concurrency-limit / backoff ladder + per-key
+  cooldowns) is documented with code references and unchanged.
+- **Audit:** `docs/PROVIDER_QUIRKS_AUDIT.md` — wire/client coverage
+  sweep (all declared wires have mock-tested clients), catalog-driven
+  auth verification, and a prioritized backlog (streaming usage
+  accounting, cross-account verification, quota-blocked completion).
+  `docs/PROVIDER_AUTH_MATRIX.md` statuses aligned to the operator's
+  evidence distinctions (cross-account failover NOT verified;
+  completion QUOTA-BLOCKED / PENDING; Azure Entra MOCK-TESTED).
+
 ### Phase 1 follow-up: live verification + pool-join fix (2026-11-21)
 
 - **Fix: provider-login pool join now registers the updated key pool.**
