@@ -70,6 +70,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -132,37 +133,67 @@ func (s *Server) handleAudioTranslations(w http.ResponseWriter, r *http.Request)
 	s.handleAudio(w, r, router.AudioTranslations)
 }
 
-// AudioVoice describes one available text-to-speech voice.
-type AudioVoice struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Gender      string `json:"gender,omitempty"`
-	Description string `json:"description,omitempty"`
-}
+// No voice-listing route is served: the audio surface is an
+// OpenAI-wire passthrough, and the OpenAI audio API has no voice
+// discovery endpoint. A fixed list here would present static data
+// as live provider capability, so voice discovery is deferred until
+// a provider with a real voices API (e.g. ElevenLabs) is wired.
 
-// standardAudioVoices is the canonical list of text-to-speech voices across OpenAI and supported TTS providers.
-var standardAudioVoices = []AudioVoice{
-	{ID: "alloy", Name: "Alloy", Gender: "neutral", Description: "Versatile, balanced voice"},
-	{ID: "echo", Name: "Echo", Gender: "male", Description: "Warm, conversational voice"},
-	{ID: "fable", Name: "Fable", Gender: "neutral", Description: "British accent, expressive storytelling voice"},
-	{ID: "onyx", Name: "Onyx", Gender: "male", Description: "Deep, authoritative voice"},
-	{ID: "nova", Name: "Nova", Gender: "female", Description: "Energetic, bright voice"},
-	{ID: "shimmer", Name: "Shimmer", Gender: "female", Description: "Clear, resonant voice"},
-}
+// audioVoiceIDRe bounds the {voiceId} path segment to the
+// characters real provider voice ids use.
+var audioVoiceIDRe = regexp.MustCompile(`^[A-Za-z0-9_.\-]{1,128}$`)
 
-// handleAudioVoices serves GET /v1/audio/voices and GET /v1/voices.
-func (s *Server) handleAudioVoices(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+// handleAudioTextToSpeechWithVoice serves POST
+// /v1/audio/text-to-speech/{voiceId}: the path's voice id is written
+// into the JSON body's "voice" field and the request then follows
+// the normal speech path. A body that already names a DIFFERENT
+// voice is refused 400 rather than silently overridden.
+func (s *Server) handleAudioTextToSpeechWithVoice(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"voices": standardAudioVoices,
-	})
-}
-
-// handleAudioTextToSpeechWithVoice serves POST /v1/audio/text-to-speech/{voiceId...}.
-func (s *Server) handleAudioTextToSpeechWithVoice(w http.ResponseWriter, r *http.Request) {
+	voice := r.PathValue("voiceId")
+	if !audioVoiceIDRe.MatchString(voice) {
+		writeError(w, http.StatusBadRequest, "invalid voice id in path")
+		return
+	}
+	// Admission before I/O, as in handleAudio (the check only
+	// peeks, so handleAudio repeating it records nothing twice).
+	if s.preBodyAdmission(w, r) {
+		return
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, audioMaxUploadBytes))
+	if err != nil {
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			writeError(w, http.StatusRequestEntityTooLarge, "request body too large: one audio upload is capped at 25 MiB")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "could not read request body")
+		return
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil || fields == nil {
+		writeError(w, http.StatusBadRequest, "invalid request: body must be a JSON object")
+		return
+	}
+	if raw, ok := fields["voice"]; ok {
+		var existing string
+		if err := json.Unmarshal(raw, &existing); err != nil || existing != voice {
+			writeError(w, http.StatusBadRequest, "body voice conflicts with the voice id in the path")
+			return
+		}
+	}
+	vb, _ := json.Marshal(voice)
+	fields["voice"] = vb
+	rewritten, err := json.Marshal(fields)
+	if err != nil {
+		writeServerError(w, http.StatusInternalServerError, "could not encode request")
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(rewritten))
+	r.ContentLength = int64(len(rewritten))
 	s.handleAudio(w, r, router.AudioSpeech)
 }
 

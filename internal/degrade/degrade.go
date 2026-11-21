@@ -1953,6 +1953,42 @@ func (e *StaleEngine) Rerank(ctx context.Context, req provider.RerankRequest) (*
 	return nil, errors.New("degrade: wrapped engine does not support rerank")
 }
 
+// AudioPassthrough, Images and MediaPassthrough forward the
+// single-attempt passthrough surfaces (audio, images, search / OCR /
+// video / music) to the wrapped engine, with the same no-cache,
+// no-stale rule as Embed: each is replay-exempt, so a cached or stale
+// answer would hand out another request's clip, image or task and
+// hide the upstream call the ledger must record. Before Phase 0
+// (2026-11-21) these were missing, so the server's optional-interface
+// checks failed on the wrapper and every one of these routes answered
+// 503 in production even though router.Engine serves them.
+func (e *StaleEngine) AudioPassthrough(ctx context.Context, req router.AudioRequest) (*router.AudioResponse, error) {
+	if ae, ok := e.engine.(interface {
+		AudioPassthrough(context.Context, router.AudioRequest) (*router.AudioResponse, error)
+	}); ok {
+		return ae.AudioPassthrough(ctx, req)
+	}
+	return nil, errors.New("degrade: wrapped engine does not support audio")
+}
+
+func (e *StaleEngine) Images(ctx context.Context, req provider.ImageRequest) (*provider.ImageResponse, error) {
+	if ie, ok := e.engine.(interface {
+		Images(context.Context, provider.ImageRequest) (*provider.ImageResponse, error)
+	}); ok {
+		return ie.Images(ctx, req)
+	}
+	return nil, errors.New("degrade: wrapped engine does not support images")
+}
+
+func (e *StaleEngine) MediaPassthrough(ctx context.Context, req provider.MediaPassthroughRequest) (*provider.MediaPassthroughResponse, error) {
+	if me, ok := e.engine.(interface {
+		MediaPassthrough(context.Context, provider.MediaPassthroughRequest) (*provider.MediaPassthroughResponse, error)
+	}); ok {
+		return me.MediaPassthrough(ctx, req)
+	}
+	return nil, errors.New("degrade: wrapped engine does not support media passthrough")
+}
+
 // ChatStream calls the wrapped engine, forwarding deltas. On success
 // it stores the completed response and returns it. On error:
 //   - if any delta was already delivered, the original error is

@@ -95,9 +95,9 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 		"GET /api/pricing", "PATCH /api/pricing", "DELETE /api/cache",
 		"GET /v1/models", "POST /v1/chat/completions", "POST /a2a", "GET /api/a2a/status", "GET /.well-known/agent.json", "POST /v1/embeddings", "POST /v1/multimodal-embeddings", "POST /v1/rerank", "POST /v1/messages", "POST /v1/responses", "GET /v1/responses/{id}", "GET /v1/responses", "DELETE /v1/responses/{id}", "GET /v1/me/status", "GET /v1/me/sessions", "GET /v1/auto-combo/{channel}/candidates",
 		"GET /v1/models/query", "GET /v1/models/health", "GET /v1/models/{model...}", "POST /v1/providers/{provider}/chat/completions", "GET /v1/providers/{provider}/models", "GET /v1/providers/{provider}/status", "GET /v1beta/models", "POST /v1beta/models/{rest...}",
-		"POST /v1/completions", "POST /v1/systemone", "POST /v1/relay/chat/completions", "GET /v1/classify", "GET /v1/explain/routing", "GET /v1/segment", "POST /v1/images/generations", "POST /v1/images/edits",
-		"POST /v1/audio/speech", "POST /v1/audio/text-to-speech", "POST /v1/audio/text-to-speech/{voiceId...}", "GET /v1/audio/voices", "GET /v1/voices", "POST /v1/audio/transcriptions", "POST /v1/audio/speech-to-text", "POST /v1/audio/translations",
-		"POST /v1/moderations", "POST /v1/search", "POST /v1/web/fetch", "POST /v1/ocr", "POST /v1/videos/generations", "GET /v1/videos/{id}", "GET /v1/video-bridge/drilldown", "POST /v1/video-bridge/drilldown", "POST /v1/music/generations",
+		"POST /v1/completions", "POST /v1/relay/chat/completions", "GET /v1/classify", "GET /v1/explain/routing", "GET /v1/segment", "POST /v1/images/generations", "POST /v1/images/edits",
+		"POST /v1/audio/speech", "POST /v1/audio/text-to-speech", "POST /v1/audio/text-to-speech/{voiceId}", "POST /v1/audio/transcriptions", "POST /v1/audio/speech-to-text", "POST /v1/audio/translations",
+		"POST /v1/moderations", "POST /v1/search", "POST /v1/web/fetch", "POST /v1/ocr", "POST /v1/videos/generations", "GET /v1/videos/{id}", "POST /v1/music/generations",
 		"POST /v1/messages/count_tokens", "GET /v1/responses/{id}/input_items", "GET /v1/responses/input_tokens",
 		"POST /v1/files", "GET /v1/files", "GET /v1/files/{id}", "DELETE /v1/files/{id}", "GET /v1/files/{id}/content",
 		"POST /v1/batches", "GET /v1/batches", "GET /v1/batches/{id}", "POST /v1/batches/{id}/cancel", "DELETE /v1/batches/{id}", "DELETE /v1/batches/delete-completed",
@@ -191,12 +191,20 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 	// /api/providers/{id}/keys/{keyId}/rotate (critic fix 2026-11-19)
 	// + 4 OAuth routes (POST/GET/DELETE /oauth/clients + GET
 	// /oauth/authorize, B3-07).
+	// Phase 0 (2026-11-21): LOCAL_ONLY 9 -> 10 for POST
+	// /admin/restart (spawn-capable: it starts a replacement
+	// process). MANAGEMENT 250 -> 254 for POST
+	// /v1/multimodal-embeddings, POST /v1/audio/text-to-speech,
+	// POST /v1/audio/text-to-speech/{voiceId} and POST
+	// /v1/web/fetch. The fabricated routes added with them
+	// (/v1/systemone, /v1/audio/voices, /v1/voices,
+	// /v1/video-bridge/drilldown x2) were removed, not counted.
 	counts := map[GuardTier]int{}
 	for _, r := range table {
 		counts[r.Tier]++
 	}
-	if counts[TierLocalOnly] != 9 || counts[TierAlwaysProtected] != 49 || counts[TierManagement] != 250 {
-		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 9/49/250)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
+	if counts[TierLocalOnly] != 10 || counts[TierAlwaysProtected] != 49 || counts[TierManagement] != 254 {
+		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 10/49/254)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
 	}
 }
 
@@ -314,7 +322,8 @@ func TestShutdownWithoutHook(t *testing.T) {
 // fake success).
 func TestLocalOnlyNotImplementedRoutes(t *testing.T) {
 	srv := newTestServer(t, &fakeEngine{})
-	paths := []string{"/admin/service/install", "/admin/plugin/load", "/admin/update", "/admin/provider/login"}
+	// /admin/update is a real update check now (TestAdminUpdateCheck).
+	paths := []string{"/admin/service/install", "/admin/plugin/load", "/admin/provider/login"}
 	for _, p := range paths {
 		rec := doReqPeer(t, srv, "POST", p, "", "test-key-123", nonLoopbackPeer)
 		if rec.Code != http.StatusForbidden {

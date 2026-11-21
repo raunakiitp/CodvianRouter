@@ -40,12 +40,14 @@ import (
 	_ "net/http/pprof"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -4910,6 +4912,8 @@ func runServe(opts options) int {
 	// doShutdown is set after httpSrv exists; the server's shutdown
 	// hook (POST /admin/shutdown) calls it through the closure above.
 	var doShutdown func()
+	// restartRequested is set by the POST /admin/restart hook.
+	var restartRequested atomic.Bool
 	// Reversible PII token vault (B3-19, parity tracker:782): nil
 	// unless the config flag is on; a corrupt vault file fails
 	// startup loudly (see reversiblePIIVault).
@@ -5164,10 +5168,22 @@ func runServe(opts options) int {
 				doShutdown()
 			}
 		}),
+		// POST /admin/restart: mark the restart, then stop the
+		// HTTP server exactly like shutdown. runServe's normal
+		// shutdown branch sees the mark after the final cache
+		// sync and starts the replacement (relaunchAfterRestart).
 		server.WithRestartHook(func() {
+			restartRequested.Store(true)
 			if doShutdown != nil {
 				doShutdown()
 			}
+		}),
+		// POST /admin/update: the same GitHub releases lookup as
+		// `update --check`. A check only; installing stays in the
+		// CLI, which verifies signature + checksum.
+		server.WithUpdateCheck(Version, func(ctx context.Context) (string, error) {
+			client := &http.Client{Timeout: 15 * time.Second}
+			return resolveLatestTag(updateAPIBase(), client)
 		}),
 	)
 	// Responses transcripts (CHECKLIST 315–316): restore the
@@ -5444,8 +5460,42 @@ func runServe(opts options) int {
 		syncCtx, syncCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer syncCancel()
 		st.syncCachesOnShutdown(syncCtx)
+		if restartRequested.Load() {
+			return relaunchAfterRestart()
+		}
 		return 0
 	}
+}
+
+// relaunchAfterRestart finishes POST /admin/restart once the HTTP
+// server has stopped (so the port is free) and caches are synced.
+// Under the tray supervisor (tray.SupervisedEnv set) the process
+// exits with tray.RestartExitCode and the supervisor starts a fresh
+// gateway. Unsupervised, it starts the same binary with the same
+// arguments, detached, inheriting stdout/stderr, and exits 0. A
+// failed relaunch exits 1 with the reason: the gateway has stopped
+// and says so, instead of claiming it restarted.
+func relaunchAfterRestart() int {
+	if os.Getenv(tray.SupervisedEnv) == "1" {
+		fmt.Println("codvian-router: restarting (handing back to the supervisor)")
+		return tray.RestartExitCode
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "codvian-router: restart: cannot resolve own binary (%v); the gateway has stopped\n", err)
+		return 1
+	}
+	cmd := exec.Command(exe, os.Args[1:]...)
+	cmd.Stdin = nil
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	detachProcess(cmd)
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "codvian-router: restart: cannot start replacement (%v); the gateway has stopped\n", err)
+		return 1
+	}
+	fmt.Printf("codvian-router: restarted as pid %d\n", cmd.Process.Pid)
+	return 0
 }
 
 // runEval smoke-evaluates the live engine: one synchronous health
