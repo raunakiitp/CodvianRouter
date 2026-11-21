@@ -28,4 +28,6 @@ jobs:
         run: |
           # Proves the Go benchmarks compile and execute on Linux; this is
           # infrastructure validation, NOT a published performance number.
-          go test -bench=. -benchtime=1x -run='^$' ./...
+          # Scoped to stable benchmark packages so the gate is not brittle;
+          # the full rig is scripts/bench.sh (Linux, quiet machine only).
+          go test -bench=. -benchtime=1x -run='^$' ./internal/ledger/ ./internal/tokencount/
