@@ -13,6 +13,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 0 cleanup (2026-11-21)
+
+- **Removed fabricated endpoints:** `POST /v1/systemone` (returned a canned
+  "processed successfully" without calling a model), `GET|POST
+  /v1/video-bridge/drilldown` (fixed frame counts and scores for any id),
+  `GET /v1/audio/voices` and `GET /v1/voices` (a static list presented as
+  provider data). They now answer 404.
+- **Security:** `/v1/web/fetch` dials only the IP it validated
+  (`internal/server/egress_guard.go`): DNS rebinding, mixed public/private
+  answers, IPv4-mapped/NAT64/6to4 tricks, redirects to private hosts and
+  environment proxies can no longer reach internal addresses; TLS still
+  verifies the hostname. DNS lookup failures no longer fail open.
+- **`POST /admin/restart`** is a real graceful relaunch (supervised: exit
+  code 75 and the tray supervisor restarts it; unsupervised: re-launches
+  the same binary). It no longer falls back to shutdown while answering
+  "restarting". Added to the spawn-capable patterns; the two guard tests
+  pass.
+- **`POST /admin/update`** is a real release check against the GitHub API
+  (never installs; `codvian-router update` installs with signature +
+  checksum checks).
+- **`POST /v1/audio/text-to-speech/{voiceId}`** now writes the path voice
+  into the request body (it was ignored before).
+- **Fixed: audio, images, search, OCR, video and music answered 503 in
+  the real server.** The serving wrapper (`degrade.StaleEngine`) did not
+  forward `AudioPassthrough`, `Images` or `MediaPassthrough`, so the
+  server's capability checks failed even though `router.Engine` serves
+  them. The wrapper now forwards them (never cached, never stale).
+- **64 routes answer `501 feature_unavailable`** with a reason and, where
+  one exists, the route to use instead (`internal/server/unavailable_routes.go`):
+  provider login, service install, plugin load, and 61 B8 dashboard
+  routes whose settings were stored in memory and never read by the router.
+- **Analytics:** heatmap and weekly pattern are computed from the ledger
+  (new `Ledger.DayBuckets`, UTC calendar days); the budget table uses the
+  enforced `KeyBudgetStatus` (it divided USD by token limits before); the
+  scoring inspector and scoring modes report the scorer's real weights
+  instead of invented values.
+- `scripts/audit-fake.sh` §5b checks these contracts and fails on a known
+  fake.
+
 ### Added
 
 - Phase 2/3 backend packages, **wired into the binary and gate-verified
