@@ -331,6 +331,99 @@ func TestProviderLoginCallbackNoAdder(t *testing.T) {
 	}
 }
 
+// loginPoolAdder is a fake registry with a real key pool: the
+// callback's pool-join path must hand the routing hook the UPDATED
+// provider (post-add), never the pre-add snapshot.
+type loginPoolAdder struct {
+	mu   sync.Mutex
+	prov *provider.Provider
+}
+
+func (a *loginPoolAdder) AddCatalogWithOptions(_ context.Context, catalogID, apiKey string, _ provider.CatalogAddOptions) (*provider.Provider, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.prov = &provider.Provider{
+		ID: "prov_pool", Name: "OpenRouter", CatalogID: catalogID,
+		Models: []provider.Model{{ID: "model-a"}},
+		Keys:   []provider.ProviderKey{{ID: "key_first", Role: provider.KeyRolePreferred}},
+	}
+	return a.prov, nil
+}
+
+func (a *loginPoolAdder) AddContext(_ context.Context, _, _, _ string) (*provider.Provider, error) {
+	return nil, errors.New("loginPoolAdder: custom add not used by provider login")
+}
+
+func (a *loginPoolAdder) List() []*provider.Provider {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.prov == nil {
+		return nil
+	}
+	cp := *a.prov
+	cp.Keys = append([]provider.ProviderKey(nil), a.prov.Keys...)
+	return []*provider.Provider{&cp}
+}
+
+func (a *loginPoolAdder) AddKey(_ context.Context, providerID, apiKey, role string) (provider.ProviderKey, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	k := provider.ProviderKey{ID: "key_added_" + apiKey, Role: role}
+	a.prov.Keys = append(a.prov.Keys, k)
+	return k, nil
+}
+
+// TestProviderLoginPoolJoinHookSeesUpdatedPool is the regression for
+// the live-verification find (2026-11-21): the second login joined
+// the pool, but the callback passed the PRE-add provider snapshot to
+// the routing hook, so the engine never registered the new key and
+// every request kept using the first key. The hook must see the
+// updated pool, and a pool join must use the key-changed hook.
+func TestProviderLoginPoolJoinHookSeesUpdatedPool(t *testing.T) {
+	m := newLoginAuthMock(t)
+	adder := &loginPoolAdder{}
+	var addedKeys, changedKeys atomic.Int32
+	var changedCalls atomic.Int32
+	srv := newTestServer(t, &fakeEngine{},
+		WithProviderLoginFlow(loginFlowFor(m)),
+		WithProviderAdder(adder),
+		WithProviderAddedHook(func(_ context.Context, p *provider.Provider) error {
+			addedKeys.Store(int32(len(p.Keys)))
+			return nil
+		}),
+		WithProviderKeyChangedHook(func(_ context.Context, p *provider.Provider) error {
+			changedCalls.Add(1)
+			changedKeys.Store(int32(len(p.Keys)))
+			return nil
+		}),
+	)
+	// Login #1 creates the provider (added hook, 1 key).
+	out := startLogin(t, srv, `{"provider":"openrouter","mode":"headless"}`)
+	rec := doReqPeer(t, srv, "GET", "/admin/provider/login/callback?code=c1&state="+url.QueryEscape(out["state"].(string)), "", "", loopbackPeer)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("login 1: %d %s", rec.Code, rec.Body.String())
+	}
+	if addedKeys.Load() != 1 || changedCalls.Load() != 0 {
+		t.Fatalf("login 1 hooks: added=%d changedCalls=%d, want 1 / 0", addedKeys.Load(), changedCalls.Load())
+	}
+	// Login #2 joins the pool: the KEY-CHANGED hook must see 2 keys.
+	m.key = "sk-or-v1-login-mock-key-2"
+	out = startLogin(t, srv, `{"provider":"openrouter","mode":"headless"}`)
+	rec = doReqPeer(t, srv, "GET", "/admin/provider/login/callback?code=c2&state="+url.QueryEscape(out["state"].(string)), "", "", loopbackPeer)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("login 2: %d %s", rec.Code, rec.Body.String())
+	}
+	if changedCalls.Load() != 1 {
+		t.Fatalf("pool join did not use the key-changed hook (calls=%d)", changedCalls.Load())
+	}
+	if changedKeys.Load() != 2 {
+		t.Fatalf("key-changed hook saw %d keys, want 2 (the updated pool, not the pre-add snapshot)", changedKeys.Load())
+	}
+	if !strings.Contains(rec.Body.String(), "2 accounts") {
+		t.Errorf("pool-join page does not report 2 accounts: %q", rec.Body.String())
+	}
+}
+
 // loginUpstream is a minimal OpenAI-compatible upstream for the
 // real-registry callback test: model list + chat, recording auth.
 type loginUpstream struct {

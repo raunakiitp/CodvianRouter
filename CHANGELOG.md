@@ -13,6 +13,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 1 follow-up: live verification + pool-join fix (2026-11-21)
+
+- **Fix: provider-login pool join now registers the updated key pool.**
+  Live verification with a real OpenRouter account found that the
+  callback's pool-join path handed the routing hook the PRE-add provider
+  snapshot, so the engine never registered the second key and every
+  request kept using the first. `attachOpenRouterKey` now re-reads the
+  provider after `AddKey`, and a pool join uses the key-changed hook
+  (matching the key-management API). Regression test:
+  `TestProviderLoginPoolJoinHookSeesUpdatedPool`.
+- **Live evidence recorded** in `docs/PROVIDER_AUTH_MATRIX.md` (OpenRouter
+  PKCE row promoted to real-provider-tested for exchange, validation,
+  encrypted storage, 441-model discovery, pool join, restart persistence,
+  per-key failover on 429/402, and zero secret leakage). Successful chat
+  completion is NOT yet evidenced: the operator account's free tier
+  returned persistent 429s and it has never purchased credits (tiny paid
+  probe → honest upstream 402; $0 spent). Azure Entra ID stays
+  mock-tested. Three quirks recorded for the provider-quirks audit
+  slice (nested model-ID addressing, 429 retry storms, empty-content
+  length finishes).
+
 ### Phase 1 provider authentication (2026-11-21)
 
 - **OpenRouter account login (OAuth PKCE).** `codvian-router provider
