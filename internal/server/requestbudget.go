@@ -302,12 +302,42 @@ func (s *Server) noteRequestBudgetMidChain(req *provider.ChatRequest, err error)
 // response could be priced at all, so the client can see what
 // the request cost against its cap. Unpriced responses record
 // nothing and set no header: no price, no verdict. Streaming
-// responses never reach this function — their usage is a
-// local-estimate fallback (cost $0), so no actual cost can be
-// honestly priced for them.
+// responses use checkRequestBudgetOverageStream instead (G1):
+// their headers are already committed, but a reported usage
+// block is priced and recorded the same way.
 func (s *Server) checkRequestBudgetOverage(ctx context.Context, w http.ResponseWriter, req *provider.ChatRequest, resp *provider.ChatResponse) {
-	if req.BudgetUSD == nil || resp == nil {
+	actual, ok := s.budgetOverageActual(ctx, req, resp)
+	if !ok {
 		return
+	}
+	w.Header().Set("X-Codvian-Budget-Spent", fmt.Sprintf("$%.6f", actual))
+	s.recordBudgetOverage(ctx, req, actual, resp.Usage.PromptTokens)
+}
+
+// checkRequestBudgetOverageStream is the streaming twin (G1): a
+// completed stream whose upstream REPORTED usage is priced and
+// recorded exactly like a non-streaming overage, but no header is
+// set — the SSE headers went out with the first chunk. The spend
+// still reaches the client through the telemetry trailer
+// (responseMeta prices the same reported usage) and the ledger.
+// A stream with no upstream report (zero usage) records nothing:
+// a local estimate is never priced as an actual.
+func (s *Server) checkRequestBudgetOverageStream(ctx context.Context, req *provider.ChatRequest, resp *provider.ChatResponse) {
+	actual, ok := s.budgetOverageActual(ctx, req, resp)
+	if !ok {
+		return
+	}
+	s.recordBudgetOverage(ctx, req, actual, resp.Usage.PromptTokens)
+}
+
+// budgetOverageActual prices a served response's reported usage
+// at the serving pair and reports whether a verdict is possible
+// (budget set, pair priced, tokens reported). Shared by the
+// streaming and non-streaming overage checks so the two can never
+// drift apart on what an overage means.
+func (s *Server) budgetOverageActual(ctx context.Context, req *provider.ChatRequest, resp *provider.ChatResponse) (float64, bool) {
+	if req.BudgetUSD == nil || resp == nil {
+		return 0, false
 	}
 	// Serving provider from this request's own route trace
 	// (CHECKLIST 317-318: the attribution sink on ctx, falling
@@ -325,16 +355,29 @@ func (s *Server) checkRequestBudgetOverage(ctx context.Context, w http.ResponseW
 	}
 	price, _ := s.pairPrice(providerID, req.Model)
 	if price.InputUSDPer1M == nil || price.OutputUSDPer1M == nil {
-		return
+		return 0, false
+	}
+	if resp.Usage.PromptTokens <= 0 && resp.Usage.CompletionTokens <= 0 {
+		return 0, false
 	}
 	actual := float64(resp.Usage.PromptTokens)*(*price.InputUSDPer1M/1e6) +
 		float64(resp.Usage.CompletionTokens)*(*price.OutputUSDPer1M/1e6)
-	if resp.Usage.PromptTokens <= 0 && resp.Usage.CompletionTokens <= 0 {
-		return
-	}
-	w.Header().Set("X-Codvian-Budget-Spent", fmt.Sprintf("$%.6f", actual))
+	return actual, true
+}
+
+// recordBudgetOverage records an overage event when the priced
+// actual exceeds the request's budget (the dashboard feed).
+func (s *Server) recordBudgetOverage(ctx context.Context, req *provider.ChatRequest, actual float64, promptTokens int) {
 	if actual <= *req.BudgetUSD {
 		return
+	}
+	providerID := ""
+	if trace := s.requestTrace(ctx); trace != nil {
+		for _, att := range trace.Attempts {
+			if att.Outcome == "success" {
+				providerID = att.Provider
+			}
+		}
 	}
 	s.reqBudgets.record(requestBudgetEvent{
 		Model:         req.Model,
@@ -344,7 +387,7 @@ func (s *Server) checkRequestBudgetOverage(ctx context.Context, w http.ResponseW
 		Outcome:       "overage",
 		ActualCostUSD: &actual,
 		SpentUSD:      actual,
-		PromptTokens:  resp.Usage.PromptTokens,
+		PromptTokens:  promptTokens,
 	})
 }
 

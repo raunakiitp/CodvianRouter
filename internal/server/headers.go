@@ -223,10 +223,12 @@ func (s *Server) responseMeta(ctx context.Context, req provider.ChatRequest, res
 		// usage at all (rerank without a usage block): the
 		// token/cost headers stay ABSENT rather than 0. A real
 		// report always carries a nonzero token count on at
-		// least one axis.
+		// least one axis. Negative counts are malformed upstream
+		// output — sanitized before they can price as negative
+		// spend in the telemetry headers/trailer (P1-09).
 		if resp.Usage != (provider.Usage{}) {
 			meta.HasUsage = true
-			meta.Usage = resp.Usage
+			meta.Usage = resp.Usage.NonNegative()
 		}
 		if resp.Model != "" {
 			meta.Model = resp.Model

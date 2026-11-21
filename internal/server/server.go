@@ -5383,7 +5383,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			Message:      provider.Message{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls},
 			FinishReason: finishReason,
 		}},
-		Usage: resp.Usage,
+		Usage: projectClientUsage(resp.Usage),
 	}
 	var respBuf bytes.Buffer
 	if err := json.NewEncoder(&respBuf).Encode(chatResp); err != nil {
@@ -6859,7 +6859,56 @@ type chatCompletionResponse struct {
 	Created int64            `json:"created"`
 	Model   string           `json:"model"`
 	Choices []chatChoiceJSON `json:"choices"`
-	Usage   provider.Usage   `json:"usage"`
+	Usage   clientUsageBlock `json:"usage"`
+}
+
+// clientUsageBlock is the client-facing OpenAI usage projection
+// (G1): the flat counts plus the nested detail blocks OpenAI SDKs
+// read (prompt_tokens_details.cached_tokens,
+// completion_tokens_details.reasoning_tokens). The flat
+// cached_tokens field is kept for existing gateway consumers.
+// Detail blocks appear only when the upstream actually reported a
+// nonzero value — never invented. Router-internal bookkeeping
+// (cache-write tiers, reported cost, local estimates, service tier)
+// never leaks into this block: it carries only what the client is
+// meant to see.
+type clientUsageBlock struct {
+	PromptTokens            int                            `json:"prompt_tokens"`
+	CompletionTokens        int                            `json:"completion_tokens"`
+	TotalTokens             int                            `json:"total_tokens"`
+	CachedTokens            int                            `json:"cached_tokens,omitempty"`
+	PromptTokensDetails     *clientPromptTokensDetails     `json:"prompt_tokens_details,omitempty"`
+	CompletionTokensDetails *clientCompletionTokensDetails `json:"completion_tokens_details,omitempty"`
+}
+
+type clientPromptTokensDetails struct {
+	CachedTokens int `json:"cached_tokens"`
+}
+
+type clientCompletionTokensDetails struct {
+	ReasoningTokens int `json:"reasoning_tokens"`
+}
+
+// projectClientUsage projects a provider-reported usage block into
+// the client-facing shape. A zero usage block projects to zero
+// counts (the caller decides whether to emit it at all). Negative
+// counts are malformed upstream output and clamp to 0 — the client
+// never sees negative tokens (P1-09; the ledger clamps identically).
+func projectClientUsage(u provider.Usage) clientUsageBlock {
+	u = u.NonNegative()
+	b := clientUsageBlock{
+		PromptTokens:     u.PromptTokens,
+		CompletionTokens: u.CompletionTokens,
+		TotalTokens:      u.TotalTokens,
+		CachedTokens:     u.CachedTokens,
+	}
+	if b.CachedTokens > 0 {
+		b.PromptTokensDetails = &clientPromptTokensDetails{CachedTokens: b.CachedTokens}
+	}
+	if u.ReasoningTokens > 0 {
+		b.CompletionTokensDetails = &clientCompletionTokensDetails{ReasoningTokens: u.ReasoningTokens}
+	}
+	return b
 }
 
 type chatChoiceJSON struct {
@@ -6890,6 +6939,11 @@ type streamChunk struct {
 	Created int64          `json:"created"`
 	Model   string         `json:"model"`
 	Choices []streamChoice `json:"choices"`
+	// Usage is set only on the final usage chunk (G1): emitted
+	// when the client asked for stream_options.include_usage AND
+	// the upstream reported usage. Choices is an empty array on
+	// that chunk, exactly like OpenAI's wire shape.
+	Usage *clientUsageBlock `json:"usage,omitempty"`
 }
 
 // handleChatStream streams SSE deltas to the client. It returns nil
@@ -7278,17 +7332,37 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 		}
 		return onChunk(provider.StreamChunk{Content: delta})
 	}
+	// finalUsage (G1): set on the success path only, when the
+	// client requested stream_options.include_usage and the
+	// upstream actually reported usage. finish emits it as the
+	// final usage chunk (empty choices array) after the finish
+	// chunk and before [DONE]. A local estimate is NEVER emitted
+	// here — the client asked for the provider's numbers.
+	var finalUsage *clientUsageBlock
 	finish := func(reason string) error {
-		// A chunk already carried the finish reason: just close.
-		if finishSent {
-			return writeSSENow("data: [DONE]\n\n")
+		// A chunk already carried the finish reason: skip the
+		// finish chunk, but the usage chunk (if any) still goes
+		// out before [DONE].
+		if !finishSent {
+			if reason == "" {
+				reason = "stop"
+			}
+			fr := reason
+			if err := writeChunk(streamDelta{}, &fr); err != nil {
+				return err
+			}
 		}
-		if reason == "" {
-			reason = "stop"
-		}
-		fr := reason
-		if err := writeChunk(streamDelta{}, &fr); err != nil {
-			return err
+		if finalUsage != nil {
+			b, err := json.Marshal(streamChunk{
+				ID: id, Object: "chat.completion.chunk", Created: created, Model: req.Model,
+				Choices: []streamChoice{}, Usage: finalUsage,
+			})
+			if err != nil {
+				return err
+			}
+			if err := writeSSENow("data: " + string(b) + "\n\n"); err != nil {
+				return err
+			}
 		}
 		return writeSSENow("data: [DONE]\n\n")
 	}
@@ -7413,6 +7487,21 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 		// so a stream that errored needs no flush: the error
 		// frame ends it instead.
 		emitTail()
+		// G1: the client asked for stream_options.include_usage —
+		// emit the upstream's reported usage as the final usage
+		// chunk (finish writes it before [DONE]). Only a real
+		// report qualifies: a zero usage block means the upstream
+		// reported nothing, and a local estimate is never presented
+		// as provider-reported.
+		if req.StreamIncludeUsage && resp != nil && resp.Usage != (provider.Usage{}) {
+			u := projectClientUsage(resp.Usage)
+			finalUsage = &u
+		}
+		// G1: a stream whose upstream reported usage is priced for
+		// the per-request budget exactly like a non-streaming
+		// response — the overage feed records it; the spend rides
+		// the telemetry trailer below (headers are already out).
+		s.checkRequestBudgetOverageStream(ctx, &req, resp)
 		// Telemetry trailer (M2.1): the values that were not
 		// known when the stream's headers were sent — cost,
 		// tokens, fallback — as a final SSE comment before

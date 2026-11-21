@@ -13,6 +13,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### G1 — streaming usage accounting (2026-11-21)
+
+- **OpenAI-wire streams now request `stream_options.include_usage`**,
+  so upstreams that honor it (OpenAI itself included) send the final
+  usage chunk. The client's own `stream_options.include_usage` is
+  decoded and honored: a completed stream emits ONE final usage
+  chunk (empty choices array) before `[DONE]` — only when the
+  upstream actually reported usage; a local estimate is never
+  presented as provider-reported.
+- **Reported streaming usage reaches the ledger on every wire.**
+  The engine drain carries `Done.Resp.Usage` (all wire clients
+  already aggregate their usage events: OpenAI final chunk,
+  Anthropic message_delta, Gemini usageMetadata, Cohere message-end,
+  Bedrock metadata); a successful stream with a report is reconciled
+  exactly like a non-streaming report (provider numbers verbatim,
+  local estimate alongside, divergence calibration, reported cost
+  preserved). No report keeps the labelled local-estimate fallback.
+  Last report wins — never summed; one ledger row per attempt.
+- **Streaming budget overages are now recorded**: the overage check
+  shares one priced-actual core between streaming and non-streaming
+  paths; the spend rides the telemetry trailer (headers are already
+  committed on streams). Pre-send/mid-chain gates unchanged.
+- Tests: provider/router/server `stream_usage_test.go` suites
+  (request flag, aggregation, decode table, ledger reconciliation,
+  fallback, usage-chunk emission rules, streaming overage feed).
+  Non-streaming accounting, cancellation semantics and the degrade
+  wrapper preserved. Details: docs/PROVIDER_QUIRKS_AUDIT.md §7.
+
 ### Phase 1 Provider Quirks Audit Slice (2026-11-21)
 
 - **Fix: nested model IDs are addressable verbatim.** Aggregator model
