@@ -46,6 +46,14 @@ func WithTelemetryLogger(l *observability.Logger) Option {
 	return func(s *Server) { s.obsLogger = l }
 }
 
+// WithTracer overrides the request tracer. The default is the
+// build-tagged tracer constructed in New (no-op unless -tags otel);
+// main passes observability.NewConfiguredTracer(...) here so an
+// operator-configured OTLP endpoint exports request spans.
+func WithTracer(t *observability.Tracer) Option {
+	return func(s *Server) { s.tracer = t }
+}
+
 // telemetryOutcome maps a finished HTTP status onto the
 // Collector/Logger outcome + error class. 2xx is "ok"; a timeout
 // status is the "timeout" outcome (not "error"); 429 is

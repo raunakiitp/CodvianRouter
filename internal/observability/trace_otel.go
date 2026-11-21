@@ -28,6 +28,9 @@ const maxRecordedSpans = 1024
 type Tracer struct {
 	mu    sync.Mutex
 	spans []SpanData
+	// exporter, when set by NewConfiguredTracer, also ships finished
+	// spans to an OTLP/HTTP collector (bounded queue; never blocks).
+	exporter *otlpExporter
 }
 
 // NewTracer returns a recording Tracer.
@@ -112,6 +115,10 @@ func (t *Tracer) record(sd SpanData) {
 		sd.Attributes = attrs
 	}
 	t.spans = append(t.spans, sd)
+	if t.exporter != nil {
+		// Never block the request path on export pressure.
+		t.exporter.enqueue(sd)
+	}
 }
 
 // StartSpan starts a span named name. Its parent is the span carried by

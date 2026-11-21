@@ -16,28 +16,25 @@
 // proves nothing; the controls prove these tests can tell hit
 // from miss.
 //
-// KNOWN FAILURES (do not "fix" by weakening the test — they are
-// the findings this slice exists to surface):
+// CLOSED GAPS (2026-11-21, Phase 2/T9 audit): both findings below were
+// surfaced by this slice and have since been CLOSED by the M6.11 scoped
+// store — LocalSemanticCache records tenant + temperature bucket on
+// every entry made through degrade's Scoped APIs, and semanticLookup/
+// semanticStore use them, so a cross-tenant paraphrase misses inside
+// the layer and a cross-temperature hit never serves. The tests that
+// used to demonstrate the leaks now pin the closed behaviour; their
+// comments below are kept as history:
 //   - TestM611CrossTenantSemanticParaphraseGap: a cross-tenant
-//     PARAPHRASE is served the other tenant's semantic answer.
-//     semanticBlocked (degrade.go) gates only exact-text matches;
-//     the residual gap is stated in the lookup comment itself
-//     ("a cross-tenant paraphrase can still hit ... needs tenant
-//     recording inside the semantic store"). This test proves the
-//     gap is real and measurable.
+//     PARAPHRASE used to be served the other tenant's semantic answer
+//     when only exact-text matches were gated (semanticBlocked). The
+//     scoped store closed it; the exact-text provenance gate remains
+//     as defence in depth for stores without scoped methods.
 //   - TestM611TempSemanticCrossTempWithAllowance: with
-//     AllowNonZeroTemp on, a temp-0 request (identical text AND
-//     paraphrase) is served an answer stored from a temp>0 turn
-//     — the semantic layer has no temperature dimension (the
-//     exact layer partitions by temperature bucket; the semantic
-//     layer does not). The temp-0 hit also re-stores the hot
-//     answer under the temp-0 exact key (Chat stores every
-//     lookup hit), laundering it into the exact layer. Whether
-//     that is accepted under the allowance or needs a fix is a
-//     coordinator decision; the test pins the behaviour either way.
-//     TestM611TempSeparationWithAllowance proves the EXACT layer
-//     alone partitions correctly (exact-only harness, no semantic
-//     layer to mask it).
+//     AllowNonZeroTemp on, a temp-0 request used to be served an
+//     answer stored from a temp>0 turn. Temperature-bucket scoping
+//     (tempBucket on every scoped entry) closed it; the test pins the
+//     partition either way. TestM611TempSeparationWithAllowance proves
+//     the EXACT layer alone partitions correctly too.
 package degrade
 
 import (
@@ -239,15 +236,15 @@ func TestM611NoCrossTenantSemanticExactText(t *testing.T) {
 	}
 }
 
-// TestM611CrossTenantSemanticParaphraseGap is the KNOWN-GAP probe
-// for property 1 (see the file header): a cross-tenant PARAPHRASE
-// — similar but not identical text — is NOT blocked by
-// semanticBlocked, which gates only exact-text matches. This test
-// expects the property (tenant B must fail with providers down)
-// and FAILS against current production code, proving the residual
-// gap documented in degrade.go's lookup comment. Do not weaken
-// it: closing the gap needs tenant recording inside the semantic
-// store (internal/cache follow-up), not a test edit.
+// TestM611CrossTenantSemanticParaphraseGap is the probe for property 1:
+// a cross-tenant PARAPHRASE — similar but not identical text — must
+// never be served another tenant's semantic answer. It originally
+// demonstrated the leak the wrapper-level provenance gate could not
+// close (semanticBlocked gates exact-text matches only); the M6.11
+// scoped store (tenant recorded per entry, enforced by semanticLookup)
+// closed it, and this test now PINS the closed behaviour: tenant B
+// fails with providers down. The exact-text gate stays as defence in
+// depth for stores without scoped methods.
 func TestM611CrossTenantSemanticParaphraseGap(t *testing.T) {
 	ctx := context.Background()
 	f := &fakeEngine{chatResp: &provider.ChatResponse{
@@ -671,5 +668,65 @@ func TestM611TruncatedNeverStoredEnginePaths(t *testing.T) {
 	m611FailProvider(fc)
 	if resp, err := sec.Chat(ctx, testReq()); err != nil || resp == nil || resp.Content != "4" {
 		t.Fatalf("control second Chat = (%+v, %v), want the stored complete answer", resp, err)
+	}
+}
+
+// TestM611NoCrossTenantSemanticOnStream (Phase 2/T9) closes the last
+// uncovered surface of property 1: the STREAM path. The wrapper's
+// lookup() is shared by Chat and ChatStream, but that sharing was
+// proven for the exact layer (TestM611NoCrossTenantExactChatStream)
+// and only implied for semantic. This pins it: tenant A stores via a
+// streaming request; tenant A's own paraphrase stream hits semantically
+// (control); tenant B's identical-text AND paraphrase streams must both
+// go upstream (providers down), and a cross-temperature paraphrase by
+// tenant A itself must miss too.
+func TestM611NoCrossTenantSemanticOnStream(t *testing.T) {
+	ctx := context.Background()
+	f := &fakeEngine{streamResp: &provider.ChatResponse{
+		Content: "Paris is the capital of France.",
+		Usage:   provider.Usage{PromptTokens: 8, CompletionTokens: 7, TotalTokens: 15},
+		Model:   "test-model",
+	}}
+	pol := m611Policy()
+	pol.AllowNonZeroTemp = true // temperature scoping needs nonzero entries storable
+	se, _, _, _ := wrapSemanticTest(f, pol)
+
+	if _, err := se.ChatStream(ctx, m611Req("tenant-a", "test-model", "What is the capital of France?", 0), func(string) error { return nil }); err != nil {
+		t.Fatalf("tenant A store ChatStream: %v", err)
+	}
+	// Control: same-tenant paraphrase on the STREAM path hits semantically.
+	f.streamResp = nil
+	f.streamErr = errUpstreamDown
+	resp, err := se.ChatStream(ctx, m611Req("tenant-a", "test-model", "What is the capital of France today?", 0), func(string) error { return nil })
+	if err != nil || resp == nil || resp.Content != "Paris is the capital of France." {
+		t.Fatalf("same-tenant paraphrase ChatStream = (%+v, %v), want the semantic hit", resp, err)
+	}
+	if kind, _, ok := se.LastCacheHit(); !ok || kind != "semantic" {
+		t.Fatalf("same-tenant paraphrase LastCacheHit kind = %q, want semantic", kind)
+	}
+	// Property: tenant B, identical text, stream must go upstream.
+	if _, err := se.ChatStream(ctx, m611Req("tenant-b", "test-model", "What is the capital of France?", 0), func(string) error { return nil }); !errors.Is(err, errUpstreamDown) {
+		t.Fatalf("tenant B identical-text ChatStream err = %v, want the upstream error (cross-tenant serve)", err)
+	}
+	// Property: tenant B, paraphrase, stream must also miss.
+	if _, err := se.ChatStream(ctx, m611Req("tenant-b", "test-model", "What is the capital of France today?", 0), func(string) error { return nil }); !errors.Is(err, errUpstreamDown) {
+		t.Fatalf("tenant B paraphrase ChatStream err = %v, want the upstream error (cross-tenant paraphrase serve)", err)
+	}
+
+	// Temperature partition on the stream path: a temp-0.7 entry is not
+	// served to a temp-0.9 request (same tenant, paraphrase).
+	g := &fakeEngine{streamResp: &provider.ChatResponse{
+		Content: "hot answer",
+		Usage:   provider.Usage{PromptTokens: 8, CompletionTokens: 7, TotalTokens: 15},
+		Model:   "test-model",
+	}}
+	seg, _, _, _ := wrapSemanticTest(g, pol)
+	if _, err := seg.ChatStream(ctx, m611Req("tenant-c", "test-model", "What is the capital of France?", 0.7), func(string) error { return nil }); err != nil {
+		t.Fatalf("tenant C store ChatStream @0.7: %v", err)
+	}
+	g.streamResp = nil
+	g.streamErr = errUpstreamDown
+	if _, err := seg.ChatStream(ctx, m611Req("tenant-c", "test-model", "What is the capital of France today?", 0.9), func(string) error { return nil }); !errors.Is(err, errUpstreamDown) {
+		t.Fatalf("cross-temperature paraphrase ChatStream err = %v, want the upstream error (temperature leak)", err)
 	}
 }

@@ -778,9 +778,10 @@ func countTextTokens(model, text string) int {
 // sessionTurnCompletion counts one turn's completion tokens: the
 // provider-reported completion count when the upstream reported
 // it (> 0), else the local count of the delivered text. The
-// delivered text is authoritative for streams (the drain's
-// response carries no usage) and for failed streams (the partial
-// text actually sent).
+// delivered text remains authoritative for failed streams (the
+// partial text actually sent) and is the fallback when the drain
+// carried no usage; since G1 the drain DOES carry the reported
+// usage on a completed stream, so the fallback is rare.
 func sessionTurnCompletion(resp *provider.ChatResponse, deliveredText string) int {
 	if resp != nil && resp.Usage.CompletionTokens > 0 {
 		return resp.Usage.CompletionTokens

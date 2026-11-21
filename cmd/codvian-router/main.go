@@ -69,6 +69,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/mcptools"
 	"github.com/raunakiitp/codvian-router/internal/metrics"
 	"github.com/raunakiitp/codvian-router/internal/modelsync"
+	"github.com/raunakiitp/codvian-router/internal/observability"
 	"github.com/raunakiitp/codvian-router/internal/plugins"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/providerlogin"
@@ -4929,6 +4930,15 @@ func runServe(opts options) int {
 	}
 	srv := server.New(st.serving,
 		server.WithVersion(Version),
+		// Request tracing (Phase 2 observability): the build-tagged
+		// tracer; an operator-set tracing_otlp_endpoint exports root
+		// spans to that OTLP/HTTP collector. Empty endpoint = local
+		// ring only (or a no-op in a default build).
+		server.WithTracer(observability.NewConfiguredTracer(observability.TracerConfig{
+			Endpoint:  st.cfg.TracingOTLPEndpoint,
+			Headers:   st.cfg.TracingOTLPHeaders,
+			TimeoutMs: st.cfg.TracingOTLPTimeoutMs,
+		})),
 		server.WithHeadless(opts.headless),
 		server.WithConfig(st.cfg),
 		server.WithProviderRegistry(st.reg),

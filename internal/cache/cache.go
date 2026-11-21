@@ -69,10 +69,22 @@ import (
 )
 
 // Usage is the token usage of a cached response.
+//
+// CachedTokens / ReasoningTokens were added for the Phase 2 carry-over
+// "cache replay usage-detail preservation": a replayed response must
+// not silently drop the detail splits the original report carried
+// (prompt_tokens_details.cached_tokens,
+// completion_tokens_details.reasoning_tokens). Both are omitempty, so
+// every pre-existing serialized entry (memory, SQLite, Redis) stays
+// byte-compatible and reads back as zero when absent. Negative
+// values never store: they are malformed upstream output and clamp to
+// zero at the store site.
 type Usage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+	CachedTokens     int `json:"cached_tokens,omitempty"`
+	ReasoningTokens  int `json:"reasoning_tokens,omitempty"`
 }
 
 // CachedResponse is what a cache layer stores and returns.

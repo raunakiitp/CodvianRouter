@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > [docs/INSTALL.md](docs/INSTALL.md)).
 
 ## [Unreleased]
+### Added
+- Phase 2 carry-over closure: exact-cache replay now preserves provider-reported usage details (`cached_tokens`, `reasoning_tokens`) end-to-end — store clamps malformed negatives, serialization is omitempty-backward-compatible (memory/SQLite/Redis entries unchanged), and replays report the same usage shape as the original live response. Regression tests: round-trip, negative clamp, JSON backward compatibility.
+- Phase 2 carry-over closure: Responses API streaming usage accounting proven end-to-end — a new server test drives `/v1/responses` stream:true through a real engine and asserts both the `response.completed` usage block (input/output/total/cached) and the engine ledger row (reported split, not an estimate).
+- Phase 2 carry-over closure: combo/pipeline streaming usage accounting proven — the panel executes non-streaming, records the winner's provider-reported split into the ledger (losers as cancellations), and replays the response verbatim with its usage on the Done event; regression test locks in one-success-row / no-drain-double-count.
+### Observability
+- Request tracing wired end-to-end for `-tags otel` builds: every HTTP request gets a root `codvian.request` span (request id + route); when `tracing_otlp_endpoint` is configured in config, spans also ship to that OTLP/HTTP collector as OTLP/JSON from a bounded queue (never blocks requests, failed batches dropped and counted, invalid endpoints ignored). Verified against a local test collector decoding the real wire format, plus drop/invalid-endpoint behavior tests and a server-level wiring test. Default builds remain no-op tracing.
+### Live Routing view depth + semantic-cache audit
+- Live Routing rows now explain the real candidate outcomes the router emits: hedge loser (was a raw "context canceled"), circuit-breaker/cooldown/zero-quota/attempt-budget skips, and per-row hedge winner/loser tags derived from the request's actual hedge decision. Extend-only change to the existing feed renderer — same classes, palette and layout; a node-driven regression test runs the SERVED inline script (`node --check` + fixture attempts) so the labels cannot drift.
+- Semantic cache tenant isolation audit (T9): confirmed the M6.11 scoped store closes cross-tenant paraphrase and cross-temperature leaks on Chat; added the previously missing stream-surface proof (cross-tenant identical text, cross-tenant paraphrase, and cross-temperature lookups on ChatStream all miss under a failing provider, with a same-tenant semantic-hit control); corrected the stale test-file documentation that still listed these as known failures.
+
 
 ### G1 — streaming usage accounting (2026-11-21)
 
