@@ -13,6 +13,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 1 provider authentication (2026-11-21)
+
+- **OpenRouter account login (OAuth PKCE).** `codvian-router provider
+  login openrouter` (headless code paste, works over SSH) and
+  `POST /admin/provider/login` + `GET /admin/provider/login/callback`
+  (loopback browser callback) implement OpenRouter's official PKCE flow:
+  fresh S256 challenge and 256-bit single-use state per flow, 10-minute
+  pending TTL, bounded pending map. The exchange returns a user-controlled
+  API key (no refresh token exists in this flow); it is live-tested against
+  the upstream, stored encrypted, and its models discovered — the same
+  registry path as a pasted key. Further logins join the existing
+  OpenRouter provider's key pool as additional accounts (per-key failover
+  rotates across them). The callback route is loopback-only without a
+  gateway key (the one-time PKCE state is its credential); off-host
+  requests are 403. No code, state, verifier or key is logged or rendered.
+  Route counts: 313 → 314 (LOCAL_ONLY 10 → 11); honest-501 list 64 → 63
+  (`POST /admin/provider/login` is real now).
+- **Azure OpenAI via Microsoft Entra ID client credentials.** Store
+  `{tenant_id, client_id, client_secret}` JSON as the `azure-openai`
+  provider key: the router mints a Bearer token at the tenant's
+  `/oauth2/v2.0/token` endpoint (scope
+  `https://cognitiveservices.azure.com/.default`), caches it in process
+  memory with a 60 s expiry skew, and re-mints on expiry through the
+  now expiry-aware auth cache. Client-credentials grants issue no refresh
+  token — re-minting is the refresh behavior. Mint breaker (5 consecutive
+  failures → 30 min cooldown), validated `token_uri`/`scope` overrides,
+  tenant path-segment validation, and token-endpoint error bodies never
+  echoed (status + AAD error code only). The static `api-key` variant is
+  unchanged.
+- **Preserved, not rewritten:** Bedrock SigV4, Vertex service-account JWT
+  exchange, static-key pools (preferred/reserve, per-key failover),
+  add/rotate live key tests, model discovery and refresh.
+- **Evidence:** deterministic mock auth-host/upstream tests
+  (`internal/providerlogin`, `internal/provider/entra_test.go`,
+  `internal/server/provider_login_test.go` incl. a real-registry
+  end-to-end multi-account + restart-persistence test). Both flows are
+  **mock-tested**; `real-provider-tested` requires an operator account and
+  is tracked per installation in docs/PROVIDER_AUTH_MATRIX.md. Usage and
+  security properties: docs/PROVIDER_LOGIN.md.
+- **Still unsupported (honest refusals):** subscription/browser-cookie
+  sign-in (ToS-grey catalog entries), the OpenRouter `jwt` catalog variant,
+  and any exchange kind without an implemented, tested minting path.
+
 ### Phase 0 security closure (2026-11-21)
 
 - **Webhook SSRF / DNS rebinding fixed.** Delivery used a plain

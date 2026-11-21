@@ -106,7 +106,7 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 		"POST /admin/shutdown", "POST /admin/restart", "POST /admin/service/install",
 		"POST /admin/plugin/load", "POST /admin/update",
 		"POST /admin/tunnel/start", "POST /admin/tunnel/stop",
-		"GET /admin/tunnel/status", "POST /admin/provider/login",
+		"GET /admin/tunnel/status", "POST /admin/provider/login", "GET /admin/provider/login/callback",
 		"POST /admin/bootstrap", "POST /admin/settings/export",
 		"POST /admin/db/export", "POST /admin/db/wipe/arm",
 		"POST /admin/db/wipe", "POST /admin/db/import",
@@ -199,12 +199,17 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 	// /v1/web/fetch. The fabricated routes added with them
 	// (/v1/systemone, /v1/audio/voices, /v1/voices,
 	// /v1/video-bridge/drilldown x2) were removed, not counted.
+	// Phase 1 (2026-11-21): LOCAL_ONLY 10 -> 11 for GET
+	// /admin/provider/login/callback (the provider-login browser
+	// redirect: loopback-only, authenticated by the one-time PKCE
+	// state instead of a gateway key). POST /admin/provider/login
+	// became a real route in the same slice (tier unchanged).
 	counts := map[GuardTier]int{}
 	for _, r := range table {
 		counts[r.Tier]++
 	}
-	if counts[TierLocalOnly] != 10 || counts[TierAlwaysProtected] != 49 || counts[TierManagement] != 254 {
-		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 10/49/254)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
+	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 49 || counts[TierManagement] != 254 {
+		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/49/254)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
 	}
 }
 
@@ -319,11 +324,12 @@ func TestShutdownWithoutHook(t *testing.T) {
 
 // TestLocalOnlyNotImplementedRoutes: the not-yet-built Tier 1 features
 // are guarded for real (403 off-host) and honest on-host (501, not a
-// fake success).
+// fake success). /admin/provider/login is a real route since Phase 1
+// (TestProviderLogin*); /admin/update is a real update check
+// (TestAdminUpdateCheck).
 func TestLocalOnlyNotImplementedRoutes(t *testing.T) {
 	srv := newTestServer(t, &fakeEngine{})
-	// /admin/update is a real update check now (TestAdminUpdateCheck).
-	paths := []string{"/admin/service/install", "/admin/plugin/load", "/admin/provider/login"}
+	paths := []string{"/admin/service/install", "/admin/plugin/load"}
 	for _, p := range paths {
 		rec := doReqPeer(t, srv, "POST", p, "", "test-key-123", nonLoopbackPeer)
 		if rec.Code != http.StatusForbidden {
@@ -725,6 +731,7 @@ func TestSpawnCapablePatternsMatchTable(t *testing.T) {
 		"/admin/shutdown",
 		"/admin/bootstrap",
 		"/admin/provider/login",
+		"/admin/provider/login/callback",
 	} {
 		if !matchesSpawnCapablePattern(path) {
 			t.Errorf("spawn-capable path %s matches no pattern", path)
@@ -823,10 +830,20 @@ func TestScopeEnforcedTableDriven(t *testing.T) {
 			if route.Path == "/v1/chat/completions" {
 				body = kbChatBody("model-a", false)
 			}
-			// Bootstrap takes no key by design: from loopback it
-			// is 409 once a key exists (never 401).
+			// Bootstrap takes no key by design. /admin/bootstrap
+			// is 409 once a key exists (never 401). The provider
+			// login callback is the browser redirect target: with
+			// no code/state it is a 400 page (never 401/403 from
+			// loopback) — its credential is the one-time PKCE
+			// state, checked in the handler (TestProviderLogin*).
 			if route.Bootstrap {
 				rec := doReqPeer(t, srv, route.Method, path, body, "", loopbackPeer)
+				if route.Path == "/admin/provider/login/callback" {
+					if rec.Code != http.StatusBadRequest {
+						t.Errorf("login callback without key/params: status %d, want 400 (handler reached, params missing)", rec.Code)
+					}
+					return
+				}
 				if rec.Code != http.StatusConflict {
 					t.Errorf("bootstrap without key: status %d, want 409 (already complete)", rec.Code)
 				}

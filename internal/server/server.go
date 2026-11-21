@@ -76,6 +76,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/observability"
 	"github.com/raunakiitp/codvian-router/internal/plugins"
 	"github.com/raunakiitp/codvian-router/internal/provider"
+	"github.com/raunakiitp/codvian-router/internal/providerlogin"
 	"github.com/raunakiitp/codvian-router/internal/readiness"
 	"github.com/raunakiitp/codvian-router/internal/reasoning"
 	"github.com/raunakiitp/codvian-router/internal/responses"
@@ -566,6 +567,10 @@ type Server struct {
 	providerRemovedHook    ProviderRemovedHook     // nil = removed providers stay live in the engine until restart (honest live_removed=false)
 	providerKeyManager     ProviderKeyManager      // nil = provider-key endpoints answer 503; set by WithProviderRegistry
 	providerKeyChangedHook ProviderKeyChangedHook  // nil = key changes do not route until restart (honest routing_live=false)
+	// providerLogin drives provider account login flows (Phase 1,
+	// provider_login.go): OpenRouter OAuth PKCE today. Created in
+	// New; WithProviderLoginFlow overrides it for tests.
+	providerLogin *providerlogin.OpenRouterFlow
 	// shortlist is the operator's curated model shortlist (config
 	// `shortlist`, CHECKLIST 199-200): entries pin models to the
 	// top of GET /v1/models and GET /dashboard/models, marked
@@ -1515,7 +1520,7 @@ func (s *Server) agentCardBaseURL() string {
 }
 
 func New(engine Engine, opts ...Option) *Server {
-	s := &Server{engine: engine, timeout: DefaultTimeout, logger: log.Default(), startedAt: time.Now(), guardrails: guardrails.NewStore(), tunnel: newTunnelManager(), wipeTokens: map[[32]byte]time.Time{}, reqBudgets: newRequestBudgetStore(), responses: responses.New(), traffic: newKeyTrafficLimiter(), keySessions: newKeySessionTracker(), codeOutcomes: autorouter.NewOutcomeStore(), dedupStore: compress.NewSessionDedupStore()}
+	s := &Server{engine: engine, timeout: DefaultTimeout, logger: log.Default(), startedAt: time.Now(), guardrails: guardrails.NewStore(), tunnel: newTunnelManager(), wipeTokens: map[[32]byte]time.Time{}, reqBudgets: newRequestBudgetStore(), responses: responses.New(), traffic: newKeyTrafficLimiter(), keySessions: newKeySessionTracker(), codeOutcomes: autorouter.NewOutcomeStore(), dedupStore: compress.NewSessionDedupStore(), providerLogin: providerlogin.NewOpenRouterFlow()}
 	// M2 telemetry defaults (overridden by WithTelemetryCollector /
 	// WithTelemetryLogger below): a live collector, and a JSON
 	// request logger on os.Stderr — never a new file.
@@ -1862,6 +1867,11 @@ func New(engine Engine, opts ...Option) *Server {
 	s.register(mux, "POST", "/admin/tunnel/stop", s.handleTunnelStop)
 	s.register(mux, "GET", "/admin/tunnel/status", s.handleTunnelStatus)
 	s.register(mux, "POST", "/admin/bootstrap", s.handleBootstrap)
+	// Phase 1 provider account login (provider_login.go): start is
+	// Tier 1 + admin key; the browser callback is Tier 1 loopback-only
+	// without a key (one-time PKCE state is its credential).
+	s.register(mux, "POST", "/admin/provider/login", s.handleProviderLogin)
+	s.register(mux, "GET", "/admin/provider/login/callback", s.handleProviderLoginCallback)
 	s.register(mux, "POST", "/admin/settings/export", s.handleSettingsExport)
 	s.register(mux, "POST", "/admin/db/export", s.handleDBExport)
 	s.register(mux, "POST", "/admin/db/wipe/arm", s.handleDBWipeArm)

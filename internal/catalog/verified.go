@@ -357,7 +357,7 @@ var verifiedProviders = []Provider{
 		KeyFormat:    "sk-or-v1- + 64 lowercase hex (73 chars total); or a signed JWT access token (detected by prefix/issuer).",
 		Verification: VerificationDocs,
 		SourceURL:    "https://openrouter.ai/docs/api_reference/authentication",
-		Notes:        "Optional HTTP-Referer + X-Title headers (rankings). EU host https://eu.openrouter.ai/api/v1. Keys can carry credit limits/expiry. OAuth PKCE + BYOK exist.",
+		Notes:        "Optional HTTP-Referer + X-Title headers (rankings). EU host https://eu.openrouter.ai/api/v1. Keys can carry credit limits/expiry. OAuth PKCE + BYOK exist. Account login (Phase 1): `codvian-router provider login openrouter` or POST /admin/provider/login — the official PKCE flow returns a user-controlled API key (no refresh token), stored encrypted in the provider key pool.",
 	},
 	{
 		ID:          "azure-openai",
@@ -373,7 +373,8 @@ var verifiedProviders = []Provider{
 				AuthKind: AuthExchange,
 				Exchange: &ExchangeAuth{
 					Kind:        "entra-id",
-					Description: "Foundry /openai/v1 with Microsoft Entra ID: Bearer token minted for scope https://cognitiveservices.azure.com/.default (or https://ai.azure.com/.default). The api-key header also works on this surface.",
+					Description: "Foundry /openai/v1 with Microsoft Entra ID: Bearer token minted for scope https://cognitiveservices.azure.com/.default (or https://ai.azure.com/.default). The api-key header also works on this surface. Implemented (Phase 1): store {tenant_id, client_id, client_secret} JSON as the provider key; the router mints the token with the client-credentials grant and re-mints it on expiry (no refresh token exists in this grant).",
+					TokenTTL:    "1h",
 					DocURL:      "https://learn.microsoft.com/en-us/azure/foundry/openai/reference",
 				},
 			},

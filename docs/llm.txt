@@ -7,7 +7,7 @@
 # Scope `admin` implies every scope. LOCAL_ONLY = loopback-only
 # even with a valid key. Destructive routes need a typed
 # {"confirm": "<phrase>"} body in addition to the key.
-# Routes: 313
+# Routes: 314
 
 ## Auth
 header: Authorization: Bearer <gateway-key>
@@ -222,7 +222,8 @@ POST /admin/update | LOCAL_ONLY | scopes=admin | auth=key | Update check: asks t
 POST /admin/tunnel/start | LOCAL_ONLY | scopes=admin | auth=key | Starts the local TCP tunnel: forwards a loopback port to the gateway's listen address (real TCP proxy, loopback-only, stdlib only).
 POST /admin/tunnel/stop | LOCAL_ONLY | scopes=admin | auth=key | Stops the running local TCP tunnel and reports the bytes it forwarded.
 GET /admin/tunnel/status | LOCAL_ONLY | scopes=admin | auth=key | Live tunnel status (running/stopped, ports, bytes forwarded) — loopback-only like the other tunnel routes.
-POST /admin/provider/login | LOCAL_ONLY | scopes=admin | auth=key | Unavailable: answers 501 feature_unavailable, does nothing (provider sign-in (OAuth / device-code login) is not supported in this build). Use instead: POST /api/providers with an API key.
+POST /admin/provider/login | LOCAL_ONLY | scopes=admin | auth=key | Starts a provider account login flow (Phase 1: OpenRouter OAuth PKCE) and returns {provider, mode, authorization_url, state, expires_at}. The operator opens the authorization URL in a browser; the exchanged API key is live-tested and stored encrypted through the provider registry (into the existing OpenRouter key pool when one is configured). Loopback-only + admin gateway key. The code_verifier never leaves the server; no secret is logged or returned.
+GET /admin/provider/login/callback | LOCAL_ONLY | scopes=- | auth=bootstrap | Browser redirect target of the provider login flow: exchanges the one-time authorization code (bound to the PKCE state issued by POST /admin/provider/login) for the user's OpenRouter API key and stores it through the registry. Loopback-only WITHOUT a gateway key — a top-level browser navigation cannot carry one; the single-use 256-bit state plus PKCE is the credential, and off-host requests are refused 403 before anything else. Answers a small HTML result page; no code, state, verifier or key is logged or rendered.
 POST /admin/bootstrap | LOCAL_ONLY | scopes=- | auth=bootstrap | Fresh-install first-key setup — only while no gateway key exists; claims with the one-shot bootstrap token printed to stdout at first boot (loopback-only).
 POST /admin/settings/export | ALWAYS_PROTECTED | scopes=admin | auth=key | Exports the full settings snapshot. Secrets are redacted and never exported — provider keys and gateway-key hashes stay on disk. Requires gateway-key auth AND the typed confirmation phrase EXPORT SETTINGS (the operator-credential second check).
 POST /admin/db/export | ALWAYS_PROTECTED | scopes=admin | auth=key | Exports the config + ledger usage history as a downloadable JSON file. All secrets redacted (no provider keys, no gateway-key hashes, no base URLs); usage history is read-only, never reset. Requires gateway-key auth AND the typed confirmation phrase EXPORT.
@@ -340,6 +341,6 @@ openapi: curl http://127.0.0.1:8080/openapi.json  # route list + tier extensions
 
 ## Notes
 - /openapi.json carries no scopes, no auth-exempt flag, no schemas; this file and docs/API_REFERENCE.md do.
-- Four Tier 1 routes are honest 501 stubs: POST /admin/service/install, POST /admin/plugin/load, POST /admin/update, POST /admin/provider/login.
+- Two Tier 1 routes are honest 501 stubs: POST /admin/service/install, POST /admin/plugin/load. POST /admin/update is a real release check and POST /admin/provider/login a real OpenRouter PKCE login (Phase 1).
 - Dashboard feeds (GET /dashboard/*) are auth-exempt by design; the mutating dashboard POSTs need scope admin.
 - Never invent a model, price, cap, or endpoint not listed here or in GET /v1/models / GET /api/catalog.

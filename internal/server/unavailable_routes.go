@@ -37,7 +37,6 @@ var unavailableRoutes = map[string]unavailableRoute{
 	// Tier 1 system features.
 	"POST /admin/service/install": {Reason: "system service installation is not supported in this build", UseInst: "`codvian-router restart` starts a supervised background gateway"},
 	"POST /admin/plugin/load":     {Reason: "dynamic plugin loading is unsupported by design: plugins are compiled-in and enabled from config at startup (docs/plugins.md)"},
-	"POST /admin/provider/login":  {Reason: "provider sign-in (OAuth / device-code login) is not supported in this build", UseInst: "POST /api/providers with an API key"},
 
 	// Key extensions whose settings were never enforced.
 	"PATCH /admin/keys/{id}/budget":           {Reason: "this route stored limits in memory and nothing enforced them", UseInst: budgetUse},

@@ -2478,12 +2478,22 @@ const ROUTES = [
     "path": "/admin/provider/login",
     "tier": "LOCAL_ONLY",
     "spawn_capable": true,
-    "description": "Unavailable: answers 501 feature_unavailable, does nothing (provider sign-in (OAuth / device-code login) is not supported in this build). Use instead: POST /api/providers with an API key.",
+    "description": "Starts a provider account login flow (Phase 1: OpenRouter OAuth PKCE) and returns {provider, mode, authorization_url, state, expires_at}. The operator opens the authorization URL in a browser; the exchanged API key is live-tested and stored encrypted through the provider registry (into the existing OpenRouter key pool when one is configured). Loopback-only + admin gateway key. The code_verifier never leaves the server; no secret is logged or returned.",
     "auth_exempt": false,
     "scopes": [
       "admin"
     ],
     "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/provider/login/callback",
+    "tier": "LOCAL_ONLY",
+    "spawn_capable": true,
+    "description": "Browser redirect target of the provider login flow: exchanges the one-time authorization code (bound to the PKCE state issued by POST /admin/provider/login) for the user's OpenRouter API key and stores it through the registry. Loopback-only WITHOUT a gateway key \u2014 a top-level browser navigation cannot carry one; the single-use 256-bit state plus PKCE is the credential, and off-host requests are refused 403 before anything else. Answers a small HTML result page; no code, state, verifier or key is logged or rendered.",
+    "auth_exempt": false,
+    "scopes": [],
+    "bootstrap": true
   },
   {
     "method": "POST",
