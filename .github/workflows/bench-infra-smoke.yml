@@ -1,0 +1,31 @@
+name: bench-infra-smoke
+on:
+  push:
+  paths:
+    - 'internal/**'
+    - 'scripts/bench*.sh'
+    - 'go.mod'
+    - '.github/workflows/bench-infra-smoke.yml'
+  schedule:
+    - cron: '0 5 * * 1'
+permissions:
+  contents: read
+jobs:
+  bench-smoke:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.27.4"
+      - name: Validate bench prerequisites
+        run: |
+          echo "flock: $(command -v flock || echo MISSING)"
+          echo "loadavg: $(cat /proc/loadavg 2>/dev/null || echo MISSING)"
+      - name: Benchmark infrastructure smoke (one iteration each, no unit tests)
+        run: |
+          # Proves the Go benchmarks compile and execute on Linux; this is
+          # infrastructure validation, NOT a published performance number.
+          go test -bench=. -benchtime=1x -run='^$' ./...
