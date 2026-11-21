@@ -132,38 +132,38 @@ func TestPrefixedModelRoutingNestedIDs(t *testing.T) {
 			// The live-verification bug: a listed nested ID whose
 			// first segment is a catalog entry ("liquid") must route
 			// verbatim, not pin to the unconfigured catalog provider.
-			name: "listed nested ID is a model, not a pin",
+			name:  "listed nested ID is a model, not a pin",
 			model: "liquid/lfm-3-1.7b:free", wantPin: false,
 			wantModel: "liquid/lfm-3-1.7b:free",
 		},
 		{
 			// Explicit aggregator pin still works: OpenRouter serves
 			// the bare nested ID, so the prefix is a real pin.
-			name: "aggregator-prefixed nested ID pins",
+			name:  "aggregator-prefixed nested ID pins",
 			model: "openrouter/liquid/lfm-3-1.7b:free", wantPin: true,
 			wantOnly: "openrouter", wantModel: "liquid/lfm-3-1.7b:free",
 		},
 		{
-			name: "registry-ID pin",
+			name:  "registry-ID pin",
 			model: "prov_or/liquid/lfm-3-1.7b:free", wantPin: true,
 			wantOnly: "prov_or", wantModel: "liquid/lfm-3-1.7b:free",
 		},
 		{
 			// Both OpenAI and OpenRouter are registered: the explicit
 			// provider intent wins over the aggregator's nested ID.
-			name: "direct provider pin wins over aggregator listing",
+			name:  "direct provider pin wins over aggregator listing",
 			model: "openai/gpt-4o", wantPin: true,
 			wantOnly: "openai", wantModel: "gpt-4o",
 		},
 		{
 			// Unknown prefix (no catalog entry either): historical
 			// behaviour — leave the request untouched for the engine.
-			name: "unknown prefix stays untouched",
+			name:  "unknown prefix stays untouched",
 			model: "zzvendor/zzmodel", wantPin: false,
 			wantModel: "zzvendor/zzmodel",
 		},
 		{
-			name: "bare model without slash untouched",
+			name:  "bare model without slash untouched",
 			model: "gpt-4o", wantPin: false, wantModel: "gpt-4o",
 		},
 	}
