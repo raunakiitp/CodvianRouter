@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Phase 2 carry-over closure: exact-cache replay now preserves provider-reported usage details (`cached_tokens`, `reasoning_tokens`) end-to-end — store clamps malformed negatives, serialization is omitempty-backward-compatible (memory/SQLite/Redis entries unchanged), and replays report the same usage shape as the original live response. Regression tests: round-trip, negative clamp, JSON backward compatibility.
 - Phase 2 carry-over closure: Responses API streaming usage accounting proven end-to-end — a new server test drives `/v1/responses` stream:true through a real engine and asserts both the `response.completed` usage block (input/output/total/cached) and the engine ledger row (reported split, not an estimate).
+- Phase 2 carry-over closure: combo/pipeline streaming usage accounting proven — the panel executes non-streaming, records the winner's provider-reported split into the ledger (losers as cancellations), and replays the response verbatim with its usage on the Done event; regression test locks in one-success-row / no-drain-double-count.
 
 
 ### G1 — streaming usage accounting (2026-11-21)
