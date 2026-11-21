@@ -34,10 +34,10 @@ Codvian `internal/strategy/` is extensive (priority/balanced/cheapest/fastest/mo
 
 | Item | Status | Notes |
 |---|---|---|
-| Strategy registry breadth | MOCK_TESTED (31 names, conformance suites) | Verify each has distinct semantics vs reference (Ledger P2-T3) |
-| auto/* dispatch + candidate pool | MOCK_TESTED | Tune exploration/quality with measured data |
-| Data-source-dependent rows (headroom/expiry/premium class) | BLOCKED until sources exist | Honest unknowns; do not invent |
-| Feedback-learned weights | IMPLEMENTED_NOT_WIRED (OFF by default) | Enable path + real feedback loop (P2-T4) |
+| Strategy registry breadth | COMPLETE (verified this pass) | `internal/strategy/strategy.go` `All` = 35 strategies (Priority→Nadir). 19 test files / 185 tests, package green. Distinct semantics proven per strategy: `TestEachStrategyPicksExpectedProvider` (cheapest→cheap, fastest→fast, most-reliable→steady, least-latency→fast, priority→declared order), `TestConformanceEveryStrategyIsAPermutation` + `TestHookNeverDropsOrDuplicates` (every strategy is a deterministic permutation of the candidate chain), `TestConformanceUnknownStrategyIsPriority` + `rt5` unknown-strategy warnings (unknown name falls back to priority, logged once — never invented behavior). |
+| Data-source-gated strategies stay honest | COMPLETE (verified this pass) | `TestConformanceDataLimitedStrategiesAreIdentityToday` pins that context-optimized / context-relay return declared order until their data lands; least-used + LKGP left the identity list in Phase C (live attempt counts / LKGP records now reorder), cache-optimized reorders only on measured warmth (`m6_5_wiring_test.go`). Unknown cost/quality stays unknown — nothing fabricated. |
+| auto/* dispatch + candidate pool | VERIFIED | auto:<axis> alias + virtual-model resolution covered by `TestAutoAxis`, `TestAxisVirtualModel`, `TestAutoCodeVariantNamesCodeStrategy`, `TestAutoChaosVariantStreamsPanelStrategy`, `TestBalancedHookOrdersBySixteenOnlyFactor` (16-factor scoring + mode packs, `TestConformanceModePacksDiffer`). |
+| Feedback-learned weights | IMPLEMENTED_NOT_WIRED (OFF by default) | Enablement path + real feedback loop belong to P2-T11 (pricing/quality signals). Off by default is the honest default; not silently wired. |
 
 ## D. Caching (§6)
 
