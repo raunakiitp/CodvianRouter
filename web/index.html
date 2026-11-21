@@ -6079,6 +6079,17 @@ resp = client.chat.completions.create(
   function traceReasonLabel(reason, outcome){
     if(outcome === "success") return "served the request";
     if(outcome === "skipped_context_fit") return "context too small for this prompt — skipped before dialling";
+    /* Hedge race outcomes (CHECKLIST 191): the loser was cancelled
+       when another target won the race; it is not an upstream
+       failure. The winner carries outcome success, tagged per-row
+       by hedgeRoleLabel below. */
+    if(outcome === "hedged_cancelled") return "hedge loser — cancelled once another target won the race";
+    /* Skipped candidates: never dialled, with the exact gate that
+       skipped them, so an empty-looking row still explains itself. */
+    if(outcome === "skipped_breaker") return "circuit breaker open for this provider — skipped before dialling";
+    if(outcome === "skipped_cooldown") return "provider in cooldown after an earlier failure — skipped";
+    if(outcome === "skipped_zero_quota") return "zero quota remaining on this provider — skipped";
+    if(outcome === "skipped_max_attempts") return "beyond the attempt budget — never dialled";
     /* Replay-exempt skips (CHECKLIST 171-172): the target was
        never dialled — it lacks the endpoint, or had no live
        client — so there is nothing to fall back from. */
@@ -6241,6 +6252,19 @@ resp = client.chat.completions.create(
     if(!p) return "";
     return p;
   }
+  /* Hedge role of one trace attempt (CHECKLIST 191): when hedging
+     was ARMED for this request, the successful attempt is the
+     winner of the race and every hedged_cancelled attempt is a
+     loser — rendered per row so the operator can see who won and
+     who lost, not just that a hedge existed. Derived only from the
+     request's real hedge decision and the attempt's real outcome;
+     anything else renders nothing. */
+  function hedgeRoleLabel(at){
+    if(traceHedge !== "armed") return "";
+    if(at.outcome === "success") return "hedge winner — served after winning the race";
+    if(at.outcome === "hedged_cancelled") return "hedge loser — lost the race";
+    return "";
+  }
   function renderTraceInto(el){
     if(!el) return;
     el.innerHTML = "";
@@ -6280,6 +6304,7 @@ resp = client.chat.completions.create(
       var effLabel = effortLabel(at);
       var fwdLabel = effortForwardingLabel(at);
       var polLabel = effortPolicyLabel(at);
+      var hedgeLabel = hedgeRoleLabel(at);
       row.innerHTML = '<span class="dot ' + traceDotClass(at.outcome) + '"></span>' +
         '<span class="model mono" style="font-size:12.5px">' + escHtml(at.provider || "—") + ' / ' + escHtml(at.model || "—") + '</span>' +
         '<span class="to">' + traceReasonLabel(at.reason, at.outcome) + '</span>' +
@@ -6292,6 +6317,7 @@ resp = client.chat.completions.create(
         (effLabel ? '<span class="preread">' + escHtml(effLabel) + '</span>' : '') +
         (fwdLabel ? '<span class="preread">' + escHtml(fwdLabel) + '</span>' : '') +
         (polLabel ? '<span class="preread">' + escHtml(polLabel) + '</span>' : '') +
+        (hedgeLabel ? '<span class="preread">' + escHtml(hedgeLabel) + '</span>' : '') +
         '<span class="lat mono">' + fmtNum(at.latency_ms) + ' ms</span>';
       el.appendChild(row);
     });
