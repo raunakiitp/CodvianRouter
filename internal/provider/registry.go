@@ -753,12 +753,13 @@ func (r *Registry) AddCatalogWithOptions(ctx context.Context, catalogID, apiKey 
 	}
 	// Resolve auth for this exact (provider, endpoint, variant) pair.
 	// Exchange surfaces fail here with a clear error — never a faked
-	// static header. The one exception is Bedrock SigV4: the client
-	// signs each request itself from the operator's AWS credentials,
-	// so a SigV4 surface with parseable credentials is allowed
-	// through (with an empty header set — there is no static header
-	// to store). Any other exchange, or a SigV4 surface whose key
-	// is not AWS credential material, stays refused.
+	// static header. The exceptions are the three exchanges the
+	// router performs itself: Bedrock SigV4 (the client signs each
+	// request), Vertex service-account JSON (the client mints a
+	// token per request), and Azure Entra ID client credentials
+	// (a Bearer token is minted now and re-minted on expiry by the
+	// auth cache). Any other exchange, or an exchange surface whose
+	// key is not the right credential material, stays refused.
 	res, err := catalog.ResolveAuth(entry, endpoint, opts.Variant, apiKey)
 	if err != nil {
 		if errors.Is(err, catalog.ErrExchangeRequired) {
@@ -776,6 +777,14 @@ func (r *Registry) AddCatalogWithOptions(ctx context.Context, catalogID, apiKey 
 				// resolution's Gemini wire — see vertexHeaders.
 				res.Headers = headers
 				res.Wire = catalog.WireFormat(wire)
+			} else if headers, wire, _, eerr := entraIDHeaders(res, apiKey); eerr == nil {
+				// Azure Entra ID client credentials: mint the
+				// Bearer token now (the add-time key test uses
+				// it); per-request resolution re-mints on expiry.
+				res.Headers = headers
+				res.Wire = catalog.WireFormat(wire)
+			} else if eerr != nil && !errors.Is(eerr, errEntraNotApplicable) {
+				return nil, fmt.Errorf("catalog provider %q (%s): %w", entry.ID, entry.Name, eerr)
 			} else {
 				return nil, fmt.Errorf("catalog provider %q (%s): %w — credential exchange is not supported yet; use a static-header variant of this provider if one exists", entry.ID, entry.Name, err)
 			}
@@ -1157,7 +1166,7 @@ func (r *Registry) keyFingerprint(k ProviderKey) string {
 // it, so a key the upstream rejects can never enter the pool by
 // either path.
 func (r *Registry) testKeyLive(ctx context.Context, p *Provider, apiKey string) error {
-	headers, _, err := r.resolveAuthHeadersUncached(p, apiKey)
+	headers, _, _, err := r.resolveAuthHeadersUncached(p, apiKey)
 	if err != nil {
 		return fmt.Errorf("resolving auth for provider %q: %w", p.Name, err)
 	}
@@ -1967,11 +1976,15 @@ func vertexHeaders(res catalog.AuthResolution, key string) (map[string]string, s
 // cachedAuth is one memoized resolveAuthHeaders result. headers is
 // owned by the cache: callers always receive a copy, so no caller
 // can mutate a cached header set (e.g. by adding a per-request
-// header) and poison later requests.
+// header) and poison later requests. expiry bounds minted-token
+// resolutions (Entra ID): a cached Bearer token is only served until
+// its expiry, then the resolution re-runs and re-mints. Static
+// header sets carry the zero time (never expire).
 type cachedAuth struct {
 	fp      [32]byte // authFingerprint of the provider record resolved
 	headers map[string]string
 	wire    string
+	expiry  time.Time
 }
 
 // authFingerprint hashes every input resolveAuthHeaders depends on,
@@ -2027,14 +2040,14 @@ func (r *Registry) resolveAuthHeaders(p *Provider, key, keyCiphertext string) (m
 	fp := authFingerprint(p, keyCiphertext)
 	cacheKey := p.ID + "\x00" + string(fp[:])
 	r.authMu.Lock()
-	if ent, ok := r.authCache[cacheKey]; ok && ent.fp == fp {
+	if ent, ok := r.authCache[cacheKey]; ok && ent.fp == fp && (ent.expiry.IsZero() || time.Now().Before(ent.expiry)) {
 		headers, wire := cloneHeaders(ent.headers), ent.wire
 		r.authMu.Unlock()
 		return headers, wire, nil
 	}
 	r.authMu.Unlock()
 
-	headers, wire, err := r.resolveAuthHeadersUncached(p, key)
+	headers, wire, expiry, err := r.resolveAuthHeadersUncached(p, key)
 	if err != nil {
 		return nil, "", err
 	}
@@ -2042,43 +2055,50 @@ func (r *Registry) resolveAuthHeaders(p *Provider, key, keyCiphertext string) (m
 	if r.authCache == nil {
 		r.authCache = make(map[string]cachedAuth)
 	}
-	r.authCache[cacheKey] = cachedAuth{fp: fp, headers: cloneHeaders(headers), wire: wire}
+	r.authCache[cacheKey] = cachedAuth{fp: fp, headers: cloneHeaders(headers), wire: wire, expiry: expiry}
 	r.authMu.Unlock()
 	return headers, wire, nil
 }
 
 // resolveAuthHeadersUncached is the uncached resolution behind
 // resolveAuthHeaders: catalog lookup for a catalog-linked provider,
-// base-URL catalog match (plus the wire fallback) otherwise.
-func (r *Registry) resolveAuthHeadersUncached(p *Provider, key string) (map[string]string, string, error) {
+// base-URL catalog match (plus the wire fallback) otherwise. The
+// returned expiry bounds minted-token header sets (Entra ID); static
+// resolutions return the zero time.
+func (r *Registry) resolveAuthHeadersUncached(p *Provider, key string) (map[string]string, string, time.Time, error) {
 	if p.CatalogID != "" {
 		entry, err := lookupCatalog(p.CatalogID)
 		if err != nil {
-			return nil, "", fmt.Errorf("provider %q: %w", p.ID, err)
+			return nil, "", time.Time{}, fmt.Errorf("provider %q: %w", p.ID, err)
 		}
 		if entry.ToSGrey {
-			return nil, "", fmt.Errorf("provider %q: catalog provider %q is ToS-grey and cannot be a routing target", p.ID, entry.ID)
+			return nil, "", time.Time{}, fmt.Errorf("provider %q: catalog provider %q is ToS-grey and cannot be a routing target", p.ID, entry.ID)
 		}
 		res, err := catalog.ResolveAuth(entry, p.AuthEndpoint, p.AuthVariant, key)
 		if err != nil {
 			if headers, wire, ok := sigv4Headers(res, key); ok {
-				return headers, wire, nil
+				return headers, wire, time.Time{}, nil
 			}
 			if headers, wire, ok := vertexHeaders(res, key); ok {
-				return headers, wire, nil
+				return headers, wire, time.Time{}, nil
 			}
-			return nil, "", fmt.Errorf("provider %q (%s): %w", p.ID, entry.ID, err)
+			if headers, wire, expiry, eerr := entraIDHeaders(res, key); eerr == nil {
+				return headers, wire, expiry, nil
+			} else if !errors.Is(eerr, errEntraNotApplicable) {
+				return nil, "", time.Time{}, fmt.Errorf("provider %q (%s): %w", p.ID, entry.ID, eerr)
+			}
+			return nil, "", time.Time{}, fmt.Errorf("provider %q (%s): %w", p.ID, entry.ID, err)
 		}
-		return res.Headers, string(res.Wire), nil
+		return res.Headers, string(res.Wire), time.Time{}, nil
 	}
 	// No catalog link: a Bedrock runtime host speaks Converse and
 	// signs with SigV4 — the catalog's templated base URLs never
 	// match a concrete host, so check the host pattern directly.
 	if isBedrockBaseURL(p.BaseURL) {
 		if _, err := parseAWSCredentials(key); err != nil {
-			return nil, "", fmt.Errorf("provider %q: %w", p.ID, err)
+			return nil, "", time.Time{}, fmt.Errorf("provider %q: %w", p.ID, err)
 		}
-		return map[string]string{}, WireFormatBedrock, nil
+		return map[string]string{}, WireFormatBedrock, time.Time{}, nil
 	}
 	// No catalog link: a Vertex AI host speaks the Vertex wire
 	// and mints its token from service-account JSON — same
@@ -2086,9 +2106,9 @@ func (r *Registry) resolveAuthHeadersUncached(p *Provider, key string) (map[stri
 	// service-account JSON stays refused.
 	if isVertexBaseURL(p.BaseURL) {
 		if _, _, err := parseVertexServiceAccount(key); err != nil {
-			return nil, "", fmt.Errorf("provider %q: %w", p.ID, err)
+			return nil, "", time.Time{}, fmt.Errorf("provider %q: %w", p.ID, err)
 		}
-		return map[string]string{}, WireFormatVertex, nil
+		return map[string]string{}, WireFormatVertex, time.Time{}, nil
 	}
 	// No catalog link: match by base URL when the catalog knows it.
 	// Exchange matches fail loudly; an unknown endpoint on a known
@@ -2103,19 +2123,24 @@ func (r *Registry) resolveAuthHeadersUncached(p *Provider, key string) (map[stri
 	if err != nil {
 		if errors.Is(err, catalog.ErrExchangeRequired) {
 			if headers, wire, ok := sigv4Headers(res, key); ok {
-				return headers, wire, nil
+				return headers, wire, time.Time{}, nil
 			}
 			if headers, wire, ok := vertexHeaders(res, key); ok {
-				return headers, wire, nil
+				return headers, wire, time.Time{}, nil
 			}
-			return nil, "", fmt.Errorf("provider %q: %w", p.ID, err)
+			if headers, wire, expiry, eerr := entraIDHeaders(res, key); eerr == nil {
+				return headers, wire, expiry, nil
+			} else if !errors.Is(eerr, errEntraNotApplicable) {
+				return nil, "", time.Time{}, fmt.Errorf("provider %q: %w", p.ID, eerr)
+			}
+			return nil, "", time.Time{}, fmt.Errorf("provider %q: %w", p.ID, err)
 		}
-		return nil, catalogWireForBaseURL(p.BaseURL, key), nil
+		return nil, catalogWireForBaseURL(p.BaseURL, key), time.Time{}, nil
 	}
 	if !found {
-		return nil, catalogWireForBaseURL(p.BaseURL, key), nil
+		return nil, catalogWireForBaseURL(p.BaseURL, key), time.Time{}, nil
 	}
-	return res.Headers, string(res.Wire), nil
+	return res.Headers, string(res.Wire), time.Time{}, nil
 }
 
 // DetectWireFormat probes an upstream and reports its wire format.
