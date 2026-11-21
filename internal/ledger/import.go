@@ -279,15 +279,16 @@ func (l *Ledger) ImportEvents(ctx context.Context, events []UsageEvent) (importe
 	}
 	defer dup.Close()
 	ins, err := tx.PrepareContext(ctx, `
-		INSERT INTO usage_events
-		  (ts, gateway_key_id, provider, model, endpoint, prompt_tokens,
-		   completion_tokens, total_tokens, cached_tokens,
-		   reasoning_tokens, cache_write_tokens,
-		   cache_write_tokens_5m, cache_write_tokens_1h, local_estimate,
-		   prompt_before_compression_tokens, compression_saved_tokens, cache_tokens_saved,
-		   tokens_split_known,
-		   cost_usd, ok, latency_ms, shared, auto_variant)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			INSERT INTO usage_events
+			  (ts, gateway_key_id, provider, model, endpoint, prompt_tokens,
+			   completion_tokens, total_tokens, cached_tokens,
+			   reasoning_tokens, cache_write_tokens,
+			   cache_write_tokens_5m, cache_write_tokens_1h, local_estimate,
+			   prompt_before_compression_tokens, compression_saved_tokens, cache_tokens_saved,
+			   tokens_split_known,
+			   cost_usd, ok, latency_ms, shared, auto_variant,
+			   reported_cost_usd, reported_cost_known, cost_delta_usd, cancelled)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return 0, 0, fmt.Errorf("ledger: import: prepare insert: %w", err)
 	}
@@ -311,6 +312,22 @@ func (l *Ledger) ImportEvents(ctx context.Context, events []UsageEvent) (importe
 		}
 		if e.LocalEstimate {
 			localEstimate = 1
+		}
+		cancelled := 0
+		if e.Cancelled {
+			cancelled = 1
+		}
+		// Reported-cost reconciliation, mirroring normalizeUsage
+		// (recordUsage): a valid upstream-reported cost wins over
+		// the hand-computed number, and the delta (reported −
+		// computed) is stored with it. An invalid report (nil,
+		// negative, NaN, Inf) is ignored — never stored as billing.
+		costValue, reportedCost, reportedKnown, costDelta := e.CostUSD, 0.0, 0, 0.0
+		if rep := e.ReportedCostUSD; rep != nil && !math.IsNaN(*rep) && !math.IsInf(*rep, 0) && *rep >= 0 {
+			reportedCost = *rep
+			reportedKnown = 1
+			costDelta = *rep - e.CostUSD
+			costValue = *rep
 		}
 		total := e.TotalTokens
 		if e.SplitKnown && total == 0 {
@@ -343,12 +360,13 @@ func (l *Ledger) ImportEvents(ctx context.Context, events []UsageEvent) (importe
 			e.CacheWriteTokens5m, e.CacheWriteTokens1h, localEstimate,
 			e.PromptBeforeCompressionTokens, e.CompressionSavedTokens, e.CacheTokensSaved,
 			splitKnown,
-			e.CostUSD, ok, e.LatencyMS, shared, e.AutoVariant); err != nil {
+			costValue, ok, e.LatencyMS, shared, e.AutoVariant,
+			reportedCost, reportedKnown, costDelta, cancelled); err != nil {
 			return 0, 0, fmt.Errorf("ledger: import: insert: %w", err)
 		}
 		// Keep the cached budget spend in sync, exactly like
 		// RecordUsage does — but only for rows actually inserted.
-		if _, err := upd.ExecContext(ctx, e.CostUSD, e.GatewayKeyID); err != nil {
+		if _, err := upd.ExecContext(ctx, costValue, e.GatewayKeyID); err != nil {
 			return 0, 0, fmt.Errorf("ledger: import: budget update: %w", err)
 		}
 		imported++

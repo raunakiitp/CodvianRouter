@@ -2,8 +2,10 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/guardrails"
@@ -181,16 +183,31 @@ type analyticsCostFields struct {
 	UnpricedTokens   *int    `json:"unpriced_tokens,omitempty"`
 	CostStatus       string  `json:"cost_status"`
 	PriceSplitScope  string  `json:"price_split_scope"`
+	// T6: the window's provider-REPORTED cost reconciliation.
+	// ReportedCostUSD is the sum of costs the upstreams themselves
+	// reported (0 when none were); ReportedCostRows counts those
+	// rows. It can differ from PricedCostUSD, which is the reported
+	// sum where present and the hand-computed priced sum otherwise —
+	// the difference is the pricing-vs-billing reconciliation delta,
+	// surfaced rather than hidden.
+	ReportedCostUSD  float64 `json:"reported_cost_usd"`
+	ReportedCostRows int     `json:"reported_cost_rows"`
 }
 
 // analyticsCostBlock builds the cost block for a window with
-// `requests` rows and `pricedCost` priced spend. The scope string
-// names what the split covers (or why it is unavailable).
-func analyticsCostBlock(requests int, pricedCost float64, split *analyticsPriceSplit) analyticsCostFields {
+// `requests` rows, `pricedCost` priced spend, and the reported-cost
+// reconciliation (T6): `reportedCost`/`reportedRows` are the exact
+// sum of provider-reported costs and how many rows carried one —
+// zero when nothing was reported, never dressed up as free. The
+// scope string names what the split covers (or why it is
+// unavailable).
+func analyticsCostBlock(requests int, pricedCost float64, split *analyticsPriceSplit, reportedCost float64, reportedRows int) analyticsCostFields {
 	b := analyticsCostFields{
-		PricedCostUSD:   pricedCost,
-		CostStatus:      analyticsCostStatus(requests, split),
-		PriceSplitScope: "gateway_keys_in_config",
+		PricedCostUSD:    pricedCost,
+		CostStatus:       analyticsCostStatus(requests, split),
+		PriceSplitScope:  "gateway_keys_in_config",
+		ReportedCostUSD:  reportedCost,
+		ReportedCostRows: reportedRows,
 	}
 	if split == nil {
 		b.PriceSplitScope = "unavailable_no_config"
@@ -223,6 +240,36 @@ func analyticsNote(hasData bool, status string) string {
 		// out-of-scope rows (a ledger out-of-scope count) is a
 		// follow-up, not built here.
 		return "the priced/unpriced split covers gateway keys still in config only; rows recorded under a deleted key are counted in the totals but absent from the split"
+	}
+	return ""
+}
+
+// joinNotes combines honesty notes; empty halves are dropped.
+func joinNotes(a, b string) string {
+	switch {
+	case a == "":
+		return b
+	case b == "":
+		return a
+	default:
+		return a + "; " + b
+	}
+}
+
+// analyticsReconciliationNote (T6): when the window carries both
+// provider-reported costs and a priced-computed total, say how far
+// they sit apart — pricing tables vs upstream billing disagreeing is
+// exactly the signal an operator must see, never a silent average.
+// Empty when nothing was reported or the figures agree.
+func analyticsReconciliationNote(priced, reported float64, reportedRows int) string {
+	if reportedRows <= 0 {
+		return ""
+	}
+	delta := priced - reported
+	if delta > 0.0001 || delta < -0.0001 {
+		return "pricing-vs-billing delta: priced_cost_usd " + fmt.Sprintf("%.4f", priced) +
+			" vs upstream-reported " + fmt.Sprintf("%.4f", reported) + " (" + fmt.Sprintf("%.4f", delta) +
+			") across " + strconv.Itoa(reportedRows) + " reported row(s)"
 	}
 	return ""
 }
@@ -278,7 +325,7 @@ func (s *Server) handleAnalyticsSummary(w http.ResponseWriter, r *http.Request) 
 		s.logger.Printf("analytics/summary: priced split failed: %v", guardrails.RedactLogLine(err.Error()))
 		split = nil
 	}
-	cost := analyticsCostBlock(sum.Requests, sum.CostUSD, split)
+	cost := analyticsCostBlock(sum.Requests, sum.CostUSD, split, sum.ReportedCostUSD, sum.ReportedCostRows)
 	out := analyticsSummaryResponse{
 		analyticsWindow:        win,
 		HasData:                sum.Requests > 0,
@@ -299,7 +346,7 @@ func (s *Server) handleAnalyticsSummary(w http.ResponseWriter, r *http.Request) 
 		CompressionTokensSaved: sum.CompressionTokensSaved,
 		MeanLatencyMS:          sum.MeanLatencyMS,
 		analyticsCostFields:    cost,
-		Note:                   analyticsNote(sum.Requests > 0, cost.CostStatus),
+		Note:                   joinNotes(analyticsNote(sum.Requests > 0, cost.CostStatus), analyticsReconciliationNote(cost.PricedCostUSD, sum.ReportedCostUSD, sum.ReportedCostRows)),
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -537,7 +584,7 @@ func (s *Server) handleAnalyticsCosts(w http.ResponseWriter, r *http.Request) {
 		s.logger.Printf("analytics/costs: priced split failed: %v", guardrails.RedactLogLine(err.Error()))
 		split = nil
 	}
-	cost := analyticsCostBlock(sum.Requests, sum.CostUSD, split)
+	cost := analyticsCostBlock(sum.Requests, sum.CostUSD, split, sum.ReportedCostUSD, sum.ReportedCostRows)
 	// Per-key roll-up, straight from the ledger summary: one
 	// row per key with rows in the window, in the summary's
 	// order. Always a non-nil slice, so an empty window reads
@@ -557,7 +604,7 @@ func (s *Server) handleAnalyticsCosts(w http.ResponseWriter, r *http.Request) {
 		Requests:            sum.Requests,
 		ByKey:               keys,
 		analyticsCostFields: cost,
-		Note:                analyticsNote(sum.Requests > 0, cost.CostStatus),
+		Note:                joinNotes(analyticsNote(sum.Requests > 0, cost.CostStatus), analyticsReconciliationNote(cost.PricedCostUSD, sum.ReportedCostUSD, sum.ReportedCostRows)),
 	}
 	writeJSON(w, http.StatusOK, out)
 }

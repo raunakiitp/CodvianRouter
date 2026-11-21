@@ -2404,13 +2404,24 @@ type UsageSummary struct {
 	// those hits saved vs. a full upstream call. Saved tokens
 	// are caller-measured, never derived; failed and shared
 	// rows carry none, so each request is counted once.
-	CacheHitRequests   int             `json:"cache_hit_requests"`
-	CacheTokensSaved   int             `json:"cache_tokens_saved"`
-	UnknownSplitTokens int             `json:"unknown_split_tokens"`
-	CostUSD            float64         `json:"cost_usd"`
-	MeanLatencyMS      float64         `json:"mean_latency_ms"`
-	ByProvider         []ProviderUsage `json:"by_provider"`
-	ByModel            []ModelUsage    `json:"by_model"`
+	CacheHitRequests   int     `json:"cache_hit_requests"`
+	CacheTokensSaved   int     `json:"cache_tokens_saved"`
+	UnknownSplitTokens int     `json:"unknown_split_tokens"`
+	CostUSD            float64 `json:"cost_usd"`
+	// ReportedCostUSD / ReportedCostRows are the window's
+	// PROVIDER-REPORTED cost reconciliation (T6): the exact sum of
+	// the costs upstreams themselves reported on their attempts
+	// (reported_cost_known = 1), and how many rows carried one.
+	// CostUSD is that reported sum where present and the
+	// hand-computed priced sum otherwise, so a window with both
+	// kinds can differ; the delta is the reconciliation signal the
+	// analytics surfaces expose. Zero rows means nothing was
+	// reported — not that everything was free.
+	ReportedCostUSD  float64         `json:"reported_cost_usd"`
+	ReportedCostRows int             `json:"reported_cost_rows"`
+	MeanLatencyMS    float64         `json:"mean_latency_ms"`
+	ByProvider       []ProviderUsage `json:"by_provider"`
+	ByModel          []ModelUsage    `json:"by_model"`
 	// ByKey is the per-gateway-key roll-up (see KeyUsage): one
 	// row per key with at least one usage row in the window,
 	// priced spend plus the exact per-row unpriced count. Keys
@@ -2533,6 +2544,8 @@ func (l *Ledger) Summary(ctx context.Context, since, until time.Time) (UsageSumm
 		       COALESCE(SUM(CASE WHEN ok = 1 THEN cache_tokens_saved ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN tokens_split_known = 0 THEN total_tokens ELSE 0 END), 0),
 		       COALESCE(SUM(cost_usd), 0),
+		       COALESCE(SUM(CASE WHEN reported_cost_known = 1 THEN reported_cost_usd ELSE 0 END), 0),
+		       COALESCE(SUM(CASE WHEN reported_cost_known = 1 THEN 1 ELSE 0 END), 0),
 		       COALESCE(AVG(latency_ms), 0)
 		FROM usage_events WHERE ts >= ?`+untilClause, args...).Scan(
 		&s.Requests, &s.OK, &s.Errors, &s.Cancelled, &s.PromptTokens, &s.CompletionTokens,
@@ -2541,7 +2554,7 @@ func (l *Ledger) Summary(ctx context.Context, since, until time.Time) (UsageSumm
 		&s.RequestsWithLocalEstimate,
 		&s.CompressionRequests, &s.CompressionTokensSaved,
 		&s.CacheHitRequests, &s.CacheTokensSaved,
-		&s.UnknownSplitTokens, &s.CostUSD, &s.MeanLatencyMS)
+		&s.UnknownSplitTokens, &s.CostUSD, &s.ReportedCostUSD, &s.ReportedCostRows, &s.MeanLatencyMS)
 	if err != nil {
 		return s, fmt.Errorf("ledger: summary: %w", err)
 	}

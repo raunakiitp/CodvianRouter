@@ -7504,8 +7504,24 @@ resp = client.chat.completions.create(
     }
     if(val) val.textContent = fmtMoney4(r.value);
     if(pill) pill.textContent = (d.cost_status === "complete" ? "all rows priced" : "priced rows only");
-    if(note) note.textContent = "Priced " + fmtMoney2(d.priced_cost_usd) + " ÷ " + fmtNum(r.pricedRequests) + " priced requests, this calendar month (" + fmtNum(d.requests) + " total requests" + (d.unpriced_requests ? ", " + fmtNum(d.unpriced_requests) + " unpriced" : "") + "). Unpriced requests are excluded, not counted as $0.";
-  }
+    if(note) note.textContent = "Priced " + fmtMoney2(d.priced_cost_usd) + " ÷ " + fmtNum(r.pricedRequests) + " priced requests, this calendar month (" + fmtNum(d.requests) + " total requests" + (d.unpriced_requests ? ", " + fmtNum(d.unpriced_requests) + " unpriced" : "") + "). Unpriced requests are excluded, not counted as $0." + reportedCostSuffix(d);
+      }
+      /* T6: reported-vs-priced reconciliation suffix. When upstreams
+         reported their own costs, show that exact figure next to the
+         priced-computed one; when they disagree, say so. Nothing is
+         invented: both numbers come from ledger fields, and no rows
+         means no suffix at all (never "$0 reported"). */
+      function reportedCostSuffix(d){
+        var rows = Number((d && d.reported_cost_rows) || 0);
+        if(rows <= 0) return "";
+        var rep = Number((d && d.reported_cost_usd) || 0);
+        var delta = Number((d && d.priced_cost_usd) || 0) - rep;
+        var s = " Upstream-reported billing: " + fmtMoney2(rep) + " across " + fmtNum(rows) + " row" + (rows === 1 ? "" : "s") + ".";
+        if(delta > 0.0001 || delta < -0.0001){
+          s += " Pricing tables vs upstream billing differ by " + fmtMoney4(delta) + " — reported figures win on their rows.";
+        }
+        return s;
+      }
   function loadCostsAvg(){
     var headers = adminHeaders();
     if(!headers) return;
