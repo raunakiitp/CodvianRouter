@@ -9,9 +9,9 @@ Statuses: NOT_IMPLEMENTED · PARTIALLY_IMPLEMENTED · IMPLEMENTED_NOT_WIRED · M
 | ID | Task (directive ref) | Status | Evidence / notes | PR |
 |---|---|---|---|---|
 | P2-T0 | Gap inventory + parity matrix | IN PROGRESS | docs/PHASE2_OMNIROUTE_PARITY.md drafted from code recon (dashboard tokens/pages, strategy package, observability, cache wiring verified 2026-11-21) | — |
-| P2-T1 | Carry-over closure: Responses streaming usage accounting (addendum §7.1) | INVESTIGATING | subagent deep-dive running | — |
-| P2-T2 | Carry-over closure: combo/pipeline streaming usage accounting (§7.2) | INVESTIGATING | subagent deep-dive running | — |
-| P2-T3 | Carry-over closure: exact-cache replay usage details (§7.3) | INVESTIGATING | subagent deep-dive running (toChatResponse drops cached/reasoning; cache.Usage lacks fields) | — |
+| P2-T1 | Carry-over closure: Responses streaming usage accounting (addendum §7.1) | COMPLETE | `/v1/responses` streams via the same engine chunk entry as chat (ChatStreamChunks→runStream); new `internal/server/responses_usage_test.go` proves response.completed usage block AND ledger row carry the reported split; stale "drain carries no usage" comment corrected | PR pending |
+| P2-T2 | Carry-over closure: combo/pipeline streaming usage accounting (§7.2) | INVESTIGATING | combo.go rebuilds a Done resp with Usage; ledger row on success/failure path under review | — |
+| P2-T3 | Carry-over closure: exact-cache replay usage details (§7.3) | COMPLETE | cache.Usage + degrade.store/toChatResponse preserve cached/reasoning splits; negatives clamped; omitempty JSON keeps pre-existing entries byte-compatible; tests green (cache+degrade packages) | PR pending |
 | P2-T4 | ToolCalling catalog metadata completion/consistency (§7.4) | TODO | informational catalog field; fill from provider docs honestly | — |
 | P2-T5 | Live routing view depth: candidates + rejection reasons + hedge loser/winner + retry/cooldown/breaker explanations in UI (§4.2, addendum §2) | TODO | backend trace data exists; UI depth is the gap; design preservation applies | — |
 | P2-T6 | Usage/cost analytics accuracy: per-surface accounting + reported-vs-estimated labelling everywhere (§4.3) | TODO | G1 closed chat; T1/T2/T3 extend | — |

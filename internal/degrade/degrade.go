@@ -1715,6 +1715,11 @@ func (e *StaleEngine) store(ctx context.Context, req provider.ChatRequest, resp 
 			PromptTokens:     resp.Usage.PromptTokens,
 			CompletionTokens: resp.Usage.CompletionTokens,
 			TotalTokens:      resp.Usage.TotalTokens,
+			// Phase 2 carry-over: preserve the provider-reported detail
+			// splits through the cache round-trip (clamped; negatives
+			// are malformed output and never stored).
+			CachedTokens:    max(resp.Usage.CachedTokens, 0),
+			ReasoningTokens: max(resp.Usage.ReasoningTokens, 0),
 		},
 		Model: resp.Model,
 	}
@@ -1871,6 +1876,12 @@ func toChatResponse(req provider.ChatRequest, cached cache.CachedResponse) *prov
 			PromptTokens:     cached.Usage.PromptTokens,
 			CompletionTokens: cached.Usage.CompletionTokens,
 			TotalTokens:      cached.Usage.TotalTokens,
+			// Phase 2 carry-over: the stored detail splits ride the
+			// replay, so a cache hit reports the same usage shape as
+			// the original live response (client usage block +
+			// telemetry project them).
+			CachedTokens:    cached.Usage.CachedTokens,
+			ReasoningTokens: cached.Usage.ReasoningTokens,
 		},
 		Model: model,
 	}
