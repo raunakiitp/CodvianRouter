@@ -6890,6 +6890,11 @@ type streamChunk struct {
 	Created int64          `json:"created"`
 	Model   string         `json:"model"`
 	Choices []streamChoice `json:"choices"`
+	// Usage is set only on the final usage chunk (G1): emitted
+	// when the client asked for stream_options.include_usage AND
+	// the upstream reported usage. Choices is an empty array on
+	// that chunk, exactly like OpenAI's wire shape.
+	Usage *provider.Usage `json:"usage,omitempty"`
 }
 
 // handleChatStream streams SSE deltas to the client. It returns nil
@@ -7278,17 +7283,37 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 		}
 		return onChunk(provider.StreamChunk{Content: delta})
 	}
+	// finalUsage (G1): set on the success path only, when the
+	// client requested stream_options.include_usage and the
+	// upstream actually reported usage. finish emits it as the
+	// final usage chunk (empty choices array) after the finish
+	// chunk and before [DONE]. A local estimate is NEVER emitted
+	// here — the client asked for the provider's numbers.
+	var finalUsage *provider.Usage
 	finish := func(reason string) error {
-		// A chunk already carried the finish reason: just close.
-		if finishSent {
-			return writeSSENow("data: [DONE]\n\n")
+		// A chunk already carried the finish reason: skip the
+		// finish chunk, but the usage chunk (if any) still goes
+		// out before [DONE].
+		if !finishSent {
+			if reason == "" {
+				reason = "stop"
+			}
+			fr := reason
+			if err := writeChunk(streamDelta{}, &fr); err != nil {
+				return err
+			}
 		}
-		if reason == "" {
-			reason = "stop"
-		}
-		fr := reason
-		if err := writeChunk(streamDelta{}, &fr); err != nil {
-			return err
+		if finalUsage != nil {
+			b, err := json.Marshal(streamChunk{
+				ID: id, Object: "chat.completion.chunk", Created: created, Model: req.Model,
+				Choices: []streamChoice{}, Usage: finalUsage,
+			})
+			if err != nil {
+				return err
+			}
+			if err := writeSSENow("data: " + string(b) + "\n\n"); err != nil {
+				return err
+			}
 		}
 		return writeSSENow("data: [DONE]\n\n")
 	}
@@ -7413,6 +7438,21 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 		// so a stream that errored needs no flush: the error
 		// frame ends it instead.
 		emitTail()
+		// G1: the client asked for stream_options.include_usage —
+		// emit the upstream's reported usage as the final usage
+		// chunk (finish writes it before [DONE]). Only a real
+		// report qualifies: a zero usage block means the upstream
+		// reported nothing, and a local estimate is never presented
+		// as provider-reported.
+		if req.StreamIncludeUsage && resp != nil && resp.Usage != (provider.Usage{}) {
+			u := resp.Usage
+			finalUsage = &u
+		}
+		// G1: a stream whose upstream reported usage is priced for
+		// the per-request budget exactly like a non-streaming
+		// response — the overage feed records it; the spend rides
+		// the telemetry trailer below (headers are already out).
+		s.checkRequestBudgetOverageStream(ctx, &req, resp)
 		// Telemetry trailer (M2.1): the values that were not
 		// known when the stream's headers were sent — cost,
 		// tokens, fallback — as a final SSE comment before

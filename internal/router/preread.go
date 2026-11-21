@@ -254,7 +254,7 @@ func validatePrereadPrefix(text string, hasToolCalls bool, cfg ResponseValidatio
 // of the stream forwards live via forwardStream — and a failure
 // after that point is reported, never switched (the caller stops
 // the chain once partial content exists; see runStream).
-func (e *Engine) forwardStreamPreread(ctx context.Context, out chan<- StreamEvent, ch <-chan StreamEvent, first *StreamEvent, partial *strings.Builder, onCommit func()) (streamOutcome, error, prereadInfo) {
+func (e *Engine) forwardStreamPreread(ctx context.Context, out chan<- StreamEvent, ch <-chan StreamEvent, first *StreamEvent, partial *strings.Builder, onCommit func()) (streamOutcome, error, prereadInfo, *provider.ChatResponse) {
 	var buf []StreamEvent
 	bufBytes := 0
 	finishReason := ""
@@ -267,7 +267,7 @@ func (e *Engine) forwardStreamPreread(ctx context.Context, out chan<- StreamEven
 	// events when the first event was already content — so the
 	// trace can tell "preread ran, committed immediately" apart
 	// from "preread never ran" (state "").
-	commit := func(firstEv *StreamEvent) (streamOutcome, error, prereadInfo) {
+	commit := func(firstEv *StreamEvent) (streamOutcome, error, prereadInfo, *provider.ChatResponse) {
 		// 200-OK body validation (see the file header): the text
 		// about to reach the client is judged BEFORE commit —
 		// afterwards no switch is possible. A failing prefix
@@ -289,7 +289,7 @@ func (e *Engine) forwardStreamPreread(ctx context.Context, out chan<- StreamEven
 			}
 		}
 		if verr := validatePrereadPrefix(commitText.String(), commitToolCalls, e.cfg.ResponseValidation); verr != nil {
-			return streamFailed, verr, pr
+			return streamFailed, verr, pr, nil
 		}
 		// The commit point (CHECKLIST 199): the first buffered
 		// event is about to reach the client, so this attempt's
@@ -309,26 +309,26 @@ func (e *Engine) forwardStreamPreread(ctx context.Context, out chan<- StreamEven
 			select {
 			case out <- ev:
 			case <-ctx.Done():
-				return streamCtxDone, ctx.Err(), pr
+				return streamCtxDone, ctx.Err(), pr, nil
 			}
 		}
 		pr = prereadInfo{state: "held", events: len(buf), bytes: bufBytes}
 		buf = nil
-		oc, err := e.forwardStream(ctx, out, ch, firstEv, partial, nil)
-		return oc, err, pr
+		oc, err, dr := e.forwardStream(ctx, out, ch, firstEv, partial, nil)
+		return oc, err, pr, dr
 	}
 
 	// Seed with the hedge winner's already-consumed first event.
 	if first != nil {
 		if first.Err != nil {
-			return streamFailed, first.Err, pr
+			return streamFailed, first.Err, pr, nil
 		}
 		if first.Done {
 			if doneHasReasoning(first.Resp) {
 				return commit(first)
 			}
 			pr = prereadInfo{state: "empty", events: len(buf), bytes: bufBytes}
-			return streamEmpty, &provider.EmptyStreamError{FinishReason: first.FinishReason}, pr
+			return streamEmpty, &provider.EmptyStreamError{FinishReason: first.FinishReason}, pr, nil
 		}
 		if isContentEvent(*first) {
 			return commit(first)
@@ -345,7 +345,7 @@ func (e *Engine) forwardStreamPreread(ctx context.Context, out chan<- StreamEven
 	for {
 		select {
 		case <-ctx.Done():
-			return streamCtxDone, ctx.Err(), pr
+			return streamCtxDone, ctx.Err(), pr, nil
 		case <-timer.C:
 			// Bound hit: commit what was held (possibly nothing)
 			// and stream the rest live.
@@ -356,19 +356,19 @@ func (e *Engine) forwardStreamPreread(ctx context.Context, out chan<- StreamEven
 				// ended is the cancellation unwinding, not
 				// an upstream failure (CHECKLIST 153).
 				if err := ctx.Err(); err != nil {
-					return streamCtxDone, err, pr
+					return streamCtxDone, err, pr, nil
 				}
-				return streamFailed, errors.New("router: upstream closed stream without Done"), pr
+				return streamFailed, errors.New("router: upstream closed stream without Done"), pr, nil
 			}
 			if ev.Err != nil {
-				return streamFailed, ev.Err, pr
+				return streamFailed, ev.Err, pr, nil
 			}
 			if ev.Done {
 				if doneHasReasoning(ev.Resp) {
 					return commit(&ev)
 				}
 				pr = prereadInfo{state: "empty", events: len(buf), bytes: bufBytes}
-				return streamEmpty, &provider.EmptyStreamError{FinishReason: finishReason}, pr
+				return streamEmpty, &provider.EmptyStreamError{FinishReason: finishReason}, pr, nil
 			}
 			if ev.FinishReason != "" {
 				finishReason = ev.FinishReason

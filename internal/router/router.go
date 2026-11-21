@@ -4169,12 +4169,14 @@ func (e *Engine) reconcileUsage(providerID, model string, req provider.ChatReque
 	return usage
 }
 
-// streamFallbackUsage is the ledger usage for a successful stream:
-// streaming usage is unknown to the engine (bridgeStream discards
-// the upstream ChatResponse), so the local prompt count is the
+// streamFallbackUsage is the ledger usage for a successful stream
+// whose upstream reported NO usage: the local prompt count is the
 // fallback, labelled LocalEstimate — the same rule as
 // reconcileUsage's no-report branch. A 0 local count records
-// Usage{} (unknown), never a guessed split.
+// Usage{} (unknown), never a guessed split. When the upstream DID
+// report streaming usage (G1: the Done event's reassembled
+// response carries it), runStream reconciles that report instead
+// and never calls this fallback.
 func (e *Engine) streamFallbackUsage(providerID, model, wire string, req provider.ChatRequest) provider.Usage {
 	local := e.localPromptCountCalibrated(providerID, model, wire, req)
 	if local <= 0 {
@@ -5895,7 +5897,7 @@ const (
 // response. It never fires when the stream fails before its first
 // event (an Err first event, or ctx ending first): nothing was
 // delivered, so there is no serving provider to name.
-func (e *Engine) forwardStream(ctx context.Context, out chan<- StreamEvent, ch <-chan StreamEvent, first *StreamEvent, partial *strings.Builder, onCommit func()) (streamOutcome, error) {
+func (e *Engine) forwardStream(ctx context.Context, out chan<- StreamEvent, ch <-chan StreamEvent, first *StreamEvent, partial *strings.Builder, onCommit func()) (streamOutcome, error, *provider.ChatResponse) {
 	committed := false
 	fireCommit := func() {
 		if !committed {
@@ -5913,7 +5915,7 @@ func (e *Engine) forwardStream(ctx context.Context, out chan<- StreamEvent, ch <
 	defer timer.Stop()
 	if first != nil {
 		if first.Err != nil {
-			return streamFailed, first.Err
+			return streamFailed, first.Err, nil
 		}
 		if first.Delta != "" {
 			partial.WriteString(first.Delta)
@@ -5923,19 +5925,19 @@ func (e *Engine) forwardStream(ctx context.Context, out chan<- StreamEvent, ch <
 		select {
 		case out <- *first:
 		case <-ctx.Done():
-			return streamCtxDone, ctx.Err()
+			return streamCtxDone, ctx.Err(), nil
 		}
 		if first.Done {
-			return streamDone, nil
+			return streamDone, nil, first.Resp
 		}
 	}
 	for {
 		select {
 		case <-ctx.Done():
-			return streamCtxDone, ctx.Err()
+			return streamCtxDone, ctx.Err(), nil
 		case <-timer.C:
 			if err := wd.check(time.Now()); err != nil {
-				return streamFailed, err
+				return streamFailed, err, nil
 			}
 			timer.Reset(wd.nextCheck())
 		case ev, ok := <-ch:
@@ -5949,12 +5951,12 @@ func (e *Engine) forwardStream(ctx context.Context, out chan<- StreamEvent, ch <
 				// dashboard label and the terminal event
 				// must all say cancelled (CHECKLIST 153).
 				if err := ctx.Err(); err != nil {
-					return streamCtxDone, err
+					return streamCtxDone, err, nil
 				}
-				return streamFailed, errors.New("router: upstream closed stream without Done")
+				return streamFailed, errors.New("router: upstream closed stream without Done"), nil
 			}
 			if ev.Err != nil {
-				return streamFailed, ev.Err
+				return streamFailed, ev.Err, nil
 			}
 			if ev.Delta != "" {
 				partial.WriteString(ev.Delta)
@@ -5964,10 +5966,10 @@ func (e *Engine) forwardStream(ctx context.Context, out chan<- StreamEvent, ch <
 			select {
 			case out <- ev:
 			case <-ctx.Done():
-				return streamCtxDone, ctx.Err()
+				return streamCtxDone, ctx.Err(), nil
 			}
 			if ev.Done {
-				return streamDone, nil
+				return streamDone, nil, ev.Resp
 			}
 		}
 	}
@@ -6600,14 +6602,15 @@ attemptLoop:
 		}
 		var outcome streamOutcome
 		var serr error
+		var doneResp *provider.ChatResponse
 		pr := prereadInfo{}
 		if partial.Len() == 0 && exempt == "" {
-			outcome, serr, pr = e.forwardStreamPreread(ctx, out, ch, first, &partial, onCommit)
+			outcome, serr, pr, doneResp = e.forwardStreamPreread(ctx, out, ch, first, &partial, onCommit)
 		} else {
 			if partial.Len() == 0 && exempt != "" {
 				pr = prereadInfo{state: "exempt:" + exempt}
 			}
-			outcome, serr = e.forwardStream(ctx, out, ch, first, &partial, onCommit)
+			outcome, serr, doneResp = e.forwardStream(ctx, out, ch, first, &partial, onCommit)
 		}
 		// Preferred-account failover (M4.8): the attempt is
 		// over — stop the deadline timer if it is still armed
@@ -6693,14 +6696,28 @@ attemptLoop:
 			addTraceAttemptStreamReasoning(trace, streamAtt, lat, "success", nil, pr, "done", label)
 			e.noteAttemptStats(streamAtt.ProviderID, streamAtt.KeyID, true, lat)
 			if e.ledger != nil {
-				// Streaming usage is unknown to the engine:
-				// bridgeStream discards the upstream ChatResponse
-				// (which may carry usage), so the local prompt
-				// count is the fallback, labelled LocalEstimate
-				// (see streamFallbackUsage) — never a guessed
-				// split or a made-up cost. The compression
-				// saving rides on the same row (CHECKLIST 183).
-				e.recordAttempt(req.CallerID, streamAtt, true, lat, withCompression(e.streamFallbackUsage(streamAtt.ProviderID, streamAtt.Model, e.wireFor(streamAtt.ProviderID), req), req))
+				// G1 (streaming usage accounting): the Done event
+				// carries the upstream's reassembled response, and
+				// every wire client aggregates the upstream's
+				// streaming usage into it (OpenAI's final usage
+				// chunk — requested via stream_options.include_usage
+				// — Anthropic message_delta, Gemini usageMetadata,
+				// Cohere message-end, Bedrock metadata). When the
+				// upstream reported a split, it is reconciled exactly
+				// like a non-streaming report (provider numbers kept
+				// verbatim, local estimate alongside, divergence
+				// counted, reported cost preserved). When it reported
+				// nothing, the local prompt count is the fallback,
+				// labelled LocalEstimate (streamFallbackUsage) —
+				// never a guessed split or a made-up cost. The
+				// compression saving rides on the same row
+				// (CHECKLIST 183). One row per attempt: the usage is
+				// the LAST reported event, never a sum.
+				usage := e.streamFallbackUsage(streamAtt.ProviderID, streamAtt.Model, e.wireFor(streamAtt.ProviderID), req)
+				if doneResp != nil && (doneResp.Usage.PromptTokens != 0 || doneResp.Usage.CompletionTokens != 0 || doneResp.Usage.TotalTokens != 0) {
+					usage = e.reconcileUsage(streamAtt.ProviderID, streamAtt.Model, req, doneResp.Usage)
+				}
+				e.recordAttempt(req.CallerID, streamAtt, true, lat, withCompression(usage, req))
 			}
 			e.breakerSuccess(streamAtt.ProviderID)
 			// A success clears any lockout on the triple (M4.3).
@@ -7479,6 +7496,11 @@ func (e *Engine) chatStreamDrainChunks(ctx context.Context, chain []Attempt, req
 					doneResp = &provider.ChatResponse{Content: full.String(), Model: req.Model, ToolCalls: toolCalls, FinishReason: finishReason}
 					if ev.Resp != nil {
 						doneResp.Reasoning = ev.Resp.Reasoning
+						// G1: carry the upstream-reported streaming
+						// usage (and any reported cost inside it) to
+						// the caller — the server projects it into
+						// the client's usage chunk / telemetry.
+						doneResp.Usage = ev.Resp.Usage
 					}
 				}
 			}
@@ -7527,6 +7549,9 @@ func (e *Engine) chatStreamDrainChunks(ctx context.Context, chain []Attempt, req
 				doneResp = &provider.ChatResponse{Content: full.String(), Model: req.Model, ToolCalls: toolCalls, FinishReason: finishReason}
 				if ev.Resp != nil {
 					doneResp.Reasoning = ev.Resp.Reasoning
+					// G1: upstream-reported streaming usage rides
+					// to the caller (see the ctx-cancel loop).
+					doneResp.Usage = ev.Resp.Usage
 				}
 				continue
 			}

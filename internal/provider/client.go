@@ -826,6 +826,15 @@ type ChatRequest struct {
 	BudgetUSD    *float64 `json:"-"`
 	BudgetStrict bool     `json:"-"`
 
+	// StreamIncludeUsage is the client's stream_options.include_usage
+	// request (G1): when true, a completed stream emits a final
+	// usage chunk before [DONE] — but only when the upstream
+	// actually reported usage (a local estimate is never presented
+	// as provider-reported). Router-internal (json:"-"): the
+	// upstream request carries its own include_usage flag
+	// (streamOptionsWire), never the client's block verbatim.
+	StreamIncludeUsage bool `json:"-"`
+
 	// CacheControls carries the per-request cache directives parsed
 	// from HTTP headers by the server (M6.4): bypass headers and
 	// per-request cache controls. It is router-internal (json:"-"):
@@ -962,6 +971,23 @@ func (r *ChatRequest) UnmarshalJSON(data []byte) error {
 				return fmt.Errorf("provider: invalid prompt_cache_key value: %w", err)
 			}
 			r.PromptCacheKey = &key
+		}
+	}
+	// stream_options (G1): only include_usage is meaningful to the
+	// gateway. Decoded leniently — unknown keys inside the block
+	// are ignored, not a 400: OpenAI SDKs send only include_usage,
+	// and a compatibility surface must not break on a future
+	// field it does not act on. A malformed include_usage value
+	// is a 400 naming the field.
+	if v, ok := fields["stream_options"]; ok && string(v) != "null" {
+		var so struct {
+			IncludeUsage *bool `json:"include_usage"`
+		}
+		if err := json.Unmarshal(v, &so); err != nil {
+			return fmt.Errorf("provider: invalid stream_options: %w", err)
+		}
+		if so.IncludeUsage != nil {
+			r.StreamIncludeUsage = *so.IncludeUsage
 		}
 	}
 	// The routing contract is decoded strictly: an unknown key
@@ -1776,17 +1802,31 @@ type chatMessageWire struct {
 // explicit JSON null) when one was supplied, else the
 // router-generated auto key for OpenAI's own API, else omitted.
 type chatCompletionRequest struct {
-	Model           string            `json:"model"`
-	Messages        []chatMessageWire `json:"messages"`
-	Stream          bool              `json:"stream"`
-	MaxTokens       int               `json:"max_tokens,omitempty"`
-	Temperature     float64           `json:"temperature,omitempty"`
-	TopP            float64           `json:"top_p,omitempty"`
-	ReasoningEffort string            `json:"reasoning_effort,omitempty"`
-	Stop            []string          `json:"stop,omitempty"`
-	Tools           []ToolDefinition  `json:"tools,omitempty"`
-	ToolChoice      json.RawMessage   `json:"tool_choice,omitempty"`
-	PromptCacheKey  json.RawMessage   `json:"prompt_cache_key,omitempty"`
+	Model           string             `json:"model"`
+	Messages        []chatMessageWire  `json:"messages"`
+	Stream          bool               `json:"stream"`
+	StreamOptions   *streamOptionsWire `json:"stream_options,omitempty"`
+	MaxTokens       int                `json:"max_tokens,omitempty"`
+	Temperature     float64            `json:"temperature,omitempty"`
+	TopP            float64            `json:"top_p,omitempty"`
+	ReasoningEffort string             `json:"reasoning_effort,omitempty"`
+	Stop            []string           `json:"stop,omitempty"`
+	Tools           []ToolDefinition   `json:"tools,omitempty"`
+	ToolChoice      json.RawMessage    `json:"tool_choice,omitempty"`
+	PromptCacheKey  json.RawMessage    `json:"prompt_cache_key,omitempty"`
+}
+
+// streamOptionsWire is the OpenAI stream_options block. G1
+// (streaming usage accounting): the router always asks for
+// include_usage on OpenAI-wire streams so the upstream's final
+// usage chunk reaches the ledger as provider-reported tokens
+// instead of a local estimate. OpenAI itself omits streaming
+// usage without this flag; most OpenAI-compatible providers
+// either honor it or ignore the unknown field. The aggregated
+// usage is decoded by the same usageWire path as non-streaming
+// responses (cached/reasoning splits and reported cost included).
+type streamOptionsWire struct {
+	IncludeUsage bool `json:"include_usage"`
 }
 
 // openAIToolCallDelta is one tool-call delta inside a streaming chunk.
@@ -2152,6 +2192,12 @@ func (c *openAIClient) toChatCompletionRequest(req ChatRequest) (chatCompletionR
 		Tools:           req.Tools,
 		ToolChoice:      req.ToolChoice,
 		PromptCacheKey:  c.cacheKeyField(req),
+	}
+	// G1: ask for the final usage chunk on every OpenAI-wire
+	// stream. Non-streaming requests carry usage in the response
+	// body already and never set this block.
+	if req.Stream {
+		out.StreamOptions = &streamOptionsWire{IncludeUsage: true}
 	}
 	// G13: the OpenRouter prompt-cache marker is applied here, at
 	// send time — toChatCompletionRequest is the single funnel for
