@@ -1,0 +1,41 @@
+name: browser-smoke
+on:
+  push:
+    paths:
+      - 'web/index.html'
+      - 'tests/playwright/**'
+      - '.github/workflows/browser-smoke.yml'
+      - 'internal/server/web.go'
+permissions:
+  contents: read
+jobs:
+  playwright:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.27.4"
+      - name: Build the router
+        run: go build -buildvcs=false -o /tmp/codvian-router ./cmd/codvian-router
+      - name: Boot the server
+        run: |
+          mkdir -p /tmp/cv/data
+          /tmp/codvian-router serve --listen 127.0.0.1:20128 --data-dir /tmp/cv/data > /tmp/cv/server.log 2>&1 &
+          echo $! > /tmp/cv/pid
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:20128/dashboard >/dev/null 2>&1; then echo "server up"; break; fi
+            sleep 1
+          done
+          echo "--- server.log ---"; tail -20 /tmp/cv/server.log || true
+      - name: Install Playwright deps (Node is preinstalled on the runner)
+        run: |
+          cd tests/playwright
+          npm install
+          npx playwright install --with-deps chromium
+      - name: Run Playwright smoke
+        env:
+          BASE_URL: http://127.0.0.1:20128
+        run: cd tests/playwright && npx playwright test

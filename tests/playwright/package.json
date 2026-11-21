@@ -1,0 +1,10 @@
+{
+  "name": "codvian-router-browser-smoke",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Playwright browser smoke for the Codvian Router dashboard (G-04). Synthetic fixtures only; no real provider keys.",
+  "devDependencies": {
+    "@playwright/test": "^1.44.0"
+  },
+  "scripts": { "test": "playwright test" }
+}
