@@ -209,7 +209,7 @@ func TestRegistrationsM9M10StatusDisabledNoStore(t *testing.T) {
 // the URL only (events untouched), read back, unknown id 404.
 func TestRegistrationsM9M10WebhookPutRoundTrip(t *testing.T) {
 	srv, _, adminRaw, _ := regM9M10Setup(t, false)
-	rec := doReq(t, srv, http.MethodPost, "/api/webhooks", `{"url":"https://203.0.113.10/hook","events":["quota.exceeded"]}`, adminRaw)
+	rec := doReq(t, srv, http.MethodPost, "/api/webhooks", `{"url":"https://93.184.215.10/hook","events":["quota.exceeded"]}`, adminRaw)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create webhook: status %d, want 201: %s", rec.Code, rec.Body.String())
 	}
@@ -217,7 +217,7 @@ func TestRegistrationsM9M10WebhookPutRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
 		t.Fatalf("create response is not JSON: %v: %s", err, rec.Body.String())
 	}
-	rec = doReq(t, srv, http.MethodPut, "/api/webhooks/"+created.ID, `{"url":"https://203.0.113.11/hook2"}`, adminRaw)
+	rec = doReq(t, srv, http.MethodPut, "/api/webhooks/"+created.ID, `{"url":"https://93.184.215.11/hook2"}`, adminRaw)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("PUT webhook: status %d, want 200: %s", rec.Code, rec.Body.String())
 	}
@@ -225,8 +225,8 @@ func TestRegistrationsM9M10WebhookPutRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &updated); err != nil {
 		t.Fatalf("PUT response is not JSON: %v: %s", err, rec.Body.String())
 	}
-	if updated.URL != "https://203.0.113.11/hook2" {
-		t.Errorf("updated url = %q, want https://203.0.113.11/hook2", updated.URL)
+	if updated.URL != "https://93.184.215.11/hook2" {
+		t.Errorf("updated url = %q, want https://93.184.215.11/hook2", updated.URL)
 	}
 	if len(updated.Events) != 1 || updated.Events[0] != "quota.exceeded" {
 		t.Errorf("updated events = %v, want [quota.exceeded] (partial update must keep unprovided fields)", updated.Events)
@@ -242,7 +242,7 @@ func TestRegistrationsM9M10WebhookPutRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &one); err != nil {
 		t.Fatalf("GET response is not JSON: %v: %s", err, rec.Body.String())
 	}
-	if one.URL != "https://203.0.113.11/hook2" {
+	if one.URL != "https://93.184.215.11/hook2" {
 		t.Errorf("GET url = %q, want the updated URL persisted in the live server", one.URL)
 	}
 }

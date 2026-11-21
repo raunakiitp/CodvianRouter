@@ -852,10 +852,13 @@ type Server struct {
 	// updateCheck backs POST /admin/update (nil = 503, see
 	// admin_update.go). webFetchEgress / webFetchTLS are nil in
 	// production (real DNS, system roots); tests inject them.
-	updateCheck      UpdateCheckFunc
-	updateCurrent    string
-	webFetchEgress   *egressGuard
-	webFetchTLS      *tls.Config
+	updateCheck    UpdateCheckFunc
+	updateCurrent  string
+	webFetchEgress *egressGuard
+	webFetchTLS    *tls.Config
+	// webhookClient is nil in production (webhooks.New then uses the
+	// SSRF-safe egress client); tests set it for loopback receivers.
+	webhookClient    *http.Client
 	startedAt        time.Time
 	localOnlyDenials atomic.Uint64
 	// CHECKLIST 243 server-side counters (see failover_243.go):

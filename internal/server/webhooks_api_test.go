@@ -55,7 +55,7 @@ func TestM819CreateListGetDelete(t *testing.T) {
 	s := newKeyBudgetSetup(t)
 	srv := s.server(t)
 
-	rec := callWebhookHandler(t, srv, "POST", "/api/webhooks", `{"url":"https://203.0.113.10/hook","events":["quota.exceeded"]}`)
+	rec := callWebhookHandler(t, srv, "POST", "/api/webhooks", `{"url":"https://93.184.215.10/hook","events":["quota.exceeded"]}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create status = %d, want 201: %s", rec.Code, rec.Body.String())
 	}
@@ -64,7 +64,7 @@ func TestM819CreateListGetDelete(t *testing.T) {
 	if !strings.HasPrefix(created.ID, "wh_") {
 		t.Errorf("created id = %q, want a server-generated wh_ id", created.ID)
 	}
-	if created.URL != "https://203.0.113.10/hook" || len(created.Events) != 1 || created.Events[0] != "quota.exceeded" {
+	if created.URL != "https://93.184.215.10/hook" || len(created.Events) != 1 || created.Events[0] != "quota.exceeded" {
 		t.Errorf("created = %+v, want url + quota.exceeded echoed back", created)
 	}
 	if created.HasSecret {
@@ -117,7 +117,7 @@ func TestM819CreateValidation(t *testing.T) {
 		want int
 		note string
 	}{
-		{"ftp scheme", `{"url":"ftp://203.0.113.10/hook","events":["quota.exceeded"]}`, 400, "scheme"},
+		{"ftp scheme", `{"url":"ftp://93.184.215.10/hook","events":["quota.exceeded"]}`, 400, "scheme"},
 		{"loopback ip", `{"url":"http://127.0.0.1:9/hook","events":["quota.exceeded"]}`, 400, "loopback"},
 		{"localhost name", `{"url":"https://localhost/hook","events":["quota.exceeded"]}`, 400, "localhost"},
 		{"private 10.x", `{"url":"https://10.0.0.5/hook","events":["quota.exceeded"]}`, 400, "private-network"},
@@ -126,10 +126,10 @@ func TestM819CreateValidation(t *testing.T) {
 		{"credentials in url", `{"url":"https://user:pass@203.0.113.10/hook","events":["quota.exceeded"]}`, 400, "credentials"},
 		{"no host", `{"url":"https:///hook","events":["quota.exceeded"]}`, 400, "no host"},
 		{"missing url", `{"events":["quota.exceeded"]}`, 400, "url is required"},
-		{"no events", `{"url":"https://203.0.113.10/hook","events":[]}`, 400, "events is required"},
-		{"unknown event", `{"url":"https://203.0.113.10/hook","events":["key.rotated"]}`, 400, "key.rotated"},
-		{"unknown event among known", `{"url":"https://203.0.113.10/hook","events":["quota.exceeded","key.deleted"]}`, 400, "key.deleted"},
-		{"client-supplied id rejected", `{"id":"wh-mine","url":"https://203.0.113.10/hook","events":["quota.exceeded"]}`, 400, "invalid webhook registration"},
+		{"no events", `{"url":"https://93.184.215.10/hook","events":[]}`, 400, "events is required"},
+		{"unknown event", `{"url":"https://93.184.215.10/hook","events":["key.rotated"]}`, 400, "key.rotated"},
+		{"unknown event among known", `{"url":"https://93.184.215.10/hook","events":["quota.exceeded","key.deleted"]}`, 400, "key.deleted"},
+		{"client-supplied id rejected", `{"id":"wh-mine","url":"https://93.184.215.10/hook","events":["quota.exceeded"]}`, 400, "invalid webhook registration"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -148,7 +148,7 @@ func TestM819CreateValidation(t *testing.T) {
 	// Duplicate events are deduped, not rejected.
 	s := newKeyBudgetSetup(t)
 	srv := s.server(t)
-	rec := callWebhookHandler(t, srv, "POST", "/api/webhooks", `{"url":"https://203.0.113.10/hook","events":["quota.exceeded","quota.exceeded","budget.warning"]}`)
+	rec := callWebhookHandler(t, srv, "POST", "/api/webhooks", `{"url":"https://93.184.215.10/hook","events":["quota.exceeded","quota.exceeded","budget.warning"]}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("dedupe create status = %d, want 201: %s", rec.Code, rec.Body.String())
 	}
@@ -162,7 +162,7 @@ func TestM819CreateValidation(t *testing.T) {
 func TestM819SecretNeverEchoed(t *testing.T) {
 	s := newKeyBudgetSetup(t)
 	srv := s.server(t)
-	rec := callWebhookHandler(t, srv, "POST", "/api/webhooks", `{"url":"https://203.0.113.10/hook","events":["budget.warning"],"secret":"mock-secret-value"}`)
+	rec := callWebhookHandler(t, srv, "POST", "/api/webhooks", `{"url":"https://93.184.215.10/hook","events":["budget.warning"],"secret":"mock-secret-value"}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create status = %d, want 201: %s", rec.Code, rec.Body.String())
 	}
@@ -265,6 +265,10 @@ func TestM819BudgetWarningFiresOnThresholdCrossing(t *testing.T) {
 	s.cfg.Webhooks = []config.WebhookConfig{{
 		ID: "wh-test", URL: mock.URL, Events: []string{"budget.warning"}, Secret: "test-secret",
 	}}
+	// The production dispatcher refuses loopback targets at delivery
+	// (egress policy); this test exercises the threshold logic, so it
+	// delivers to its loopback receiver through the receiver's client.
+	srv.webhookClient = mock.Client()
 	srv.rebuildWebhookDispatcher()
 
 	if err := s.led.SetInternalBudget(context.Background(), ledger.InternalBudget{
@@ -366,7 +370,7 @@ func TestM819UpdatePartial(t *testing.T) {
 	s := newKeyBudgetSetup(t)
 	srv := s.server(t)
 
-	rec := callWebhookHandler(t, srv, "POST", "/api/webhooks", `{"url":"https://203.0.113.10/hook","events":["quota.exceeded"],"secret":"s3cr3t"}`)
+	rec := callWebhookHandler(t, srv, "POST", "/api/webhooks", `{"url":"https://93.184.215.10/hook","events":["quota.exceeded"],"secret":"s3cr3t"}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create status = %d, want 201: %s", rec.Code, rec.Body.String())
 	}
@@ -388,16 +392,16 @@ func TestM819UpdatePartial(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("put events status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
-	if got := get(); got.URL != "https://203.0.113.10/hook" || len(got.Events) != 1 || got.Events[0] != "budget.warning" || !got.HasSecret {
+	if got := get(); got.URL != "https://93.184.215.10/hook" || len(got.Events) != 1 || got.Events[0] != "budget.warning" || !got.HasSecret {
 		t.Fatalf("after events-only PUT: %+v, want same URL, budget.warning, secret kept", got)
 	}
 
 	// URL only: events survive untouched.
-	rec = callWebhookHandler(t, srv, "PUT", "/api/webhooks/"+created.ID, `{"url":"https://203.0.113.20/other"}`)
+	rec = callWebhookHandler(t, srv, "PUT", "/api/webhooks/"+created.ID, `{"url":"https://93.184.215.20/other"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("put url status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
-	if got := get(); got.URL != "https://203.0.113.20/other" || len(got.Events) != 1 || got.Events[0] != "budget.warning" {
+	if got := get(); got.URL != "https://93.184.215.20/other" || len(got.Events) != 1 || got.Events[0] != "budget.warning" {
 		t.Fatalf("after url-only PUT: %+v, want new URL, budget.warning kept", got)
 	}
 
@@ -406,7 +410,7 @@ func TestM819UpdatePartial(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("put empty status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
-	if got := get(); got.URL != "https://203.0.113.20/other" || !got.HasSecret {
+	if got := get(); got.URL != "https://93.184.215.20/other" || !got.HasSecret {
 		t.Fatalf("after empty PUT: %+v, want unchanged", got)
 	}
 
@@ -427,7 +431,7 @@ func TestM819UpdateValidation(t *testing.T) {
 	s := newKeyBudgetSetup(t)
 	srv := s.server(t)
 
-	rec := callWebhookHandler(t, srv, "POST", "/api/webhooks", `{"url":"https://203.0.113.10/hook","events":["quota.exceeded"]}`)
+	rec := callWebhookHandler(t, srv, "POST", "/api/webhooks", `{"url":"https://93.184.215.10/hook","events":["quota.exceeded"]}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create status = %d, want 201: %s", rec.Code, rec.Body.String())
 	}
@@ -443,7 +447,7 @@ func TestM819UpdateValidation(t *testing.T) {
 		{"unknown id", "/api/webhooks/wh_nope", `{"events":["budget.warning"]}`, ""},
 		{"loopback url", "/api/webhooks/" + created.ID, `{"url":"http://127.0.0.1:9/hook"}`, "loopback"},
 		{"localhost name", "/api/webhooks/" + created.ID, `{"url":"https://localhost/hook"}`, "localhost"},
-		{"ftp scheme", "/api/webhooks/" + created.ID, `{"url":"ftp://203.0.113.10/hook"}`, "http or https"},
+		{"ftp scheme", "/api/webhooks/" + created.ID, `{"url":"ftp://93.184.215.10/hook"}`, "http or https"},
 		{"private url", "/api/webhooks/" + created.ID, `{"url":"https://10.0.0.5/hook"}`, "private-network"},
 		{"empty url", "/api/webhooks/" + created.ID, `{"url":"  "}`, ""},
 		{"unknown event", "/api/webhooks/" + created.ID, `{"events":["key.rotated"]}`, "key.rotated"},
@@ -469,7 +473,7 @@ func TestM819UpdateValidation(t *testing.T) {
 	rec = callWebhookHandler(t, srv, "GET", "/api/webhooks/"+created.ID, "")
 	var one webhookView
 	decodeWebhookBody(t, rec, &one)
-	if one.URL != "https://203.0.113.10/hook" || len(one.Events) != 1 || one.Events[0] != "quota.exceeded" {
+	if one.URL != "https://93.184.215.10/hook" || len(one.Events) != 1 || one.Events[0] != "quota.exceeded" {
 		t.Fatalf("after refused PUTs: %+v, want the original registration", one)
 	}
 }
@@ -484,7 +488,7 @@ func TestM819UpdateSecretNeverEchoed(t *testing.T) {
 	s := newKeyBudgetSetup(t)
 	srv := s.server(t)
 
-	rec := callWebhookHandler(t, srv, "POST", "/api/webhooks", `{"url":"https://203.0.113.10/hook","events":["quota.exceeded"],"secret":"original-secret-value"}`)
+	rec := callWebhookHandler(t, srv, "POST", "/api/webhooks", `{"url":"https://93.184.215.10/hook","events":["quota.exceeded"],"secret":"original-secret-value"}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create status = %d, want 201: %s", rec.Code, rec.Body.String())
 	}
@@ -492,7 +496,7 @@ func TestM819UpdateSecretNeverEchoed(t *testing.T) {
 	decodeWebhookBody(t, rec, &created)
 
 	// Full-payload PUT: new URL + new events + rotated secret.
-	rec = callWebhookHandler(t, srv, "PUT", "/api/webhooks/"+created.ID, `{"url":"https://203.0.113.20/other","events":["budget.warning"],"secret":"rotated-secret-value"}`)
+	rec = callWebhookHandler(t, srv, "PUT", "/api/webhooks/"+created.ID, `{"url":"https://93.184.215.20/other","events":["budget.warning"],"secret":"rotated-secret-value"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("put status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
@@ -501,7 +505,7 @@ func TestM819UpdateSecretNeverEchoed(t *testing.T) {
 	}
 	var updated webhookView
 	decodeWebhookBody(t, rec, &updated)
-	if updated.URL != "https://203.0.113.20/other" || len(updated.Events) != 1 || updated.Events[0] != "budget.warning" || !updated.HasSecret {
+	if updated.URL != "https://93.184.215.20/other" || len(updated.Events) != 1 || updated.Events[0] != "budget.warning" || !updated.HasSecret {
 		t.Fatalf("put response = %+v, want new URL, budget.warning, has_secret true", updated)
 	}
 
@@ -515,7 +519,7 @@ func TestM819UpdateSecretNeverEchoed(t *testing.T) {
 	}
 	var one webhookView
 	decodeWebhookBody(t, rec, &one)
-	if one.URL != "https://203.0.113.20/other" || len(one.Events) != 1 || one.Events[0] != "budget.warning" || !one.HasSecret {
+	if one.URL != "https://93.184.215.20/other" || len(one.Events) != 1 || one.Events[0] != "budget.warning" || !one.HasSecret {
 		t.Fatalf("after PUT: %+v, want the edited registration with the secret kept", one)
 	}
 }

@@ -112,7 +112,7 @@ func webFetch(t *testing.T, srv *Server, url string) *httptest.ResponseRecorder 
 func newFetchServer(t *testing.T, dns *fakeDNS, dialer *recordingDialer, tlsCfg *tls.Config) *Server {
 	t.Helper()
 	srv := newTestServer(t, &fakeEngine{})
-	srv.webFetchEgress = &egressGuard{lookup: dns.lookup, dial: dialer.dial}
+	srv.webFetchEgress = &egressGuard{Lookup: dns.lookup, Dial: dialer.dial}
 	srv.webFetchTLS = tlsCfg
 	return srv
 }

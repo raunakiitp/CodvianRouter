@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/raunakiitp/codvian-router/internal/release"
 )
 
 func TestBacklogEndpoints_MultimodalEmbeddings(t *testing.T) {
@@ -277,6 +279,47 @@ func TestAdminUpdateCheck(t *testing.T) {
 		}))
 		if rec := doReqPeer(t, srv, "POST", "/admin/update", "", "test-key-123", loopbackPeer); rec.Code != http.StatusBadGateway {
 			t.Errorf("status %d, want 502", rec.Code)
+		}
+	})
+	check := func(t *testing.T, err error) (*httptest.ResponseRecorder, map[string]any) {
+		t.Helper()
+		srv := newTestServer(t, &fakeEngine{}, WithUpdateCheck("0.1.0", func(ctx context.Context) (string, error) { return "", err }))
+		rec := doReqPeer(t, srv, "POST", "/admin/update", "", "test-key-123", loopbackPeer)
+		var res map[string]any
+		_ = json.Unmarshal(rec.Body.Bytes(), &res)
+		return rec, res
+	}
+	t.Run("no published release", func(t *testing.T) {
+		rec, res := check(t, &release.LookupError{Kind: release.KindNoRelease, Status: 404, Err: errors.New("none")})
+		if rec.Code != http.StatusOK || res["latest"] != nil || res["release_available"] != false ||
+			res["update_available"] != false || res["status"] != "no_published_release" {
+			t.Fatalf("status %d body %v, want 200 with latest=null, release_available=false, update_available=false", rec.Code, res)
+		}
+		if _, ok := res["release_url"]; ok {
+			t.Errorf("no-release answer invented a release_url: %v", res)
+		}
+	})
+	t.Run("failures are not no-release", func(t *testing.T) {
+		for _, c := range []struct {
+			kind release.LookupKind
+			code int
+		}{
+			{release.KindRateLimited, http.StatusServiceUnavailable},
+			{release.KindTimeout, http.StatusGatewayTimeout},
+			{release.KindUpstream, http.StatusBadGateway},
+			{release.KindMalformed, http.StatusBadGateway},
+			{release.KindNetwork, http.StatusBadGateway},
+			{release.KindAuth, http.StatusBadGateway},
+			{release.KindNotFound, http.StatusBadGateway},
+		} {
+			rec, res := check(t, &release.LookupError{Kind: c.kind, RetryAfter: 30 * time.Second, Err: errors.New("x")})
+			e, _ := res["error"].(map[string]any)
+			if rec.Code != c.code || e["code"] != string(c.kind) || res["status"] == "no_published_release" {
+				t.Errorf("%s: status %d body %v, want %d code=%s", c.kind, rec.Code, res, c.code, c.kind)
+			}
+			if c.kind == release.KindRateLimited && rec.Header().Get("Retry-After") != "30" {
+				t.Errorf("rate limited: Retry-After = %q, want 30", rec.Header().Get("Retry-After"))
+			}
 		}
 	})
 	t.Run("remote refused", func(t *testing.T) {

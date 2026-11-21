@@ -209,7 +209,7 @@ func TestDashboardM10_12CreateListDeleteRoundTrip(t *testing.T) {
 	if code, _ := m10_12WebhooksList(t, srv, ""); code != http.StatusUnauthorized {
 		t.Errorf("GET /api/webhooks without a key status = %d, want 401", code)
 	}
-	rec := doReq(t, srv, http.MethodPost, "/api/webhooks", `{"url":"https://203.0.113.10/hook","events":["quota.exceeded"]}`, "")
+	rec := doReq(t, srv, http.MethodPost, "/api/webhooks", `{"url":"https://93.184.215.10/hook","events":["quota.exceeded"]}`, "")
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("POST /api/webhooks without a key status = %d, want 401", rec.Code)
 	}
@@ -223,7 +223,7 @@ func TestDashboardM10_12CreateListDeleteRoundTrip(t *testing.T) {
 
 	// Create with both event kinds + a secret.
 	rec = doReq(t, srv, http.MethodPost, "/api/webhooks",
-		`{"url":"https://203.0.113.10/hook","events":["quota.exceeded","budget.warning"],"secret":"hook-secret"}`, adminRaw)
+		`{"url":"https://93.184.215.10/hook","events":["quota.exceeded","budget.warning"],"secret":"hook-secret"}`, adminRaw)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create status = %d, want 201: %s", rec.Code, rec.Body.String())
 	}
@@ -234,7 +234,7 @@ func TestDashboardM10_12CreateListDeleteRoundTrip(t *testing.T) {
 	if !strings.HasPrefix(created.ID, "wh_") {
 		t.Errorf("created id = %q, want a server-generated wh_ id", created.ID)
 	}
-	if created.URL != "https://203.0.113.10/hook" || len(created.Events) != 2 {
+	if created.URL != "https://93.184.215.10/hook" || len(created.Events) != 2 {
 		t.Errorf("created = %+v, want url + both events echoed back", created)
 	}
 	if !created.HasSecret {
@@ -307,8 +307,12 @@ func TestDashboardM10_12LoopbackRejected(t *testing.T) {
 			if !strings.Contains(body, tc.want) {
 				t.Errorf("rejection body = %s, want it to mention %q", body, tc.want)
 			}
-			if tc.configFile && !strings.Contains(body, "config file") {
-				t.Errorf("rejection body = %s, want it to point at the config file", body)
+			// Phase 0 closure: delivery enforces the egress policy for
+			// every webhook, so a config-file loopback target is no
+			// longer delivered either - the rejection must not point
+			// at the config file as a workaround.
+			if tc.configFile && strings.Contains(body, "config file") {
+				t.Errorf("rejection body = %s, must not suggest the config file (loopback is refused at delivery too)", body)
 			}
 		})
 	}
@@ -330,7 +334,7 @@ func TestDashboardM10_12EditRoundTrip(t *testing.T) {
 	srv, adminRaw := m10_12Setup(t)
 
 	rec := doReq(t, srv, http.MethodPost, "/api/webhooks",
-		`{"url":"https://203.0.113.10/hook","events":["quota.exceeded"],"secret":"hook-secret"}`, adminRaw)
+		`{"url":"https://93.184.215.10/hook","events":["quota.exceeded"],"secret":"hook-secret"}`, adminRaw)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create status = %d, want 201: %s", rec.Code, rec.Body.String())
 	}
@@ -341,7 +345,7 @@ func TestDashboardM10_12EditRoundTrip(t *testing.T) {
 
 	// PUT without a key is refused (TierAlwaysProtected, admin).
 	rec = doReq(t, srv, http.MethodPut, "/api/webhooks/"+created.ID,
-		`{"url":"https://203.0.113.20/other","events":["budget.warning"]}`, "")
+		`{"url":"https://93.184.215.20/other","events":["budget.warning"]}`, "")
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("PUT without a key status = %d, want 401", rec.Code)
 	}
@@ -356,7 +360,7 @@ func TestDashboardM10_12EditRoundTrip(t *testing.T) {
 	// secret is kept (this is what the page sends when the edit
 	// secret box is left blank).
 	rec = doReq(t, srv, http.MethodPut, "/api/webhooks/"+created.ID,
-		`{"url":"https://203.0.113.20/other","events":["budget.warning"]}`, adminRaw)
+		`{"url":"https://93.184.215.20/other","events":["budget.warning"]}`, adminRaw)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("PUT edit status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
@@ -367,14 +371,14 @@ func TestDashboardM10_12EditRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &updated); err != nil {
 		t.Fatalf("decode updated webhook: %v: %s", err, rec.Body.String())
 	}
-	if updated.URL != "https://203.0.113.20/other" || len(updated.Events) != 1 || updated.Events[0] != "budget.warning" || !updated.HasSecret {
+	if updated.URL != "https://93.184.215.20/other" || len(updated.Events) != 1 || updated.Events[0] != "budget.warning" || !updated.HasSecret {
 		t.Fatalf("PUT response = %+v, want new URL, budget.warning, secret kept", updated)
 	}
 
 	// List shows the edit; GET by id agrees, still no secret value.
 	if code, list := m10_12WebhooksList(t, srv, adminRaw); code != http.StatusOK {
 		t.Fatalf("GET /api/webhooks status = %d, want 200", code)
-	} else if len(list.Webhooks) != 1 || list.Webhooks[0].URL != "https://203.0.113.20/other" || len(list.Webhooks[0].Events) != 1 || !list.Webhooks[0].HasSecret {
+	} else if len(list.Webhooks) != 1 || list.Webhooks[0].URL != "https://93.184.215.20/other" || len(list.Webhooks[0].Events) != 1 || !list.Webhooks[0].HasSecret {
 		t.Fatalf("list after PUT = %+v, want the edited registration", list)
 	}
 	rec = doReq(t, srv, http.MethodGet, "/api/webhooks/"+created.ID, "", adminRaw)
@@ -414,7 +418,7 @@ func TestDashboardM10_12EditClearSecretRoundTrip(t *testing.T) {
 	srv, adminRaw := m10_12Setup(t)
 
 	rec := doReq(t, srv, http.MethodPost, "/api/webhooks",
-		`{"url":"https://203.0.113.10/hook","events":["quota.exceeded"],"secret":"hook-secret"}`, adminRaw)
+		`{"url":"https://93.184.215.10/hook","events":["quota.exceeded"],"secret":"hook-secret"}`, adminRaw)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create status = %d, want 201: %s", rec.Code, rec.Body.String())
 	}
@@ -428,7 +432,7 @@ func TestDashboardM10_12EditClearSecretRoundTrip(t *testing.T) {
 
 	// No secret field (checkbox unchecked, field blank): kept.
 	rec = doReq(t, srv, http.MethodPut, "/api/webhooks/"+created.ID,
-		`{"url":"https://203.0.113.10/hook","events":["quota.exceeded"]}`, adminRaw)
+		`{"url":"https://93.184.215.10/hook","events":["quota.exceeded"]}`, adminRaw)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("PUT keep-secret status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}

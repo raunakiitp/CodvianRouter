@@ -34,9 +34,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/raunakiitp/codvian-router/internal/egress"
 )
 
 // QuotaExceededEvent is the event name for a quota threshold
@@ -82,13 +85,20 @@ var webhookRetryBackoff = func(failedAttempts int) time.Duration {
 }
 
 // New builds a dispatcher. A nil logger disables delivery logging
-// (deliveries still happen); a nil client uses no client-level
-// timeout — each attempt is bounded by its own 10s context
-// (webhookAttemptTimeout), which is the only timeout that
-// applies.
+// (deliveries still happen). A nil client is the production default:
+// the SSRF-safe egress client (internal/egress) - every connection,
+// including each retry, resolves the host once, refuses loopback /
+// private / link-local / metadata / reserved and mixed answers, and
+// dials only the validated IP; redirects are not followed (a 3xx is
+// a terminal answer, as before); environment proxies are ignored;
+// TLS verifies the hostname. Registration-time validation alone was
+// not enough: the old plain client resolved DNS again at delivery,
+// so a rebinding host could pass registration and then point at an
+// internal address. Each attempt is bounded by its own 10s context
+// (webhookAttemptTimeout). A non-nil client is used as given (tests).
 func New(endpoints []Endpoint, client *http.Client, logger *log.Logger) *Dispatcher {
 	if client == nil {
-		client = &http.Client{}
+		client = egress.Default().Client(0, 0, nil)
 	}
 	return &Dispatcher{endpoints: endpoints, client: client, log: logger}
 }
@@ -155,13 +165,17 @@ func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
 		resp, err := d.client.Do(req)
 		cancel()
 		if err != nil {
-			// Transport error: retryable (a refused
+			// A destination refused by the egress policy is
+			// terminal: retrying would only re-resolve and be
+			// refused again (or, worse, be retried until a
+			// rebinding host flips to an allowed answer).
+			if errors.Is(err, egress.ErrBlocked) {
+				d.logf("webhook %s: delivery blocked by egress policy: %v", ep.ID, err)
+				return
+			}
+			// Other transport errors are retryable (a refused
 			// connection or a reset may clear on the next
-			// attempt). The URL itself was validated at
-			// registration, so there is no permanently
-			// blocked target to fail closed on here —
-			// unlike the reference router, which never retries its
-			// OutboundUrlGuardError.
+			// attempt).
 			if attempt == webhookMaxRetries {
 				d.logf("webhook %s: delivery failed after %d attempts: %v", ep.ID, webhookMaxRetries+1, err)
 				return

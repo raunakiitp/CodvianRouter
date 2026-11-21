@@ -2298,7 +2298,7 @@
     "path": "/admin/update",
     "tier": "LOCAL_ONLY",
     "spawn_capable": true,
-    "description": "Update check: asks the GitHub releases API for the latest release and answers {current, latest, update_available, release_url}. It never downloads or installs anything; installing is `codvian-router update` (signature + checksum verified). 503 when no update checker is wired, 502 when the release API cannot be read.",
+    "description": "Update check: asks the GitHub releases API for the latest release and answers {current, latest, release_available, update_available, release_url}. When the repository exists but has no published release it answers 200 with latest null, release_available false and status no_published_release (no tag or URL invented). Failures carry their kind in error.code: 503 rate_limited (with Retry-After), 504 timeout, 502 for network, auth, upstream 5xx, malformed response or repository not found. It never downloads or installs anything; installing is `codvian-router update` (signature + checksum verified). 503 when no update checker is wired.",
     "auth_exempt": false,
     "scopes": [
       "admin"

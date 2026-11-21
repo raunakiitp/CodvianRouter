@@ -4617,7 +4617,7 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required, AND loopback-only (checked before auth)
 - **Spawn-capable:** yes
-- **Description:** Update check: asks the GitHub releases API for the latest release and answers {current, latest, update_available, release_url}. It never downloads or installs anything; installing is `codvian-router update` (signature + checksum verified). 503 when no update checker is wired, 502 when the release API cannot be read.
+- **Description:** Update check: asks the GitHub releases API for the latest release and answers {current, latest, release_available, update_available, release_url}. When the repository exists but has no published release it answers 200 with latest null, release_available false and status no_published_release (no tag or URL invented). Failures carry their kind in error.code: 503 rate_limited (with Retry-After), 504 timeout, 502 for network, auth, upstream 5xx, malformed response or repository not found. It never downloads or installs anything; installing is `codvian-router update` (signature + checksum verified). 503 when no update checker is wired.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
