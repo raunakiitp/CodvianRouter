@@ -104,10 +104,13 @@ func TestStreamIncludeUsageEmitsUsageChunk(t *testing.T) {
 	var usageChunk struct {
 		Choices []json.RawMessage `json:"choices"`
 		Usage   *struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
-			TotalTokens      int `json:"total_tokens"`
-			CachedTokens     int `json:"cached_tokens"`
+			PromptTokens        int `json:"prompt_tokens"`
+			CompletionTokens    int `json:"completion_tokens"`
+			TotalTokens         int `json:"total_tokens"`
+			CachedTokens        int `json:"cached_tokens"`
+			PromptTokensDetails *struct {
+				CachedTokens int `json:"cached_tokens"`
+			} `json:"prompt_tokens_details"`
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal([]byte(lines[len(lines)-2]), &usageChunk); err != nil {
@@ -122,6 +125,11 @@ func TestStreamIncludeUsageEmitsUsageChunk(t *testing.T) {
 	u := usageChunk.Usage
 	if u.PromptTokens != 12 || u.CompletionTokens != 6 || u.TotalTokens != 18 || u.CachedTokens != 4 {
 		t.Errorf("usage chunk = %+v, want the upstream report 12/6/18 cached 4", u)
+	}
+	// OpenAI SDK parity: the nested detail block rides alongside
+	// the flat counts when the upstream reported cached tokens.
+	if u.PromptTokensDetails == nil || u.PromptTokensDetails.CachedTokens != 4 {
+		t.Errorf("prompt_tokens_details = %+v, want cached_tokens 4", u.PromptTokensDetails)
 	}
 	// Exactly one usage chunk — no duplicate accounting on the wire.
 	n := 0
@@ -231,5 +239,64 @@ func TestStreamBudgetOverageRecorded(t *testing.T) {
 	}
 	if ev.PromptTokens != 12 {
 		t.Errorf("prompt tokens = %d, want the reported 12", ev.PromptTokens)
+	}
+}
+
+// TestNonStreamingUsageProjection proves the client-facing usage
+// block carries the OpenAI nested detail blocks (SDK parity) for
+// both cached and reasoning tokens, alongside the flat counts —
+// and never invents details the upstream did not report.
+func TestNonStreamingUsageProjection(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"chatcmpl-x","model":"gate-model","choices":[{"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":20,"completion_tokens":8,"total_tokens":28,"prompt_tokens_details":{"cached_tokens":9},"completion_tokens_details":{"reasoning_tokens":5}}}`))
+	}))
+	t.Cleanup(up.Close)
+	srv := streamUsageServer(t, up.URL)
+	rec := doReq(t, srv, http.MethodPost, "/v1/chat/completions",
+		`{"model":"gate-model","messages":[{"role":"user","content":"hi"}]}`, "test-key-123")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Usage struct {
+			PromptTokens        int `json:"prompt_tokens"`
+			CompletionTokens    int `json:"completion_tokens"`
+			TotalTokens         int `json:"total_tokens"`
+			CachedTokens        int `json:"cached_tokens"`
+			PromptTokensDetails *struct {
+				CachedTokens int `json:"cached_tokens"`
+			} `json:"prompt_tokens_details"`
+			CompletionTokensDetails *struct {
+				ReasoningTokens int `json:"reasoning_tokens"`
+			} `json:"completion_tokens_details"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("response not JSON: %v", err)
+	}
+	u := resp.Usage
+	if u.PromptTokens != 20 || u.CompletionTokens != 8 || u.TotalTokens != 28 {
+		t.Fatalf("usage = %+v, want 20/8/28", u)
+	}
+	if u.PromptTokensDetails == nil || u.PromptTokensDetails.CachedTokens != 9 {
+		t.Errorf("prompt_tokens_details = %+v, want cached_tokens 9", u.PromptTokensDetails)
+	}
+	if u.CompletionTokensDetails == nil || u.CompletionTokensDetails.ReasoningTokens != 5 {
+		t.Errorf("completion_tokens_details = %+v, want reasoning_tokens 5", u.CompletionTokensDetails)
+	}
+}
+
+func TestProjectClientUsageNoInventedDetails(t *testing.T) {
+	b := projectClientUsage(provider.Usage{PromptTokens: 3, CompletionTokens: 1, TotalTokens: 4})
+	if b.PromptTokensDetails != nil || b.CompletionTokensDetails != nil {
+		t.Fatalf("details invented without a report: %+v", b)
+	}
+	if b.CachedTokens != 0 {
+		t.Fatalf("cached = %d, want 0", b.CachedTokens)
+	}
+	z := projectClientUsage(provider.Usage{})
+	if z.PromptTokens != 0 || z.TotalTokens != 0 || z.PromptTokensDetails != nil {
+		t.Fatalf("zero usage projected wrong: %+v", z)
 	}
 }

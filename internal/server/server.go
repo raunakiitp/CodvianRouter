@@ -5383,7 +5383,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			Message:      provider.Message{Role: "assistant", Content: resp.Content, ToolCalls: resp.ToolCalls},
 			FinishReason: finishReason,
 		}},
-		Usage: resp.Usage,
+		Usage: projectClientUsage(resp.Usage),
 	}
 	var respBuf bytes.Buffer
 	if err := json.NewEncoder(&respBuf).Encode(chatResp); err != nil {
@@ -6859,7 +6859,53 @@ type chatCompletionResponse struct {
 	Created int64            `json:"created"`
 	Model   string           `json:"model"`
 	Choices []chatChoiceJSON `json:"choices"`
-	Usage   provider.Usage   `json:"usage"`
+	Usage   clientUsageBlock `json:"usage"`
+}
+
+// clientUsageBlock is the client-facing OpenAI usage projection
+// (G1): the flat counts plus the nested detail blocks OpenAI SDKs
+// read (prompt_tokens_details.cached_tokens,
+// completion_tokens_details.reasoning_tokens). The flat
+// cached_tokens field is kept for existing gateway consumers.
+// Detail blocks appear only when the upstream actually reported a
+// nonzero value — never invented. Router-internal bookkeeping
+// (cache-write tiers, reported cost, local estimates, service tier)
+// never leaks into this block: it carries only what the client is
+// meant to see.
+type clientUsageBlock struct {
+	PromptTokens            int                            `json:"prompt_tokens"`
+	CompletionTokens        int                            `json:"completion_tokens"`
+	TotalTokens             int                            `json:"total_tokens"`
+	CachedTokens            int                            `json:"cached_tokens,omitempty"`
+	PromptTokensDetails     *clientPromptTokensDetails     `json:"prompt_tokens_details,omitempty"`
+	CompletionTokensDetails *clientCompletionTokensDetails `json:"completion_tokens_details,omitempty"`
+}
+
+type clientPromptTokensDetails struct {
+	CachedTokens int `json:"cached_tokens"`
+}
+
+type clientCompletionTokensDetails struct {
+	ReasoningTokens int `json:"reasoning_tokens"`
+}
+
+// projectClientUsage projects a provider-reported usage block into
+// the client-facing shape. A zero usage block projects to zero
+// counts (the caller decides whether to emit it at all).
+func projectClientUsage(u provider.Usage) clientUsageBlock {
+	b := clientUsageBlock{
+		PromptTokens:     u.PromptTokens,
+		CompletionTokens: u.CompletionTokens,
+		TotalTokens:      u.TotalTokens,
+		CachedTokens:     u.CachedTokens,
+	}
+	if u.CachedTokens > 0 {
+		b.PromptTokensDetails = &clientPromptTokensDetails{CachedTokens: u.CachedTokens}
+	}
+	if u.ReasoningTokens > 0 {
+		b.CompletionTokensDetails = &clientCompletionTokensDetails{ReasoningTokens: u.ReasoningTokens}
+	}
+	return b
 }
 
 type chatChoiceJSON struct {
@@ -6894,7 +6940,7 @@ type streamChunk struct {
 	// when the client asked for stream_options.include_usage AND
 	// the upstream reported usage. Choices is an empty array on
 	// that chunk, exactly like OpenAI's wire shape.
-	Usage *provider.Usage `json:"usage,omitempty"`
+	Usage *clientUsageBlock `json:"usage,omitempty"`
 }
 
 // handleChatStream streams SSE deltas to the client. It returns nil
@@ -7289,7 +7335,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 	// final usage chunk (empty choices array) after the finish
 	// chunk and before [DONE]. A local estimate is NEVER emitted
 	// here — the client asked for the provider's numbers.
-	var finalUsage *provider.Usage
+	var finalUsage *clientUsageBlock
 	finish := func(reason string) error {
 		// A chunk already carried the finish reason: skip the
 		// finish chunk, but the usage chunk (if any) still goes
@@ -7445,7 +7491,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 		// reported nothing, and a local estimate is never presented
 		// as provider-reported.
 		if req.StreamIncludeUsage && resp != nil && resp.Usage != (provider.Usage{}) {
-			u := resp.Usage
+			u := projectClientUsage(resp.Usage)
 			finalUsage = &u
 		}
 		// G1: a stream whose upstream reported usage is priced for
