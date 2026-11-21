@@ -388,6 +388,15 @@ func TestRegistryAddCatalogRefusals(t *testing.T) {
 	}{
 		{"tos-grey oauth", "claude", CatalogAddOptions{BaseURL: srv.URL}, "ToS-grey"},
 		{"tos-grey reference", "chatgpt-web-codex", CatalogAddOptions{BaseURL: srv.URL}, "ToS-grey"},
+		// Subscription/IDE OAuth flows that are NOT ToS-grey-flagged
+		// still have no permitted credential exchange: they must be
+		// refused at add time, never silently turned into a static
+		// key or a faked token (P1-08 OAuth audit, 2026-11-21).
+		{"subscription oauth copilot", "github-copilot", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
+		{"subscription oauth codex", "codex", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
+		{"subscription oauth cursor", "cursor", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
+		{"subscription oauth kiro", "kiro", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
+		{"subscription oauth xai", "xai-oauth", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
 		{"vertex exchange", "vertex", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
 		{"bedrock exchange", "bedrock", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
 		{"azure entra exchange", "azure-openai", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},

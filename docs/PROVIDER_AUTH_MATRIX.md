@@ -93,3 +93,30 @@ Full findings, code references, wire/client coverage sweep and the prioritized b
 4. Cross-account failover: **NOT verified**.
 5. Successful real chat completion: **QUOTA-BLOCKED / PENDING** — inference is not fully verified.
 6. Azure Entra ID: **MOCK-TESTED**.
+
+## OAuth flow audit (P1-08, 2026-11-21)
+
+All 31 `CategoryOAuth` catalog entries are subscription/IDE session flows (ChatGPT, GitHub Copilot, Codex, Claude Code, Cursor, Kiro, Antigravity, GitLab Duo, Zed, Cline, Devin, …), not permitted API-key OAuth:
+
+- `claude` (the only docs-verified one) is **ToS-grey** with a documented `oauth-pkce` exchange → refused at add time (tested).
+- The other 30 are reference-metadata-only with no permitted exchange → refused at add time as "credential exchange is not supported yet". Regression-tested for `github-copilot`, `codex`, `cursor`, `kiro`, `xai-oauth` (`TestRegistryAddCatalogRefusals`): a subscription flow can never be silently turned into a static key or a faked token.
+- Policy: only official, documented, permitted provider flows are implemented. The four implemented exchanges: OpenRouter PKCE (**real-provider-tested**), Azure Entra client credentials (**mock-tested**), Bedrock SigV4 (**mock-tested**), Vertex service-account JSON (**mock-tested**). No browser-cookie scraping, no private subscription session reuse.
+- `internal/oauth` is the **gateway's own** OAuth 2.0 authorization server for gateway clients (authorization-code + PKCE → HS256 JWT access tokens, single-use rotated refresh tokens) — a client-auth surface, not provider auth; tested (`oauth_test.go`, `jwt_test.go`).
+- Perplexity's documented MCP OAuth 2.1+PKCE is an **upstream MCP tool-server** flow, not routing auth: the gateway's MCP surface authenticates with gateway keys (OAuth explicitly NOT APPLICABLE — `internal/mcp/tools_search.go`), and Perplexity routing uses the Bearer API-key path. Status: metadata-only for the MCP OAuth surface; out of Phase 1 routing-auth scope.
+
+## Capability parity sweep (P1-07, 2026-11-21)
+
+Repository-evidence sweep of the capability areas the Phase 1 directive names. Every area has a real implementation plus dedicated deterministic suites across provider/router/server; per-provider LIVE verification is separately blocked (G4/G5/G6) and never inferred from these tests.
+
+| Capability | Implementation evidence | Test evidence | Status |
+|---|---|---|---|
+| Tool/function calling | per-wire tool translation + capability gating + relay tool gate | `provider/ct1_tools_test.go`, `router/ct1_tool_capability_test.go`, `server/m6_3_relay_tool_gate_test.go` | mock-tested |
+| Reasoning support | cross-wire capture/handoff, forced/intent effort policies, reasoning-only completions commit (PR #21) | `provider/reasoning_test.go`, `provider/effort_budget_test.go`, `router/reasoning_test.go`, `router/forced_effort_test.go`, `router/intent_effort_test.go`, `router/cancel_test.go` | mock-tested |
+| Model discovery + refresh | add-time live probe, manual/periodic refresh, `models_fetched_at` | `provider/refresh_test.go`, `provider/dashboard_models_test.go`, `server/models*_test.go` | mock-tested; discovery **real-provider-tested** via OpenRouter (441 models) |
+| Error classification + rate limits | uniform taxonomy across wires, Retry-After body classification (quota/concurrency/plain), header learning, breaker-4xx rule | `provider/taxonomy_test.go`, `provider/retryafter_body_test.go`, `provider/ratelimit_headers_test.go`, `router/ratelimit_test.go`, `router/retryafter_test.go` | mock-tested; 429/402 failover **real-provider-tested** (live traces) |
+| Context/output limits | context-fit chain jumps, effort/output budgets, per-request USD budget (pre-send/mid-chain/post-hoc, now incl. streams — G1), internal budgets | `router/contextfit_test.go`, `server/contextfit_test.go`, `router/requestbudget_test.go`, `router/internalbudget_test.go`, `server/stream_usage_test.go` | mock-tested + integration-tested |
+| Image/audio/video | images/audio clients, passthrough, media verification, modality bridges | `provider/images_client_test.go`, `provider/audio_client_test.go`, `provider/media_verify_test.go`, `router/images_passthrough_test.go`, `router/audio_passthrough_test.go`, `router/media_verify_test.go` | mock-tested |
+| Key pools / rotation / account selection | preferred/reserve roles, AddKey/RemoveKey/SetKeyRole, per-key cooldowns + failover | `provider/keys_test.go`, `provider/pool_test.go`, `router/keypool_test.go`, `server/provider_keys_test.go` | mock-tested; 2-key pool + restart **real-provider-tested** (same account) |
+| Streaming usage accounting | G1 (PR #22): include_usage, per-wire aggregation carried to ledger/budget/client | `provider/router/server stream_usage_test.go` | mock-tested + integration-tested |
+| Catalog `ToolCalling` metadata | informational only (`SupportsTools` is not a routing filter); unset on most verified entries | catalog validation tests | metadata backlog (documentation, not a feature) |
+| Per-provider live capability verification | needs operator credentials/accounts/resources | — | **blocked-external-dependency** (G4/G5/G6) |
