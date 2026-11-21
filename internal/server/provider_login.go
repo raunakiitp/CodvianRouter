@@ -184,8 +184,18 @@ func (s *Server) handleProviderLoginCallback(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	routingLive, note := false, "restart the router to route through the new credential"
-	if s.providerAddedHook != nil {
-		if herr := s.providerAddedHook(r.Context(), p); herr == nil {
+	// A pool join is a key change: the key-changed hook re-syncs
+	// every key's engine client (the added hook would also work
+	// with the re-read provider, but the key-changed hook is the
+	// semantically correct path and matches the key-management API).
+	var hook func(context.Context, *provider.Provider) error
+	if asKey && s.providerKeyChangedHook != nil {
+		hook = s.providerKeyChangedHook
+	} else {
+		hook = s.providerAddedHook
+	}
+	if hook != nil {
+		if herr := hook(r.Context(), p); herr == nil {
 			routingLive, note = true, ""
 		} else {
 			note = "the credential is stored, but live routing registration failed: " + guardrails.RedactLogLine(herr.Error()) + " (restart the router)"
@@ -208,7 +218,9 @@ func (s *Server) handleProviderLoginCallback(w http.ResponseWriter, r *http.Requ
 // into the existing OpenRouter provider's key pool when one is
 // configured (multi-account rotation), otherwise as a new catalog
 // provider. Both paths live-test the key against the upstream and
-// persist it encrypted; a failure stores nothing.
+// persist it encrypted; a failure stores nothing. The returned
+// provider is re-read AFTER the pool add so callers (the routing
+// hook) see the updated key pool, never the pre-add snapshot.
 func (s *Server) attachOpenRouterKey(ctx context.Context, key string) (*provider.Provider, bool, error) {
 	type keyPoolAdder interface {
 		List() []*provider.Provider
@@ -219,6 +231,11 @@ func (s *Server) attachOpenRouterKey(ctx context.Context, key string) (*provider
 			if existing.CatalogID == "openrouter" {
 				if _, err := kp.AddKey(ctx, existing.ID, key, provider.KeyRolePreferred); err != nil {
 					return nil, false, err
+				}
+				for _, updated := range kp.List() {
+					if updated.ID == existing.ID {
+						return updated, true, nil
+					}
 				}
 				return existing, true, nil
 			}
