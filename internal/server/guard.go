@@ -81,8 +81,11 @@ type GuardRoute struct {
 	Description  string    `json:"description"`
 	AuthExempt   bool      `json:"auth_exempt"`
 	Scopes       []string  `json:"scopes,omitempty"`
-	// Bootstrap marks the fresh-install first-key route: loopback-only
-	// like the rest of Tier 1, but it takes no key — no key exists yet.
+	// Bootstrap marks a loopback-only route that takes no gateway
+	// key: the fresh-install first-key setup (claims with the
+	// one-shot bootstrap token printed at first boot) and the
+	// provider-login browser callback (a top-level redirect cannot
+	// carry a key; the single-use PKCE state is its credential).
 	Bootstrap bool `json:"bootstrap,omitempty"`
 }
 
@@ -399,7 +402,8 @@ var guardRouteTable = []GuardRoute{
 	{Method: "POST", Path: "/admin/tunnel/start", Tier: TierLocalOnly, SpawnCapable: true, Description: "Starts the local TCP tunnel: forwards a loopback port to the gateway's listen address (real TCP proxy, loopback-only, stdlib only).", Scopes: []string{"admin"}},
 	{Method: "POST", Path: "/admin/tunnel/stop", Tier: TierLocalOnly, SpawnCapable: true, Description: "Stops the running local TCP tunnel and reports the bytes it forwarded.", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/admin/tunnel/status", Tier: TierLocalOnly, SpawnCapable: true, Description: "Live tunnel status (running/stopped, ports, bytes forwarded) — loopback-only like the other tunnel routes.", Scopes: []string{"admin"}},
-	{Method: "POST", Path: "/admin/provider/login", Tier: TierLocalOnly, SpawnCapable: true, Description: "Unavailable: answers 501 feature_unavailable, does nothing (provider sign-in (OAuth / device-code login) is not supported in this build). Use instead: POST /api/providers with an API key.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/admin/provider/login", Tier: TierLocalOnly, SpawnCapable: true, Description: "Starts a provider account login flow (Phase 1: OpenRouter OAuth PKCE) and returns {provider, mode, authorization_url, state, expires_at}. The operator opens the authorization URL in a browser; the exchanged API key is live-tested and stored encrypted through the provider registry (into the existing OpenRouter key pool when one is configured). Loopback-only + admin gateway key. The code_verifier never leaves the server; no secret is logged or returned.", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/admin/provider/login/callback", Tier: TierLocalOnly, SpawnCapable: true, Description: "Browser redirect target of the provider login flow: exchanges the one-time authorization code (bound to the PKCE state issued by POST /admin/provider/login) for the user's OpenRouter API key and stores it through the registry. Loopback-only WITHOUT a gateway key — a top-level browser navigation cannot carry one; the single-use 256-bit state plus PKCE is the credential, and off-host requests are refused 403 before anything else. Answers a small HTML result page; no code, state, verifier or key is logged or rendered.", Bootstrap: true},
 	{Method: "POST", Path: "/admin/bootstrap", Tier: TierLocalOnly, SpawnCapable: true, Description: "Fresh-install first-key setup — only while no gateway key exists; claims with the one-shot bootstrap token printed to stdout at first boot (loopback-only).", Bootstrap: true},
 
 	// Tier 2 — ALWAYS_PROTECTED (destructive; auth always required).
@@ -638,7 +642,7 @@ var spawnCapablePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^/admin/plugin(/.*)?$`),
 	regexp.MustCompile(`^/admin/update$`),
 	regexp.MustCompile(`^/admin/tunnel(/.*)?$`),
-	regexp.MustCompile(`^/admin/provider/login$`),
+	regexp.MustCompile(`^/admin/provider/login(/.*)?$`),
 	regexp.MustCompile(`^/admin/bootstrap$`),
 }
 

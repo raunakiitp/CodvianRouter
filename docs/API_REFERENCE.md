@@ -8,9 +8,9 @@ the per-route sections; regenerate instead:
 python3 scripts/gen-api-docs.py
 ```
 
-Coverage: **313 routes** (163 GET, 103 POST, 21 DELETE, 21 PATCH, 5 PUT) —
-10 `LOCAL_ONLY`, 49 `ALWAYS_PROTECTED`,
-254 `MANAGEMENT`; 58 auth-exempt, 245 scope-gated, 10 key-only (gateway key, no scope).
+Coverage: **314 routes** (164 GET, 103 POST, 21 DELETE, 21 PATCH, 5 PUT) —
+11 `LOCAL_ONLY`, 49 `ALWAYS_PROTECTED`,
+254 `MANAGEMENT`; 58 auth-exempt, 245 scope-gated, 11 key-only (gateway key, no scope).
 Enforced by `TestAPIReferenceCoversEveryRoute`
 (`internal/server/api_reference_test.go`): the test reads the guard
 table and this doc and FAILS if any route is missing. That test is
@@ -4681,12 +4681,41 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required, AND loopback-only (checked before auth)
 - **Spawn-capable:** yes
-- **Description:** Unavailable: answers 501 feature_unavailable, does nothing (provider sign-in (OAuth / device-code login) is not supported in this build). Use instead: POST /api/providers with an API key.
-- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Description:** Starts a provider account login flow (Phase 1: OpenRouter OAuth PKCE) and returns {provider, mode, authorization_url, state, expires_at}. The operator opens the authorization URL in a browser; the exchanged API key is live-tested and stored encrypted through the provider registry (into the existing OpenRouter key pool when one is configured). Loopback-only + admin gateway key. The code_verifier never leaves the server; no secret is logged or returned.
+- **Request body (JSON):**
+
+  ```json
+  {
+    "provider": "openrouter",
+    "mode": "headless",
+    "key_label": "Codvian Router",
+    "limit": "",
+    "expiration": ""
+  }
+  ```
+
+  Source: Fields from internal/server/provider_login.go providerLoginRequest (provider, mode, key_label, limit, expiration). mode: callback (default when a listen address is configured) or headless. Response: {provider, mode, authorization_url, state, expires_at, callback_url?} — never the code_verifier.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
   ```sh
-  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/admin/provider/login
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{"provider": "openrouter", "mode": "headless", "key_label": "Codvian Router", "limit": "", "expiration": ""}' http://127.0.0.1:8080/admin/provider/login
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `GET /admin/provider/login/callback`
+
+- **Tier:** `LOCAL_ONLY`
+- **Scope(s):** any authenticated key (no scope listed)
+- **Auth:** None — fresh-install first key (no key exists yet); loopback-only
+- **Spawn-capable:** yes
+- **Bootstrap:** yes — first-key route, only while no gateway key exists
+- **Description:** Browser redirect target of the provider login flow: exchanges the one-time authorization code (bound to the PKCE state issued by POST /admin/provider/login) for the user's OpenRouter API key and stores it through the registry. Loopback-only WITHOUT a gateway key — a top-level browser navigation cannot carry one; the single-use 256-bit state plus PKCE is the credential, and off-host requests are refused 403 before anything else. Answers a small HTML result page; no code, state, verifier or key is logged or rendered.
+- **Request:** no body.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X GET http://127.0.0.1:8080/admin/provider/login/callback
   ```
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.

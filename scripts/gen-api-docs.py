@@ -37,6 +37,15 @@ GUARD = ROOT / "internal" / "server" / "guard.go"
 # --- Verified request bodies (handler file:line traced in the doc). ---
 # Key = "METHOD path". Value = (json_example, source_note).
 VERIFIED_BODIES = {
+    "POST /admin/provider/login": (
+        '{\n  "provider": "openrouter",\n  "mode": "headless",\n'
+        '  "key_label": "Codvian Router",\n  "limit": "",\n  "expiration": ""\n}',
+        "Fields from internal/server/provider_login.go providerLoginRequest "
+        "(provider, mode, key_label, limit, expiration). mode: callback "
+        "(default when a listen address is configured) or headless. "
+        "Response: {provider, mode, authorization_url, state, expires_at, "
+        "callback_url?} — never the code_verifier.",
+    ),
     "POST /v1/chat/completions": (
         '{\n  "model": "<model-id>",\n  "messages": [{"role": "user", "content": "Hello"}],\n'
         '  "stream": false,\n  "max_tokens": 256,\n  "temperature": 0.7\n}',
@@ -511,8 +520,8 @@ def build_llm_txt(routes):
         "",
         "## Notes",
         "- /openapi.json carries no scopes, no auth-exempt flag, no schemas; this file and docs/API_REFERENCE.md do.",
-        "- Four Tier 1 routes are honest 501 stubs: POST /admin/service/install, POST /admin/plugin/load, "
-        "POST /admin/update, POST /admin/provider/login.",
+        "- Two Tier 1 routes are honest 501 stubs: POST /admin/service/install, POST /admin/plugin/load. "
+        "POST /admin/update is a real release check and POST /admin/provider/login a real OpenRouter PKCE login (Phase 1).",
         "- Dashboard feeds (GET /dashboard/*) are auth-exempt by design; the mutating dashboard POSTs need scope admin.",
         "- Never invent a model, price, cap, or endpoint not listed here or in GET /v1/models / GET /api/catalog.",
     ]

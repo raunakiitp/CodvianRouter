@@ -14,6 +14,7 @@
 //	codvian-router [--config PATH] provider list        # list configured providers
 //	codvian-router [--config PATH] provider add <base-url> <api-key> [--name NAME]
 //	codvian-router [--config PATH] provider add-catalog <catalog-id> <api-key> [--endpoint E] [--variant V] [--base-url URL]
+//	codvian-router [--config PATH] provider login <catalog-id>  # account login (OpenRouter OAuth PKCE; headless code paste)
 //	codvian-router [--config PATH] provider remove <provider-id>  # delete a configured provider (persisted)
 //	codvian-router verify-release [DIR]  # verify DIR's files against its checksums.txt (integrity only; signature via scripts/verify-release.sh)
 //	codvian-router release verify <tag> [--dir DIR]  # verify a published release: cosign signature + checksums + SBOM + provenance (see docs/RELEASE-CHECKLIST.md)
@@ -70,6 +71,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/modelsync"
 	"github.com/raunakiitp/codvian-router/internal/plugins"
 	"github.com/raunakiitp/codvian-router/internal/provider"
+	"github.com/raunakiitp/codvian-router/internal/providerlogin"
 	"github.com/raunakiitp/codvian-router/internal/readiness"
 	"github.com/raunakiitp/codvian-router/internal/release"
 	"github.com/raunakiitp/codvian-router/internal/router"
@@ -718,6 +720,8 @@ Usage:
   codvian-router [--config PATH] provider list        list configured providers
   codvian-router [--config PATH] provider add <base-url> <api-key> [--name NAME]
   codvian-router [--config PATH] provider add-catalog <catalog-id> <api-key> [--endpoint E] [--variant V] [--base-url URL]
+  codvian-router [--config PATH] provider login <catalog-id>
+                                                account login via the provider's documented OAuth flow (supported: openrouter — PKCE, headless code paste; the exchanged API key is live-tested and stored encrypted)
   codvian-router catalog audit [--out-dir DIR] [--web-json PATH] [--models-dev-url URL] [--skip-reachability] [--concurrency N] [--probe-timeout SEC] [--triage-summary PATH]
                                                 audit the provider catalog against live models.dev + base-URL/website reachability; reports only, never edits the catalog (docs/catalog-audit-<date>.json/.md + web/catalog-audit.json)
   codvian-router [--config PATH] provider remove <provider-id>  delete a configured provider (persisted)
@@ -5841,15 +5845,20 @@ func openRegistry(opts options) (*provider.Registry, string, error) {
 //	provider list
 //	provider add <base-url> <api-key> [--name NAME]
 //	provider add-catalog <catalog-id> <api-key> [--endpoint E] [--variant V] [--base-url URL]
+//	provider login <catalog-id>
+//	provider remove <provider-id>
 //
 // add-catalog resolves the base URL, wire format and auth scheme from
 // the catalog entry, so the operator only supplies the ID and their
 // own key. The key is tested against the upstream before the provider
 // is stored (see Registry.AddCatalog); a bad key or an unreachable
 // upstream rejects the add.
+//
+// login runs the provider's documented account-login flow headlessly
+// (Phase 1: OpenRouter OAuth PKCE — see runProviderLogin).
 func runProvider(opts options, args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "codvian-router: provider requires an action: list, add, add-catalog, remove")
+		fmt.Fprintln(os.Stderr, "codvian-router: provider requires an action: list, add, add-catalog, login, remove")
 		return 2
 	}
 	ctx := context.Background()
@@ -5913,6 +5922,12 @@ func runProvider(opts options, args []string) int {
 		}
 		fmt.Printf("added catalog provider %q (%s)\n  catalog: %s (verification: %s)\n  base_url: %s\n  wire: %s\n  auth endpoint: %s\n  models: %d\n", p.Name, p.ID, p.CatalogID, p.Verification, p.BaseURL, p.WireFormat, auth, len(p.Models))
 		return 0
+	case "login":
+		if len(args) != 2 {
+			fmt.Fprintln(os.Stderr, "codvian-router: usage: provider login <catalog-id> (supported: openrouter)")
+			return 2
+		}
+		return runProviderLogin(opts, args[1])
 	case "remove":
 		if len(args) != 2 {
 			fmt.Fprintln(os.Stderr, "codvian-router: usage: provider remove <provider-id>")
@@ -5939,9 +5954,89 @@ func runProvider(opts options, args []string) int {
 		fmt.Printf("removed provider %q (%s)\n  models removed from config: %d (restart the router to drop it live, or use DELETE /api/providers/%s on a running router)\n", p.Name, p.ID, len(p.Models), p.ID)
 		return 0
 	default:
-		fmt.Fprintf(os.Stderr, "codvian-router: unknown provider action %q (want list, add, add-catalog, remove)\n", args[0])
+		fmt.Fprintf(os.Stderr, "codvian-router: unknown provider action %q (want list, add, add-catalog, login, remove)\n", args[0])
 		return 2
 	}
+}
+
+// runProviderLogin runs a provider account login headlessly: it
+// prints the authorization URL, the operator authorizes in a browser,
+// OpenRouter displays a single-use code (headless PKCE — no callback
+// listener needed, works over SSH), the operator pastes the code, and
+// the exchanged API key is stored through the registry: live-tested
+// against the upstream, encrypted at rest, models discovered. When an
+// OpenRouter provider is already configured the key joins its pool as
+// another account instead of duplicating the provider.
+//
+// Phase 1 supports OpenRouter only. Its official flow returns an API
+// key, not an access/refresh token pair — there is no refresh token to
+// renew; an expired/revoked key is rotated with `provider login` again
+// or the dashboard's key rotation.
+func runProviderLogin(opts options, catalogID string) int {
+	if catalogID != "openrouter" {
+		fmt.Fprintf(os.Stderr, "codvian-router: account login is supported for \"openrouter\" only in this build; for %q use `provider add-catalog %s <api-key>`\n", catalogID, catalogID)
+		return 2
+	}
+	reg, _, err := openRegistry(opts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "codvian-router: %v\n", err)
+		return 1
+	}
+	flow := providerlogin.NewOpenRouterFlow()
+	started, err := flow.Start(providerlogin.OpenRouterStartOptions{KeyLabel: "Codvian Router"})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "codvian-router: cannot start login: %v\n", err)
+		return 1
+	}
+	fmt.Println("Open this URL in a browser, sign in to OpenRouter and authorize:")
+	fmt.Println()
+	fmt.Println("  " + started.AuthorizationURL)
+	fmt.Println()
+	fmt.Println("After authorizing, the page displays a single-use code (expires in 10 minutes).")
+	fmt.Print("Paste the authorization code: ")
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil && strings.TrimSpace(line) == "" {
+		fmt.Fprintf(os.Stderr, "codvian-router: cannot read the authorization code: %v\n", err)
+		return 1
+	}
+	code := strings.TrimSpace(line)
+	if code == "" {
+		fmt.Fprintln(os.Stderr, "codvian-router: no authorization code entered; nothing was stored")
+		return 1
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	key, err := flow.Exchange(ctx, started.State, code)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "codvian-router: login failed: %v\n", err)
+		return 1
+	}
+	var p *provider.Provider
+	asKey := false
+	for _, existing := range reg.List() {
+		if existing.CatalogID == "openrouter" {
+			if _, err := reg.AddKey(ctx, existing.ID, key, provider.KeyRolePreferred); err != nil {
+				fmt.Fprintf(os.Stderr, "codvian-router: cannot store the account key: %v\n", err)
+				return 1
+			}
+			p, asKey = existing, true
+			break
+		}
+	}
+	if p == nil {
+		p, err = reg.AddCatalogWithOptions(ctx, "openrouter", key, provider.CatalogAddOptions{})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "codvian-router: cannot add OpenRouter provider: %v\n", err)
+			return 1
+		}
+	}
+	if asKey {
+		fmt.Printf("added an OpenRouter account key to provider %q (%s); the pool now holds %d accounts (the router fails over across them per key)\n", p.Name, p.ID, len(p.Keys))
+	} else {
+		fmt.Printf("added provider %q (%s)\n  wire: %s\n  models: %d\n", p.Name, p.ID, p.WireFormat, len(p.Models))
+	}
+	fmt.Println("note: the key is stored encrypted in the config; a running router picks it up after restart (or use the dashboard's live provider add).")
+	return 0
 }
 
 // dbImportConfirm is the exact phrase the operator must type to
