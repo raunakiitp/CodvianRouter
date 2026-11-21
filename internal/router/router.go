@@ -3814,11 +3814,18 @@ func (e *Engine) callChat(ctx context.Context, att Attempt, req provider.ChatReq
 }
 
 // isEmptyCompletion reports whether a non-streaming response served
-// nothing: no text and no tool calls. A finish reason alone is not
-// content — a stream that sends only `finish_reason: stop` is an
-// empty completion, and the same holds here.
+// nothing: no text, no tool calls and no reasoning. A finish reason
+// alone is not content — a stream that sends only `finish_reason:
+// stop` is an empty completion, and the same holds here. A
+// reasoning-only completion is NOT empty: a model that spent its
+// whole budget thinking (finish_reason: length) served real output,
+// and failing over cannot improve the same budget on another target
+// (live OpenRouter verification, 2026-11-21).
 func isEmptyCompletion(resp *provider.ChatResponse) bool {
-	return resp.Content == "" && len(resp.ToolCalls) == 0
+	if resp.Content != "" || len(resp.ToolCalls) > 0 {
+		return false
+	}
+	return resp.Reasoning.Empty()
 }
 
 // recordAttempt records one attempt against the gateway key the
