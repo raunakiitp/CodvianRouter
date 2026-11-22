@@ -113,6 +113,7 @@ func (s *Server) checkTeamBudget(w http.ResponseWriter, r *http.Request) bool {
 //  1. If the key is bound to a team in the org store
 //  2. If the requested model is allowed by the team's allowlist
 //  3. If the requested routing strategy is allowed by the team's allowlist
+//
 // Returns false if it wrote a refusal (403 for isolation).
 func (s *Server) checkTeamPolicy(w http.ResponseWriter, r *http.Request, req *provider.ChatRequest) bool {
 	// No org store configured -> no team policy enforcement

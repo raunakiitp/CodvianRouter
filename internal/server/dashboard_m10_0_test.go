@@ -117,18 +117,18 @@ func TestDashboardM10_0NavSlots(t *testing.T) {
 		}
 	}
 	// Guard leaves the nav in M10-0 (its section is folded into Settings
-		// by M10-14; the feeds stay live). Guardrails now has a dedicated
-		// view (P3-D), so it stays in the nav.
-		for _, gone := range []string{`data-view="guard"`} {
-			if strings.Contains(body, gone) {
-				t.Errorf("M10-0 nav must not contain %s", gone)
-			}
+	// by M10-14; the feeds stay live). Guardrails now has a dedicated
+	// view (P3-D), so it stays in the nav.
+	for _, gone := range []string{`data-view="guard"`} {
+		if strings.Contains(body, gone) {
+			t.Errorf("M10-0 nav must not contain %s", gone)
 		}
+	}
 	// Nav inventory pin: 20 pre-M10 entries - 2 removed + 14 new = 32
-		// (Activity is not a slot — its section never landed; see above).
-		if got := strings.Count(body, "data-view="); got != 32 {
-			t.Errorf("nav data-view count = %d, want 32 (20 - 2 removed + 14 new)", got)
-		}
+	// (Activity is not a slot — its section never landed; see above).
+	if got := strings.Count(body, "data-view="); got != 32 {
+		t.Errorf("nav data-view count = %d, want 32 (20 - 2 removed + 14 new)", got)
+	}
 	// No nav button may point at a missing section: every data-view
 	// value must have a matching id="view-<name>" section, so no dead
 	// nav entry can show nothing on click (M10-17 gate-prep G7: the
