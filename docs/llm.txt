@@ -7,7 +7,7 @@
 # Scope `admin` implies every scope. LOCAL_ONLY = loopback-only
 # even with a valid key. Destructive routes need a typed
 # {"confirm": "<phrase>"} body in addition to the key.
-# Routes: 320
+# Routes: 326
 
 ## Auth
 header: Authorization: Bearer <gateway-key>
@@ -336,6 +336,12 @@ GET /api/eval/schedules/{id} | MANAGEMENT | scopes=admin | auth=key | One evalua
 PATCH /api/eval/schedules/{id} | ALWAYS_PROTECTED | scopes=admin | auth=key | Partial update of one schedule (interval, enabled, regression threshold, concurrency). Management auth (admin scope) required.
 DELETE /api/eval/schedules/{id} | ALWAYS_PROTECTED | scopes=admin | auth=key | Deletes one schedule (its history is preserved); unknown ids answer 404. Management auth (admin scope) required.
 GET /api/eval/schedules/{id}/history | MANAGEMENT | scopes=admin | auth=key | Run history for one schedule, newest first (?limit=, default 100). Gateway-key auth required.
+GET /api/org | MANAGEMENT | scopes=admin | auth=key | Lists organizations and teams (id, name, budget, allowed models/strategies, roles). Gateway-key auth required.
+POST /api/org | ALWAYS_PROTECTED | scopes=admin | auth=key | Creates (bootstraps) an organization. Management auth (admin scope) required — it creates a tenant.
+POST /api/org/teams | ALWAYS_PROTECTED | scopes=admin | auth=key | Creates a team under an org. Management auth (admin scope) required — it changes tenant isolation.
+POST /api/org/teams/{id}/bind | ALWAYS_PROTECTED | scopes=admin | auth=key | Binds a gateway key to a team (team-key isolation + team budget). Management auth (admin scope) required.
+POST /api/org/teams/{id}/unbind | ALWAYS_PROTECTED | scopes=admin | auth=key | Removes a key's team binding (isolation off). Management auth (admin scope) required.
+GET /api/org/audit | MANAGEMENT | scopes=admin | auth=key | Append-only admin audit log, newest first (?limit=, default 200). Gateway-key auth required.
 
 ## Examples (one per family)
 health: curl http://127.0.0.1:8080/healthz  # -> {"status":"ok"}

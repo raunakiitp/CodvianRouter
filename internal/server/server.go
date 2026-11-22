@@ -1731,6 +1731,7 @@ func New(engine Engine, opts ...Option) *Server {
 	// panics on a missing table entry, like s.register).
 	s.registerWebhooksRoutes(mux)
 	s.registerEvalRoutes(mux)
+	s.registerOrgRoutes(mux)
 	s.register(mux, "GET", "/api/usage/om-usage", s.handleOmUsage)
 	s.register(mux, "GET", "/api/cache/stats", s.handleCacheStats)
 	s.register(mux, "GET", "/api/telemetry/model-latency-stats", s.handleModelLatencyStats)
