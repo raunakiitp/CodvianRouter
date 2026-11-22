@@ -652,8 +652,8 @@ type Server struct {
 	// evalStore is the P3-B scheduled-evaluation store (created lazily
 	// from cfg.DataDir). evalSched runs due schedules against the
 	// harness; evalInitOnce guards one-time lazy creation.
-	evalStore   *eval.Store
-	evalSched   *eval.Scheduler
+	evalStore    *eval.Store
+	evalSched    *eval.Scheduler
 	evalInitOnce sync.Once
 	// evalCancel stops the scheduler loop on Close (a leaked loop
 	// would otherwise keep touching the store after the server is
