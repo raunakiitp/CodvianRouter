@@ -923,6 +923,9 @@ type Server struct {
 	a2aPruneLoop   *A2APruneLoop
 	a2aPruneCancel context.CancelFunc
 	a2aPruneOpts   *A2APruneOptions
+	// auditStore is the append-only request-level compliance audit
+	// store (nil = audit logging off). Set by WithAuditStore.
+	auditStore *auditStore
 }
 
 // Option configures a Server.
@@ -1943,7 +1946,7 @@ func New(engine Engine, opts ...Option) *Server {
 	// failure — the store is lazy and re-opens on first API use).
 	s.startEvalScheduler()
 
-	s.handler = s.withLogging(mux)
+	s.handler = s.withLogging(s.withAudit(mux))
 	return s
 }
 
