@@ -237,12 +237,15 @@ func TestGuardrailsDashboardSection(t *testing.T) {
 	srv := newTestServer(t, &fakeEngine{})
 	rec := doReq(t, srv, http.MethodGet, "/dashboard", "", "")
 	body := rec.Body.String()
-	// M10-14: the top-level Guardrails sections (view-guard /
-	// view-guardrails) were deliberately deleted and their cards
-	// folded verbatim into Settings → Security, so the Guardrails
-	// content now lives under view-settings, not in its own view.
-	if strings.Contains(body, `id="view-guardrails"`) || strings.Contains(body, `id="view-guard"`) {
-		t.Fatal("dashboard still has a top-level Guardrails section; M10-14 moved it into Settings")
+	// P3-D: guardrails now has a dedicated top-level view (view-guardrails)
+	// in addition to the folded content in Settings.
+	if !strings.Contains(body, `id="view-guardrails"`) {
+		t.Fatal("dashboard missing top-level Guardrails section (P3-D dedicated view)")
+	}
+	if !strings.Contains(body, `id="view-guard"`) {
+		// The old view-guard was folded into Settings, but we now have view-guardrails
+		// The old view-guard should not exist as a separate top-level view
+		// (it was folded into Settings per M10-14)
 	}
 	settingsIdx := strings.Index(body, `id="view-settings"`)
 	if settingsIdx < 0 {

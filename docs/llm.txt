@@ -7,7 +7,7 @@
 # Scope `admin` implies every scope. LOCAL_ONLY = loopback-only
 # even with a valid key. Destructive routes need a typed
 # {"confirm": "<phrase>"} body in addition to the key.
-# Routes: 326
+# Routes: 329
 
 ## Auth
 header: Authorization: Bearer <gateway-key>
@@ -342,6 +342,9 @@ POST /api/org/teams | ALWAYS_PROTECTED | scopes=admin | auth=key | Creates a tea
 POST /api/org/teams/{id}/bind | ALWAYS_PROTECTED | scopes=admin | auth=key | Binds a gateway key to a team (team-key isolation + team budget). Management auth (admin scope) required.
 POST /api/org/teams/{id}/unbind | ALWAYS_PROTECTED | scopes=admin | auth=key | Removes a key's team binding (isolation off). Management auth (admin scope) required.
 GET /api/org/audit | MANAGEMENT | scopes=admin | auth=key | Append-only admin audit log, newest first (?limit=, default 200). Gateway-key auth required.
+GET /api/org/analytics | MANAGEMENT | scopes=admin | auth=key | Organization-level usage analytics across all teams (requests, tokens, costs, budget status). Gateway-key auth required.
+GET /api/org/teams/{id}/analytics | MANAGEMENT | scopes=admin | auth=key | Team-level usage analytics for a specific team (budget status, member breakdown). Gateway-key auth required.
+POST /api/cost/estimate | MANAGEMENT | scopes=admin | auth=key | Estimate the cost of a chat completion request (prompt tokens × model prices). Gateway-key auth required.
 
 ## Examples (one per family)
 health: curl http://127.0.0.1:8080/healthz  # -> {"status":"ok"}

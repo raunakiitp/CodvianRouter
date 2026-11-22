@@ -548,6 +548,11 @@ var guardRouteTable = []GuardRoute{
 	{Method: "POST", Path: "/api/org/teams/{id}/bind", Tier: TierAlwaysProtected, Description: "Binds a gateway key to a team (team-key isolation + team budget). Management auth (admin scope) required.", Scopes: []string{"admin"}},
 	{Method: "POST", Path: "/api/org/teams/{id}/unbind", Tier: TierAlwaysProtected, Description: "Removes a key's team binding (isolation off). Management auth (admin scope) required.", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/org/audit", Tier: TierManagement, Description: "Append-only admin audit log, newest first (?limit=, default 200). Gateway-key auth required.", Scopes: []string{"admin"}},
+	// P3-A org/team analytics
+	{Method: "GET", Path: "/api/org/analytics", Tier: TierManagement, Description: "Organization-level usage analytics across all teams (requests, tokens, costs, budget status). Gateway-key auth required.", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/org/teams/{id}/analytics", Tier: TierManagement, Description: "Team-level usage analytics for a specific team (budget status, member breakdown). Gateway-key auth required.", Scopes: []string{"admin"}},
+	// P3-C Cost Estimation & Reconciliation
+	{Method: "POST", Path: "/api/cost/estimate", Tier: TierManagement, Description: "Estimate the cost of a chat completion request (prompt tokens × model prices). Gateway-key auth required.", Scopes: []string{"admin"}},
 }
 
 // RouteTable returns a copy of the guard classification table: every

@@ -81,15 +81,22 @@ var m10_14StatusFeeds = []string{
 func TestDashboardM10_14TopLevelSectionsGone(t *testing.T) {
 	body := m10_0DashboardBody(t)
 	for _, gone := range []string{
-		`id="view-guard"`, `id="view-guardrails"`,
-		`data-view="guard"`, `data-view="guardrails"`,
+		`id="view-guard"`,
+		`data-view="guard"`,
 		// Stale titles-map entries (M10-0 review follow-up): the
 		// sections are gone, so the map must not name them either.
-		`guard:"Route guards"`, `guardrails:"Guardrails"`,
+		`guard:"Route guards"`,
+		// NOTE: view-guardrails / data-view="guardrails" are now a
+		// dedicated P3-D top-level view (added after M10-14), so they
+		// are expected to be present and are not in this "gone" list.
 	} {
 		if strings.Contains(body, gone) {
 			t.Errorf("M10-14 top-level section still present: %s", gone)
 		}
+	}
+	// The P3-D dedicated guardrails view must exist.
+	if !strings.Contains(body, `id="view-guardrails"`) || !strings.Contains(body, `data-view="guardrails"`) {
+		t.Error("M10-14/P3-D: dedicated view-guardrails section missing")
 	}
 }
 
