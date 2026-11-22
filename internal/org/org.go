@@ -52,33 +52,33 @@ func (r Role) CanManage() bool { return r == RoleOwner || r == RoleAdmin }
 
 // Team is one tenant under an org.
 type Team struct {
-	ID              string            `json:"id"`
-	OrgID           string            `json:"org_id"`
-	Name            string            `json:"name"`
-	BudgetUSD       float64           `json:"budget_usd,omitempty"`       // 0 = unlimited
-	AllowedModels   []string          `json:"allowed_models,omitempty"`   // empty = inherit org/unrestricted
+	ID                string          `json:"id"`
+	OrgID             string          `json:"org_id"`
+	Name              string          `json:"name"`
+	BudgetUSD         float64         `json:"budget_usd,omitempty"`     // 0 = unlimited
+	AllowedModels     []string        `json:"allowed_models,omitempty"` // empty = inherit org/unrestricted
 	AllowedStrategies []string        `json:"allowed_strategies,omitempty"`
-	Roles           map[string]Role   `json:"roles,omitempty"`            // member identity -> role
-	CreatedAt       time.Time         `json:"created_at"`
+	Roles             map[string]Role `json:"roles,omitempty"` // member identity -> role
+	CreatedAt         time.Time       `json:"created_at"`
 }
 
 // Organization is the top-level tenant.
 type Organization struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	DefaultBudgetUSD float64       `json:"default_budget_usd,omitempty"`
-	Roles       map[string]Role   `json:"roles,omitempty"` // member identity -> role (org-level)
-	CreatedAt   time.Time         `json:"created_at"`
+	ID               string          `json:"id"`
+	Name             string          `json:"name"`
+	DefaultBudgetUSD float64         `json:"default_budget_usd,omitempty"`
+	Roles            map[string]Role `json:"roles,omitempty"` // member identity -> role (org-level)
+	CreatedAt        time.Time       `json:"created_at"`
 }
 
 // AuditEntry is one append-only administrative record.
 type AuditEntry struct {
-	Seq      int       `json:"seq"`
-	At       time.Time `json:"at"`
-	Actor    string    `json:"actor"` // member identity or key id
-	Action   string    `json:"action"`
-	Target   string    `json:"target,omitempty"`
-	Detail   string    `json:"detail,omitempty"`
+	Seq    int       `json:"seq"`
+	At     time.Time `json:"at"`
+	Actor  string    `json:"actor"` // member identity or key id
+	Action string    `json:"action"`
+	Target string    `json:"target,omitempty"`
+	Detail string    `json:"detail,omitempty"`
 }
 
 // KeyBinding ties a gateway key to a team for isolation.
