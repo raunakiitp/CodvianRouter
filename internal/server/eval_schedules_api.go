@@ -69,9 +69,9 @@ func (s *Server) ensureEvalStore() (*eval.Store, error) {
 }
 
 // startEvalScheduler starts the scheduler loop owned by the Server. It
-// is called from New once. NewEngine is nil (the scheduler then runs
-// the harness with no engine, which records failures and never spends
-// credits); callers may swap it on the Scheduler before starting.
+// is called from New once. The scheduler uses the Server's routing
+// engine by default (real provider-backed evaluations). Use
+// WithEvalEngine to override for testing or mock scenarios.
 func (s *Server) startEvalScheduler() {
 	if _, err := s.ensureEvalStore(); err != nil {
 		return
@@ -81,8 +81,15 @@ func (s *Server) startEvalScheduler() {
 	ctx, cancel := context.WithCancel(context.Background())
 	st.cancel = cancel
 	if st.scheduler == nil {
+		eng := s.evalEngine
+		if eng == nil {
+			eng = s.engine
+		}
+		// Adapter: server.Engine has Chat and ChatStream; eval.Engine only needs Chat.
+		// Since server.Engine implements eval.Engine's Chat method, we can wrap it.
 		st.scheduler = &eval.Scheduler{
-			Store: st.store,
+			Store:     st.store,
+			NewEngine: func() eval.Engine { return eng },
 			Notify: func(event, scheduleID, runID string) {
 				if s.webhooks == nil {
 					return
@@ -119,6 +126,7 @@ type evalScheduleView struct {
 	TimeZone              string    `json:"time_zone,omitempty"`
 	MinRunsForBaseline    int       `json:"min_runs_for_baseline,omitempty"`
 	RegressionMaxPassDrop float64   `json:"regression_max_pass_rate_drop,omitempty"`
+	UseRealEngine         bool      `json:"use_real_engine,omitempty"`
 	LastRun               time.Time `json:"last_run,omitempty"`
 }
 
@@ -131,6 +139,7 @@ func (s *Server) evalScheduleViewOf(sch *eval.Schedule) evalScheduleView {
 		TimeZone:              sch.TimeZone,
 		MinRunsForBaseline:    sch.MinRunsForBaseline,
 		RegressionMaxPassDrop: sch.RegressionMaxPassRateDrop,
+		UseRealEngine:         sch.UseRealEngine,
 		LastRun:               sch.LastRun,
 	}
 	return v
@@ -160,6 +169,7 @@ type evalScheduleInput struct {
 	MinRunsForBaseline    *int     `json:"min_runs_for_baseline,omitempty"`
 	RegressionMaxPassDrop *float64 `json:"regression_max_pass_rate_drop,omitempty"`
 	MaxConcurrent         *int     `json:"max_concurrent,omitempty"`
+	UseRealEngine         *bool    `json:"use_real_engine,omitempty"`
 }
 
 // handleEvalScheduleCreate (POST /api/eval/schedules).
@@ -197,6 +207,9 @@ func (s *Server) handleEvalScheduleCreate(w http.ResponseWriter, r *http.Request
 	}
 	if in.MaxConcurrent != nil {
 		sch.MaxConcurrent = *in.MaxConcurrent
+	}
+	if in.UseRealEngine != nil {
+		sch.UseRealEngine = *in.UseRealEngine
 	}
 	if err := st.Upsert(sch); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid schedule: "+err.Error())
@@ -255,6 +268,9 @@ func (s *Server) handleEvalScheduleByID(w http.ResponseWriter, r *http.Request) 
 		}
 		if in.MaxConcurrent != nil {
 			sch.MaxConcurrent = *in.MaxConcurrent
+		}
+		if in.UseRealEngine != nil {
+			sch.UseRealEngine = *in.UseRealEngine
 		}
 		if err := st.Upsert(sch); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid schedule: "+err.Error())

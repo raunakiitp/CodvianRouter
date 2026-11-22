@@ -53,6 +53,27 @@ func TestGenerateMatchesSha256sum(t *testing.T) {
 	if err != nil {
 		t.Skip("sha256sum not on PATH")
 	}
+	// On Windows, LookPath can resolve to an inaccessible WindowsApps shim.
+	// Probe it; if it cannot run, fall back to known-working copies.
+	probe := exec.Command(sha256sum, "--version")
+	if err := probe.Run(); err != nil {
+		candidates := []string{
+			`C:\Program Files\Git\usr\bin\sha256sum.exe`,
+			`C:\msys64\usr\bin\sha256sum.exe`,
+			`C:\cygwin64\bin\sha256sum.exe`,
+		}
+		for _, alt := range candidates {
+			if _, err := os.Stat(alt); err == nil {
+				if exec.Command(alt, "--version").Run() == nil {
+					sha256sum = alt
+					break
+				}
+			}
+		}
+		if exec.Command(sha256sum, "--version").Run() != nil {
+			t.Skip("sha256sum found on PATH but not executable in this environment")
+		}
+	}
 	dir := t.TempDir()
 	writeFile(t, dir, "codvian-router_0.1.0_linux_amd64.tar.gz", "archive")
 	content, err := GenerateChecksums(dir, []string{"codvian-router_0.1.0_linux_amd64.tar.gz"})

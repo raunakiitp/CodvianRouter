@@ -543,6 +543,10 @@ type Server struct {
 	// isolated.
 	evalStateMu sync.Mutex
 	evalState   *evalState
+	// evalEngine is the engine used by the scheduled evaluation scheduler.
+	// If nil, the Server's routing engine is used (real provider-backed).
+	// Set via WithEvalEngine for testing or mock scenarios.
+	evalEngine Engine
 	// orgStateMu guards the lazily-opened P3-A org store (org_api.go).
 	// It lives on THIS Server instance (not a package global) so two
 	// Servers with different data dirs are isolated.
@@ -1243,7 +1247,15 @@ func WithGuardrails(g *guardrails.Store) Option {
 }
 
 // WithRequestRewrite enables request rewriting (B3-20, Stage 1):
-// when true, applyGuardrails strips PII/secrets from the request
+// WithEvalEngine sets a custom engine for the scheduled evaluation
+// scheduler. If not set, the Server's routing engine is used (real
+// provider-backed evaluations). Use this for testing or to provide a
+// mock engine for no-provider scenarios.
+func WithEvalEngine(eng Engine) Option {
+	return func(s *Server) { s.evalEngine = eng }
+}
+
+// WithRequestRewrite when true, applyGuardrails strips PII/secrets from the request
 // before it reaches the provider. Opt-in (the reference router's
 // modifiedPayload); off by default. Wiring only — main.go and
 // tests choose when to turn it on.
@@ -1743,6 +1755,7 @@ func New(engine Engine, opts ...Option) *Server {
 	s.registerWebhooksRoutes(mux)
 	s.registerEvalRoutes(mux)
 	s.registerOrgRoutes(mux)
+	s.registerCostRoutes(mux)
 	s.register(mux, "GET", "/api/usage/om-usage", s.handleOmUsage)
 	s.register(mux, "GET", "/api/cache/stats", s.handleCacheStats)
 	s.register(mux, "GET", "/api/telemetry/model-latency-stats", s.handleModelLatencyStats)
@@ -5196,6 +5209,13 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	// spend (global / model / pool scopes) decide before the
 	// traffic check, right after the schedule gate.
 	if refused := s.checkInternalBudgets(w, r, req.Model); refused {
+		return
+	}
+	// P3-A org/team policy: enforce team allowlists (models/strategies)
+	// and cross-team isolation via the org store. Runs after internal
+	// budgets but before team budget (ledger) so a request refused by
+	// policy never reaches the ledger budget gate.
+	if !s.checkTeamPolicy(w, r, &req) {
 		return
 	}
 	if !s.checkTeamBudget(w, r) {

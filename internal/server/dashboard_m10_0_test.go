@@ -32,6 +32,14 @@ import (
 var m10_0NewNavViews = []string{
 	"combos", "cache", "resilience", "health", "webhooks",
 	"analytics", "batch", "responses", "audit",
+	// P3-A Organizations/Teams
+	"org-teams",
+	// P3-B Evaluation Schedules
+	"eval-schedules",
+	// P3-D Guardrails (dedicated view)
+	"guardrails",
+	// P3-C Cost Estimation
+	"cost-estimation",
 }
 
 // m10_0AdminDashboardPOSTs are the dashboard POST paths that sent no
@@ -108,17 +116,18 @@ func TestDashboardM10_0NavSlots(t *testing.T) {
 			t.Errorf("M10-0 nav slot missing: data-view=%q", view)
 		}
 	}
-	// Guard / Guardrails leave the nav in M10-0 (their sections are
-	// folded into Settings by M10-14; the feeds stay live).
-	for _, gone := range []string{`data-view="guard"`, `data-view="guardrails"`} {
+	// Guard leaves the nav in M10-0 (its section is folded into Settings
+	// by M10-14; the feeds stay live). Guardrails now has a dedicated
+	// view (P3-D), so it stays in the nav.
+	for _, gone := range []string{`data-view="guard"`} {
 		if strings.Contains(body, gone) {
 			t.Errorf("M10-0 nav must not contain %s", gone)
 		}
 	}
-	// Nav inventory pin: 20 pre-M10 entries - 2 removed + 9 new = 27
+	// Nav inventory pin: 20 pre-M10 entries - 2 removed + 14 new = 32
 	// (Activity is not a slot — its section never landed; see above).
-	if got := strings.Count(body, "data-view="); got != 27 {
-		t.Errorf("nav data-view count = %d, want 27 (20 - 2 removed + 9 new)", got)
+	if got := strings.Count(body, "data-view="); got != 32 {
+		t.Errorf("nav data-view count = %d, want 32 (20 - 2 removed + 14 new)", got)
 	}
 	// No nav button may point at a missing section: every data-view
 	// value must have a matching id="view-<name>" section, so no dead

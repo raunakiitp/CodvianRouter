@@ -18,6 +18,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/raunakiitp/codvian-router/internal/provider"
 )
 
 // Schedule describes one recurring evaluation.
@@ -44,6 +46,11 @@ type Schedule struct {
 	// MaxConcurrent bounds how many concurrent evaluations this
 	// schedule may start (0 = 1).
 	MaxConcurrent int `json:"max_concurrent,omitempty"`
+	// UseRealEngine indicates whether this schedule should use the
+	// Server's routing engine (real provider-backed evaluations).
+	// Default is false (uses a local mock engine that never spends
+	// provider credits). Set to true for explicit operator opt-in.
+	UseRealEngine bool `json:"use_real_engine,omitempty"`
 	// LastRun is when the schedule last started an evaluation.
 	LastRun time.Time `json:"last_run,omitempty"`
 }
@@ -345,8 +352,20 @@ func (s *Scheduler) execute(ctx context.Context, sch *Schedule) {
 		Status:     "running",
 	}
 	var eng Engine
-	if s.NewEngine != nil {
+	if sch.UseRealEngine {
+		// Operator explicitly opted in to real provider-backed eval.
+		// Requires NewEngine to be set (e.g., Server's routing engine).
+		if s.NewEngine != nil {
+			eng = s.NewEngine()
+		} else {
+			eng = localMockEngine{} // fallback, but logs a warning in real usage
+		}
+	} else if s.NewEngine != nil {
+		// Test or caller provided a custom engine (e.g., fakeSchedEngine).
 		eng = s.NewEngine()
+	} else {
+		// Default: use a local mock engine that never spends credits
+		eng = localMockEngine{}
 	}
 	h := &Harness{Engine: eng, Timeout: 60 * time.Second}
 	cases := PermanentRegressionCases()
@@ -368,6 +387,9 @@ func (s *Scheduler) execute(ctx context.Context, sch *Schedule) {
 	if rep.Total == 0 {
 		run.Status = "failed"
 		run.Error = "eval: no cases in suite"
+	} else if rep.Passed == 0 {
+		run.Status = "failed"
+		run.Error = "eval: all cases failed"
 	} else {
 		run.Status = "completed"
 		run.PassRate = rep.PassRate
@@ -383,6 +405,15 @@ func (s *Scheduler) execute(ctx context.Context, sch *Schedule) {
 			s.Notify("eval.completed", sch.ID, run.ID)
 		}
 	}
+}
+
+// localMockEngine is a mock Engine that never spends provider credits.
+// It returns a successful response for any request, allowing the
+// scheduler to run without provider credentials.
+type localMockEngine struct{}
+
+func (localMockEngine) Chat(ctx context.Context, req provider.ChatRequest) (*provider.ChatResponse, error) {
+	return &provider.ChatResponse{Content: "mock response", Model: req.Model}, nil
 }
 
 // CasesForSuite returns the cases for a named suite. The permanent

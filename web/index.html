@@ -658,10 +658,34 @@
         Webhooks
       </button>
       <button class="nav-item" data-view="analytics">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-6 4 3 6-8"/><path d="M18 6h3v3"/></svg>
-        Analytics
-      </button>
-      <button class="nav-item" data-view="batch">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+              Analytics
+            </button>
+            <button class="nav-item" data-view="batch">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+              Batch
+            </button>
+            <!-- P3-A Organizations/Teams -->
+            <button class="nav-item" data-view="org-teams">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Organizations
+            </button>
+            <!-- P3-B Evaluation Schedules -->
+            <button class="nav-item" data-view="eval-schedules">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              Eval Schedules
+            </button>
+            <!-- P3-D Guardrails (dedicated view) -->
+            <button class="nav-item" data-view="guardrails">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Guardrails
+            </button>
+            <!-- P3-C Cost Estimation -->
+            <button class="nav-item" data-view="cost-estimation">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v6l4 2"/></svg>
+              Cost Estimation
+            </button>
+            <button class="nav-item" data-view="batch">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17.5l9 5 9-5"/></svg>
         Batch
       </button>
@@ -3593,7 +3617,267 @@ resp = client.chat.completions.create(
         </div>
       </section>
 
-      <section class="view" id="view-audit">
+            <!-- P3-A Organizations/Teams -->
+            <section class="view" id="view-org-teams">
+              <div class="page-head">
+                <div>
+                  <h1>Organizations & Teams</h1>
+                  <p>Multi-tenant organizations, teams, RBAC roles, and team-key isolation — live from GET /api/org and GET /api/analytics.</p>
+                </div>
+                <div class="head-actions">
+                  <button class="btn" id="orgTeamsRefreshBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.6-6.4M21 4v5h-5"/></svg>
+                    Refresh
+                  </button>
+                </div>
+              </div>
+              <div class="card" id="orgTeamsKeyCard" style="display:none; margin-bottom:14px">
+                <div class="card-body" style="color:var(--text-2)">Organizations needs an admin-scoped gateway key. Type your key in the sidebar Operator key field, then press <button class="btn small" id="orgTeamsLoadBtn">Load orgs & teams</button></div>
+              </div>
+              <div class="card" id="orgTeamsErrorCard" style="display:none; margin-bottom:14px">
+                <div class="card-body" style="color:var(--red); font-weight:600" id="orgTeamsError"></div>
+              </div>
+
+              <div class="card" style="margin-bottom:14px">
+                <div class="card-head"><h3>Organizations</h3><div class="right"><span class="sub" id="orgsMeta">Loading live data…</span></div></div>
+                <div class="card-body">
+                  <table>
+                    <thead><tr><th>Organization</th><th class="num">Teams</th><th class="num">Total Budget</th><th>Default Budget</th><th>Created</th></tr></thead>
+                    <tbody id="orgsBody"></tbody>
+                  </table>
+                  <div id="orgsEmpty" style="display:none; color:var(--text-2); font-size:13.5px; padding:12px 0 0">No organizations yet — create one to get started.</div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-head"><h3>Teams</h3><div class="right"><span class="sub" id="teamsMeta">Loading live data…</span></div></div>
+                <div class="card-body">
+                  <table>
+                    <thead><tr><th>Team</th><th>Organization</th><th class="num">Budget</th><th>Allowed Models</th><th>Allowed Strategies</th><th>Members</th><th>Created</th></tr></thead>
+                    <tbody id="teamsBody"></tbody>
+                  </table>
+                  <div id="teamsEmpty" style="display:none; color:var(--text-2); font-size:13.5px; padding:12px 0 0">No teams yet — create a team under an organization.</div>
+                </div>
+              </div>
+            </section>
+
+            <!-- P3-B Evaluation Schedules -->
+            <section class="view" id="view-eval-schedules">
+              <div class="page-head">
+                <div>
+                  <h1>Evaluation Schedules</h1>
+                  <p>Recurring evaluation schedules, run history, and regression detection — live from GET /api/eval/schedules.</p>
+                </div>
+                <div class="head-actions">
+                  <button class="btn" id="evalSchedRefreshBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.6-6.4M21 4v5h-5"/></svg>
+                    Refresh
+                  </button>
+                </div>
+              </div>
+              <div class="card" id="evalSchedKeyCard" style="display:none; margin-bottom:14px">
+                <div class="card-body" style="color:var(--text-2)">Evaluation schedules needs an admin-scoped gateway key. Type your key in the sidebar Operator key field, then press <button class="btn small" id="evalSchedLoadBtn">Load schedules</button></div>
+              </div>
+              <div class="card" id="evalSchedErrorCard" style="display:none; margin-bottom:14px">
+                <div class="card-body" style="color:var(--red); font-weight:600" id="evalSchedError"></div>
+              </div>
+
+              <div class="card">
+                <div class="card-head"><h3>Schedules</h3><div class="right"><span class="sub" id="evalSchedMeta">Loading live data…</span></div></div>
+                <div class="card-body">
+                  <table>
+                    <thead><tr><th>Schedule</th><th>Suite</th><th>Interval</th><th>Enabled</th><th>Use Real Engine</th><th>Last Run</th><th>Status</th></tr></thead>
+                    <tbody id="evalSchedBody"></tbody>
+                  </table>
+                  <div id="evalSchedEmpty" style="display:none; color:var(--text-2); font-size:13.5px; padding:12px 0 0">No evaluation schedules yet — create one to start recurring evaluations.</div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:14px">
+                <div class="card-head"><h3>Run History</h3><div class="right"><span class="sub" id="evalRunMeta">Loading live data…</span></div></div>
+                <div class="card-body">
+                  <table>
+                    <thead><tr><th>Run</th><th>Schedule</th><th>Started</th><th>Finished</th><th class="num">Total</th><th class="num">Passed</th><th>Pass Rate</th><th>Status</th><th>Regression</th></tr></thead>
+                    <tbody id="evalRunsBody"></tbody>
+                  </table>
+                  <div id="evalRunsEmpty" style="display:none; color:var(--text-2); font-size:13.5px; padding:12px 0 0">No runs yet — schedules will populate history as they execute.</div>
+                </div>
+              </div>
+            </section>
+
+            <!-- P3-D Guardrails (dedicated view) -->
+            <section class="view" id="view-guardrails">
+              <div class="page-head">
+                <div>
+                  <h1>Guardrails</h1>
+                  <p>PII redaction, secret redaction, and prompt-injection pattern detection — live from GET /dashboard/guardrails and GET /dashboard/guard.</p>
+                </div>
+                <div class="head-actions">
+                  <button class="btn" id="gvGuardrailsRefreshBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.6-6.4M21 4v5h-5"/></svg>
+                    Refresh
+                  </button>
+                </div>
+              </div>
+              <div class="card" id="gvGuardrailsKeyCard" style="display:none; margin-bottom:14px">
+                <div class="card-body" style="color:var(--text-2)">Guardrails needs an admin-scoped gateway key. Type your key in the sidebar Operator key field, then press <button class="btn small" id="gvGuardrailsLoadBtn">Load guardrails</button></div>
+              </div>
+              <div class="card" id="gvGuardrailsErrorCard" style="display:none; margin-bottom:14px">
+                <div class="card-body" style="color:var(--red); font-weight:600" id="gvGuardrailsError"></div>
+              </div>
+
+              <div class="kpis3">
+                <div class="card kpi">
+                  <div class="kpi-top"><span class="kpi-label">Requests checked</span></div>
+                  <div class="kpi-value" id="gvGrChecked">0</div>
+                  <div class="kpi-note">Inbound chat requests scanned since start</div>
+                </div>
+                <div class="card kpi">
+                  <div class="kpi-top"><span class="kpi-label">Redactions</span></div>
+                  <div class="kpi-value" id="gvGrRedacted">0</div>
+                  <div class="kpi-note">Matches found and redacted in logs</div>
+                </div>
+                <div class="card kpi">
+                  <div class="kpi-top"><span class="kpi-label">Blocked</span></div>
+                  <div class="kpi-value" id="gvGrBlocked">0</div>
+                  <div class="kpi-note">Requests refused before any provider</div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:14px">
+                <div class="card-head"><h3>Refusal codes — policy vs upstream</h3></div>
+                <div class="card-body" style="font-size:13.5px; color:var(--text-2)">
+                  <p style="margin-top:0">Refusal is <span class="mono">403</span> / <span class="mono">-32001</span>; upstream failure is <span class="mono">502</span> / <span class="mono">-32603</span>.</p>
+                  <div class="score-row"><span class="t">Policy refusals <span class="mono">(-32001)</span></span><span class="v" id="gvGrPolicyRefusals">0</span></div>
+                  <div class="score-row"><span class="t">Upstream failures <span class="mono">(-32603 / own 4xx)</span></span><span class="v" id="gvGrUpstreamFailures">0</span></div>
+                  <div class="score-row"><span class="t">Client Vertex overrides rejected <span class="mono">(400, admin opt-in off)</span></span><span class="v" id="gvGrSecurityVertex">0</span></div>
+                  <div class="score-row"><span class="t">Writes naming an unknown guardrail <span class="mono">(400)</span></span><span class="v" id="gvGrSecurityGuardrail">0</span></div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:14px">
+                <div class="card-head"><h3>Refusal chain — upstream content refusals</h3><div class="right"><span class="sub">Live, since this process started</span></div></div>
+                <div class="card-body" style="font-size:13.5px; color:var(--text-2)">
+                  <p style="margin-top:0">Provider content refusals route to the next target — never retried.</p>
+                  <div id="gvGrRefusalChain">
+                    <p style="color:var(--text-2); margin:0">No upstream content refusals yet.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:14px">
+                <div class="card-head"><h3>Failover — pins escape, delivered calls never replay</h3><div class="right"><span class="sub">Live, since this process started</span></div></div>
+                <div class="card-body" style="font-size:13.5px; color:var(--text-2)">
+                  <p style="margin-top:0">Pinned deployments still escape on retryable failure.</            <div id="gvGrFailover243">
+                    <p style="color:var(--text-2); margin:0">No pin escapes yet.</            </div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:14px">
+                <div class="card-head"><h3>Failover — region-aware order</h3><div class="right"><span class="sub">Live, since this process started</span></div></div>
+                <div class="card-body" style="font-size:13.5px; color:var(--text-2)">
+                  <p style="margin-top:0">Failover: same model, another region — then equivalent, then self-hosted.</p>
+                  <div id="gvGrFailover257">
+                    <p style="color:var(--text-2); margin:0">No region-aware failovers yet.</            </div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:14px">
+                <div class="card-head"><h3>Per-key guardrail scoping</h3><div class="right"><span class="sub">Live, from the config file</span></div></div>
+                <div class="card-body" style="font-size:13.5px; color:var(--text-2)">
+                  <p style="margin-top:0">A key with a guardrail list runs only those guardrails.</p>
+                  <div id="gvGrKeyScoping">
+                    <p style="color:var(--text-2); margin:0">No key scopes a list — every key runs global config.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:14px">
+                <div class="card-head"><h3>Guardrail configuration</h3><div class="right"><span class="pill flat" id="gvGrPill">Log redaction always on</span><button class="btn" id="guardrailsRefreshConfigBtn" style="margin-left:8px">Refresh</button></div></div>
+                <div class="card-body">
+                  <div id="gvGrConfigEmpty" style="color:var(--text-2); font-size:13.5px">Loading live data…</div>
+                  <table id="gvGrConfigTable" style="display:none; margin-top:12px">
+                    <thead><tr><th>Guardrail</th><th>Action</th><th>Custom patterns</th><th>Enabled</th></tr></thead>
+                    <tbody id="gvGrConfigBody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:14px">
+                <div class="card-head"><h3>Async guardrails</h3><div class="right"><span class="sub">Slow classifiers run with the provider call — they never block the first token</span></div></div>
+                <div class="card-body" style="font-size:13.5px; color:var(--text-2)">
+                  <div id="gvGrAsyncEmpty" style="color:var(--text-2); margin:0">No async guardrails configured.</div>
+                  <table id="gvGrAsyncTable" style="display:none; margin-top:12px">
+                    <thead><tr><th>Name</th><th>Kind</th><th>Timeout</th><th>Mode</th><th>Status</th></tr></thead>
+                    <tbody id="gvGrAsyncBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            <!-- P3-C Cost Estimation -->
+            <section class="view" id="view-cost-estimation">
+              <div class="page-head">
+                <div>
+                  <h1>Cost Estimation</h1>
+                  <p>Estimate the cost of a chat completion request without calling any provider — prompt tokens × catalog prices.</p>
+                </div>
+              </div>
+              <div class="card" id="costEstKeyCard" style="display:none; margin-bottom:14px">
+                <div class="card-body" style="color:var(--text-2)">Cost estimation needs an admin-scoped gateway key. Type your key in the sidebar Operator key field, then press <button class="btn small" id="costEstLoadBtn">Load estimation</button></div>
+              </div>
+              <div class="card" id="costEstErrorCard" style="display:none; margin-bottom:14px">
+                <div class="card-body" style="color:var(--red); font-weight:600" id="costEstError"></div>
+              </div>
+
+              <div class="card" style="margin-bottom:14px">
+                <div class="card-head"><h3>Estimate Request Cost</h3></div>
+                <div class="card-body">
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px">
+                    <div>
+                      <label for="costEstModel" style="display:block; margin-bottom:4px">Model</label>
+                      <input id="costEstModel" type="text" placeholder="e.g., gpt-4o, claude-3-opus" style="width:100%" />
+                    </div>
+                    <div>
+                      <label for="costEstMaxTokens" style="display:block; margin-bottom:4px">Max Tokens (optional)</label>
+                      <input id="costEstMaxTokens" type="number" placeholder="e.g., 500" min="1" style="width:100%" />
+                    </div>
+                  </div>
+                  <div style="margin-bottom:16px">
+                    <label for="costEstMessages" style="display:block; margin-bottom:4px">Messages (JSON array)</label>
+                    <textarea id="costEstMessages" rows="6" style="width:100%; font-family:monospace; font-size:13px" placeholder='[{"role": "user", "content": "Hello, how are you?"}]'></textarea>
+                  </div>
+                  <div style="display:flex; gap:12px; flex-wrap:wrap">
+                    <button class="btn" id="costEstimateBtn">Estimate Cost</button>
+                    <button class="btn" id="costEstimateClearBtn" style="background:var(--surface-3)">Clear</button>
+                  </div>
+                  <div id="costEstResult" style="margin-top:16px; display:none">
+                    <div class="card-head"><h3>Estimation Result</h3></div>
+                    <div class="card-body">
+                      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px">
+                        <div><div style="font-size:12.5px; color:var(--text-2)">Model</div><div class="mono" id="costEstOutModel"></div></div>
+                        <div><div style="font-size:12.5px; color:var(--text-2)">Prompt Tokens</div><div class="mono" id="costEstOutPromptTokens"></div></div>
+                        <div><div style="font-size:12.5px; color:var(--text-2)">Est. Completion Tokens</div><div class="mono" id="costEstOutEstCompletion"></div></div>
+                        <div><div style="font-size:12.5px; color:var(--text-2)">Estimated Cost (USD)</div><div class="mono" style="font-size:20px; font-weight:600" id="costEstOutCost"></div></div>
+                        <div><div style="font-size:12.5px; color:var(--text-2)">Cost Known</div><div class="mono" id="costEstOutCostKnown"></div></div>
+                        <div><div style="font-size:12.5px; color:var(--text-2)">Price Source</div><div class="mono" id="costEstOutPriceSource"></div></div>
+                      </div>
+                      <div style="margin-top:12px" id="costEstOutBreakdown"></div>
+                      <div style="margin-top:8px; font-size:13px; color:var(--text-2)" id="costEstOutWarning"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:14px">
+                <div class="card-head"><h3>Cost Reconciliation (Estimate vs Actual)</h3><div class="right"><span class="sub">Live — from GET /api/cost/reconciliation (when implemented)</span></div></div>
+                <div class="card-body">
+                  <p style="color:var(--text-2); margin-top:0">Estimated vs actual cost tracking for completed requests. Requires cost estimation to be run before the request and actual cost recorded after.</            <div id="costReconciliationEmpty" style="color:var(--text-2); font-size:13.5px">Cost reconciliation requires integration with the chat completion flow — not yet implemented.</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="view" id="view-audit">
         <div class="page-head">
           <div>
             <h1>Audit</h1>

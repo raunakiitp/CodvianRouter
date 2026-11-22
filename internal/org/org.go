@@ -210,6 +210,24 @@ func (s *Store) AddTeam(t *Team, actor Role) error {
 	return s.persist()
 }
 
+// DeleteTeam removes a team and all its associated data.
+func (s *Store) DeleteTeam(teamID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.teams[teamID]; !ok {
+		return errors.New("org: unknown team")
+	}
+	// Remove any key bindings to this team
+	for keyID, binding := range s.bindings {
+		if binding.TeamID == teamID {
+			delete(s.bindings, keyID)
+		}
+	}
+	delete(s.teams, teamID)
+	s.auditLocked("system", "team.delete", teamID, "")
+	return s.persist()
+}
+
 // SetRole assigns a role on a team (or org when teamID is "").
 func (s *Store) SetRole(teamID, member string, role Role, actor Role) error {
 	if member == "" || !role.Valid() {

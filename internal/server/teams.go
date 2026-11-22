@@ -24,6 +24,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/config"
 	"github.com/raunakiitp/codvian-router/internal/guardrails"
 	"github.com/raunakiitp/codvian-router/internal/ledger"
+	"github.com/raunakiitp/codvian-router/internal/provider"
 )
 
 // teamBudgetStatus is one team's computed budget state in its
@@ -105,6 +106,45 @@ func (s *Server) checkTeamBudget(w http.ResponseWriter, r *http.Request) bool {
 	}
 	writeJSON(w, http.StatusBadRequest, errorBody{Error: errorDetail{Message: fmt.Sprintf("This API key's team reached its shared usage quota. The soft committed-usage window resets at %s.", st.WindowEnd.Format(time.RFC3339)), Type: "team_budget"}})
 	return false
+}
+
+// checkTeamPolicy enforces P3-A org/team policy: cross-team isolation
+// via the org store. It checks:
+//  1. If the key is bound to a team in the org store
+//  2. If the requested model is allowed by the team's allowlist
+//  3. If the requested routing strategy is allowed by the team's allowlist
+//
+// Returns false if it wrote a refusal (403 for isolation).
+func (s *Server) checkTeamPolicy(w http.ResponseWriter, r *http.Request, req *provider.ChatRequest) bool {
+	// No org store configured -> no team policy enforcement
+	st, err := s.ensureOrgStore()
+	if err != nil || st == nil {
+		return true
+	}
+	keyID := s.callerKeyID(r)
+	if keyID == "" {
+		return true
+	}
+	team := st.TeamForKey(keyID)
+	if team == nil {
+		// Key not bound to any team in org store -> no policy enforcement
+		return true
+	}
+	// Check model allowlist
+	model := req.Model
+	if model != "" && !st.AllowModel(team.ID, model) {
+		writeJSON(w, http.StatusForbidden, errorBody{Error: errorDetail{Message: fmt.Sprintf("model %q not allowed for this team", model), Type: "team_policy"}})
+		return false
+	}
+	// Check strategy allowlist (from routing contract Sort field)
+	// The Sort field in RequestRouting can specify a fallback strategy.
+	if req.Routing != nil && req.Routing.Sort != "" {
+		if !st.AllowStrategy(team.ID, req.Routing.Sort) {
+			writeJSON(w, http.StatusForbidden, errorBody{Error: errorDetail{Message: fmt.Sprintf("routing strategy %q not allowed for this team", req.Routing.Sort), Type: "team_policy"}})
+			return false
+		}
+	}
+	return true
 }
 
 // teamMemberView is one member row of the cost-center report:
