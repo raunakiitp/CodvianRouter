@@ -545,6 +545,9 @@ type Server struct {
 	// oauthStore is the lazy dashboard OAuth connection store (PR #52):
 	// created on first OAuth use from cfg.DataDir. Guarded by dashAuthMu.
 	oauthStore *oauthConnStore
+	// ipControl is the lazy IP allowlist/blocklist store (PR #53):
+	// created on first IP-control use. Guarded by dashAuthMu.
+	ipControl *ipControlStore
 	// evalStateMu guards the lazily-opened P3-B eval store/scheduler
 	// (eval_schedules_api.go). It lives on THIS Server instance (not a
 	// package global) so two Servers with different data dirs are
@@ -1966,7 +1969,7 @@ func New(engine Engine, opts ...Option) *Server {
 	// failure — the store is lazy and re-opens on first API use).
 	s.startEvalScheduler()
 
-	s.handler = s.withLogging(s.withAudit(mux))
+	s.handler = s.withLogging(s.withIPControl(s.withAudit(mux)))
 	return s
 }
 
