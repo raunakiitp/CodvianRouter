@@ -21,8 +21,10 @@ jobs:
         run: |
           mkdir -p /tmp/cv/data
           /tmp/codvian-router init --config /tmp/cv/config.yaml --key-file /tmp/cv/key.txt
-          python3 -c "import yaml;p='/tmp/cv/config.yaml';c=yaml.safe_load(open(p));c['data_dir']='/tmp/cv/data';open(p,'w').write(yaml.safe_dump(c))"
-          echo "config data_dir=$(grep data_dir /tmp/cv/config.yaml)"
+          python3 -c "import json;p='/tmp/cv/config.yaml';d=json.load(open(p));d['data_dir']='/tmp/cv/data';open(p,'w').write(json.dumps(d,indent=2))"
+          grep '"data_dir"' /tmp/cv/config.yaml
+      - name: Validate the config (fail fast on invalid JSON)
+        run: /tmp/codvian-router validate --config /tmp/cv/config.yaml
       - name: Boot the server
         id: boot
         run: |
@@ -31,12 +33,12 @@ jobs:
           echo "$PID" > /tmp/cv/pid
           UP=0
           for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:20128/dashboard >/dev/null 2>&1; then UP=1; break; fi
+            if curl -fsS http://127.0.0.1:20128/healthz >/dev/null 2>&1; then UP=1; break; fi
             if ! kill -0 "$PID" 2>/dev/null; then echo "server process exited early (pid $PID)"; break; fi
             sleep 1
           done
           if [ "$UP" != "1" ]; then
-            echo "FATAL: dashboard did not become ready in 30s"
+            echo "FATAL: server did not become ready in 30s"
             echo "--- server.log ---"
             cat /tmp/cv/server.log || true
             echo "--- process alive? ---"
@@ -44,8 +46,12 @@ jobs:
             kill "$PID" 2>/dev/null || true
             exit 1
           fi
-          echo "server up (pid $PID)"
+          echo "server ready (pid $PID)"
           if kill -0 "$PID" 2>/dev/null; then echo "process alive: yes"; else echo "process alive: NO"; fi
+          echo "--- /dashboard ---"
+          curl -s -o /dev/null -w "http=%{http_code}\n" http://127.0.0.1:20128/dashboard
+          echo "--- /healthz ---"
+          curl -s -o /dev/null -w "http=%{http_code}\n" http://127.0.0.1:20128/healthz
           echo "--- server.log ---"
           cat /tmp/cv/server.log || true
       - name: Install Playwright deps
