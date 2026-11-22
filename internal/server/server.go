@@ -537,6 +537,12 @@ type Server struct {
 	dashAuthMu  sync.Mutex
 	dashAuth    *dashAuthStore
 	dashAuthErr error
+	// evalStateMu guards the lazily-opened P3-B eval store/scheduler
+	// (eval_schedules_api.go). It lives on THIS Server instance (not a
+	// package global) so two Servers with different data dirs are
+	// isolated.
+	evalStateMu sync.Mutex
+	evalState   *evalState
 	// dedupStore is the cross-turn session-dedup store (B4-23):
 	// process memory, created eagerly in New — Seen/Mark are
 	// mutex-safe, and an empty store is exactly "no session
