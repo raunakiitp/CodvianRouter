@@ -6,8 +6,8 @@
 | P0-2: Semantic cache wired into request path | DONE | (n/a — already on main) | VERIFIED | VERIFIED | VERIFIED | N/A |
 | P1-1: Dashboard session auth (JWT cookie) | DONE | (n/a — already on main) | VERIFIED | VERIFIED | VERIFIED | N/A |
 | P1-2: TOTP 2FA + backup codes | MERGED | #51 | IMPLEMENTED | TESTED | PASSED | MERGED |
-| P1-3: OAuth provider connections (≥3) | IMPLEMENTED | #52 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
-| P1-4: IP allowlist/blocklist | NOT STARTED | #53 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
+| P1-3: OAuth provider connections (≥3) | MERGED | #52 | IMPLEMENTED | TESTED | PASSED | MERGED |
+| P1-4: IP allowlist/blocklist | IMPLEMENTED | #53 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
 | P1-5: Remaining routing strategies | NOT STARTED | #54 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
 | P1-6: `auto/*` model aliases (9 aliases) | NOT STARTED | #55 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
 | P1-7: Combos (multi-model sequences) | NOT STARTED | #56 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
@@ -16,10 +16,10 @@
 | P2-3: Publish Docker images | NOT STARTED | #59 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
 | P2-4: Benchmark parity report | NOT STARTED | #60 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
 
-**Current main commit:** fbed1ff (PR #51 TOTP merged)
+**Current main commit:** b3aa2ee (PR #51 TOTP + PR #52 OAuth merged)
 **Repository:** C:/Users/LOQ/AppData/Local/hermes/cache/scratch/codvian-phase1-audit/CodvianRouter
 
-**Last updated:** 2026-11-23 — PR #51 TOTP merged (ci, bench-smoke, playwright, sbom-and-vuln all green). PR #52 OAuth implemented, CI running.
+**Last updated:** 2026-11-23 — PR #51 TOTP and PR #52 OAuth merged (all CI green). PR #53 IP control opened as GitHub #51, CI pending. Next: PR #54 routing strategies.
 
 **PR #49 changes:**
 - `internal/server/audit_log.go` (new): append-only SQLite audit store with hash-chain tamper evidence, `withAudit` middleware, `WithAuditStore` option, sensitive-field redaction
