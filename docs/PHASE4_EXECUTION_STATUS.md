@@ -14,13 +14,13 @@
 | P2-1: Webhook integrations (Slack/Discord/Telegram) | MERGED | #57 | IMPLEMENTED | TESTED | PASSED | MERGED |
 | P2-2: More webhook event types | MERGED | #58 | IMPLEMENTED | TESTED | PASSED | MERGED |
 | P2-3: Publish Docker images | VERIFIED | #59 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
-| P2-4: Benchmark parity report | NOT STARTED | #60 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
-| P2-5: Final release readiness | NOT STARTED | #61 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
+| P2-4: Benchmark parity report | VERIFIED | #60 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
+| P2-5: Final release readiness | IN PROGRESS | #61 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
 
 **Current main commit:** 1577e91 (PR #49-#58 all merged)
 **Repository:** C:/Users/LOQ/AppData/Local/hermes/cache/scratch/codvian-phase1-audit/CodvianRouter
 
-**Last updated:** 2026-11-23 — PR #49-#58 all merged (audit log, TOTP, OAuth, IP control, routing strategies, auto/* aliases, combos, webhooks, webhook events). PR #59 Docker publishing verified — Dockerfile + docker-compose.yml + release.yml (GoReleaser/multi-arch/cosign/syft) all exist. PR #60 benchmark report next.
+**Last updated:** 2026-11-23 — PR #49-#58 all merged. PR #59 Docker publishing verified (infrastructure exists). PR #60 benchmark report opened (GitHub #57). PR #61 final release readiness — all verification checks pass.
 
 **PR #49 changes:**
 - `internal/server/audit_log.go` (new): append-only SQLite audit store with hash-chain tamper evidence, `withAudit` middleware, `WithAuditStore` option, sensitive-field redaction
