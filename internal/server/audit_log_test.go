@@ -73,15 +73,15 @@ func TestAuditVerifyChainIntact(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		if err := store.Record(auditEvent{
-			TS:           int64(i * 1000),
+			TS:            int64(i * 1000),
 			CorrelationID: "req",
-			KeyIDHash:    "abc12345",
-			Method:       "GET",
-			Path:         "/v1/models",
-			StatusCode:   200,
-			LatencyMs:    10,
-			FailureClass: "none",
-			ActorType:    "gateway_key",
+			KeyIDHash:     "abc12345",
+			Method:        "GET",
+			Path:          "/v1/models",
+			StatusCode:    200,
+			LatencyMs:     10,
+			FailureClass:  "none",
+			ActorType:     "gateway_key",
 		}); err != nil {
 			t.Fatalf("Record(%d): %v", i, err)
 		}
@@ -107,15 +107,15 @@ func TestAuditTamperDetection(t *testing.T) {
 	// Record 3 events.
 	for i := 0; i < 3; i++ {
 		if err := store.Record(auditEvent{
-			TS:           int64(i * 1000),
+			TS:            int64(i * 1000),
 			CorrelationID: "req",
-			KeyIDHash:    "abc12345",
-			Method:       "GET",
-			Path:         "/v1/models",
-			StatusCode:   200,
-			LatencyMs:    10,
-			FailureClass: "none",
-			ActorType:    "gateway_key",
+			KeyIDHash:     "abc12345",
+			Method:        "GET",
+			Path:          "/v1/models",
+			StatusCode:    200,
+			LatencyMs:     10,
+			FailureClass:  "none",
+			ActorType:     "gateway_key",
 		}); err != nil {
 			t.Fatalf("Record(%d): %v", i, err)
 		}
@@ -164,14 +164,14 @@ func TestAuditAppendOnlySchema(t *testing.T) {
 	}
 	// Record one event.
 	if err := store.Record(auditEvent{
-		TS:           1,
+		TS:            1,
 		CorrelationID: "req",
-		Method:       "GET",
-		Path:         "/v1/models",
-		StatusCode:   200,
-		LatencyMs:    1,
-		FailureClass: "none",
-		ActorType:    "anonymous",
+		Method:        "GET",
+		Path:          "/v1/models",
+		StatusCode:    200,
+		LatencyMs:     1,
+		FailureClass:  "none",
+		ActorType:     "anonymous",
 	}); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
@@ -392,7 +392,6 @@ func TestNormalizeRoutePath(t *testing.T) {
 		}
 	}
 }
-
 
 // --- test helpers ---
 

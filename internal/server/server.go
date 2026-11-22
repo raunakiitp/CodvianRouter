@@ -918,15 +918,15 @@ type Server struct {
 	// production leaves it nil (the interval is not an operator
 	// knob — see a2a_prune.go).
 	a2aMu          sync.Mutex
-		a2aSvc         *a2a.Service
-		a2aCancels     map[string]context.CancelFunc
-		a2aPruneLoop   *A2APruneLoop
-		a2aPruneCancel context.CancelFunc
-		a2aPruneOpts   *A2APruneOptions
-		// auditStore is the append-only request-level compliance audit
-		// store (nil = audit logging off). Set by WithAuditStore.
-		auditStore *auditStore
-	}
+	a2aSvc         *a2a.Service
+	a2aCancels     map[string]context.CancelFunc
+	a2aPruneLoop   *A2APruneLoop
+	a2aPruneCancel context.CancelFunc
+	a2aPruneOpts   *A2APruneOptions
+	// auditStore is the append-only request-level compliance audit
+	// store (nil = audit logging off). Set by WithAuditStore.
+	auditStore *auditStore
+}
 
 // Option configures a Server.
 type Option func(*Server)

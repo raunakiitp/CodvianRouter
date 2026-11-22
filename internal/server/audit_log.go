@@ -44,15 +44,15 @@ import (
 // auditEvent is one audit record as stored in the audit_events table.
 // All sensitive fields are redacted before construction.
 type auditEvent struct {
-	TS           int64  `json:"ts"`              // unix milliseconds (UTC)
+	TS            int64  `json:"ts"`             // unix milliseconds (UTC)
 	CorrelationID string `json:"correlation_id"` // request ID from context
-	KeyIDHash    string `json:"key_id_hash"`    // first 8 hex of SHA-256(key_id), "" when anonymous
-	Method       string `json:"method"`         // HTTP method
-	Path         string `json:"path"`           // normalized route path, query stripped
-	StatusCode   int    `json:"status_code"`    // HTTP response status
-	LatencyMs    int64  `json:"latency_ms"`     // handler latency
-	FailureClass string `json:"failure_class"`  // auth, rate_limit, quota, upstream, server, none
-	ActorType    string `json:"actor_type"`     // gateway_key, oauth, anonymous
+	KeyIDHash     string `json:"key_id_hash"`    // first 8 hex of SHA-256(key_id), "" when anonymous
+	Method        string `json:"method"`         // HTTP method
+	Path          string `json:"path"`           // normalized route path, query stripped
+	StatusCode    int    `json:"status_code"`    // HTTP response status
+	LatencyMs     int64  `json:"latency_ms"`     // handler latency
+	FailureClass  string `json:"failure_class"`  // auth, rate_limit, quota, upstream, server, none
+	ActorType     string `json:"actor_type"`     // gateway_key, oauth, anonymous
 }
 
 // AuditStore is the append-only, tamper-evident audit event store.
@@ -80,7 +80,7 @@ type auditStore struct {
 	path string
 
 	// stmtMu guards the lazily-prepared insert statement.
-	stmtMu   sync.Mutex
+	stmtMu     sync.Mutex
 	insertStmt *sql.Stmt
 }
 
@@ -325,11 +325,11 @@ func (s *Server) withAudit(next http.Handler) http.Handler {
 		// Build the audit event before the handler runs so downstream
 		// middleware can enrich it (model name, etc.).
 		evt := &auditEvent{
-			TS:           time.Now().UnixMilli(),
+			TS:            time.Now().UnixMilli(),
 			CorrelationID: requestIDFor(r),
-			Method:       r.Method,
-			Path:         normalizeRoutePath(r.URL.Path),
-			ActorType:    "anonymous",
+			Method:        r.Method,
+			Path:          normalizeRoutePath(r.URL.Path),
+			ActorType:     "anonymous",
 		}
 		// Attribute to a gateway key when one is presented (hashed, never raw).
 		if keyID := s.callerKeyID(r); keyID != "" {
