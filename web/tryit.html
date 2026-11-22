@@ -3832,6 +3832,78 @@ const ROUTES = [
       "admin"
     ],
     "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/org",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Lists organizations and teams (id, name, budget, allowed models/strategies, roles). Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/org",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Creates (bootstraps) an organization. Management auth (admin scope) required \u2014 it creates a tenant.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/org/teams",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Creates a team under an org. Management auth (admin scope) required \u2014 it changes tenant isolation.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/org/teams/{id}/bind",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Binds a gateway key to a team (team-key isolation + team budget). Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/org/teams/{id}/unbind",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Removes a key's team binding (isolation off). Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/org/audit",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Append-only admin audit log, newest first (?limit=, default 200). Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
   }
 ];
 // END TRYIT-ROUTES-JSON

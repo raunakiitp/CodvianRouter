@@ -543,6 +543,11 @@ type Server struct {
 	// isolated.
 	evalStateMu sync.Mutex
 	evalState   *evalState
+	// orgStateMu guards the lazily-opened P3-A org store (org_api.go).
+	// It lives on THIS Server instance (not a package global) so two
+	// Servers with different data dirs are isolated.
+	orgStateMu sync.Mutex
+	orgState   *orgState
 	// dedupStore is the cross-turn session-dedup store (B4-23):
 	// process memory, created eagerly in New — Seen/Mark are
 	// mutex-safe, and an empty store is exactly "no session
@@ -1737,6 +1742,7 @@ func New(engine Engine, opts ...Option) *Server {
 	// panics on a missing table entry, like s.register).
 	s.registerWebhooksRoutes(mux)
 	s.registerEvalRoutes(mux)
+	s.registerOrgRoutes(mux)
 	s.register(mux, "GET", "/api/usage/om-usage", s.handleOmUsage)
 	s.register(mux, "GET", "/api/cache/stats", s.handleCacheStats)
 	s.register(mux, "GET", "/api/telemetry/model-latency-stats", s.handleModelLatencyStats)

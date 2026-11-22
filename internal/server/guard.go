@@ -540,6 +540,14 @@ var guardRouteTable = []GuardRoute{
 	{Method: "PATCH", Path: "/api/eval/schedules/{id}", Tier: TierAlwaysProtected, Description: "Partial update of one schedule (interval, enabled, regression threshold, concurrency). Management auth (admin scope) required.", Scopes: []string{"admin"}},
 	{Method: "DELETE", Path: "/api/eval/schedules/{id}", Tier: TierAlwaysProtected, Description: "Deletes one schedule (its history is preserved); unknown ids answer 404. Management auth (admin scope) required.", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/eval/schedules/{id}/history", Tier: TierManagement, Description: "Run history for one schedule, newest first (?limit=, default 100). Gateway-key auth required.", Scopes: []string{"admin"}},
+	// P3-A org/team/RBAC (org_api.go): mutations rewrite tenant state,
+	// so admin scope; reads are MANAGEMENT.
+	{Method: "GET", Path: "/api/org", Tier: TierManagement, Description: "Lists organizations and teams (id, name, budget, allowed models/strategies, roles). Gateway-key auth required.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/api/org", Tier: TierAlwaysProtected, Description: "Creates (bootstraps) an organization. Management auth (admin scope) required — it creates a tenant.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/api/org/teams", Tier: TierAlwaysProtected, Description: "Creates a team under an org. Management auth (admin scope) required — it changes tenant isolation.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/api/org/teams/{id}/bind", Tier: TierAlwaysProtected, Description: "Binds a gateway key to a team (team-key isolation + team budget). Management auth (admin scope) required.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/api/org/teams/{id}/unbind", Tier: TierAlwaysProtected, Description: "Removes a key's team binding (isolation off). Management auth (admin scope) required.", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/org/audit", Tier: TierManagement, Description: "Append-only admin audit log, newest first (?limit=, default 200). Gateway-key auth required.", Scopes: []string{"admin"}},
 }
 
 // RouteTable returns a copy of the guard classification table: every
