@@ -3628,5 +3628,77 @@
       "admin"
     ],
     "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/eval/schedules",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Lists recurring evaluation schedules (id, suite, interval, enabled, regression threshold). Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/eval/schedules",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Creates a recurring evaluation schedule. Management auth (admin scope) required \u2014 it starts periodic evaluation work.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/eval/schedules/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "One evaluation schedule by id; unknown ids answer 404. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/eval/schedules/{id}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Partial update of one schedule (interval, enabled, regression threshold, concurrency). Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/eval/schedules/{id}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Deletes one schedule (its history is preserved); unknown ids answer 404. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/eval/schedules/{id}/history",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Run history for one schedule, newest first (?limit=, default 100). Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
   }
 ]
