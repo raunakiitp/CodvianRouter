@@ -4671,6 +4671,30 @@ func (s *Server) recordMetrics(ctx context.Context, req provider.ChatRequest, re
 	}
 	rec.IncRequest(providerName, model, outcome)
 	rec.ObserveLatency(providerName, model, float64(time.Since(started).Milliseconds()))
+
+	// Webhook events: request.completed / request.failed / provider.exhausted.
+	// Best-effort, async — a webhook failure never fails the request.
+	if s.webhooks != nil {
+		if errors.Is(err, router.ErrNoAvailableAttempt) {
+			s.webhooks.Notify(webhooks.ProviderExhaustedEvent, map[string]any{
+				"model":    model,
+				"provider": providerName,
+			})
+		} else if err == nil {
+			s.webhooks.Notify(webhooks.RequestCompletedEvent, map[string]any{
+				"model":      model,
+				"provider":   providerName,
+				"latency_ms": time.Since(started).Milliseconds(),
+			})
+		} else {
+			s.webhooks.Notify(webhooks.RequestFailedEvent, map[string]any{
+				"model":     model,
+				"provider":  providerName,
+				"error":     err.Error(),
+				"outcome":   outcome,
+			})
+		}
+	}
 }
 
 // setStaleHeader marks a non-streaming response as stale when the

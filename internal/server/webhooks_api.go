@@ -85,7 +85,7 @@ const BudgetWarningEvent = "budget.warning"
 
 // webhookKnownEvents is the fixed event list a registration may
 // subscribe to. Unknown events are a 400 naming the event.
-var webhookKnownEvents = []string{webhooks.QuotaExceededEvent, BudgetWarningEvent, webhooks.ProviderDegradedEvent, webhooks.ProviderRecoveredEvent}
+var webhookKnownEvents = []string{webhooks.QuotaExceededEvent, BudgetWarningEvent, webhooks.ProviderDegradedEvent, webhooks.ProviderRecoveredEvent, webhooks.RequestCompletedEvent, webhooks.RequestFailedEvent, webhooks.ProviderExhaustedEvent, webhooks.TestPingEvent}
 
 // webhookMaxBody caps a registration request body (1 MiB, the
 // same cap the quota-schedule handler uses).

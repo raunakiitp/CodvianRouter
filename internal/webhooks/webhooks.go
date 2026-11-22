@@ -46,6 +46,23 @@ import (
 // being reached (the reference router "quota.exceeded").
 const QuotaExceededEvent = "quota.exceeded"
 
+// RequestCompletedEvent fires when a chat request completes
+// successfully (a provider served a response).
+const RequestCompletedEvent = "request.completed"
+
+// RequestFailedEvent fires when a chat request fails
+// (no provider could serve it, or every attempt errored).
+const RequestFailedEvent = "request.failed"
+
+// ProviderExhaustedEvent fires when every provider in the
+// routing chain was exhausted (no attempt available).
+const ProviderExhaustedEvent = "provider.exhausted"
+
+// TestPingEvent is a synthetic event for delivery testing.
+// Subscribers receive a minimal payload; it carries no
+// request data and is safe to emit in tests.
+const TestPingEvent = "test.ping"
+
 // ProviderDegradedEvent fires when a provider's circuit breaker first
 // trips (CLOSED -> OPEN), with only the provider id and the real
 // consecutive-failure/trip counts and open duration in the payload.
