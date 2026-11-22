@@ -148,6 +148,10 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 		"GET /api/settings/combo-tuning", "PATCH /api/settings/combo-tuning",
 		"GET /api/settings/scoring-modes", "GET /api/settings/account-fallback", "PATCH /api/settings/account-fallback",
 		"GET /api/combos/{id}/studio-cascade",
+		// P3-B scheduled evaluations.
+		"GET /api/eval/schedules", "POST /api/eval/schedules",
+		"GET /api/eval/schedules/{id}", "PATCH /api/eval/schedules/{id}",
+		"DELETE /api/eval/schedules/{id}", "GET /api/eval/schedules/{id}/history",
 	}
 	if len(expected) != len(table) {
 		t.Errorf("route table has %d entries, expected %d (a route was added without updating the table, or vice versa)", len(table), len(expected))
@@ -208,8 +212,8 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 	for _, r := range table {
 		counts[r.Tier]++
 	}
-	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 49 || counts[TierManagement] != 254 {
-		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/49/254)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
+	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 52 || counts[TierManagement] != 257 {
+		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/52/257)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
 	}
 }
 

@@ -532,6 +532,14 @@ var guardRouteTable = []GuardRoute{
 	{Method: "GET", Path: "/api/settings/account-fallback", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (account fallback strategy selection is not implemented).", Scopes: []string{"admin"}},
 	{Method: "PATCH", Path: "/api/settings/account-fallback", Tier: TierManagement, Description: "Unavailable: answers 501 feature_unavailable, does nothing (account fallback strategy selection is not implemented).", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/combos/{id}/studio-cascade", Tier: TierManagement, Description: "Live cascade view for combo studio (B8-83).", Scopes: []string{"admin"}},
+	// P3-B scheduled evaluations (eval_schedules_api.go): mutations
+	// rewrite scheduling state, so admin scope; reads are MANAGEMENT.
+	{Method: "GET", Path: "/api/eval/schedules", Tier: TierManagement, Description: "Lists recurring evaluation schedules (id, suite, interval, enabled, regression threshold). Gateway-key auth required.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/api/eval/schedules", Tier: TierAlwaysProtected, Description: "Creates a recurring evaluation schedule. Management auth (admin scope) required — it starts periodic evaluation work.", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/eval/schedules/{id}", Tier: TierManagement, Description: "One evaluation schedule by id; unknown ids answer 404. Gateway-key auth required.", Scopes: []string{"admin"}},
+	{Method: "PATCH", Path: "/api/eval/schedules/{id}", Tier: TierAlwaysProtected, Description: "Partial update of one schedule (interval, enabled, regression threshold, concurrency). Management auth (admin scope) required.", Scopes: []string{"admin"}},
+	{Method: "DELETE", Path: "/api/eval/schedules/{id}", Tier: TierAlwaysProtected, Description: "Deletes one schedule (its history is preserved); unknown ids answer 404. Management auth (admin scope) required.", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/eval/schedules/{id}/history", Tier: TierManagement, Description: "Run history for one schedule, newest first (?limit=, default 100). Gateway-key auth required.", Scopes: []string{"admin"}},
 }
 
 // RouteTable returns a copy of the guard classification table: every

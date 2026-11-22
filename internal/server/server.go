@@ -537,6 +537,12 @@ type Server struct {
 	dashAuthMu  sync.Mutex
 	dashAuth    *dashAuthStore
 	dashAuthErr error
+	// evalStateMu guards the lazily-opened P3-B eval store/scheduler
+	// (eval_schedules_api.go). It lives on THIS Server instance (not a
+	// package global) so two Servers with different data dirs are
+	// isolated.
+	evalStateMu sync.Mutex
+	evalState   *evalState
 	// dedupStore is the cross-turn session-dedup store (B4-23):
 	// process memory, created eagerly in New — Seen/Mark are
 	// mutex-safe, and an empty store is exactly "no session
@@ -1730,6 +1736,7 @@ func New(engine Engine, opts ...Option) *Server {
 	// M8.19 webhooks (guard rows first — registerWebhooksRoutes
 	// panics on a missing table entry, like s.register).
 	s.registerWebhooksRoutes(mux)
+	s.registerEvalRoutes(mux)
 	s.register(mux, "GET", "/api/usage/om-usage", s.handleOmUsage)
 	s.register(mux, "GET", "/api/cache/stats", s.handleCacheStats)
 	s.register(mux, "GET", "/api/telemetry/model-latency-stats", s.handleModelLatencyStats)
@@ -1912,6 +1919,10 @@ func New(engine Engine, opts ...Option) *Server {
 	// Phase 0: every documented unavailable feature (501
 	// feature_unavailable), including the Tier 1 admin routes.
 	s.registerUnavailable(mux)
+
+	// P3-B: start the scheduled-evaluation loop (no-op on a store
+	// failure — the store is lazy and re-opens on first API use).
+	s.startEvalScheduler()
 
 	s.handler = s.withLogging(mux)
 	return s
@@ -4768,6 +4779,9 @@ func (s *Server) Close() error {
 			errs = append(errs, err)
 		}
 	}
+	// P3-B: stop the scheduled-evaluation loop before anything
+	// that closes persisted state (the loop only reads the store).
+	s.stopEvalScheduler()
 	// A2A: stop the prune loop first — Stop waits for its
 	// goroutine to exit, so no prune touches the store after
 	// it closes — then close the lazily-opened task store. A

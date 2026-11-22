@@ -8,9 +8,9 @@ the per-route sections; regenerate instead:
 python3 scripts/gen-api-docs.py
 ```
 
-Coverage: **314 routes** (164 GET, 103 POST, 21 DELETE, 21 PATCH, 5 PUT) —
-11 `LOCAL_ONLY`, 49 `ALWAYS_PROTECTED`,
-254 `MANAGEMENT`; 58 auth-exempt, 245 scope-gated, 11 key-only (gateway key, no scope).
+Coverage: **320 routes** (167 GET, 104 POST, 22 DELETE, 22 PATCH, 5 PUT) —
+11 `LOCAL_ONLY`, 52 `ALWAYS_PROTECTED`,
+257 `MANAGEMENT`; 58 auth-exempt, 251 scope-gated, 11 key-only (gateway key, no scope).
 Enforced by `TestAPIReferenceCoversEveryRoute`
 (`internal/server/api_reference_test.go`): the test reads the guard
 table and this doc and FAILS if any route is missing. That test is
@@ -3482,6 +3482,102 @@ its key field; the key is kept only in page memory, never stored.
 
   ```sh
   curl -X GET -H "Authorization: Bearer $CODVIAN_KEY" http://127.0.0.1:8080/api/combos/{id}/studio-cascade
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `GET /api/eval/schedules`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Lists recurring evaluation schedules (id, suite, interval, enabled, regression threshold). Gateway-key auth required.
+- **Request:** no body.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X GET -H "Authorization: Bearer $CODVIAN_KEY" http://127.0.0.1:8080/api/eval/schedules
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `POST /api/eval/schedules`
+
+- **Tier:** `ALWAYS_PROTECTED`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
+- **Spawn-capable:** no
+- **Description:** Creates a recurring evaluation schedule. Management auth (admin scope) required — it starts periodic evaluation work.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/api/eval/schedules
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `GET /api/eval/schedules/{id}`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** One evaluation schedule by id; unknown ids answer 404. Gateway-key auth required.
+- **Request:** no body.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X GET -H "Authorization: Bearer $CODVIAN_KEY" http://127.0.0.1:8080/api/eval/schedules/{id}
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `PATCH /api/eval/schedules/{id}`
+
+- **Tier:** `ALWAYS_PROTECTED`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
+- **Spawn-capable:** no
+- **Description:** Partial update of one schedule (interval, enabled, regression threshold, concurrency). Management auth (admin scope) required.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X PATCH -H "Authorization: Bearer $CODVIAN_KEY" http://127.0.0.1:8080/api/eval/schedules/{id}
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `DELETE /api/eval/schedules/{id}`
+
+- **Tier:** `ALWAYS_PROTECTED`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
+- **Spawn-capable:** no
+- **Description:** Deletes one schedule (its history is preserved); unknown ids answer 404. Management auth (admin scope) required.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X DELETE -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/api/eval/schedules/{id}
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `GET /api/eval/schedules/{id}/history`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Run history for one schedule, newest first (?limit=, default 100). Gateway-key auth required.
+- **Request:** no body.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X GET -H "Authorization: Bearer $CODVIAN_KEY" http://127.0.0.1:8080/api/eval/schedules/{id}/history
   ```
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.

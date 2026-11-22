@@ -17,17 +17,44 @@ jobs:
           go-version: "1.27.4"
       - name: Build the router
         run: go build -buildvcs=false -o /tmp/codvian-router ./cmd/codvian-router
-      - name: Boot the server
+      - name: Init isolated config + gateway key
         run: |
           mkdir -p /tmp/cv/data
-          /tmp/codvian-router serve --listen 127.0.0.1:20128 --data-dir /tmp/cv/data > /tmp/cv/server.log 2>&1 &
-          echo $! > /tmp/cv/pid
+          /tmp/codvian-router init --config /tmp/cv/config.yaml --key-file /tmp/cv/key.txt
+          python3 -c "import json;p='/tmp/cv/config.yaml';d=json.load(open(p));d['data_dir']='/tmp/cv/data';open(p,'w').write(json.dumps(d,indent=2))"
+          grep '"data_dir"' /tmp/cv/config.yaml
+      - name: Validate the config (fail fast on invalid JSON)
+        run: /tmp/codvian-router validate --config /tmp/cv/config.yaml
+      - name: Boot the server
+        id: boot
+        run: |
+          /tmp/codvian-router serve --config /tmp/cv/config.yaml --listen 127.0.0.1:20128 > /tmp/cv/server.log 2>&1 &
+          PID=$!
+          echo "$PID" > /tmp/cv/pid
+          UP=0
           for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:20128/dashboard >/dev/null 2>&1; then echo "server up"; break; fi
+            if curl -fsS http://127.0.0.1:20128/healthz >/dev/null 2>&1; then UP=1; break; fi
+            if ! kill -0 "$PID" 2>/dev/null; then echo "server process exited early (pid $PID)"; break; fi
             sleep 1
           done
-          echo "--- server.log ---"; tail -20 /tmp/cv/server.log || true
-      - name: Install Playwright deps (Node preinstalled on runner)
+          if [ "$UP" != "1" ]; then
+            echo "FATAL: server did not become ready in 30s"
+            echo "--- server.log ---"
+            cat /tmp/cv/server.log || true
+            echo "--- process alive? ---"
+            if kill -0 "$PID" 2>/dev/null; then echo yes; else echo "no (exited)"; fi
+            kill "$PID" 2>/dev/null || true
+            exit 1
+          fi
+          echo "server ready (pid $PID)"
+          if kill -0 "$PID" 2>/dev/null; then echo "process alive: yes"; else echo "process alive: NO"; fi
+          echo "--- /dashboard ---"
+          curl -s -o /dev/null -w "http=%{http_code}\n" http://127.0.0.1:20128/dashboard
+          echo "--- /healthz ---"
+          curl -s -o /dev/null -w "http=%{http_code}\n" http://127.0.0.1:20128/healthz
+          echo "--- server.log ---"
+          cat /tmp/cv/server.log || true
+      - name: Install Playwright deps
         run: |
           cd tests/playwright
           npm install
@@ -36,3 +63,12 @@ jobs:
         env:
           BASE_URL: http://127.0.0.1:20128
         run: cd tests/playwright && npx playwright test
+      - name: Cleanup server process
+        if: always()
+        run: |
+          if [ -f /tmp/cv/pid ]; then
+            PID=$(cat /tmp/cv/pid)
+            kill "$PID" 2>/dev/null || true
+            sleep 1
+            if kill -0 "$PID" 2>/dev/null; then echo "warning: server still running"; else echo "server terminated cleanly"; fi
+          fi
