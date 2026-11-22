@@ -9,18 +9,18 @@
 | P1-3: OAuth provider connections (≥3) | MERGED | #52 | IMPLEMENTED | TESTED | PASSED | MERGED |
 | P1-4: IP allowlist/blocklist | MERGED | #53 | IMPLEMENTED | TESTED | PASSED | MERGED |
 | P1-5: Remaining routing strategies | MERGED | #54 | IMPLEMENTED | TESTED | PASSED | MERGED |
-| P1-6: `auto/*` model aliases (9 aliases) | VERIFIED | #55 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
-| P1-7: Combos (multi-model sequences) | VERIFIED | #56 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
-| P2-1: Webhook integrations (Slack/Discord/Telegram) | VERIFIED | #57 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
-| P2-2: More webhook event types | VERIFIED | #58 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
-| P2-3: Publish Docker images | NOT STARTED | #59 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
+| P1-6: `auto/*` model aliases (9 aliases) | MERGED | #55 | IMPLEMENTED | TESTED | PASSED | MERGED |
+| P1-7: Combos (multi-model sequences) | MERGED | #56 | IMPLEMENTED | TESTED | PASSED | MERGED |
+| P2-1: Webhook integrations (Slack/Discord/Telegram) | MERGED | #57 | IMPLEMENTED | TESTED | PASSED | MERGED |
+| P2-2: More webhook event types | MERGED | #58 | IMPLEMENTED | TESTED | PASSED | MERGED |
+| P2-3: Publish Docker images | VERIFIED | #59 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
 | P2-4: Benchmark parity report | NOT STARTED | #60 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
 | P2-5: Final release readiness | NOT STARTED | #61 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
 
-**Current main commit:** a5884f2 (PR #51 TOTP + PR #52 OAuth + PR #53 IP control merged)
+**Current main commit:** 1577e91 (PR #49-#58 all merged)
 **Repository:** C:/Users/LOQ/AppData/Local/hermes/cache/scratch/codvian-phase1-audit/CodvianRouter
 
-**Last updated:** 2026-11-23 — PR #51 TOTP and PR #52 OAuth merged (all CI green). PR #53 IP control merged (GitHub #51). PR #54 routing strategies verified — all 20 roadmap strategies already implemented and wired (GitHub #52). PR #55 auto/* aliases verified — all 9 aliases already implemented.
+**Last updated:** 2026-11-23 — PR #49-#58 all merged (audit log, TOTP, OAuth, IP control, routing strategies, auto/* aliases, combos, webhooks, webhook events). PR #59 Docker publishing verified — Dockerfile + docker-compose.yml + release.yml (GoReleaser/multi-arch/cosign/syft) all exist. PR #60 benchmark report next.
 
 **PR #49 changes:**
 - `internal/server/audit_log.go` (new): append-only SQLite audit store with hash-chain tamper evidence, `withAudit` middleware, `WithAuditStore` option, sensitive-field redaction
