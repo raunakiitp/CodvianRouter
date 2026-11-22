@@ -4691,10 +4691,10 @@ func (s *Server) recordMetrics(ctx context.Context, req provider.ChatRequest, re
 			})
 		} else {
 			s.webhooks.Notify(webhooks.RequestFailedEvent, map[string]any{
-				"model":     model,
-				"provider":  providerName,
-				"error":     err.Error(),
-				"outcome":   outcome,
+				"model":    model,
+				"provider": providerName,
+				"error":    err.Error(),
+				"outcome":  outcome,
 			})
 		}
 	}
