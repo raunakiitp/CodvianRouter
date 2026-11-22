@@ -136,8 +136,13 @@ func (s *Store) persist() error {
 	if s.path == "" {
 		return nil
 	}
+	// Snapshot a deep copy under the lock so the marshal below (which
+	// runs outside the lock) can never race a concurrent Upsert/AddRun.
 	s.mu.Lock()
-	snap := map[string]any{"schedules": s.schedules, "runs": s.runs}
+	snap := map[string]any{
+		"schedules": cloneSchedules(s.schedules),
+		"runs":      append([]Run(nil), s.runs...),
+	}
 	s.mu.Unlock()
 	b, err := json.MarshalIndent(snap, "", "  ")
 	if err != nil {
@@ -147,6 +152,18 @@ func (s *Store) persist() error {
 		return err
 	}
 	return os.WriteFile(s.path, b, 0o600)
+}
+
+
+// cloneSchedules copies a schedule map. The stored *Schedule values are
+// never mutated in place after Upsert (callers operate on copies returned
+// by Get/List), so copying the map is a sufficient deep snapshot.
+func cloneSchedules(in map[string]*Schedule) map[string]*Schedule {
+	out := make(map[string]*Schedule, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 // Upsert adds or replaces a schedule (by ID), then persists.
