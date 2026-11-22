@@ -5,8 +5,8 @@
 | P0-1: Request-level compliance audit log | MERGED | #49 | IMPLEMENTED | TESTED | PASSED | MERGED |
 | P0-2: Semantic cache wired into request path | DONE | (n/a — already on main) | VERIFIED | VERIFIED | VERIFIED | N/A |
 | P1-1: Dashboard session auth (JWT cookie) | DONE | (n/a — already on main) | VERIFIED | VERIFIED | VERIFIED | N/A |
-| P1-2: TOTP 2FA + backup codes | IMPLEMENTED | #51 | IMPLEMENTED | TESTED | NOT STARTED | NOT STARTED |
-| P1-3: OAuth provider connections (≥3) | NOT STARTED | #52 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
+| P1-2: TOTP 2FA + backup codes | MERGED | #51 | IMPLEMENTED | TESTED | PASSED | MERGED |
+| P1-3: OAuth provider connections (≥3) | IMPLEMENTED | #52 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
 | P1-4: IP allowlist/blocklist | NOT STARTED | #53 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
 | P1-5: Remaining routing strategies | NOT STARTED | #54 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
 | P1-6: `auto/*` model aliases (9 aliases) | NOT STARTED | #55 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
@@ -16,10 +16,10 @@
 | P2-3: Publish Docker images | NOT STARTED | #59 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
 | P2-4: Benchmark parity report | NOT STARTED | #60 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
 
-**Current main commit:** 7e87995 (PR #49 merged)
+**Current main commit:** fbed1ff (PR #51 TOTP merged)
 **Repository:** C:/Users/LOQ/AppData/Local/hermes/cache/scratch/codvian-phase1-audit/CodvianRouter
 
-**Last updated:** 2026-11-23 — PR #49 merged (ci, bench-smoke, playwright, sbom-and-vuln all green). P0-2 semantic cache already on main (degrade.WrapWithSemantic at main.go:4336). P1-1 dashboard session auth already on main (dashauth.go with Argon2id, session cookies, throttling). PR #51 TOTP 2FA implemented, built, tested — all `./internal/server/` tests pass. Ready for CI.
+**Last updated:** 2026-11-23 — PR #51 TOTP merged (ci, bench-smoke, playwright, sbom-and-vuln all green). PR #52 OAuth implemented, CI running.
 
 **PR #49 changes:**
 - `internal/server/audit_log.go` (new): append-only SQLite audit store with hash-chain tamper evidence, `withAudit` middleware, `WithAuditStore` option, sensitive-field redaction

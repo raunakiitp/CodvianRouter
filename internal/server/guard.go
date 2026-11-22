@@ -119,6 +119,11 @@ var guardRouteTable = []GuardRoute{
 	{Method: "POST", Path: "/dashboard/auth/totp/verify", Tier: TierManagement, Description: "Verifies a TOTP or backup code for login step 2; on success sets the session cookie.", Scopes: []string{"admin"}},
 	{Method: "POST", Path: "/dashboard/auth/totp/disable", Tier: TierManagement, Description: "Disables TOTP. Requires a valid session plus current password and TOTP/backup code, or an admin gateway key.", Scopes: []string{"admin"}},
 	{Method: "POST", Path: "/dashboard/auth/totp/backup-codes", Tier: TierManagement, Description: "Regenerates single-use backup codes. Requires a valid session and current password.", Scopes: []string{"admin"}},
+	// PR #52 OAuth provider connections: session + key protected; all mutate state.
+	{Method: "GET", Path: "/dashboard/oauth/connect/{provider}", Tier: TierManagement, Description: "Starts an OAuth authorization flow for the given provider (github, google, microsoft). Redirects to the provider's authorization URL. Requires CODVIAN_OAUTH_<PROVIDER>_CLIENT_ID/SECRET env vars.", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/dashboard/oauth/callback/{provider}", Tier: TierManagement, Description: "OAuth callback: exchanges the authorization code for tokens and stores the encrypted connection. Requires a valid state cookie (CSRF protection).", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/dashboard/oauth/connections", Tier: TierManagement, Description: "Lists connected OAuth accounts (provider, connected, expires_at, scopes — no tokens).", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/dashboard/oauth/disconnect/{provider}", Tier: TierManagement, Description: "Revokes and deletes the OAuth connection for the given provider.", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/dashboard/providers", Tier: TierManagement, Description: "Live provider facts (verification, wire, health) — no keys, no base URLs.", AuthExempt: true},
 	{Method: "GET", Path: "/dashboard/overview", Tier: TierManagement, Description: "Live overview KPIs + traffic buckets from the ledger/recorder — counts and totals only, no message content.", AuthExempt: true},
 	{Method: "GET", Path: "/dashboard/models", Tier: TierManagement, Description: "Live model catalog from the registry + per-model request counts — no keys, no base URLs.", AuthExempt: true},
