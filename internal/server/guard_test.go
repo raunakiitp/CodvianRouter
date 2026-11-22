@@ -92,6 +92,9 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 		"GET /api/analytics/summary", "GET /api/analytics/by-provider", "GET /api/analytics/by-model", "GET /api/analytics/costs", "GET /api/analytics/compression", "GET /api/analytics/diversity", "GET /api/analytics/auto-routing", "GET /api/analytics/combo-health", "GET /api/resilience", "GET /api/resilience/settings", "PATCH /api/resilience/settings", "POST /api/resilience/breakers/reset", "POST /api/resilience/cooldowns", "DELETE /api/resilience/cooldowns/{model...}", "GET /api/logs", "POST /api/guardrails/test", "GET /api/fallback/chains", "POST /api/fallback/chains", "DELETE /api/fallback/chains",
 		"GET /api/teams", "POST /api/teams", "GET /api/teams/{id}", "PATCH /api/teams/{id}", "DELETE /api/teams/{id}", "GET /api/quota-pools", "POST /api/quota-pools", "GET /api/quota-pools/{id}", "PATCH /api/quota-pools/{id}", "DELETE /api/quota-pools/{id}",
 		"POST /api/webhooks", "GET /api/webhooks", "GET /api/webhooks/{id}", "PUT /api/webhooks/{id}", "DELETE /api/webhooks/{id}",
+		"POST /api/eval/schedules", "GET /api/eval/schedules",
+		"GET /api/eval/schedules/{id}", "PUT /api/eval/schedules/{id}", "DELETE /api/eval/schedules/{id}",
+		"GET /api/eval/schedules/{id}/history", "POST /api/eval/schedules/{id}/trigger",
 		"GET /api/pricing", "PATCH /api/pricing", "DELETE /api/cache",
 		"GET /v1/models", "POST /v1/chat/completions", "POST /a2a", "GET /api/a2a/status", "GET /.well-known/agent.json", "POST /v1/embeddings", "POST /v1/multimodal-embeddings", "POST /v1/rerank", "POST /v1/messages", "POST /v1/responses", "GET /v1/responses/{id}", "GET /v1/responses", "DELETE /v1/responses/{id}", "GET /v1/me/status", "GET /v1/me/sessions", "GET /v1/auto-combo/{channel}/candidates",
 		"GET /v1/models/query", "GET /v1/models/health", "GET /v1/models/{model...}", "POST /v1/providers/{provider}/chat/completions", "GET /v1/providers/{provider}/models", "GET /v1/providers/{provider}/status", "GET /v1beta/models", "POST /v1beta/models/{rest...}",
@@ -208,8 +211,8 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 	for _, r := range table {
 		counts[r.Tier]++
 	}
-	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 49 || counts[TierManagement] != 254 {
-		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/49/254)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
+	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 53 || counts[TierManagement] != 257 {
+		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/53/257)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
 	}
 }
 

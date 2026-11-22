@@ -7,7 +7,7 @@
 # Scope `admin` implies every scope. LOCAL_ONLY = loopback-only
 # even with a valid key. Destructive routes need a typed
 # {"confirm": "<phrase>"} body in addition to the key.
-# Routes: 314
+# Routes: 321
 
 ## Auth
 header: Authorization: Bearer <gateway-key>
@@ -135,6 +135,13 @@ GET /api/webhooks | MANAGEMENT | scopes=admin | auth=key | Lists webhook registr
 GET /api/webhooks/{id} | MANAGEMENT | scopes=admin | auth=key | One webhook registration by id (secret never returned); unknown id is 404. Management auth (admin scope) required.
 DELETE /api/webhooks/{id} | ALWAYS_PROTECTED | scopes=admin | auth=key | Removes a webhook registration, persists the config file and rebuilds the live dispatcher; unknown id is 404. Auth always required — it silently drops an operator alert channel.
 PUT /api/webhooks/{id} | ALWAYS_PROTECTED | scopes=admin | auth=key | Updates a webhook registration (partial update: url, events and secret are each optional, only provided fields change; the URL is re-validated when changed). Persists to the config file and rebuilds the live dispatcher; unknown id is 404. Auth always required — it can re-point an operator alert channel.
+GET /api/eval/schedules | MANAGEMENT | scopes=admin | auth=key | Lists scheduled evaluations (P3-B). Management auth (admin scope) required.
+POST /api/eval/schedules | ALWAYS_PROTECTED | scopes=admin | auth=key | Creates a scheduled evaluation (P3-B): mints id, interval, suite, regression thresholds. Auth always required — it enables recurring background evaluation.
+GET /api/eval/schedules/{id} | MANAGEMENT | scopes=admin | auth=key | One scheduled evaluation by id. Management auth (admin scope) required.
+PUT /api/eval/schedules/{id} | ALWAYS_PROTECTED | scopes=admin | auth=key | Updates a scheduled evaluation (partial: interval, suite, enabled, thresholds). Auth always required — it can enable/pause recurring background evaluation.
+DELETE /api/eval/schedules/{id} | ALWAYS_PROTECTED | scopes=admin | auth=key | Deletes a scheduled evaluation (history preserved). Auth always required — it silently stops a recurring background evaluation.
+GET /api/eval/schedules/{id}/history | MANAGEMENT | scopes=admin | auth=key | Run history for a scheduled evaluation (pass rates, failed cases, regressions). Management auth (admin scope) required.
+POST /api/eval/schedules/{id}/trigger | ALWAYS_PROTECTED | scopes=admin | auth=key | Runs a scheduled evaluation immediately and records the run. Auth always required — it executes background evaluation on demand.
 GET /api/usage/om-usage | MANAGEMENT | scopes=- | auth=key | Terminal-friendly usage command for the calling gateway key (@@om-usage): spend today / this week / this month, the active limit and next reset — plain text by default, JSON with ?format=json. Only for keys the operator enabled allow_usage_command on (403 otherwise). Gateway-key auth required.
 GET /api/cache/stats | MANAGEMENT | scopes=- | auth=exempt | Live cache analytics — per-layer entries/bytes/hits/misses/hit-ratio for the exact + semantic caches, totals, single-flight coalescing counters, and aggregated savings (tokens + USD) when a savings recorder is wired; savings omitted with a note when not. Counts only, no keys, no message content.
 GET /api/telemetry/model-latency-stats | MANAGEMENT | scopes=- | auth=exempt | Per-(provider, model) measured latency percentiles p50/p95/p99 from recorded request samples, with sample counts; optional ?provider= / ?model= exact-match filters. Read-only counts and latencies, no keys, no message content.

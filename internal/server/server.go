@@ -63,6 +63,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/coalescing"
 	"github.com/raunakiitp/codvian-router/internal/compress"
 	"github.com/raunakiitp/codvian-router/internal/config"
+	"github.com/raunakiitp/codvian-router/internal/eval"
 	"github.com/raunakiitp/codvian-router/internal/feedback"
 	"github.com/raunakiitp/codvian-router/internal/guardrails"
 	"github.com/raunakiitp/codvian-router/internal/health"
@@ -648,6 +649,12 @@ type Server struct {
 	// no webhooks configured: schedule blocks are refused
 	// without any delivery. Set by WithWebhooks.
 	webhooks *webhooks.Dispatcher
+	// evalStore is the P3-B scheduled-evaluation store (created lazily
+	// from cfg.DataDir). evalSched runs due schedules against the
+	// harness; evalInitOnce guards one-time lazy creation.
+	evalStore   *eval.Store
+	evalSched   *eval.Scheduler
+	evalInitOnce sync.Once
 	// modelsDevStatus, when set, reports the opt-in models.dev
 	// sync state (CHECKLIST 179) for the dashboard feeds: whether
 	// the sync is on, when it last tried/succeeded, the last
@@ -1730,6 +1737,7 @@ func New(engine Engine, opts ...Option) *Server {
 	// M8.19 webhooks (guard rows first — registerWebhooksRoutes
 	// panics on a missing table entry, like s.register).
 	s.registerWebhooksRoutes(mux)
+	s.registerEvalRoutes(mux)
 	s.register(mux, "GET", "/api/usage/om-usage", s.handleOmUsage)
 	s.register(mux, "GET", "/api/cache/stats", s.handleCacheStats)
 	s.register(mux, "GET", "/api/telemetry/model-latency-stats", s.handleModelLatencyStats)

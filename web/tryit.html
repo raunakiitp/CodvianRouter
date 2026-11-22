@@ -1447,6 +1447,90 @@ const ROUTES = [
   },
   {
     "method": "GET",
+    "path": "/api/eval/schedules",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Lists scheduled evaluations (P3-B). Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/eval/schedules",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Creates a scheduled evaluation (P3-B): mints id, interval, suite, regression thresholds. Auth always required \u2014 it enables recurring background evaluation.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/eval/schedules/{id}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "One scheduled evaluation by id. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "PUT",
+    "path": "/api/eval/schedules/{id}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Updates a scheduled evaluation (partial: interval, suite, enabled, thresholds). Auth always required \u2014 it can enable/pause recurring background evaluation.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/eval/schedules/{id}",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Deletes a scheduled evaluation (history preserved). Auth always required \u2014 it silently stops a recurring background evaluation.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/eval/schedules/{id}/history",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Run history for a scheduled evaluation (pass rates, failed cases, regressions). Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/eval/schedules/{id}/trigger",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Runs a scheduled evaluation immediately and records the run. Auth always required \u2014 it executes background evaluation on demand.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
     "path": "/api/usage/om-usage",
     "tier": "MANAGEMENT",
     "spawn_capable": false,
