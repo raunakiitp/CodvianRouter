@@ -41,7 +41,9 @@ func (s *Server) ensureEval() error {
 			sched.Notify = s.evalNotify
 		}
 		s.evalSched = sched
-		go sched.Run(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithCancel(context.Background())
+		s.evalCancel = cancel
+		go sched.Run(ctx, 30*time.Second)
 	})
 	return err
 }

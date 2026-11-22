@@ -655,6 +655,10 @@ type Server struct {
 	evalStore   *eval.Store
 	evalSched   *eval.Scheduler
 	evalInitOnce sync.Once
+	// evalCancel stops the scheduler loop on Close (a leaked loop
+	// would otherwise keep touching the store after the server is
+	// closed and race with a later test/restart).
+	evalCancel context.CancelFunc
 	// modelsDevStatus, when set, reports the opt-in models.dev
 	// sync state (CHECKLIST 179) for the dashboard feeds: whether
 	// the sync is on, when it last tried/succeeded, the last
@@ -4767,6 +4771,10 @@ func (s *Server) getCCRStore() *compress.CCRStore {
 // teardown even when every assertion passed.
 func (s *Server) Close() error {
 	var errs []error
+	if s.evalCancel != nil {
+		s.evalCancel()
+		s.evalCancel = nil
+	}
 	s.ccrMu.Lock()
 	store := s.ccrStore
 	s.ccrStore = nil
