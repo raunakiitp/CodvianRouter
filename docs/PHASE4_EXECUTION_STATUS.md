@@ -10,7 +10,7 @@
 | P1-4: IP allowlist/blocklist | IMPLEMENTED | #53 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
 | P1-5: Remaining routing strategies | VERIFIED | #54 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
 | P1-6: `auto/*` model aliases (9 aliases) | VERIFIED | #55 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
-| P1-7: Combos (multi-model sequences) | NOT STARTED | #56 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
+| P1-7: Combos (multi-model sequences) | VERIFIED | #56 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
 | P2-1: Webhook integrations (Slack/Discord/Telegram) | NOT STARTED | #57 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
 | P2-2: More webhook event types | NOT STARTED | #58 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
 | P2-3: Publish Docker images | NOT STARTED | #59 | NOT STARTED | NOT STARTED | NOT STARTED | NOT STARTED |
@@ -20,7 +20,7 @@
 **Current main commit:** b3aa2ee (PR #51 TOTP + PR #52 OAuth merged)
 **Repository:** C:/Users/LOQ/AppData/Local/hermes/cache/scratch/codvian-phase1-audit/CodvianRouter
 
-**Last updated:** 2026-11-23 — PR #51 TOTP and PR #52 OAuth merged (all CI green). PR #53 IP control CI pending. PR #54 routing strategies verified (GitHub #52, CI pending). PR #56 auto/* aliases verified — all 9 aliases already implemented.
+**Last updated:** 2026-11-23 — PR #51 TOTP and PR #52 OAuth merged (all CI green). PR #53 IP control CI pending. PR #54 routing strategies verified (GitHub #52, CI pending). PR #56 auto/* aliases verified — all 9 aliases already implemented (GitHub #53). PR #57 combos verified — fusion/pipeline/jev/chaos-mode all implemented.
 
 **PR #49 changes:**
 - `internal/server/audit_log.go` (new): append-only SQLite audit store with hash-chain tamper evidence, `withAudit` middleware, `WithAuditStore` option, sensitive-field redaction
