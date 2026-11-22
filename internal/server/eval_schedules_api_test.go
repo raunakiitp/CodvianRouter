@@ -129,11 +129,11 @@ func TestP3BScheduledEvalAPICRUD(t *testing.T) {
 
 func TestP3BEvalGuardClassification(t *testing.T) {
 	want := map[string]GuardTier{
-		"GET /api/eval/schedules":            TierManagement,
-		"POST /api/eval/schedules":           TierAlwaysProtected,
-		"GET /api/eval/schedules/{id}":       TierManagement,
-		"PATCH /api/eval/schedules/{id}":     TierAlwaysProtected,
-		"DELETE /api/eval/schedules/{id}":    TierAlwaysProtected,
+		"GET /api/eval/schedules":              TierManagement,
+		"POST /api/eval/schedules":             TierAlwaysProtected,
+		"GET /api/eval/schedules/{id}":         TierManagement,
+		"PATCH /api/eval/schedules/{id}":       TierAlwaysProtected,
+		"DELETE /api/eval/schedules/{id}":      TierAlwaysProtected,
 		"GET /api/eval/schedules/{id}/history": TierManagement,
 	}
 	for _, r := range RouteTable() {
