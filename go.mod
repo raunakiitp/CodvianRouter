@@ -5,8 +5,8 @@ go 1.26.0
 require (
 	github.com/pkoukk/tiktoken-go v0.1.8
 	github.com/redis/go-redis/v9 v9.23.0
-	golang.org/x/crypto v0.24.0
-	golang.org/x/sys v0.48.0
+	golang.org/x/crypto v0.59.0
+	golang.org/x/sys v0.50.0
 	modernc.org/sqlite v1.34.0
 )
 

@@ -192,14 +192,14 @@ func TestVerifyChecksumsFileCountsEntries(t *testing.T) {
 func TestGenerateSBOMShape(t *testing.T) {
 	deps := []Module{
 		{Path: "github.com/raunakiitp/codvian-router", Main: true},
-		{Path: "golang.org/x/crypto", Version: "v0.24.0"},
+		{Path: "golang.org/x/crypto", Version: "v0.59.0"},
 		{Path: "modernc.org/sqlite", Version: "v1.34.0"},
 		// A replaced module ships under the replacement's identity.
 		{Path: "example.com/old", Version: "v1.0.0", Replace: &Module{Path: "example.com/new", Version: "v1.1.0"}},
 		// A local-path replace has no version: listed, never invented.
 		{Path: "example.com/local", Version: "v1.0.0", Replace: &Module{Path: "example.com/local", Version: ""}},
 		// Duplicate path (same module seen twice) collapses to one.
-		{Path: "golang.org/x/crypto", Version: "v0.24.0"},
+		{Path: "golang.org/x/crypto", Version: "v0.59.0"},
 	}
 	out, err := GenerateSBOM("github.com/raunakiitp/codvian-router", "v0.1.0", deps)
 	if err != nil {
@@ -244,7 +244,7 @@ func TestGenerateSBOMShape(t *testing.T) {
 	if _, hasVersion := byName["example.com/local"]["version"]; hasVersion {
 		t.Fatalf("local-path replace got an invented version: %v", byName["example.com/local"])
 	}
-	if byName["golang.org/x/crypto"]["purl"] != "pkg:golang/golang.org/x/crypto@v0.24.0" {
+	if byName["golang.org/x/crypto"]["purl"] != "pkg:golang/golang.org/x/crypto@v0.59.0" {
 		t.Fatalf("crypto purl wrong: %v", byName["golang.org/x/crypto"]["purl"])
 	}
 }
@@ -267,12 +267,12 @@ func TestGenerateSBOMEmptyVersionIsHonest(t *testing.T) {
 
 func TestParseGoListJSON(t *testing.T) {
 	in := `{"Path":"github.com/raunakiitp/codvian-router","Main":true}` + "\n" +
-		`{"Path":"golang.org/x/crypto","Version":"v0.24.0"}` + "\n"
+		`{"Path":"golang.org/x/crypto","Version":"v0.59.0"}` + "\n"
 	mods, err := ParseGoListJSON(strings.NewReader(in))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(mods) != 2 || !mods[0].Main || mods[1].Version != "v0.24.0" {
+	if len(mods) != 2 || !mods[0].Main || mods[1].Version != "v0.59.0" {
 		t.Fatalf("unexpected modules: %+v", mods)
 	}
 	if _, err := ParseGoListJSON(strings.NewReader(`{"Path":"x"}{garbage`)); err == nil {

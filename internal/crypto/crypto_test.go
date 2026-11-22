@@ -450,3 +450,52 @@ func TestNewFromSecretDeterministicSalt(t *testing.T) {
 		t.Errorf("same-secret vault Unseal = %q, err = %v", got, err)
 	}
 }
+
+// TestCryptoDependencyAtSecureVersion is a regression test for the
+// golang.org/x/crypto security remediation (Dependabot alerts #1-#17,
+// CVE-2024-45337 through CVE-2026-46598). It verifies the go.mod requires
+// golang.org/x/crypto at or above the version that patches all reported
+// vulnerabilities (v0.59.0). If this test fails, the dependency was
+// accidentally downgraded and must be re-upgraded.
+func TestCryptoDependencyAtSecureVersion(t *testing.T) {
+	const minVersion = "v0.59.0"
+	// Locate go.mod by walking up from this test file's directory.
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	dir := filepath.Dir(file)
+	modPath := ""
+	for d := dir; ; d = filepath.Dir(d) {
+		if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+			modPath = filepath.Join(d, "go.mod")
+			break
+		}
+		if d == filepath.Dir(d) {
+			break // reached filesystem root
+		}
+	}
+	if modPath == "" {
+		t.Fatal("could not locate go.mod by walking up from test directory")
+	}
+	modBytes, err := os.ReadFile(modPath)
+	if err != nil {
+		t.Fatalf("cannot read go.mod: %v", err)
+	}
+	var found string
+	for _, line := range strings.Split(string(modBytes), "\n") {
+		if strings.Contains(line, "golang.org/x/crypto") {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				found = fields[1]
+			}
+			break
+		}
+	}
+	if found == "" {
+		t.Fatal("golang.org/x/crypto not found in go.mod require block")
+	}
+	if found < minVersion {
+		t.Fatalf("golang.org/x/crypto version %q is below the secure minimum %q (Dependabot alerts #1-#17, CVE-2024-45337 through CVE-2026-46598)", found, minVersion)
+	}
+}
