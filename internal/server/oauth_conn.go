@@ -34,49 +34,49 @@ import (
 // oauthProvider is the static configuration for one supported OAuth
 // provider.
 type oauthProvider struct {
-	ID      string
-	Name    string
-	AuthURL string
+	ID       string
+	Name     string
+	AuthURL  string
 	TokenURL string
-	Scopes  []string
+	Scopes   []string
 }
 
 // oauthProviders is the registry of supported OAuth providers (3 required
 // by PR #52).
 var oauthProviders = map[string]oauthProvider{
 	"github": {
-		ID:      "github",
-		Name:    "GitHub",
-		AuthURL: "https://github.com/login/oauth/authorize",
+		ID:       "github",
+		Name:     "GitHub",
+		AuthURL:  "https://github.com/login/oauth/authorize",
 		TokenURL: "https://github.com/login/oauth/access_token",
-		Scopes:  []string{"read:user", "user:email"},
+		Scopes:   []string{"read:user", "user:email"},
 	},
 	"google": {
-		ID:      "google",
-		Name:    "Google",
-		AuthURL: "https://accounts.google.com/o/oauth2/v2/auth",
+		ID:       "google",
+		Name:     "Google",
+		AuthURL:  "https://accounts.google.com/o/oauth2/v2/auth",
 		TokenURL: "https://oauth2.googleapis.com/token",
-		Scopes:  []string{"openid", "email", "profile"},
+		Scopes:   []string{"openid", "email", "profile"},
 	},
 	"microsoft": {
-		ID:      "microsoft",
-		Name:    "Microsoft",
-		AuthURL: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+		ID:       "microsoft",
+		Name:     "Microsoft",
+		AuthURL:  "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
 		TokenURL: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-		Scopes:  []string{"User.Read", "email"},
+		Scopes:   []string{"User.Read", "email"},
 	},
 }
 
 // oauthConn is one connected OAuth account. AccessToken/RefreshToken hold
 // either the raw token (no vault) or the Vault.Seal() ciphertext (vault).
 type oauthConn struct {
-	Provider    string    `json:"provider"`
-	AccessToken string    `json:"-"`
-	RefreshToken string   `json:"-"`
-	TokenType   string    `json:"token_type"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	Scope       string    `json:"scope"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	Provider     string    `json:"provider"`
+	AccessToken  string    `json:"-"`
+	RefreshToken string    `json:"-"`
+	TokenType    string    `json:"token_type"`
+	ExpiresAt    time.Time `json:"expires_at"`
+	Scope        string    `json:"scope"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // oauthConnStatus is the client-visible view of a connection (no secrets).
