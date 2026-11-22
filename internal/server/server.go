@@ -542,6 +542,9 @@ type Server struct {
 	// data dir). Guarded by dashAuthMu.
 	totpAuth    *totpStore
 	totpAuthErr error
+	// oauthStore is the lazy dashboard OAuth connection store (PR #52):
+	// created on first OAuth use from cfg.DataDir. Guarded by dashAuthMu.
+	oauthStore *oauthConnStore
 	// evalStateMu guards the lazily-opened P3-B eval store/scheduler
 	// (eval_schedules_api.go). It lives on THIS Server instance (not a
 	// package global) so two Servers with different data dirs are
@@ -1654,6 +1657,11 @@ func New(engine Engine, opts ...Option) *Server {
 	s.register(mux, "POST", "/dashboard/auth/totp/verify", s.handleTotpVerify)
 	s.register(mux, "POST", "/dashboard/auth/totp/disable", s.handleTotpDisable)
 	s.register(mux, "POST", "/dashboard/auth/totp/backup-codes", s.handleTotpBackupCodes)
+	// PR #52 OAuth provider connections:
+	s.register(mux, "GET", "/dashboard/oauth/connect/{provider}", s.handleOAuthConnect)
+	s.register(mux, "GET", "/dashboard/oauth/callback/{provider}", s.handleOAuthCallback)
+	s.register(mux, "GET", "/dashboard/oauth/connections", s.handleOAuthConnections)
+	s.register(mux, "POST", "/dashboard/oauth/disconnect/{provider}", s.handleOAuthDisconnect)
 	s.register(mux, "GET", "/dashboard/providers", s.handleDashboardProviders)
 	s.register(mux, "GET", "/dashboard/overview", s.handleOverview)
 	s.register(mux, "GET", "/dashboard/models", s.handleDashboardModels)

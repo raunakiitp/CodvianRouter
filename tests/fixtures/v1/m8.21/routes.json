@@ -141,6 +141,54 @@
   },
   {
     "method": "GET",
+    "path": "/dashboard/oauth/connect/{provider}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Starts an OAuth authorization flow for the given provider (github, google, microsoft). Redirects to the provider's authorization URL. Requires CODVIAN_OAUTH_<PROVIDER>_CLIENT_ID/SECRET env vars.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/oauth/callback/{provider}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "OAuth callback: exchanges the authorization code for tokens and stores the encrypted connection. Requires a valid state cookie (CSRF protection).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/dashboard/oauth/connections",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Lists connected OAuth accounts (provider, connected, expires_at, scopes \u2014 no tokens).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/oauth/disconnect/{provider}",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Revokes and deletes the OAuth connection for the given provider.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
     "path": "/dashboard/providers",
     "tier": "MANAGEMENT",
     "spawn_capable": false,
