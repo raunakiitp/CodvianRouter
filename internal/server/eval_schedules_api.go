@@ -20,42 +20,52 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/eval"
 )
 
-// evalMu guards the lazy eval store/scheduler so the first access
-// initializes them from cfg.DataDir (in-memory only when there is no
-// config/data dir), and a corrupt persisted store is remembered.
-// evalCancel cancels the scheduler loop on Shutdown.
-var (
-	evalMu       sync.Mutex
-	evalStore    *eval.Store
-	evalSch      *eval.Scheduler
-	evalCancel   context.CancelFunc
-	evalStoreErr error
-)
+// evalState holds the lazily-opened P3-B eval store/scheduler on THIS
+// Server instance (not package globals), so two Servers with different
+// data dirs stay fully isolated. A corrupt persisted store is
+// remembered so endpoints answer 503 instead of silently wiping history.
+type evalState struct {
+	mu        sync.Mutex
+	store     *eval.Store
+	scheduler *eval.Scheduler
+	cancel    context.CancelFunc
+	storeErr  error
+}
+
+func (s *Server) evalStateInit() *evalState {
+	s.evalStateMu.Lock()
+	defer s.evalStateMu.Unlock()
+	if s.evalState == nil {
+		s.evalState = &evalState{}
+	}
+	return s.evalState
+}
 
 // ensureEvalStore lazily opens the eval schedule store at
 // <cfg.DataDir>/eval-schedules.json (or an in-memory store when the
 // config has no data dir). A corrupt file is remembered so the
 // endpoints answer 503 instead of silently wiping history.
 func (s *Server) ensureEvalStore() (*eval.Store, error) {
-	evalMu.Lock()
-	defer evalMu.Unlock()
-	if evalStoreErr != nil {
-		return nil, evalStoreErr
+	st := s.evalStateInit()
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if st.storeErr != nil {
+		return nil, st.storeErr
 	}
-	if evalStore != nil {
-		return evalStore, nil
+	if st.store != nil {
+		return st.store, nil
 	}
 	var path string
 	if s.cfg != nil && s.cfg.DataDir != "" {
 		path = filepath.Join(s.cfg.DataDir, "eval-schedules.json")
 	}
-	st, err := eval.Open(path)
+	store, err := eval.Open(path)
 	if err != nil {
-		evalStoreErr = err
+		st.storeErr = err
 		return nil, err
 	}
-	evalStore = st
-	return st, nil
+	st.store = store
+	return st.store, nil
 }
 
 // startEvalScheduler starts the scheduler loop owned by the Server. It
@@ -63,16 +73,16 @@ func (s *Server) ensureEvalStore() (*eval.Store, error) {
 // the harness with no engine, which records failures and never spends
 // credits); callers may swap it on the Scheduler before starting.
 func (s *Server) startEvalScheduler() {
-	st, err := s.ensureEvalStore()
-	if err != nil {
+	if _, err := s.ensureEvalStore(); err != nil {
 		return
 	}
+	st := s.evalStateInit()
+	st.mu.Lock()
 	ctx, cancel := context.WithCancel(context.Background())
-	evalMu.Lock()
-	evalCancel = cancel
-	if evalSch == nil {
-		evalSch = &eval.Scheduler{
-			Store: st,
+	st.cancel = cancel
+	if st.scheduler == nil {
+		st.scheduler = &eval.Scheduler{
+			Store: st.store,
 			Notify: func(event, scheduleID, runID string) {
 				if s.webhooks == nil {
 					return
@@ -84,18 +94,20 @@ func (s *Server) startEvalScheduler() {
 			},
 		}
 	}
-	evalMu.Unlock()
-	go evalSch.Run(ctx, 15*time.Second)
+	sch := st.scheduler
+	st.mu.Unlock()
+	go sch.Run(ctx, 15*time.Second)
 }
 
 // stopEvalScheduler cancels the scheduler loop (called on Shutdown).
 func (s *Server) stopEvalScheduler() {
-	evalMu.Lock()
-	if evalCancel != nil {
-		evalCancel()
-		evalCancel = nil
+	st := s.evalStateInit()
+	st.mu.Lock()
+	if st.cancel != nil {
+		st.cancel()
+		st.cancel = nil
 	}
-	evalMu.Unlock()
+	st.mu.Unlock()
 }
 
 // evalScheduleView is the API projection of a schedule (no internals).
