@@ -81,6 +81,9 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 		"GET /dashboard/models", "POST /dashboard/models/refresh", "GET /dashboard/memstats", "GET /dashboard/catalog-audit", "GET /dashboard/logs",
 		"GET /dashboard/usage", "GET /dashboard/keys",
 		"POST /dashboard/auth/setup", "POST /dashboard/auth/login", "POST /dashboard/auth/logout", "POST /dashboard/auth/change",
+		// PR #51 TOTP endpoints
+		"GET /dashboard/auth/totp/status", "POST /dashboard/auth/totp/enroll", "POST /dashboard/auth/totp/confirm",
+		"POST /dashboard/auth/totp/verify", "POST /dashboard/auth/totp/disable", "POST /dashboard/auth/totp/backup-codes",
 		"GET /dashboard/guardrails",
 		"POST /dashboard/guardrails", "GET /dashboard/strategies",
 		"POST /dashboard/strategies", "GET /dashboard/cooldown",
@@ -219,8 +222,8 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 	for _, r := range table {
 		counts[r.Tier]++
 	}
-	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 56 || counts[TierManagement] != 262 {
-		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/56/262)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
+	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 56 || counts[TierManagement] != 268 {
+		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/56/268)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
 	}
 }
 

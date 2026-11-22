@@ -540,6 +540,8 @@ func (s *Server) handleDashAuthSetup(w http.ResponseWriter, r *http.Request) {
 
 // handleDashAuthLogin serves POST /dashboard/auth/login: checks
 // the operator password and, on success, sets the session cookie.
+// When TOTP is enabled, a valid TOTP code must also be provided;
+// without it the response is 202 with totp_required=true (no cookie).
 // A missing or wrong password is 401; a throttled peer is 429.
 func (s *Server) handleDashAuthLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -557,15 +559,32 @@ func (s *Server) handleDashAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	var req dashAuthPasswordRequest
+	var req struct {
+		Password string `json:"password"`
+		TotpCode string `json:"totp_code,omitempty"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid dashboard login: expected {\"password\": string}")
+		writeError(w, http.StatusBadRequest, "invalid dashboard login: expected {\"password\": string, \"totp_code\": string}")
 		return
 	}
 	if req.Password == "" || !st.VerifyPassword(req.Password) {
 		st.RecordLoginFailure(peer)
 		writeError(w, http.StatusUnauthorized, "wrong dashboard password")
 		return
+	}
+	// If TOTP is enabled, require a valid TOTP/backup code before issuing
+	// a session. Without one, return 202 totp_required.
+	tst, terr := s.totpStoreFor()
+	totpEnabled := terr == nil && tst != nil && tst.Enabled()
+	if totpEnabled {
+		if req.TotpCode == "" || !tst.VerifyLoginCode(req.TotpCode) {
+			st.RecordLoginSuccess(peer) // password was correct; don't count as failure
+			writeJSON(w, http.StatusAccepted, map[string]any{
+				"totp_required": true,
+				"note":          "TOTP enabled — POST /dashboard/auth/totp/verify with a TOTP or backup code to complete login",
+			})
+			return
+		}
 	}
 	st.RecordLoginSuccess(peer)
 	tok, exp, err := st.NewSession()
