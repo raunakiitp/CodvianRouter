@@ -1,6 +1,6 @@
 # OmniRoute Gap Analysis & Phase 4 Master Roadmap
 
-**Source:** read-only GitHub API access to `cheaper-inference/OmniRoute` (default branch `release/v3.8.55`). No local clone, no submodule, no code imported. CODVIAN Router compared at main commit `beeebaf` + security PR `27a235d` (merged).
+**Source:** read-only GitHub API access to `cheaper-inference/OmniRoute` (default branch `release/v3.8.55`). No local clone, no submodule, no code imported. CODVIAN Router compared at main commit `632f574`.
 
 **Methodology:** every feature classified from actual repository evidence — OmniRoute file paths + docs read via the GitHub Contents/Trees API; CODVIAN file paths + source read from the local working tree. Features are NOT marked equivalent by name alone; actual behavior is compared.
 
@@ -228,27 +228,29 @@ Classification scale:
 
 ---
 
-### Totals
+### Totals (126 features)
 
-| Category | FULLY | PARTIALLY | MISSING | IMPLEMENTED BUT NOT VERIFIED | NOT APPLICABLE |
-|----------|-------|-----------|---------|------------------------------|----------------|
-| Core Architecture | 10 | 0 | 2 | 0 | 0 |
-| Provider Mgmt | 2 | 4 | 2 | 0 | 0 |
-| Routing | 13 | 4 | 1 | 0 | 1 |
-| Auth/RBAC | 6 | 0 | 4 | 0 | 0 |
-| Usage/Billing | 8 | 1 | 1 | 0 | 0 |
-| Caching/Perf | 5 | 1 | 0 | 1 | 0 |
+| Category | FULLY | PARTIALLY | MISSING | NOT VERIFIED | N/A |
+|----------|-------|-----------|---------|--------------|-----|
+| Core Architecture | 12 | 1 | 4 | 0 | 0 |
+| Provider Mgmt | 1 | 4 | 3 | 0 | 0 |
+| Routing | 14 | 4 | 1 | 0 | 1 |
+| Auth/RBAC | 9 | 0 | 4 | 0 | 0 |
+| Usage/Billing | 6 | 3 | 1 | 0 | 0 |
+| Caching/Perf | 4 | 1 | 0 | 1 | 0 |
 | Observability | 5 | 1 | 0 | 0 | 0 |
 | Streaming/Multimodal | 1 | 2 | 1 | 0 | 0 |
 | Eval/Benchmark | 2 | 1 | 0 | 0 | 0 |
-| Webhooks/Jobs | 3 | 1 | 0 | 0 | 0 |
-| Dashboard | 1 | 2 | 2 | 0 | 0 |
+| Webhooks/Jobs | 4 | 2 | 0 | 0 | 0 |
+| Dashboard | 1 | 3 | 2 | 0 | 0 |
 | Security | 2 | 6 | 2 | 0 | 1 |
-| Deployment/Infra | 2 | 3 | 2 | 0 | 0 |
-| Testing/DX | 6 | 1 | 0 | 0 | 0 |
-| **TOTAL** | **68** | **25** | **16** | **1** | **2** |
+| Deployment/Infra | 4 | 2 | 2 | 0 | 0 |
+| Testing/DX | 7 | 1 | 0 | 0 | 0 |
+| **TOTAL** | **72** | **31** | **20** | **1** | **2** |
 
-**Grand total compared: 112 features**
+**72 + 31 + 20 + 1 + 2 = 126** ✓
+
+*(Previous versions of this document incorrectly reported 112 features due to arithmetic errors in category totals. All 126 rows above are individually verified against repository evidence.)*
 
 ---
 
@@ -256,7 +258,7 @@ Classification scale:
 
 1. **No dashboard login / session auth** — CODVIAN is API-key only; OmniRoute has dashboard sessions, OIDC, TOTP 2FA. CODVIAN's threat model is single-operator local; adding multi-user auth is a large change.
 2. **No OAuth/no-auth/web-cookie provider connections** — CODVIAN is API-key-only provider auth; OmniRoute supports 27 OAuth + no-auth + web-cookie providers.
-3. **No completions/embeddings/images/audio/video/music/search/moderation/reroute APIs** — CODVIAN is chat-completions-only (`/v1/chat/completions`, `/v1/models`); OmniRoute is a full multimodal gateway.
+3. **No WebSocket bridge, video/music generation, web search, or moderations API** — CODVIAN has chat-completions plus embeddings/images/audio/reranking; OmniRoute has additional multimodal endpoints.
 4. **No desktop app / PWA** — CODVIAN is a headless Go binary; OmniRoute ships Electron + PWA.
 5. **No Helm/Kubernetes deployment** — CODVIAN has Docker (unpublished) only.
 6. **No MITM proxy / SSRF guard** — CODVIAN makes direct outbound HTTP; OmniRoute has a full MITM proxy with SSRF protection.
@@ -269,8 +271,6 @@ Classification scale:
 1. **2FA / MFA for dashboard** (when dashboard auth is added) — OmniRoute has TOTP + backup codes.
 2. **IP allowlist/blocklist** — OmniRoute has API access IP control.
 3. **Request-level compliance audit log** — CODVIAN audits admin actions only; OmniRoute audits all API requests.
-4. **Guardrails wired into request path** — CODVIAN has guardrails package + dashboard section, but pre/post-call enforcement on chat requests needs completion.
-5. **Streaming usage recording** — streams record 0 tokens/cost (documented limitation); OmniRoute records usage from streaming responses.
 
 ---
 
@@ -284,133 +284,109 @@ Classification scale:
 
 ## Phase 4 Master Roadmap
 
-### Priority P0 (security/correctness — do before any feature work)
+### Priority P0 — Security/correctness gaps (do before any feature work)
 
-| # | Task | Dependency | Acceptance Criteria |
-|---|------|-----------|-------------------|
-| P0-1 | Complete guardrail pre/post-call enforcement on chat requests | P3-D dashboard section exists | Guardrails block/transform on `preCall` and `postCall`; fail-open behavior tested; regression tests for every guardrail |
-| P0-2 | Add streaming usage recording | ledger records 0 for streams today | Streams record provider-reported usage when available; local-estimate fallback when not; tests cover streaming rows |
-| P0-3 | Add request-level compliance audit log | org audit log exists | All API requests logged (actor, action, target, detail); append-only; tamper-evident |
+| ID | Task | Dependency | Acceptance Criteria |
+|----|------|-----------|-------------------|
+| P0-1 | Request-level compliance audit log | `audit.go` exists (guard denials/MCP only) | Every API request logged (actor, action, target, detail, redacted); **never stores API keys, authorization headers, passwords, or sensitive request/response bodies in plaintext**; append-only; tamper-evident (hash-chained or signed entries); covers `/v1/*` chat/embeddings/images/audio/responses |
+| P0-2 | Semantic cache wired into request path | `internal/cache/cache.go` exists (`LocalSemanticCache`, `NeuralEmbedder`) | Cache hit returns cached response without upstream call; miss populates; TTL/LRU enforced; neural embedder opt-in; **tenant/team/key isolation verified — a cache hit must never leak another user's response**; tests prove end-to-end hit/miss through `/v1/chat/completions` |
 
-### Priority P1 (core parity — chat gateway completeness)
+### Priority P1 — Core chat-gateway parity
 
-| # | Task | Dependency | Acceptance Criteria |
-|---|------|-----------|-------------------|
-| P1-1 | Embeddings API (`/v1/embeddings`) | provider wire format registry | OpenAI-compatible embeddings through at least 2 providers; unit tests |
-| P1-2 | Image generation API (`/v1/images/generations`) | provider wire format registry | At least 2 image providers; tests |
-| P1-3 | Audio transcription + TTS APIs | provider wire format registry | At least 2 providers each; tests |
-| P1-4 | Dashboard session auth (JWT cookie) | none | Login/logout, session revocation on password change, cookie-based admin routes |
-| P1-5 | TOTP 2FA + backup codes | P1-4 | Enrollment shows codes once, bcrypt hashes persisted, verification enforces 2FA |
-| P1-6 | OAuth provider connections | P1-4 | At least 3 OAuth providers connectable via dashboard |
-| P1-7 | IP allowlist/blocklist | P1-4 | Middleware rejects disallowed IPs; configurable via config file |
+| ID | Task | Dependency | Acceptance Criteria |
+|----|------|-----------|-------------------|
+| P1-1 | Dashboard session auth (JWT cookie) | none | Simple password + server-side session; login/logout endpoints; session revocation on password change; cookie-based admin routes; no OIDC |
+| P1-2 | TOTP 2FA + backup codes | P1-1 | Enrollment displays codes once (never stored plaintext); bcrypt hashes persisted; verification enforces 2FA; backup codes single-use |
+| P1-3 | OAuth provider connections | P1-1 | ≥3 OAuth providers connectable via dashboard; token refresh; key stored encrypted at rest |
+| P1-4 | IP allowlist/blocklist | P1-1 | Middleware rejects disallowed IPs; configurable via config file; allowlist and blocklist both supported |
+| P1-5 | Remaining routing strategies | `internal/strategy/` exists (`HookFactory`, `HookFactoryWithCacheAffinity`) | All OmniRoute-named strategies implemented + tested: priority, fill-first, weighted, round-robin, p2c, least-used, random, cost-optimized, headroom, reset-window, reset-aware, context-relay, context-optimized, lkgp, auto, fusion, pipeline, cache-optimized, quota-weighted, expiry-first, jev |
+| P1-6 | `auto/*` model aliases | `internal/autorouter/` exists | Each alias (auto/coding, auto/fast, auto/cheap, auto/subscription, auto/thrifty, auto/offline, auto/smart, auto/lkgp, auto/chaos) resolves to concrete model or fails honestly; tests |
+| P1-7 | Combos (multi-model sequences) | routing engine chains | Combo = ordered model list with automatic fallback on quota/failure/cost spike; each step tried once; tests |
 
-### Priority P2 (routing & reliability completeness)
+### Priority P2 — Webhooks, operations, polish
 
-| # | Task | Dependency | Acceptance Criteria |
-|---|------|-----------|-------------------|
-| P2-1 | Wire semantic cache into request path | `internal/cache/` semantic cache exists | Cache hit returns cached response without upstream call; miss populates; TTL/LRU enforced; tests |
-| P2-2 | Add remaining 22 routing strategies | `internal/strategy/` exists | All OmniRoute-named strategies (priority, fill-first, weighted, round-robin, p2c, least-used, random, cost-optimized, headroom, reset-window, reset-aware, context-relay, context-optimized, lkgp, auto, fusion, pipeline, cache-optimized, quota-weighted, expiry-first, jev) implemented + tested |
-| P2-3 | Add `auto/*` model aliases (coding, fast, cheap, subscription, thrifty, offline, smart, lkgp, chaos) | `internal/autorouter/` exists | Each alias resolves to a concrete model or fails honestly; tests |
-| P2-4 | Add combos (multi-model sequences) | routing engine chains | Combo = ordered model list with automatic fallback on quota/failure/cost spike; tests |
-| P2-5 | Add webhook integrations (Slack/Discord/Telegram) | `internal/webhooks/` exists | Payload templates per integration; delivery tests with mock webhooks |
-| P2-6 | Add more webhook event types | `quota.exceeded` exists | `request.completed`, `request.failed`, `provider.exhausted`, `test.ping` emitted |
+| ID | Task | Dependency | Acceptance Criteria |
+|----|------|-----------|-------------------|
 
-### Priority P3 (operations & polish)
+### Priority P2 — Webhooks, operations, polish
 
-| # | Task | Dependency | Acceptance Criteria |
-|---|------|-----------|-------------------|
-| P3-1 | Publish Docker images | `Dockerfile`, `docker-compose.yml` exist | Automated build on tags; image scans clean |
-| P3-2 | Add Helm chart | none | `deploy/helm/` with values; installable |
-| P3-3 | Add i18n for dashboard | `web/index.html` is English-only | At least 5 languages; language switcher |
-| P3-4 | Add desktop app (Electron/PWA) | none | Installable desktop binary; system tray integration |
-| P3-5 | Benchmark parity with OmniRoute | `scripts/smoke-followups-277.py` | Benchmark report comparing failover/hedge/latency numbers |
+| ID | Task | Dependency | Acceptance Criteria |
+|----|------|-----------|-------------------|
+| P2-1 | Webhook integrations (Slack/Discord/Telegram) | `internal/webhooks/` exists | Payload templates per integration; delivery tests with mock webhooks; HMAC signing option |
+| P2-2 | More webhook event types | `quota.exceeded` exists | `request.completed`, `request.failed`, `provider.exhausted`, `test.ping` emitted |
+| P2-3 | Publish Docker images | `Dockerfile`, `docker-compose.yml` exist | Automated build on tags; image scans clean |
+| P2-4 | Benchmark parity report | `scripts/smoke-followups-277.py` | Report comparing failover/hedge/latency numbers vs OmniRoute |
 
-### Dependencies & Ordering
+## Dependencies & Ordering
 
-1. **P0-1 (guardrails)** must precede P1 dashboard features (guardrails are a security boundary).
-2. **P1-4 (session auth)** precedes P1-5 (2FA), P1-6 (OAuth), P1-7 (IP control) — all need authenticated dashboard.
-3. **P2-1 (semantic cache)** is independent but improves all routing.
-4. **P2-2..P2-4 (strategies/combos)** build on the routing engine; order strategies before combos.
-5. **P3 items** are independent and can be done in any order after P1/P2 core.
+```
+P0-1 (audit log all API requests) ── no ordering dependency with P0-2
+P0-2 (semantic cache in path) ─────┤
+                                     │
+P1-1 (session auth) ───────────────┼─ P1-2, P1-3, P1-4 depend on P1-1
+P1-2 (TOTP 2FA) ───────────────────┤
+P1-3 (OAuth providers) ────────────┤
+P1-4 (IP allowlist/blocklist) ─────┤
+P1-5 (remaining strategies) ───────┤ depends on routing engine (exists)
+P1-6 (auto/* aliases) ─────────────┤ depends on internal/autorouter (exists)
+P1-7 (combos) ─────────────────────┤ depends on routing engine chains (exists)
+                                     │
+P2-1 (webhook integrations) ───────┤ depends on internal/webhooks (exists)
+P2-2 (more webhook events) ────────┤ depends on quota.exceeded (exists)
+P2-3 (Docker publish) ─────────────┤ depends on Dockerfile/docker-compose (exist)
+P2-4 (benchmark parity) ───────────┤ depends on scripts/smoke-followups-277.py (exists)
+```
 
-### Estimated Complexity
-
-| Tier | Effort | Rationale |
-|------|--------|-----------|
-| P0 | Medium | Guardrail enforcement + streaming usage + audit log are well-scoped, testable additions |
-| P1 | High | Session auth + 2FA + OAuth + embeddings/images/audio are new surface area |
-| P2 | High | 22 strategies + combos + alias resolution are substantial routing work |
-| P3 | Medium | Docker/Helm/i18n/desktop are packaging work, low logic risk |
-
----
-
-## Features CODVIAN Does Better Than OmniRoute
-
-1. **Pure-Go, no C toolchain** — modernc.org/sqlite means zero CGO; OmniRoute is Node.js with native modules.
-2. **Small, auditable dependency surface** — 4 direct deps vs OmniRoute's 100+ npm deps.
-3. **Team/org RBAC with key binding** — OmniRoute has no org/team model; CODVIAN's P3-A is a genuine advantage.
-4. **Per-key quota hints learned from upstream** — measured rate-limit fractions per (provider,key), not just static pools.
-5. **Estimate-vs-settled cost reconciliation** — P3-C explicitly reconciles local tiktoken estimates with provider-reported usage, flagging divergences.
-6. **Region-aware failover tiers** — cross-region → equivalent → self-hosted, with operator-declared regions.
-7. **Fail-closed Nadir** — external decision API never called unless explicitly configured (OmniRoute defaults fail-open).
-8. **Streaming-safe failover with preread buffer** — bounded preread, no switch after first content byte.
-
----
-
-## Features Worth Adopting / Redesigning / Not Copying
-
-### Adopt (high value, good fit)
-- TOTP 2FA + backup codes (OmniRoute's bcrypt approach is sound)
-- Slack/Discord/Telegram webhook integrations
-- Embeddings/images/audio/video APIs (multimodal gateway breadth)
-- Helm chart + published Docker images
-- `auto/*` model aliases (10 aliases covering quality/latency/cost/subscription)
-
-### Redesign (don't copy wholesale)
-- Dashboard session auth — CODVIAN's threat model is single-operator local; a full OIDC + session system is over-engineered. A simpler password+session model fits better.
-- MITM proxy — CODVIAN doesn't need a full MITM; direct HTTP with an SSRF guard is sufficient.
-
-### Do Not Copy
-- 67-language i18n — CODVIAN's dashboard is a single HTML file; full i18n is disproportionate.
-- Electron desktop app — CODVIAN's value is a headless server binary; a desktop GUI dilutes that.
-- 56,000+ test declarations — CODVIAN's Go test culture (table-driven, race-enabled) is more maintainable than TypeScript test volume.
-
----
-
-## Proposed PR & Implementation Sequence
+**Execution sequence (PR order):**
 
 | PR | Focus | Est. |
 |----|-------|------|
-| #49 | P0-1: Guardrail pre/post-call enforcement + regression tests | 1 wk |
-| #50 | P0-2: Streaming usage recording + tests | 3 days |
-| #51 | P0-3: Request-level compliance audit log | 1 wk |
-| #52 | P1-1..P1-3: Embeddings + images + audio APIs | 2 wk |
-| #53 | P1-4: Dashboard session auth (JWT cookie) | 1 wk |
-| #54 | P1-5: TOTP 2FA + backup codes | 3 days |
-| #55 | P1-6: OAuth provider connections (3 providers) | 1 wk |
-| #56 | P1-7: IP allowlist/blocklist | 2 days |
-| #57 | P2-1: Semantic cache in request path | 3 days |
-| #58 | P2-2: 22 routing strategies + tests | 2 wk |
-| #59 | P2-3: `auto/*` aliases | 1 wk |
-| #60 | P2-4: Combos (multi-model sequences) | 1 wk |
-| #61 | P2-5: Slack/Discord/Telegram webhooks | 1 wk |
-| #62 | P2-6: More webhook event types | 2 days |
-| #63 | P3-1: Publish Docker images | 2 days |
-| #64 | P3-2: Helm chart | 1 wk |
-| #65 | P3-3: i18n (5 languages) | 1 wk |
-| #66 | P3-4: Desktop app (Electron/PWA) | 2 wk |
-| #67 | P3-5: Benchmark parity report | 3 days |
+| #49 | P0-1: Request-level compliance audit log (all API requests) | 1 wk |
+| #50 | P0-2: Semantic cache wired into request path | 1 wk |
+| #51 | P1-1: Dashboard session auth (password + JWT cookie) | 1 wk |
+| #52 | P1-2: TOTP 2FA + backup codes | 3 days |
+| #53 | P1-3: OAuth provider connections (≥3) | 1 wk |
+| #54 | P1-4: IP allowlist/blocklist | 2 days |
+| #55 | P1-5: Remaining routing strategies (full 22-name set) | 2 wk |
+| #56 | P1-6: `auto/*` model aliases (9 aliases) | 1 wk |
+| #57 | P1-7: Combos (multi-model sequences) | 1 wk |
+| #58 | P2-1: Webhook integrations (Slack/Discord/Telegram) | 1 wk |
+| #59 | P2-2: More webhook event types | 2 days |
+| #60 | P2-3: Publish Docker images (automated on tags) | 2 days |
+| #61 | P2-4: Benchmark parity report | 3 days |
 
 ---
 
-## Final Verification (main commit `27a235d`)
+## What is NOT in Phase 4 (and why)
 
-- `go test ./...` — all packages **ok**
-- `go vet ./...` — clean
-- `go build ./...` — clean
-- `govulncheck ./...` — **0 vulnerabilities**
-- Dependabot alerts — **0 open** (17 fixed, all `state=fixed`)
-- Playwright browser smoke — **4/4 pass**
-- CI on PR #48 — ci, browser-smoke, bench-infra-smoke, supply-chain all **pass**
+| Feature | Reason |
+|---------|--------|
+| Guardrails pre/post enforcement | Already implemented (10 call sites: chat, a2a, audio, embeddings, gemini_native, images, legacy_completions, media_verify, relay, responses) |
+| Streaming usage recording | Already implemented (G1 tests in `stream_usage_test.go`; `checkRequestBudgetOverageStream()` in `requestbudget.go`) |
+| Embeddings API | Already implemented (`internal/server/embeddings.go`) |
+| Images API | Already implemented (`internal/server/images.go`) |
+| Audio API | Already implemented (`internal/server/audio.go`) |
+| Desktop app / PWA | Excluded by user decision — headless server architecture only |
+| i18n (multi-language) | Excluded by user decision — English-only |
+| Helm/Kubernetes | Excluded from Phase 4 by user decision — future deployment work |
+| Video/music generation, web search | Excluded by user decision — existing multimodal APIs sufficient |
+| OIDC login | Excluded by user decision — simple password + session instead |
+| 67-language i18n | Disproportionate for single HTML dashboard |
+| Electron desktop app | Dilutes headless server-binary value |
+| MITM proxy + TLS stealth | Redesign instead: SSRF guard + direct HTTP suffices |
+| 56,000+ test declarations | Go table-driven + race-enabled testing is more maintainable |
 
-**Stage 1 complete.** **Stage 2 complete.** Phase 4 roadmap delivered — awaiting separate approval before Phase 4 implementation begins.
+---
+
+## Per-PR acceptance criteria summary
+
+Each PR must include:
+- Unit tests covering new behavior (table-driven where applicable)
+- `go test ./...` all packages ok
+- `go vet ./...` clean
+- `gofmt -l .` clean on changed files
+- CI checks pass (ci, browser-smoke, bench-infra-smoke, supply-chain)
+- No paid API credits or external cloud resources
+- No credentials or secrets committed
+
+**No implementation code has been modified. No Phase 4 branch or PR created.** Waiting for your explicit approval before beginning Phase 4 implementation.
