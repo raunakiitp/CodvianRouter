@@ -537,6 +537,11 @@ type Server struct {
 	dashAuthMu  sync.Mutex
 	dashAuth    *dashAuthStore
 	dashAuthErr error
+	// totpAuth is the lazy dashboard TOTP store (PR #51): created on first
+	// TOTP use from cfg.DataDir (in-memory only when cfg is nil or has no
+	// data dir). Guarded by dashAuthMu.
+	totpAuth    *totpStore
+	totpAuthErr error
 	// evalStateMu guards the lazily-opened P3-B eval store/scheduler
 	// (eval_schedules_api.go). It lives on THIS Server instance (not a
 	// package global) so two Servers with different data dirs are
@@ -1642,6 +1647,13 @@ func New(engine Engine, opts ...Option) *Server {
 	s.register(mux, "POST", "/dashboard/auth/login", s.handleDashAuthLogin)
 	s.register(mux, "POST", "/dashboard/auth/logout", s.handleDashAuthLogout)
 	s.register(mux, "POST", "/dashboard/auth/change", s.handleDashAuthChange)
+	// PR #51 TOTP endpoints:
+	s.register(mux, "GET", "/dashboard/auth/totp/status", s.handleTotpStatus)
+	s.register(mux, "POST", "/dashboard/auth/totp/enroll", s.handleTotpEnroll)
+	s.register(mux, "POST", "/dashboard/auth/totp/confirm", s.handleTotpConfirm)
+	s.register(mux, "POST", "/dashboard/auth/totp/verify", s.handleTotpVerify)
+	s.register(mux, "POST", "/dashboard/auth/totp/disable", s.handleTotpDisable)
+	s.register(mux, "POST", "/dashboard/auth/totp/backup-codes", s.handleTotpBackupCodes)
 	s.register(mux, "GET", "/dashboard/providers", s.handleDashboardProviders)
 	s.register(mux, "GET", "/dashboard/overview", s.handleOverview)
 	s.register(mux, "GET", "/dashboard/models", s.handleDashboardModels)

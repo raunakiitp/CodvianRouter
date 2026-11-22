@@ -69,6 +69,78 @@
   },
   {
     "method": "GET",
+    "path": "/dashboard/auth/totp/status",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Reports whether TOTP is enrolled/enabled and how many backup codes remain.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/auth/totp/enroll",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Begins TOTP enrollment: generates a secret and returns an otpauth:// provisioning URI (QR code). Requires a valid session or admin gateway key.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/auth/totp/confirm",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Confirms TOTP enrollment with a valid 6-digit code; activates TOTP and mints single-use backup codes (shown once).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/auth/totp/verify",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Verifies a TOTP or backup code for login step 2; on success sets the session cookie.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/auth/totp/disable",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Disables TOTP. Requires a valid session plus current password and TOTP/backup code, or an admin gateway key.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/auth/totp/backup-codes",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Regenerates single-use backup codes. Requires a valid session and current password.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
     "path": "/dashboard/providers",
     "tier": "MANAGEMENT",
     "spawn_capable": false,

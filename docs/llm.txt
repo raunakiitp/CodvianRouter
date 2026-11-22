@@ -7,7 +7,7 @@
 # Scope `admin` implies every scope. LOCAL_ONLY = loopback-only
 # even with a valid key. Destructive routes need a typed
 # {"confirm": "<phrase>"} body in addition to the key.
-# Routes: 329
+# Routes: 335
 
 ## Auth
 header: Authorization: Bearer <gateway-key>
@@ -22,6 +22,12 @@ POST /dashboard/auth/setup | MANAGEMENT | scopes=admin | auth=key | Sets the das
 POST /dashboard/auth/login | MANAGEMENT | scopes=admin | auth=key | Operator login with the dashboard password; on success sets an HttpOnly session cookie (12h). Failed attempts are throttled per peer (5 failures → 60s lockout).
 POST /dashboard/auth/logout | MANAGEMENT | scopes=admin | auth=key | Invalidates the dashboard session cookie; 401 when the caller has neither a session nor a gateway key.
 POST /dashboard/auth/change | MANAGEMENT | scopes=admin | auth=key | Changes the dashboard operator password; requires a valid session plus the current password, or an admin gateway key. All sessions are invalidated.
+GET /dashboard/auth/totp/status | MANAGEMENT | scopes=admin | auth=key | Reports whether TOTP is enrolled/enabled and how many backup codes remain.
+POST /dashboard/auth/totp/enroll | MANAGEMENT | scopes=admin | auth=key | Begins TOTP enrollment: generates a secret and returns an otpauth:// provisioning URI (QR code). Requires a valid session or admin gateway key.
+POST /dashboard/auth/totp/confirm | MANAGEMENT | scopes=admin | auth=key | Confirms TOTP enrollment with a valid 6-digit code; activates TOTP and mints single-use backup codes (shown once).
+POST /dashboard/auth/totp/verify | MANAGEMENT | scopes=admin | auth=key | Verifies a TOTP or backup code for login step 2; on success sets the session cookie.
+POST /dashboard/auth/totp/disable | MANAGEMENT | scopes=admin | auth=key | Disables TOTP. Requires a valid session plus current password and TOTP/backup code, or an admin gateway key.
+POST /dashboard/auth/totp/backup-codes | MANAGEMENT | scopes=admin | auth=key | Regenerates single-use backup codes. Requires a valid session and current password.
 GET /dashboard/providers | MANAGEMENT | scopes=- | auth=exempt | Live provider facts (verification, wire, health) — no keys, no base URLs.
 GET /dashboard/overview | MANAGEMENT | scopes=- | auth=exempt | Live overview KPIs + traffic buckets from the ledger/recorder — counts and totals only, no message content.
 GET /dashboard/models | MANAGEMENT | scopes=- | auth=exempt | Live model catalog from the registry + per-model request counts — no keys, no base URLs.
