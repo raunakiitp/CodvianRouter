@@ -16,32 +16,45 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/org"
 )
 
-var (
-	orgMu       sync.Mutex
-	orgStore    *org.Store
-	orgStoreErr error
-)
+// orgState holds the lazily-opened P3-A org store on THIS Server
+// instance (not a package global), so two Servers with different data
+// dirs stay isolated.
+type orgState struct {
+	mu       sync.Mutex
+	store    *org.Store
+	storeErr error
+}
+
+func (s *Server) orgStateInit() *orgState {
+	s.orgStateMu.Lock()
+	defer s.orgStateMu.Unlock()
+	if s.orgState == nil {
+		s.orgState = &orgState{}
+	}
+	return s.orgState
+}
 
 func (s *Server) ensureOrgStore() (*org.Store, error) {
-	orgMu.Lock()
-	defer orgMu.Unlock()
-	if orgStoreErr != nil {
-		return nil, orgStoreErr
+	st := s.orgStateInit()
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if st.storeErr != nil {
+		return nil, st.storeErr
 	}
-	if orgStore != nil {
-		return orgStore, nil
+	if st.store != nil {
+		return st.store, nil
 	}
 	var path string
 	if s.cfg != nil && s.cfg.DataDir != "" {
 		path = filepath.Join(s.cfg.DataDir, "org.json")
 	}
-	st, err := org.Open(path)
+	store, err := org.Open(path)
 	if err != nil {
-		orgStoreErr = err
+		st.storeErr = err
 		return nil, err
 	}
-	orgStore = st
-	return st, nil
+	st.store = store
+	return st.store, nil
 }
 
 type orgTeamView struct {
