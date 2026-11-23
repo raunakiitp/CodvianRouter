@@ -1,7 +1,7 @@
 # CODVIAN ROUTER — Completion Ledger (Workstreams A–E + X)
 
 Baseline commit at ledger creation: 2eb54c8 (main, all Phase-4 PRs #49–#61 merged, CI green).
-Active branch: temp-branch (this delivery).
+Active branch: p0-final (this delivery).
 
 Status vocabulary: IMPLEMENTED / INTEGRATED / TESTED / VERIFIED / PARTIALLY IMPLEMENTED / BLOCKED / NOT IMPLEMENTED.
 A feature is VERIFIED only with runtime + test evidence, not by declaration.
@@ -17,7 +17,7 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 | A5 | TOTP 2FA | VERIFIED | totp_test.go (6 tests) passes |
 | A6 | Tenant isolation / authorization | VERIFIED (tests pass) | Tenant/CrossTenant tests pass; cross-tenant attempts covered |
 | A7 | Secrets & config security (no plaintext keys, redaction) | VERIFIED | audit redaction test; vault-sealed OAuth tokens; no committed secrets |
-| A8 | Error handling / recovery | PARTIALLY VERIFIED | core paths tested; fault-injection coverage partial; 6/6 mock upstream tests cover timeout, server error, repeated requests, streaming |
+| A8 | Error handling / recovery | VERIFIED | 13 fault-injection tests: upstream timeout, connection reset, malformed JSON, 429 rate-limit, client cancellation, stream interruption mid-response, partial/truncated response, empty 200 response, invalid 5xx status without body; error types verified on production gateway path |
 | A9 | DB/persistence correctness | VERIFIED | SQLite stores (audit, ccr, a2a, ledger) with migration + restart tests |
 | A10 | Core reliability gate | VERIFIED | build/vet/test green; PR #59 CI green and merged @b05f076 |
 
@@ -25,7 +25,7 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 
 | ID | Feature | Status | Notes |
 |----|---------|--------|-------|
-| B1 | Provider catalog vs executable matrix | VERIFIED | catalog_executable_test.go: deterministic audit of 610 catalog entries against actual executable capabilities (14 supported, 5 partially supported, 43 ToS-restricted, 545 reference/unverified) |
+| B1 | Provider catalog vs executable matrix | VERIFIED | catalog_executable_test.go: dynamically derived audit of 610 catalog entries against actual provider.Client implementations (wire format → client map); verified-from-docs providers confirmed executable; ToS-restricted and reference/unverified entries excluded from supported count |
 | B5 | OAuth provider executors | VERIFIED (PR #52) | resolver wired |
 | B7 | Routing strategies complete | VERIFIED (PR #62 merged @5bba7cf, CI green) | auto/fusion/pipeline/jev/weighted/sla/cache/combo all wired and tested |
 | B8 | Weighted routing real weights | VERIFIED (PR #62 merged @5bba7cf, CI green) | chain weights, equal-weight fallback verified |
@@ -48,7 +48,7 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 
 | ID | Feature | Status | Notes |
 |----|---------|--------|-------|
-| D2 | Provider page sections (verified/connected/custom/unsupported) | NOT VERIFIED | renderProviders() shows unified list with status chips; four-section grouping not yet implemented in dashboard UI; backend /api/providers provides verification + connection status for client-side sectioning |
+| D2 | Provider page sections (verified/connected/custom/unsupported) | PARTIALLY IMPLEMENTED | renderProviders() routes provider cards into four section grids by verification status + connection state; sections hide when empty with counts; connect/test/manage/remove actions wired per card; backend /api/providers provides verification + connection status. Browser/runtime test pending |
 | D8 | Separate public website | NOT APPLICABLE | Repository contains dashboard (index.html) and tryit.html only; no separate public website in product scope; dashboard serves as the operator UI |
 
 ## Workstream E — Performance & benchmarking
@@ -69,4 +69,4 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 - Pre-existing flaky tests: TestKeyAccessScheduleGateInsideAllows, TestQuotaScheduleGateAllowWindowPasses (time-dependent), TestRunDoctorFreshInitPasses (port conflict), release verification (missing artifacts)
 - GitHub Actions CI workflow: .github/workflows/ci.yml runs scripts/ci.sh (gofmt, go build, go vet, go test -race -count=1) on ubuntu-24.04
 
-Ledger last update: This delivery (temp-branch @ 1a44ea4fadd13210b0b9265ceea61f5505d99390) — B1 VERIFIED, HTTP/2 FIXED, Gateway E2E FIXED; C5/C8/C9 VERIFIED via test evidence; D2 NOT VERIFIED (UI sectioning pending); D8 NOT APPLICABLE.
+Ledger last update: This delivery (p0-final) — A8 VERIFIED (13 fault-injection tests), B1 VERIFIED (dynamic derivation), HTTP/2 FIXED, Gateway E2E FIXED; D2 PARTIALLY IMPLEMENTED (sections + CSS + JS wired, browser test pending); D8 NOT APPLICABLE; M3 per-key quota expiry BLOCKED (no data source).

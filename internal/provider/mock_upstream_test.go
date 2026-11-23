@@ -200,3 +200,247 @@ func TestMockUpstreamChatStreamSimple(t *testing.T) {
 		t.Errorf("Content = %q, want 'Hello'", fullContent)
 	}
 }
+
+// TestMockUpstreamConnectionReset verifies handling of connection reset by upstream.
+func TestMockUpstreamConnectionReset(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Simulate connection reset by closing without writing response
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatal("hijack not supported")
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			t.Fatalf("hijack: %v", err)
+		}
+		conn.Close()
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(srv.URL, "test-key")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_, err = c.Chat(context.Background(), ChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	})
+	if err == nil {
+		t.Fatal("expected error but got nil")
+	}
+	// Should get a connection error
+	if !strings.Contains(err.Error(), "connection") && !strings.Contains(err.Error(), "reset") && !strings.Contains(err.Error(), "EOF") {
+		t.Errorf("expected connection error, got: %v", err)
+	}
+}
+
+// TestMockUpstreamMalformedResponse verifies handling of malformed JSON from upstream.
+func TestMockUpstreamMalformedResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Write invalid JSON
+		_, _ = w.Write([]byte(`{"id":"chatcmpl-1",`))
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(srv.URL, "test-key")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_, err = c.Chat(context.Background(), ChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	})
+	if err == nil {
+		t.Fatal("expected error but got nil")
+	}
+	// Should get a JSON parsing error
+	if !strings.Contains(err.Error(), "malformed") && !strings.Contains(err.Error(), "JSON") && !strings.Contains(err.Error(), "syntax") {
+		t.Errorf("expected JSON error, got: %v", err)
+	}
+}
+
+// TestMockUpstream429Handling verifies handling of 429 Too Many Requests.
+func TestMockUpstream429Handling(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Header().Set("Retry-After", "1")
+		_, _ = w.Write([]byte(`{"error":"rate_limit_exceeded"}`))
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(srv.URL, "test-key")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_, err = c.Chat(context.Background(), ChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	})
+	if err == nil {
+		t.Fatal("expected error but got nil")
+	}
+	// Should get a 429 error
+	if !strings.Contains(err.Error(), "429") && !strings.Contains(err.Error(), "rate_limit") && !strings.Contains(err.Error(), "rate limited") && !strings.Contains(err.Error(), "Too Many Requests") {
+		t.Errorf("expected 429/rate limit error, got: %v", err)
+	}
+}
+
+// TestMockUpstreamClientCancellation verifies that client cancellation is respected.
+func TestMockUpstreamClientCancellation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Delay to allow cancellation
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(500 * time.Millisecond):
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"chatcmpl-1","model":"gpt-4o-mini","choices":[{"message":{"role":"assistant","content":"Hello"},\"finish_reason\":\"stop\"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`))
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(srv.URL, "test-key")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel immediately
+	cancel()
+
+	_, err = c.Chat(ctx, ChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	})
+	if err == nil {
+		t.Fatal("expected error but got nil")
+	}
+	// Should get a cancellation error
+	if !strings.Contains(err.Error(), "canceled") && !strings.Contains(err.Error(), "cancel") {
+		t.Errorf("expected cancellation error, got: %v", err)
+	}
+}
+
+// TestMockUpstreamStreamInterrupted verifies handling of stream interrupted mid-response.
+func TestMockUpstreamStreamInterrupted(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		// Send first chunk
+		_, _ = w.Write([]byte("data: {\"model\":\"m\",\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\n\n"))
+		// Then close connection without sending [DONE]
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatal("hijack not supported")
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			t.Fatalf("hijack: %v", err)
+		}
+		conn.Close()
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(srv.URL, "test-key")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	var fullContent string
+	_, err = c.ChatStream(context.Background(), ChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	}, func(delta string) error {
+		fullContent += delta
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected error but got nil")
+	}
+	// Should get a connection/stream error
+	if !strings.Contains(err.Error(), "connection") && !strings.Contains(err.Error(), "reset") && !strings.Contains(err.Error(), "EOF") && !strings.Contains(err.Error(), "stream") {
+		t.Errorf("expected stream/connection error, got: %v", err)
+	}
+}
+
+// TestMockUpstreamPartialResponse verifies handling of partial/truncated response.
+func TestMockUpstreamPartialResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Send incomplete JSON
+		_, _ = w.Write([]byte(`{"id":"chatcmpl-1","model":"gpt-4o-mini","choices":`))
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(srv.URL, "test-key")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_, err = c.Chat(context.Background(), ChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	})
+	if err == nil {
+		t.Fatal("expected error but got nil")
+	}
+	// Should get a JSON parsing error
+	if !strings.Contains(err.Error(), "malformed") && !strings.Contains(err.Error(), "JSON") && !strings.Contains(err.Error(), "syntax") && !strings.Contains(err.Error(), "truncated") {
+		t.Errorf("expected JSON error, got: %v", err)
+	}
+}
+
+// TestMockUpstreamEmptyResponse verifies handling of empty response body.
+func TestMockUpstreamEmptyResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Send empty body with 200 OK
+		_, _ = w.Write([]byte{})
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(srv.URL, "test-key")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_, err = c.Chat(context.Background(), ChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	})
+	if err == nil {
+		t.Fatal("expected error but got nil")
+	}
+	// Should get a parsing error
+	if !strings.Contains(err.Error(), "empty") && !strings.Contains(err.Error(), "malformed") && !strings.Contains(err.Error(), "JSON") && !strings.Contains(err.Error(), "no choices") {
+		t.Errorf("expected error for empty response, got: %v", err)
+	}
+}
+
+// TestMockUpstreamInvalidStatus verifies handling of non-200 status without error body.
+func TestMockUpstreamInvalidStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		// No error body
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(srv.URL, "test-key")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_, err = c.Chat(context.Background(), ChatRequest{
+		Model:    "gpt-4o-mini",
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	})
+	if err == nil {
+		t.Fatal("expected error but got nil")
+	}
+	// Should get a 500 error
+	if !strings.Contains(err.Error(), "500") && !strings.Contains(err.Error(), "Internal Server Error") {
+		t.Errorf("expected 500 error, got: %v", err)
+	}
+}
