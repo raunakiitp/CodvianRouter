@@ -4468,7 +4468,7 @@ resp = client.chat.completions.create(
             : "<b>No providers connected yet.</b><br/>Add one from the catalog above.");
         g.appendChild(empty);
       });
-      updateSectionCounts();
+      updateSectionCounts(counts);
       return;
     }
     providers.forEach(function(p){
@@ -4478,7 +4478,7 @@ resp = client.chat.completions.create(
       grid.appendChild(card);
       counts[section]++;
     });
-    updateSectionCounts();
+    updateSectionCounts(counts);
   }
 
   function getProviderSection(p){
@@ -4503,7 +4503,7 @@ resp = client.chat.completions.create(
     }
   }
 
-  function updateSectionCounts(){
+  function updateSectionCounts(counts){
     $("#countVerified").textContent = counts.verified;
     $("#countConnected").textContent = counts.connected;
     $("#countCustom").textContent = counts.custom;
