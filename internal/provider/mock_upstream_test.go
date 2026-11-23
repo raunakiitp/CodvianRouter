@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -42,16 +43,12 @@ func TestMockUpstreamHTTP11(t *testing.T) {
 }
 
 // TestMockUpstreamHTTP2 verifies that the upstream actually receives an HTTP/2 request.
-// This test asserts r.ProtoMajor == 2. If the test environment cannot genuinely establish
-// HTTP/2 (e.g., httptest only supports HTTP/1.1), the test will FAIL — not silently pass.
-// This ensures the acceptance criteria are truthfully reported: HTTP/2 verification is either
-// genuine (PASS) or blocked/unavailable (FAIL), never a false PASS.
+// This test asserts r.ProtoMajor == 2 using genuine Go HTTP/2 test infrastructure:
+// httptest.NewUnstartedServer, EnableHTTP2 = true, and StartTLS().
+// The test will PASS when genuine HTTP/2 is established, FAIL otherwise.
 func TestMockUpstreamHTTP2(t *testing.T) {
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Genuinely assert that the server received HTTP/2.
-		// In environments where only HTTP/1.1 is available (such as httptest without
-		// full HTTP/2 support), this assertion will fire and the test will FAIL,
-		// correctly reflecting that genuine HTTP/2 cannot be established here.
 		if r.ProtoMajor != 2 {
 			t.Errorf("expected ProtoMajor == 2 (genuine HTTP/2), got %d — genuine HTTP/2 not established", r.ProtoMajor)
 		}
@@ -59,10 +56,20 @@ func TestMockUpstreamHTTP2(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":"chatcmpl-1","model":"gpt-4o-mini","choices":[{"message":{"role":"assistant","content":"Hello HTTP/2"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`))
 	}))
 	srv.EnableHTTP2 = true
-	srv.Start()
+	srv.StartTLS()
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "test-key")
+	// Create a client that trusts the test server's self-signed cert and forces HTTP/2
+	customClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // For test only - test server uses self-signed cert
+			},
+			ForceAttemptHTTP2: true,
+		},
+	}
+
+	c, err := NewClient(srv.URL, "test-key", WithHTTPClient(customClient))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
