@@ -362,7 +362,11 @@
   .codeblock .cm{color:#8A8A8A} .codeblock .st{color:#D9F99D} .codeblock .kw{color:#FFFFFF}
 
   /* Providers grid */
-  .prov-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px}
+    .prov-section{margin-bottom:24px}
+    .prov-section-title{font-size:14px; font-weight:700; color:var(--text); margin:0 0 12px; display:flex; align-items:center; gap:8px}
+    .prov-section-title .count{font-size:12px; font-weight:500; color:var(--text-2); background:var(--surface); padding:2px 8px; border-radius:999px}
+    .prov-section:empty{display:none}
+    .prov-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px}
   .prov-card{padding:22px; display:flex; flex-direction:column; gap:0; border-radius:28px; transition:box-shadow .18s ease, transform .18s ease}
   .prov-card:hover{box-shadow:var(--shadow-lg); transform:translateY(-2px)}
   .prov-card-top{display:flex; align-items:flex-start; gap:12px}
@@ -1057,21 +1061,41 @@ resp = client.chat.completions.create(
         </div>
 
         <div class="steps">
-          <div class="step card done">
-            <div class="step-n">✓</div>
-            <div><h4>Pick a provider</h4><p>Any OpenAI-compatible endpoint — or local Ollama, keyless.</p></div>
-          </div>
-          <div class="step card done">
-            <div class="step-n">✓</div>
-            <div><h4>Paste the API key</h4><p>Keys are encrypted on this machine, never leave it.</p></div>
-          </div>
-          <div class="step card">
-            <div class="step-n">3</div>
-            <div><h4>Route with one key</h4><p>Use model <span class="mono" style="font-size:12px">"auto"</span> or pin any model.</p></div>
-          </div>
-        </div>
+                  <div class="step card done">
+                    <div class="step-n">✓</div>
+                    <div><h4>Pick a provider</h4><p>Any OpenAI-compatible endpoint — or local Ollama, keyless.</p></div>
+                  </div>
+                  <div class="step card done">
+                    <div class="step-n">✓</div>
+                    <div><h4>Paste the API key</h4><p>Keys are encrypted on this machine, never leave it.</p></div>
+                  </div>
+                  <div class="step card">
+                    <div class="step-n">3</div>
+                    <div><h4>Route with one key</h4><p>Use model <span class="mono" style="font-size:12px">"auto"</span> or pin any model.</p></div>
+                  </div>
+                </div>
 
-        <!-- Add provider: real POST /api/providers (Tier 2 — gateway-key
+                <!-- Provider sections (D2): Verified / Connected / Custom / Unsupported -->
+                <div class="prov-sections" id="provSections">
+                  <section class="prov-section" id="provSectionVerified">
+                    <h3 class="prov-section-title">Verified providers <span class="count" id="countVerified"></span></h3>
+                    <div class="prov-grid" id="provGridVerified"></div>
+                  </section>
+                  <section class="prov-section" id="provSectionConnected">
+                    <h3 class="prov-section-title">Connected providers <span class="count" id="countConnected"></span></h3>
+                    <div class="prov-grid" id="provGridConnected"></div>
+                  </section>
+                  <section class="prov-section" id="provSectionCustom">
+                    <h3 class="prov-section-title">Custom providers <span class="count" id="countCustom"></span></h3>
+                    <div class="prov-grid" id="provGridCustom"></div>
+                  </section>
+                  <section class="prov-section" id="provSectionUnsupported">
+                    <h3 class="prov-section-title">Unsupported providers <span class="count" id="countUnsupported"></span></h3>
+                    <div class="prov-grid" id="provGridUnsupported"></div>
+                  </section>
+                </div>
+
+                <!-- Add provider: real POST /api/providers (Tier 2 — gateway-key
              auth always required). The key is typed fresh, sent once
              with this request, and never stored in the browser; the
              server tests it live against the upstream before storing
@@ -1176,9 +1200,7 @@ resp = client.chat.completions.create(
             <div id="catalogUnavailable" style="display:none; color:var(--text-2); font-size:13.5px; padding:12px 0 0">Catalog unavailable — check the router is running and reload.</div>
           </div>
         </div>
-
-        <div class="prov-grid" id="provGrid"></div>
-        <div id="provVertexLine" style="font-size:13px; color:var(--text-2); margin-top:12px">No Vertex AI providers configured — add one from the catalog.</div>
+                <div id="provVertexLine" style="font-size:13px; color:var(--text-2); margin-top:12px">No Vertex AI providers configured — add one from the catalog.</div>
 
         <!-- Test Results modal (M10-2, Q21): "{passed}/{total} passed"
              from the last probe results in GET /api/providers — the
