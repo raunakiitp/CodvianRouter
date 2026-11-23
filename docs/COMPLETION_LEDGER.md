@@ -24,9 +24,13 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 ## Workstream B — Provider execution, routing, auth matrix
 | ID | Feature | Status | Notes |
 |----|---------|--------|-------|
-| B1 | Provider catalog vs executable matrix | NOT STARTED | recompute counts from current source |
+| B1 | Provider catalog vs executable matrix | VERIFIED | cataudit package compares compiled catalog vs models.dev: renamed/possible_rename/base_url_differs/base_url_path_differs/base_url_missing findings; reachability probes; never edits catalog; cataudit_test.go and catalog_audit_test.go pass |
 | B7 | Routing strategies complete | VERIFIED | all strategies wired: priority/identity, balanced/16-factor, cheapest/fastest/most-reliable/least-latency via HookWithWeights, latency-aware/weighted/sla/cache/m3-orderings via wiringHook, combo strategies (fusion/pipeline/jev/chaos-mode) via combo engine; validStrategies allowlist updated to include sla-aware/latency-aware; strategy tree evaluation wired in router/tree.go |
 | B8 | Weighted routing real weights | VERIFIED | weighted strategy wired via wiringHook (WeightedDraw over chain weights from SetChainWeights/routing.chain_weights, equal-weight uniform fallback when unconfigured, all-zero weights rejected at config validation); TestConformanceWeightedDrawIsAPermutation + TestConformanceWeightedChainWeights pass |
+| B9 | SLA-aware routing | VERIFIED | StrategySLAAware wired in wiringHook: latency-weighted scoring with SLA target p95; falls back to balanced on zero context; tests pass |
+| B10 | Context-aware routing | VERIFIED | StrategyContextOptimized and StrategyContextRelay wired in wiringHook via sixteenHookCtx with mode-pack strategy lists; tests pass |
+| B11 | Budget-aware routing | VERIFIED | Quota-weighted, headroom, fill-first, expiry-first ordering strategies wired in wiringHook; quota schedule and budget tracking enforced; tests pass |
+| B13 | Fallback and recovery behavior | VERIFIED | Failover chains, circuit breakers (degraded/recovered events), resilience breakers, reset endpoints; breakerWebhookEvents adapter; tests pass |
 | B12 | Burn-rate forecasting | VERIFIED (PR #60 merged @5862b6e, CI green) | GET /api/usage/budget/forecast: per-key 1h/24h burn rate + projected exhaustion from real ledger spend + stored limit; insufficient_data/exhausted when data missing; usageapi_forecast_test.go |
 | B5 | OAuth provider executors | VERIFIED (this branch, A2) | resolver wired |
 
@@ -35,8 +39,8 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 |----|---------|--------|-------|
 | C9 | Webhook delivery (HMAC, retry, DLQ) | VERIFIED | Dispatcher with HMAC-SHA256 signing, 3-retry exponential backoff (1s/2s/4s), per-attempt 10s timeout, egress SSRF-safe client; events wired: quota.exceeded, budget.warning, provider.degraded/recovered, provider.exhausted, request.completed/failed, test.ping; /api/webhooks CRUD with SSRF validation; UI page in web/index.html; webhooks_api_test.go, webhooks_test.go, webhook_breaker_events_test.go all pass |
 | C2 | WebSocket /v1/ws | VERIFIED | GET /v1/ws upgrades to WebSocket and streams chat completions over WS frames; auth via Authorization header or api_key query param; guard-row added; engine stream path (ChatStream) used; docs/API_REFERENCE.md, docs/llm.txt, tests/fixtures/v1/m8.21/routes.json, web/tryit.html updated; all server tests pass |
-| C5 | MCP tools | PARTIALLY | recompute count; verify execution |
-| C8 | A2A execution | PARTIALLY | verify task execution path |
+| C5 | MCP tools | VERIFIED | full MCP surface: internal/mcp (tools_cost, tools_ops, tools_routing, tools_search, identity, scopes, audit, enforcement, memory_store), internal/mcptools (controls, static, stdio), server MCP handlers (/api/mcp/*), dashboard MCP page; all mcp/mcptools/server MCP tests pass |
+| C8 | A2A execution | VERIFIED | /a2a JSON-RPC endpoint with guard row (POST /a2a), task service + in-flight processor cancels, lazy store open, prune loop, agent card, skills, status, register, dashboard; internal/a2a + server A2A tests all pass |
 
 ## Workstream D — Dashboard, provider pages, public website
 | ID | Feature | Status | Notes |
