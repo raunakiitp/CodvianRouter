@@ -936,6 +936,10 @@ type Server struct {
 	a2aPruneOpts   *A2APruneOptions
 	// auditStore is the append-only request-level compliance audit
 	// store (nil = audit logging off). Set by WithAuditStore.
+	// auditMu guards it so Close() can release the handle while a
+	// request in flight still reads it (Record on a closed store is
+	// a logged no-op, never a failed request).
+	auditMu    sync.Mutex
 	auditStore *auditStore
 }
 
@@ -4869,6 +4873,19 @@ func (s *Server) Close() error {
 			if err := st.Close(); err != nil {
 				errs = append(errs, err)
 			}
+		}
+	}
+	// A1: close the request-level audit store too — otherwise the
+	// SQLite handle stays open past shutdown (a resource leak in
+	// production, and on Windows it keeps <data-dir>/audit.db
+	// locked so the process never fully releases the file).
+	s.auditMu.Lock()
+	audit := s.auditStore
+	s.auditStore = nil
+	s.auditMu.Unlock()
+	if audit != nil {
+		if err := audit.Close(); err != nil {
+			errs = append(errs, err)
 		}
 	}
 	return errors.Join(errs...)

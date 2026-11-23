@@ -374,6 +374,100 @@ func TestAuditStorageFailureDoesNotFailRequest(t *testing.T) {
 	}
 }
 
+// TestAuditProductionWiringOption verifies the actual production option
+// WithAuditStore(path) — the same call site cmd/codvian-router/main.go
+// now uses — wires a persistent store into a server built by New(...),
+// and that a real request through the full ServeHTTP chain (which mounts
+// withAudit) produces a durable, hash-chain-verified audit event in the
+// SQLite file. It then closes the server and reopens the file cold
+// (simulating a restart) to confirm the event survived and the chain
+// still verifies.
+func TestAuditProductionWiringOption(t *testing.T) {
+	dir := t.TempDir()
+	auditPath := filepath.Join(dir, "audit.db")
+
+	// Build the server the way production does: New(...) + WithAuditStore.
+	srv := newTestServer(t, &fakeEngine{}, WithAuditStore(auditPath))
+
+	// The option must have wired a non-nil store. This is the exact link
+	// that was missing when main.go never passed WithAuditStore.
+	srv.auditMu.Lock()
+	wired := srv.auditStore != nil
+	srv.auditMu.Unlock()
+	if !wired {
+		t.Fatal("WithAuditStore did not wire auditStore into the server")
+	}
+
+	// A real request through the full production handler chain.
+	rec := doReq(t, srv, http.MethodGet, "/v1/models", "", "test-key-123")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	// Close the server (releases the audit handle via Server.Close),
+	// then reopen the SQLite file cold to simulate a restart.
+	if err := srv.Close(); err != nil {
+		t.Fatalf("server Close: %v", err)
+	}
+	store, err := openAuditStore(auditPath)
+	if err != nil {
+		t.Fatalf("reopen audit store after restart: %v", err)
+	}
+	defer store.Close()
+
+	got, total, err := store.List(10, 0)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if total < 1 {
+		t.Fatalf("total = %d, want >= 1 persisted audit event after restart", total)
+	}
+	var found *auditEvent
+	for i := range got {
+		if got[i].Path == "/v1/models" {
+			found = &got[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("no /v1/models audit event persisted after restart; got %d events", total)
+	}
+	if found.ActorType != "gateway_key" || found.KeyIDHash == "" {
+		t.Errorf("attribution: actor_type=%q key_id_hash empty=%v, want gateway_key with hash", found.ActorType, found.KeyIDHash == "")
+	}
+	if strings.Contains(found.KeyIDHash, "test-key-123") {
+		t.Error("raw API key leaked into audit key_id_hash")
+	}
+	// Hash chain must verify intact after a cold reopen (restart behavior).
+	// VerifyChain returns -1 when every row chains correctly (an index is
+	// returned only when a tampered row is found).
+	n, err := store.VerifyChain()
+	if err != nil {
+		t.Fatalf("VerifyChain after restart: %v", err)
+	}
+	if n != -1 {
+		t.Errorf("VerifyChain = %d, want -1 (chain intact after restart)", n)
+	}
+}
+
+// TestAuditStoreClosedOnServerClose verifies Server.Close releases the
+// audit store handle (previously it was leaked, which on Windows kept
+// audit.db locked past shutdown).
+func TestAuditStoreClosedOnServerClose(t *testing.T) {
+	dir := t.TempDir()
+	auditPath := filepath.Join(dir, "audit.db")
+	srv := newTestServer(t, &fakeEngine{}, WithAuditStore(auditPath))
+	if err := srv.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	srv.auditMu.Lock()
+	remaining := srv.auditStore
+	srv.auditMu.Unlock()
+	if remaining != nil {
+		t.Error("auditStore still non-nil after Server.Close — handle leaked")
+	}
+}
+
 // TestNormalizeRoutePath verifies query strings are stripped.
 func TestNormalizeRoutePath(t *testing.T) {
 	cases := []struct {

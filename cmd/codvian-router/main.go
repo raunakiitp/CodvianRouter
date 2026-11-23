@@ -5108,6 +5108,12 @@ func runServe(opts options) int {
 		// in which case schedule blocks are refused without any
 		// delivery.
 		server.WithWebhooks(webhookDispatcher(st.cfg)),
+		// Request-level compliance audit log (Workstream A1):
+		// hash-chained, append-only SQLite store persisted in the
+		// data dir. A real request through the production server
+		// now produces a durable audit event; failures are logged
+		// by the option itself, never silently dropped.
+		server.WithAuditStore(filepath.Join(st.cfg.DataDir, "audit.db")),
 		server.WithModelsDevStatus(modelsDevStatusFunc(st.modelsDev)),
 		server.WithLedgerPrices(st.ledgerPrices),
 		server.WithGuardrails(st.guardrails),
