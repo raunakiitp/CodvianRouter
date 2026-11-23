@@ -428,24 +428,94 @@ func TestCatalogExecutableMatrix(t *testing.T) {
 		maxCaps := 0
 
 		// Core capabilities
-		if ec.Chat { caps++; maxCaps++ } else { maxCaps++ }
-		if ec.ChatStream { caps++; maxCaps++ } else { maxCaps++ }
-		if ec.ChatStreamChunks { caps++; maxCaps++ } else { maxCaps++ }
-		if ec.Models { caps++; maxCaps++ } else { maxCaps++ }
-		if ec.Tools { caps++; maxCaps++ } else { maxCaps++ }
-		if ec.Streaming { caps++; maxCaps++ } else { maxCaps++ }
+		if ec.Chat {
+			caps++
+			maxCaps++
+		} else {
+			maxCaps++
+		}
+		if ec.ChatStream {
+			caps++
+			maxCaps++
+		} else {
+			maxCaps++
+		}
+		if ec.ChatStreamChunks {
+			caps++
+			maxCaps++
+		} else {
+			maxCaps++
+		}
+		if ec.Models {
+			caps++
+			maxCaps++
+		} else {
+			maxCaps++
+		}
+		if ec.Tools {
+			caps++
+			maxCaps++
+		} else {
+			maxCaps++
+		}
+		if ec.Streaming {
+			caps++
+			maxCaps++
+		} else {
+			maxCaps++
+		}
 
 		// Auth capabilities
 		authCaps := 0
 		authMax := 0
-		if ec.AuthBearer { authCaps++; authMax++ } else { authMax++ }
-		if ec.AuthXAPIKey { authCaps++; authMax++ } else { authMax++ }
-		if ec.AuthAPIKey { authCaps++; authMax++ } else { authMax++ }
-		if ec.AuthXGoogAPIKey { authCaps++; authMax++ } else { authMax++ }
-		if ec.AuthXFireworks { authCaps++; authMax++ } else { authMax++ }
-		if ec.AuthOAuth { authCaps++; authMax++ } else { authMax++ }
-		if ec.AuthExchange { authCaps++; authMax++ } else { authMax++ }
-		if ec.AuthCustom { authCaps++; authMax++ } else { authMax++ }
+		if ec.AuthBearer {
+			authCaps++
+			authMax++
+		} else {
+			authMax++
+		}
+		if ec.AuthXAPIKey {
+			authCaps++
+			authMax++
+		} else {
+			authMax++
+		}
+		if ec.AuthAPIKey {
+			authCaps++
+			authMax++
+		} else {
+			authMax++
+		}
+		if ec.AuthXGoogAPIKey {
+			authCaps++
+			authMax++
+		} else {
+			authMax++
+		}
+		if ec.AuthXFireworks {
+			authCaps++
+			authMax++
+		} else {
+			authMax++
+		}
+		if ec.AuthOAuth {
+			authCaps++
+			authMax++
+		} else {
+			authMax++
+		}
+		if ec.AuthExchange {
+			authCaps++
+			authMax++
+		} else {
+			authMax++
+		}
+		if ec.AuthCustom {
+			authCaps++
+			authMax++
+		} else {
+			authMax++
+		}
 
 		// Determine status
 		if caps == maxCaps && (authCaps > 0 || authMax == 0) {
@@ -470,8 +540,8 @@ func TestCatalogExecutableMatrix(t *testing.T) {
 	t.Logf("Missing in catalog: %d - %v", len(missingInCatalog), missingInCatalog)
 
 	// B1 acceptance criteria: every catalog entry should be categorized.
-// Log providers missing from executable matrix as "unknown" but don't fail.
-// The matrix documents the gaps; implementation of missing clients is separate work.
+	// Log providers missing from executable matrix as "unknown" but don't fail.
+	// The matrix documents the gaps; implementation of missing clients is separate work.
 	if len(missingInExec) > 0 {
 		t.Logf("B1 INFO: %d providers in catalog have no executable capability record (reference/unverified entries): %v", len(missingInExec), missingInExec)
 	}
