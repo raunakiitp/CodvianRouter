@@ -7,7 +7,7 @@
 # Scope `admin` implies every scope. LOCAL_ONLY = loopback-only
 # even with a valid key. Destructive routes need a typed
 # {"confirm": "<phrase>"} body in addition to the key.
-# Routes: 340
+# Routes: 342
 
 ## Auth
 header: Authorization: Bearer <gateway-key>
@@ -141,6 +141,7 @@ POST /api/quota-pools | MANAGEMENT | scopes=admin | auth=key | Create a fair-sha
 GET /api/quota-pools/{id} | MANAGEMENT | scopes=admin | auth=key | One fair-share quota pool by id; unknown ids answer 404. Management auth (admin scope) required.
 PATCH /api/quota-pools/{id} | MANAGEMENT | scopes=admin | auth=key | Update one fair-share quota pool (dimensions, allocations). Management auth (admin scope) required.
 DELETE /api/quota-pools/{id} | MANAGEMENT | scopes=admin | auth=key | Delete one fair-share quota pool. Management auth (admin scope) required.
+GET /api/quota/intelligence | MANAGEMENT | scopes=admin | auth=key | Unified quota intelligence across pools, schedules, key budgets, internal budgets, and catalog free-tier providers. Management auth (admin scope) required.
 POST /api/webhooks | ALWAYS_PROTECTED | scopes=admin | auth=key | Registers a webhook URL + event list (quota.exceeded, budget.warning): validates the URL (http/https only, no private/loopback targets), mints a wh_ id, persists to the config file and rebuilds the live dispatcher. Auth always required — it points the server at an operator-chosen URL and stores a signing secret.
 GET /api/webhooks | MANAGEMENT | scopes=admin | auth=key | Lists webhook registrations (id, url, events, has_secret only — secrets never returned). Management auth (admin scope) required.
 GET /api/webhooks/{id} | MANAGEMENT | scopes=admin | auth=key | One webhook registration by id (secret never returned); unknown id is 404. Management auth (admin scope) required.
