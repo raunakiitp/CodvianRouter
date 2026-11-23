@@ -8,9 +8,9 @@ the per-route sections; regenerate instead:
 python3 scripts/gen-api-docs.py
 ```
 
-Coverage: **340 routes** (176 GET, 115 POST, 22 DELETE, 22 PATCH, 5 PUT) —
+Coverage: **342 routes** (178 GET, 115 POST, 22 DELETE, 22 PATCH, 5 PUT) —
 11 `LOCAL_ONLY`, 56 `ALWAYS_PROTECTED`,
-273 `MANAGEMENT`; 58 auth-exempt, 271 scope-gated, 11 key-only (gateway key, no scope).
+275 `MANAGEMENT`; 58 auth-exempt, 273 scope-gated, 11 key-only (gateway key, no scope).
 Enforced by `TestAPIReferenceCoversEveryRoute`
 (`internal/server/api_reference_test.go`): the test reads the guard
 table and this doc and FAILS if any route is missing. That test is
@@ -475,12 +475,14 @@ its key field; the key is kept only in page memory, never stored.
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
 - **Description:** WebSocket chat streaming endpoint — upgrades to WebSocket and streams chat completions over WS frames. Gateway-key auth required.
-- **Query parameters:** `model`, `messages` (JSON array), `stream` (must be `true`), `temperature`, `max_tokens`, `top_p`, `stop`, `tools` (JSON array), `tool_choice` (JSON), `api_key` (alternative to Authorization header).
-- **Response:** WebSocket text frames with JSON envelope: `{"event":"start",...}` then `{"event":"token","delta":"...","model":"..."}` per token, then close on completion/error.
+- **Request:** no body.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
   ```sh
-  ws://127.0.0.1:8080/v1/ws?model=<model-id>&messages=[{"role":"user","content":"Hello"}]&api_key=<gateway-key>
+  curl -X GET -H "Authorization: Bearer $CODVIAN_KEY" http://127.0.0.1:8080/v1/ws
   ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
 
 ### `POST /v1/embeddings`
 
@@ -2311,6 +2313,22 @@ its key field; the key is kept only in page memory, never stored.
 
   ```sh
   curl -X DELETE -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/api/quota-pools/{id}
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `GET /api/quota/intelligence`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Unified quota intelligence across pools, schedules, key budgets, internal budgets, and catalog free-tier providers. Management auth (admin scope) required.
+- **Request:** no body.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X GET -H "Authorization: Bearer $CODVIAN_KEY" http://127.0.0.1:8080/api/quota/intelligence
   ```
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
