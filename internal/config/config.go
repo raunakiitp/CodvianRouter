@@ -2163,7 +2163,7 @@ func (c *Config) Validate() error {
 				return errors.New("config: routing.chain_strategies has an empty model key")
 			}
 			if !isStrategyName(s) {
-				return fmt.Errorf("config: routing.chain_strategies[%q] = %q is not a known strategy (priority, balanced, cheapest, fastest, most-reliable, least-latency, weighted, custom-weights, code, round-robin, random, strict-random, fill-first, least-used, p2c, quota-weighted, headroom, expiry-first, reset-aware, reset-window, lkgp, context-optimized, cache-optimized, context-relay, cost-optimized, ship-fast, cost-saver, quality-first, offline-friendly, reliability-first, chaos-mode, cascade)", model, s)
+				return fmt.Errorf("config: routing.chain_strategies[%q] = %q is not a known strategy (priority, balanced, cheapest, fastest, most-reliable, least-latency, weighted, custom-weights, code, round-robin, random, strict-random, fill-first, least-used, p2c, quota-weighted, headroom, expiry-first, reset-aware, reset-window, lkgp, context-optimized, cache-optimized, context-relay, cost-optimized, ship-fast, cost-saver, quality-first, offline-friendly, reliability-first, chaos-mode, cascade, fusion)", model, s)
 			}
 		}
 		// Nestable strategy trees (CHECKLIST 177): each tree is
@@ -2988,7 +2988,7 @@ func isStrategyName(s string) bool {
 		"quota-weighted", "headroom", "expiry-first", "reset-aware", "reset-window",
 		"lkgp", "context-optimized", "cache-optimized", "context-relay",
 		"cost-optimized", "eco", "ship-fast", "cost-saver", "quality-first",
-		"offline-friendly", "reliability-first", "chaos-mode", "cascade":
+		"offline-friendly", "reliability-first", "chaos-mode", "cascade", "fusion":
 		return true
 	default:
 		return false

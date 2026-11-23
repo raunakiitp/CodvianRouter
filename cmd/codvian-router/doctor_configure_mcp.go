@@ -979,7 +979,14 @@ func (s *registryMCPSource) CreateCombo(ctx context.Context, name string, member
 	s.cfg.Routing.Groups[name] = append([]string(nil), clean...)
 	var oldStrat string
 	hadStrat := false
-	if _, isStrategy := strategy.Parse(canon); isStrategy {
+	isComboMode := func(s string) bool {
+		switch s {
+		case "fusion", "pipeline", "jev":
+			return true
+		}
+		return false
+	}(canon)
+	if _, isStrategy := strategy.Parse(canon); isStrategy && !isComboMode {
 		if s.cfg.Routing.ChainStrategies == nil {
 			s.cfg.Routing.ChainStrategies = map[string]string{}
 		}

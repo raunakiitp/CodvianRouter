@@ -153,13 +153,12 @@ func TestSLAAwareHookZeroToleranceHonoured(t *testing.T) {
 	}
 }
 
-func TestDescribeSLAAwareDisclosesP50StandIn(t *testing.T) {
-	// The review corrected the design's premise: Describe
-	// did NOT disclose the p50 stand-in. It must now say
-	// the latency is the measured p50 EWMA, not a true p95,
-	// and that stability is neutral (no stddev signal).
+func TestDescribeSLAAwareDisclosesTrueP95(t *testing.T) {
+	// Now that the engine has a latency histogram (B9), the
+	// SLA-aware description must disclose true p95 from the
+	// histogram, with fallback to p50 EWMA when samples < 20.
 	_, rule := Describe(StrategySLAAware)
-	for _, want := range []string{"p50", "not a true p95", "neutral"} {
+	for _, want := range []string{"true p95", "histogram", "p50 EWMA", "neutral"} {
 		if !strings.Contains(rule, want) {
 			t.Errorf("Describe(sla-aware) = %q, want it to disclose %q", rule, want)
 		}

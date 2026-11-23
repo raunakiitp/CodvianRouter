@@ -45,6 +45,11 @@ func TestParse(t *testing.T) {
 		"custom-weights": "custom-weights", "custom": "custom-weights",
 		"code": "code", "priority": "priority", "Priority": "priority",
 		"round-robin": "round-robin", "eco": "cost-optimized",
+		"auto":     "auto",
+		"fusion":   "fusion",
+		"pipeline": "pipeline",
+		"jev":      "jev",
+		"sla":      "sla-aware",
 	}
 	for in, want := range cases {
 		got, ok := Parse(in)
@@ -52,7 +57,7 @@ func TestParse(t *testing.T) {
 			t.Errorf("Parse(%q) = %q, %v (want %q, true)", in, got, ok, want)
 		}
 	}
-	for _, bad := range []string{"", "  ", "smartest", "auto"} {
+	for _, bad := range []string{"", "  ", "smartest"} {
 		if _, ok := Parse(bad); ok {
 			t.Errorf("Parse(%q) unexpectedly valid", bad)
 		}
