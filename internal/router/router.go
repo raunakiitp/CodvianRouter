@@ -349,15 +349,15 @@ type StrategyHookContext struct {
 	// a positive rate without this flag keep working — a
 	// positive rate is used as-is either way.
 	SLAMaxErrorRateSet bool
-		// Ledger is the ledger accessor for budget-aware routing (B11).
-		// It provides access to KeyBudgetStatus and KeyBudgetConfig for
-		// the gateway key. When nil, budget-aware routing falls back to
-		// balanced order.
-		Ledger Ledger
-		// ApiKeyId is the gateway key ID for budget-aware routing (B11).
-		// When empty, budget-aware routing falls back to balanced order.
-		ApiKeyId string
-	}
+	// Ledger is the ledger accessor for budget-aware routing (B11).
+	// It provides access to KeyBudgetStatus and KeyBudgetConfig for
+	// the gateway key. When nil, budget-aware routing falls back to
+	// balanced order.
+	Ledger Ledger
+	// ApiKeyId is the gateway key ID for budget-aware routing (B11).
+	// When empty, budget-aware routing falls back to balanced order.
+	ApiKeyId string
+}
 
 type Config struct {
 	// DisableAdaptiveLimiter, when true, runs the engine with NO
@@ -1153,9 +1153,9 @@ type breakerState struct {
 
 // providerStats is the mutable live record behind ProviderStats.
 type providerStats struct {
-	attempts     int
-	successes    int
-	latencyEWMA  float64 // EWMA (alpha 0.2) of successful latencies
+	attempts    int
+	successes   int
+	latencyEWMA float64 // EWMA (alpha 0.2) of successful latencies
 	// Latency histogram for true p95 (B9): fixed-bucket histogram
 	// covering 0-10000 ms with 1 ms resolution up to 1000 ms,
 	// then 10 ms resolution up to 10000 ms.
@@ -2357,16 +2357,16 @@ func (e *Engine) ProviderStats(providerID string) (ProviderStats, bool) {
 		return ProviderStats{ProviderID: providerID}, false
 	}
 	return ProviderStats{
-			ProviderID:   providerID,
-			Attempts:     st.attempts,
-			Successes:    st.successes,
-			Failures:     st.attempts - st.successes,
-			SuccessRate:  float64(st.successes) / float64(st.attempts),
-			LatencyMs:    st.latencyEWMA,
-			LatencyP95Ms: st.p95LatencyMs(),
-			Samples:      st.attempts,
-		}, true
-	}
+		ProviderID:   providerID,
+		Attempts:     st.attempts,
+		Successes:    st.successes,
+		Failures:     st.attempts - st.successes,
+		SuccessRate:  float64(st.successes) / float64(st.attempts),
+		LatencyMs:    st.latencyEWMA,
+		LatencyP95Ms: st.p95LatencyMs(),
+		Samples:      st.attempts,
+	}, true
+}
 
 // AllProviderStats returns the live attempt record for every provider
 // with at least one recorded attempt, in provider-ID order. Empty
@@ -2385,15 +2385,15 @@ func (e *Engine) AllProviderStats() []ProviderStats {
 	for _, id := range ids {
 		st := e.attemptStats[id]
 		out = append(out, ProviderStats{
-					ProviderID:   id,
-					Attempts:     st.attempts,
-					Successes:    st.successes,
-					Failures:     st.attempts - st.successes,
-					SuccessRate:  float64(st.successes) / float64(st.attempts),
-					LatencyMs:    st.latencyEWMA,
-					LatencyP95Ms: st.p95LatencyMs(),
-					Samples:      st.attempts,
-				})
+			ProviderID:   id,
+			Attempts:     st.attempts,
+			Successes:    st.successes,
+			Failures:     st.attempts - st.successes,
+			SuccessRate:  float64(st.successes) / float64(st.attempts),
+			LatencyMs:    st.latencyEWMA,
+			LatencyP95Ms: st.p95LatencyMs(),
+			Samples:      st.attempts,
+		})
 	}
 	return out
 }

@@ -2873,7 +2873,7 @@ func openStack(opts options) (*stack, error) {
 		applyLearnedQuota()
 		return sig
 	}
-// Cost/latency/quality-aware auto-router tier ordering: the
+	// Cost/latency/quality-aware auto-router tier ordering: the
 	// per-tier candidate models are ranked by the same live signals
 	// the strategies use — real cost from the price book, measured
 	// latency/success from the engine's live provider stats, and

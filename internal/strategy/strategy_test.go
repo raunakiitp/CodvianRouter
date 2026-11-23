@@ -43,14 +43,14 @@ func TestParse(t *testing.T) {
 		"least-latency": "least-latency", "latency": "least-latency",
 		"balanced": "balanced", "weighted": "weighted",
 		"custom-weights": "custom-weights", "custom": "custom-weights",
-				"code":           "code", "priority": "priority", "Priority": "priority",
-				"round-robin":    "round-robin", "eco": "cost-optimized",
-				"auto":           "auto",
-				"fusion":         "fusion",
-				"pipeline":       "pipeline",
-				"jev":            "jev",
-				"sla":            "sla-aware",
-			}
+		"code": "code", "priority": "priority", "Priority": "priority",
+		"round-robin": "round-robin", "eco": "cost-optimized",
+		"auto":     "auto",
+		"fusion":   "fusion",
+		"pipeline": "pipeline",
+		"jev":      "jev",
+		"sla":      "sla-aware",
+	}
 	for in, want := range cases {
 		got, ok := Parse(in)
 		if !ok || got != want {

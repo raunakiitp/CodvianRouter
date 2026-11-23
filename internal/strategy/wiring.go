@@ -894,20 +894,20 @@ func wiringHook(st Strategy, signals scoring.SignalsFunc, custom scoring.Weights
 				}
 			}
 			var maxCost float64 = -1
-					cands := make([]sla.Candidate, len(pool))
-					for j, i := range pool {
-						s := sigs[i]
-						c := sla.Candidate{}
-						// Use true p95 from histogram when available (B9);
-						// fall back to p50 EWMA. The SLA policy's target is p95.
-						if s.LatencyP95Ms > 0 {
-							c.LatencyMs = s.LatencyP95Ms
-							c.HasLatency = true
-						} else if s.LatencyMs > 0 {
-							c.LatencyMs = s.LatencyMs
-							c.HasLatency = true
-						}
-						if s.Attempts > 0 {
+			cands := make([]sla.Candidate, len(pool))
+			for j, i := range pool {
+				s := sigs[i]
+				c := sla.Candidate{}
+				// Use true p95 from histogram when available (B9);
+				// fall back to p50 EWMA. The SLA policy's target is p95.
+				if s.LatencyP95Ms > 0 {
+					c.LatencyMs = s.LatencyP95Ms
+					c.HasLatency = true
+				} else if s.LatencyMs > 0 {
+					c.LatencyMs = s.LatencyMs
+					c.HasLatency = true
+				}
+				if s.Attempts > 0 {
 					c.ErrorRate = 1 - s.SuccessRate
 					if c.ErrorRate < 0 {
 						c.ErrorRate = 0
@@ -946,128 +946,128 @@ func wiringHook(st Strategy, signals scoring.SignalsFunc, custom scoring.Weights
 			return reorderAttempts(chain, keys)
 		}
 	case StrategyNadir:
-			// Nadir is a model-selection strategy, not an ordering:
-			// the decision happens at auto/nadir dispatch time in
-			// the router (internal/router/nadir.go), which can do
-			// I/O. As a chain hook it is the identity — the
-			// declared (priority) order stands, and no external
-			// call is ever made from here. Returning nil would
-			// fall through to the balanced weight hook and
-			// re-rank, which would NOT be the priority fallback.
-			return func(chain []router.Attempt) []router.Attempt { return chain }
-		case StrategyCascade:
-			// Cascade is an engine-intercepted ordering, not a
-			// weight set: the router applies applyCascadeOrder
-			// over the live auto-catalog tiers before the hook
-			// (internal/router/cascade.go). As a chain hook it
-			// is the identity — the declared order stands. Returning
-			// nil would fall through to the balanced weight hook
-			// and re-rank, which would NOT be the cascade order.
-			return func(chain []router.Attempt) []router.Attempt { return chain }
-		case StrategyAuto:
-			// Auto is the auto-routing entry point: the auto-router
-			// (internal/router/autodispatch.go) resolves a concrete
-			// model and effective strategy from the live catalog before
-			// the chain is built. As a chain hook it is the identity —
-			// the real dispatch happened at model-resolution time.
-			return func(chain []router.Attempt) []router.Attempt { return chain }
-		case StrategyFusion:
-			// Fusion is an engine-intercepted composition (panel + judge):
-			// the router constructs the auto/fusion panel and invokes the
-			// judge model before the hook. As a chain hook it is the
-			// identity — the engine intercepted it. Returning nil would
-			// fall through to a balanced re-rank, which would NOT be the
-			// fusion panel order.
-			return func(chain []router.Attempt) []router.Attempt { return chain }
-		case StrategyPipeline:
-			// Pipeline is an engine-intercepted sequential composition:
-			// the router tries models in auto/pipeline order, feeding each
-			// model's output to the next; the first success terminates.
-			// As a chain hook it is the identity. Returning nil would
-			// fall through to a balanced re-rank, which would NOT be the
-			// pipeline order.
-			return func(chain []router.Attempt) []router.Attempt { return chain }
-		case StrategyJEV:
-				// JEV (Judge-Evaluate-Vote) is an engine-intercepted ensemble:
-				// the router constructs the auto/jev panel, invokes the judge
-				// model, and selects the best candidate. As a chain hook it is
-				// the identity. Returning nil would fall through to a balanced
-				// re-rank, which would NOT be the JEV selection.
-				return func(chain []router.Attempt) []router.Attempt { return chain }
-			case StrategyBudgetAware:
-					// Budget-aware (B11): ranks targets by remaining budget headroom
-					// for the gateway key. The hook needs access to the ledger to
-					// read KeyBudgetStatus and the budget config, and to the cost
-					// estimates for each target. Since the hook factory closes over
-					// the engine's signals function (which has no budget data), we
-					// need to inject the budget signals via the StrategyHookContext
-					// (which carries the caller's apiKeyId and the engine's ledger
-					// accessor). The context's Ledger field provides the ledger
-					// accessor; we type-assert it to the concrete ledger to access
-					// the budget methods.
-					//
-					// If no budget is configured for the key, the hook falls back
-					// to the balanced order (no re-ranking on no data).
-					return func(chain []router.Attempt) []router.Attempt {
-						if len(chain) == 0 || ctx.ApiKeyId == "" {
-							return chain
-						}
-						// Type-assert the ledger to access budget methods.
-						// The engine's ledger is the concrete *ledger.Ledger which
-						// implements GetKeyBudget and GetKeyBudgetStatus.
-						l, ok := ctx.Ledger.(*ledger.Ledger)
-									if !ok || l == nil {
-										return chain
-									}
-									// Read budget status and config from the ledger.
-									// KeyBudgetStatus requires a time.Time for the rolling
-									// window calculation; use the current time.
-									budgetStatus, err := l.KeyBudgetStatus(context.Background(), ctx.ApiKeyId, time.Now())
-									if err != nil || budgetStatus.LimitUSD <= 0 {
-										return chain // no budget configured
-									}
-									budgetConfig, err := l.GetKeyBudget(context.Background(), ctx.ApiKeyId)
-									if err != nil || budgetConfig.LimitUSD <= 0 {
-										return chain
-									}
-									remaining := budgetStatus.LimitUSD - budgetStatus.SpentUSD
-									if remaining <= 0 {
-										return chain // budget exhausted
-									}
-						// Score each target by remaining budget after estimated cost.
-						// Targets that fit within remaining budget score higher.
-						type scored struct {
-							att       router.Attempt
-							remaining float64 // remaining budget after this target's estimated cost
-						}
-						items := make([]scored, 0, len(chain))
-						for _, att := range chain {
-							cost := estimateCostUSD(att.ProviderID, att.Model, ctx.PromptTokens, signals)
-							rem := remaining - cost
-							items = append(items, scored{att: att, remaining: rem})
-						}
-						sort.SliceStable(items, func(i, j int) bool {
-							// Targets that fit in budget (remaining >= 0) lead.
-							fitI := items[i].remaining >= 0
-							fitJ := items[j].remaining >= 0
-							if fitI != fitJ {
-								return fitI
-							}
-							// Among fitting targets, more remaining budget is better.
-							// Among non-fitting, less overage is better.
-							if fitI {
-								return items[i].remaining > items[j].remaining
-							}
-							return items[i].remaining > items[j].remaining // less negative = less overage
-						})
-						keys := make([]attemptKey, 0, len(items))
-						for _, it := range items {
-							keys = append(keys, attemptKey{provider: it.att.ProviderID, model: it.att.Model})
-						}
-						return reorderAttempts(chain, keys)
-					}
+		// Nadir is a model-selection strategy, not an ordering:
+		// the decision happens at auto/nadir dispatch time in
+		// the router (internal/router/nadir.go), which can do
+		// I/O. As a chain hook it is the identity — the
+		// declared (priority) order stands, and no external
+		// call is ever made from here. Returning nil would
+		// fall through to the balanced weight hook and
+		// re-rank, which would NOT be the priority fallback.
+		return func(chain []router.Attempt) []router.Attempt { return chain }
+	case StrategyCascade:
+		// Cascade is an engine-intercepted ordering, not a
+		// weight set: the router applies applyCascadeOrder
+		// over the live auto-catalog tiers before the hook
+		// (internal/router/cascade.go). As a chain hook it
+		// is the identity — the declared order stands. Returning
+		// nil would fall through to the balanced weight hook
+		// and re-rank, which would NOT be the cascade order.
+		return func(chain []router.Attempt) []router.Attempt { return chain }
+	case StrategyAuto:
+		// Auto is the auto-routing entry point: the auto-router
+		// (internal/router/autodispatch.go) resolves a concrete
+		// model and effective strategy from the live catalog before
+		// the chain is built. As a chain hook it is the identity —
+		// the real dispatch happened at model-resolution time.
+		return func(chain []router.Attempt) []router.Attempt { return chain }
+	case StrategyFusion:
+		// Fusion is an engine-intercepted composition (panel + judge):
+		// the router constructs the auto/fusion panel and invokes the
+		// judge model before the hook. As a chain hook it is the
+		// identity — the engine intercepted it. Returning nil would
+		// fall through to a balanced re-rank, which would NOT be the
+		// fusion panel order.
+		return func(chain []router.Attempt) []router.Attempt { return chain }
+	case StrategyPipeline:
+		// Pipeline is an engine-intercepted sequential composition:
+		// the router tries models in auto/pipeline order, feeding each
+		// model's output to the next; the first success terminates.
+		// As a chain hook it is the identity. Returning nil would
+		// fall through to a balanced re-rank, which would NOT be the
+		// pipeline order.
+		return func(chain []router.Attempt) []router.Attempt { return chain }
+	case StrategyJEV:
+		// JEV (Judge-Evaluate-Vote) is an engine-intercepted ensemble:
+		// the router constructs the auto/jev panel, invokes the judge
+		// model, and selects the best candidate. As a chain hook it is
+		// the identity. Returning nil would fall through to a balanced
+		// re-rank, which would NOT be the JEV selection.
+		return func(chain []router.Attempt) []router.Attempt { return chain }
+	case StrategyBudgetAware:
+		// Budget-aware (B11): ranks targets by remaining budget headroom
+		// for the gateway key. The hook needs access to the ledger to
+		// read KeyBudgetStatus and the budget config, and to the cost
+		// estimates for each target. Since the hook factory closes over
+		// the engine's signals function (which has no budget data), we
+		// need to inject the budget signals via the StrategyHookContext
+		// (which carries the caller's apiKeyId and the engine's ledger
+		// accessor). The context's Ledger field provides the ledger
+		// accessor; we type-assert it to the concrete ledger to access
+		// the budget methods.
+		//
+		// If no budget is configured for the key, the hook falls back
+		// to the balanced order (no re-ranking on no data).
+		return func(chain []router.Attempt) []router.Attempt {
+			if len(chain) == 0 || ctx.ApiKeyId == "" {
+				return chain
+			}
+			// Type-assert the ledger to access budget methods.
+			// The engine's ledger is the concrete *ledger.Ledger which
+			// implements GetKeyBudget and GetKeyBudgetStatus.
+			l, ok := ctx.Ledger.(*ledger.Ledger)
+			if !ok || l == nil {
+				return chain
+			}
+			// Read budget status and config from the ledger.
+			// KeyBudgetStatus requires a time.Time for the rolling
+			// window calculation; use the current time.
+			budgetStatus, err := l.KeyBudgetStatus(context.Background(), ctx.ApiKeyId, time.Now())
+			if err != nil || budgetStatus.LimitUSD <= 0 {
+				return chain // no budget configured
+			}
+			budgetConfig, err := l.GetKeyBudget(context.Background(), ctx.ApiKeyId)
+			if err != nil || budgetConfig.LimitUSD <= 0 {
+				return chain
+			}
+			remaining := budgetStatus.LimitUSD - budgetStatus.SpentUSD
+			if remaining <= 0 {
+				return chain // budget exhausted
+			}
+			// Score each target by remaining budget after estimated cost.
+			// Targets that fit within remaining budget score higher.
+			type scored struct {
+				att       router.Attempt
+				remaining float64 // remaining budget after this target's estimated cost
+			}
+			items := make([]scored, 0, len(chain))
+			for _, att := range chain {
+				cost := estimateCostUSD(att.ProviderID, att.Model, ctx.PromptTokens, signals)
+				rem := remaining - cost
+				items = append(items, scored{att: att, remaining: rem})
+			}
+			sort.SliceStable(items, func(i, j int) bool {
+				// Targets that fit in budget (remaining >= 0) lead.
+				fitI := items[i].remaining >= 0
+				fitJ := items[j].remaining >= 0
+				if fitI != fitJ {
+					return fitI
 				}
-				if pack, ok := modePackStrategies[st]; ok {
+				// Among fitting targets, more remaining budget is better.
+				// Among non-fitting, less overage is better.
+				if fitI {
+					return items[i].remaining > items[j].remaining
+				}
+				return items[i].remaining > items[j].remaining // less negative = less overage
+			})
+			keys := make([]attemptKey, 0, len(items))
+			for _, it := range items {
+				keys = append(keys, attemptKey{provider: it.att.ProviderID, model: it.att.Model})
+			}
+			return reorderAttempts(chain, keys)
+		}
+	}
+	if pack, ok := modePackStrategies[st]; ok {
 		return sixteenHookCtx(signals, pack, ctx, warmth)
 	}
 	return nil
