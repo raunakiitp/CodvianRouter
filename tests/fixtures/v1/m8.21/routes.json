@@ -1386,6 +1386,18 @@
     "bootstrap": false
   },
   {
+    "method": "GET",
+    "path": "/api/quota/intelligence",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Unified quota intelligence across pools, schedules, key budgets, internal budgets, and catalog free-tier providers. Management auth (admin scope) required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
     "method": "POST",
     "path": "/api/webhooks",
     "tier": "ALWAYS_PROTECTED",
@@ -1644,7 +1656,7 @@
     "path": "/v1/ws",
     "tier": "MANAGEMENT",
     "spawn_capable": false,
-    "description": "WebSocket chat streaming endpoint — upgrades to WebSocket and streams chat completions over WS frames. Gateway-key auth required.",
+    "description": "WebSocket chat streaming endpoint \u2014 upgrades to WebSocket and streams chat completions over WS frames. Gateway-key auth required.",
     "auth_exempt": false,
     "scopes": [
       "chat"
