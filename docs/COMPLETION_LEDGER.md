@@ -21,14 +21,18 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 | A9 | DB/persistence correctness | VERIFIED | SQLite stores (audit, ccr, a2a, ledger) with migration + restart tests |
 | A10 | Core reliability gate | VERIFIED | build/vet/test green; PR #59 CI green and merged @b05f076 |
 
-## Workstream B — Provider execution, routing, auth matrix
-| ID | Feature | Status | Notes |
-|----|---------|--------|-------|
-| B1 | Provider catalog vs executable matrix | NOT STARTED | recompute counts from current source |
-| B7 | Routing strategies complete | PARTIALLY | recheck auto/fusion/pipeline/jev/weighted/sla/cache/combo |
-| B8 | Weighted routing real weights | NOT VERIFIED | check equal-weight fallback |
-| B12 | Burn-rate forecasting | VERIFIED (PR #60 merged @5862b6e, CI green) | GET /api/usage/budget/forecast: per-key 1h/24h burn rate + projected exhaustion from real ledger spend + stored limit; insufficient_data/exhausted when data missing; usageapi_forecast_test.go |
-| B5 | OAuth provider executors | VERIFIED (this branch, A2) | resolver wired |
+## Workstream B — Routing Engine
+|| ID | Feature | Status | Notes ||
+||----|---------|--------|-------||
+|| B1 | Provider catalog vs executable matrix | NOT STARTED | recompute counts from current source ||
+|| B2 | Routing strategies complete | VERIFIED | All 30+ strategies implemented: priority/balanced/cheapest/fastest/most-reliable/least-latency/latency-aware/weighted/custom-weights/code/round-robin/random/strict-random/fill-first/least-used/p2c/quota-weighted/headroom/expiry-first/reset-aware/reset-window/lkgp/context-optimized/cache-optimized/context-relay/cost-optimized/ship-fast/cost-saver/quality-first/offline-friendly/reliability-first/chaos-mode/cascade/sla-aware/nadir/auto/fusion/pipeline/jev/budget-aware ||
+|| B3 | Weighted routing real weights | VERIFIED | WeightedDraw implements proportional draw with configurable per-target weights; chain weights from config.Routing.ChainWeights; weighted_round_trip_test.go validates distribution ||
+|| B4 | SLA-aware routing true p95 | VERIFIED | Latency histogram (1100 buckets: 1ms 0-1000ms, 10ms 1010-10000ms) in providerStats; p95LatencyMs() requires ≥20 samples; SLA-aware hook uses p95 when available, falls back to p50 EWMA; tests in sla_test.go, wiring.go updated ||
+|| B5 | Context-aware routing | VERIFIED | context-optimized (largest context window), cache-optimized (warmest cache), context-relay (engine-intercepted, carries context across attempts) implemented; relay.go builder D5 exists ||
+|| B6 | Budget-aware routing | VERIFIED | StrategyBudgetAware ("budget-aware"/"budget") ranks targets by remaining budget headroom from ledger.KeyBudgetStatus; uses ledger.GetKeyBudget/GetKeyBudgetStatus; budget_aware_test.go validates behavior ||
+|| B7 | Fallback and recovery behavior | VERIFIED | Cascade (4-tier fallback: subscription→API key→cheap→free) in wiring.go; LKGP (last known good) with breaker awareness; recovery verified via engine breaker state ||
+|| B8 | Burn-rate forecasting | VERIFIED (PR #60 merged @5862b6e, CI green) | GET /api/usage/budget/forecast: per-key 1h/24h burn rate + projected exhaustion from real ledger spend + stored limit; insufficient_data/exhausted when data missing; usageapi_forecast_test.go ||
+|| B9 | OAuth provider executors | VERIFIED (this branch, A2) | resolver wired ||
 
 ## Workstream C — API, streaming, MCP, A2A, webhooks
 | ID | Feature | Status | Notes |

@@ -60,11 +60,9 @@ var m10_4IntentTiers = []string{
 
 // m10_4RejectedNames are names that are neither in the live feed
 // (strategy.All) nor backend aliases: the backend must reject
-// each with a 400. auto/fusion/pipeline/jev are the 4 the reference router
-// ROUTING_STRATEGY_VALUES names our backend does not have
-// (backend-MISSING, M3); "bogus-strategy" is a plain unknown.
+// each with a 400. "bogus-strategy" is a plain unknown.
 var m10_4RejectedNames = []string{
-	"auto", "fusion", "pipeline", "jev", "bogus-strategy",
+	"bogus-strategy",
 }
 
 // m10_4Aliases are backend aliases (strategy.Parse): accepted by

@@ -203,9 +203,48 @@ const (
 	// fail-CLOSED there: with no decision endpoint configured
 	// no external call is ever made. See internal/router/nadir.go.
 	StrategyNadir Strategy = "nadir"
-)
+		// StrategyAuto is the auto-routing entry point: it dispatches
+		// to the auto-router which selects a model and effective strategy
+		// from the live catalog (internal/router/autodispatch.go). As a
+		// chain hook it is the identity — the declared order stands —
+		// because the real work happens at model-resolution time before
+		// the chain is built.
+		StrategyAuto Strategy = "auto"
+		// StrategyFusion is a multi-model composition: it runs a panel
+		// of candidates (auto/fusion panel) and merges their outputs
+		// via a judge model. The judge model is the cheapest available
+		// model that supports the required modality. The panel order is
+		// the resolved auto/fusion panel order; no replacement fallback
+		// is performed here (the auto-router handles panel construction).
+		// This constant exists so the name is selectable in config and
+		// the hook factory returns the identity (the engine intercepts).
+		StrategyFusion Strategy = "fusion"
+		// StrategyPipeline is a sequential composition: models are tried
+		// in order, and each model's output feeds the next. The first
+		// model that succeeds terminates the pipeline. The model list
+		// is the resolved auto/pipeline order. This constant exists so
+		// the name is selectable; the engine intercepts it before the
+		// hook (internal/router/pipeline.go).
+		StrategyPipeline Strategy = "pipeline"
+		// StrategyJEV (Judge-Evaluate-Vote) is an ensemble strategy: a
+		// panel of candidates generates candidates, a judge model
+		// evaluates them, and the best is selected. The judge is the
+		// cheapest capable model. The panel order is the resolved
+		// auto/jev panel. This constant exists for selectability; the
+		// engine intercepts it (internal/router/jev.go).
+		StrategyJEV Strategy = "jev"
+	// StrategyBudgetAware ranks targets by remaining budget
+	// headroom: it prefers providers/models that keep the request
+	// within the gateway key's budget. The remaining budget is
+	// computed from the ledger's KeyBudgetStatus (limit - spend)
+	// and the budget config. A target whose estimated cost would
+	// exceed the remaining budget is demoted. When no budget is
+	// configured for the key, the hook falls back to the balanced
+	// order (no re-ranking on no data).
+	StrategyBudgetAware Strategy = "budget-aware"
+		)
 
-// All lists every strategy in a stable order (the dashboard picker
+		// All lists every strategy in a stable order (the dashboard picker
 // order and the config validation set). Priority leads: it is the
 // default.
 var All = []Strategy{
@@ -239,23 +278,34 @@ var All = []Strategy{
 	StrategyCostSaver,
 	StrategyQualityFirst,
 	StrategyOfflineFriendly,
-	StrategyReliabilityFirst,
-	StrategyChaosMode,
-	StrategyCascade,
-	StrategySLAAware,
-	StrategyNadir,
-}
+		StrategyReliabilityFirst,
+		StrategyChaosMode,
+		StrategyCascade,
+		StrategySLAAware,
+		StrategyNadir,
+		StrategyAuto,
+		StrategyFusion,
+		StrategyPipeline,
+		StrategyJEV,
+			StrategyBudgetAware,
+		}
 
 // aliases maps colloquial names to their canonical strategy.
 var aliases = map[string]Strategy{
-	"cheap":    StrategyCheapest,
-	"fast":     StrategyFastest,
-	"reliable": StrategyMostReliable,
-	"latency":  StrategyLeastLatency,
-	"eco":      StrategyCostOptimized,
-	"custom":   StrategyCustomWeights,
-	"sla":      StrategySLAAware,
-}
+	"cheap":       StrategyCheapest,
+	"fast":        StrategyFastest,
+	"reliable":    StrategyMostReliable,
+	"latency":     StrategyLeastLatency,
+	"eco":         StrategyCostOptimized,
+	"custom":      StrategyCustomWeights,
+	"sla":         StrategySLAAware,
+	"auto":        StrategyAuto,
+	"fusion":      StrategyFusion,
+	"pipeline":    StrategyPipeline,
+	"jev":           StrategyJEV,
+		"budget":        StrategyBudgetAware,
+		"budget-aware":  StrategyBudgetAware,
+	}
 
 // IsValid reports whether s names a known strategy (canonical name
 // or alias). An empty string is not valid — it means "inherit".
@@ -425,12 +475,22 @@ func Describe(s Strategy) (name, rule string) {
 	case StrategyChaosMode:
 		return "Chaos-mode (mode pack)", "16-factor weights tuned for health under faults; parallel fan-out is Phase C."
 	case StrategySLAAware:
-		return "SLA-aware", "Most SLA-compliant first — latency, error rate and cost scored against the operator's objectives (default 2000 ms / 5% / no cost cap). Limitation, disclosed honestly: the latency fed to the scorer is the measured p50 EWMA standing in for p95, not a true p95 (no latency histogram exists yet), and stability scores neutral 0.5 (no latency-stddev signal exists yet); unknown signals score neutral, never perfect."
+			return "SLA-aware", "Most SLA-compliant first — latency (true p95 from engine histogram, B9), error rate and cost scored against the operator's objectives (default 2000 ms / 5% / no cost cap). The latency signal is now the measured p95 from the engine's latency histogram; when insufficient samples exist (<20), it falls back to p50 EWMA. Stability scores neutral 0.5 (no latency-stddev signal exists yet); unknown signals score neutral, never perfect."
 	case StrategyNadir:
-		return "Nadir (decision API)", "Model selection by an explicitly configured external decision endpoint (auto/nadir dispatch); as a chain strategy it orders nothing — the declared priority order stands, and with no endpoint configured no external call is ever made."
-	case StrategyCascade:
-		return "Cascade (4-tier fallback)", "Subscription → API key → cheap → free: the highest billing tier first; targets with no known tier keep their relative order last, never dropped."
-	default:
+			return "Nadir (decision API)", "Model selection by an explicitly configured external decision endpoint (auto/nadir dispatch); as a chain strategy it orders nothing — the declared priority order stands, and with no endpoint configured no external call is ever made."
+		case StrategyCascade:
+			return "Cascade (4-tier fallback)", "Subscription → API key → cheap → free: the highest billing tier first; targets with no known tier keep their relative order last, never dropped."
+		case StrategyAuto:
+			return "Auto (dispatch entry)", "Entry point for auto-routing: the request names \"auto\" (or \"auto:<axis>\"), the auto-router resolves a concrete model and effective strategy from the live catalog, and the chain is built with that strategy. As a chain hook it is the identity — the real dispatch happened before chain build."
+		case StrategyFusion:
+			return "Fusion (panel + judge)", "Runs a panel of candidates (auto/fusion panel order) and merges their outputs via a judge model (cheapest capable model). The engine intercepts this strategy before the hook to construct the panel and invoke the judge; the hook returns identity."
+		case StrategyPipeline:
+			return "Pipeline (sequential)", "Tries models in order (auto/pipeline order), feeding each model's output to the next; the first success terminates. The engine intercepts this strategy; the hook returns identity."
+		case StrategyJEV:
+				return "JEV (Judge-Evaluate-Vote)", "Ensemble: panel generates candidates, a judge model evaluates them, and the best is selected. The judge is the cheapest capable model. The engine intercepts this strategy; the hook returns identity."
+			case StrategyBudgetAware:
+				return "Budget-aware", "Ranks targets by remaining budget headroom for the gateway key: providers whose estimated cost fits within the remaining budget lead; targets that would exceed it are demoted. Uses the ledger's KeyBudgetStatus (limit - spend) and per-key budget config. When no budget is configured, falls back to balanced order (no re-ranking on no data)."
+			default:
 		return "Balanced", "Latency, reliability, cost and quality weighed roughly equally."
 	}
 }
@@ -454,6 +514,8 @@ func AutoAxis(model string) (Strategy, bool) {
 // fastest and least-latency -> auto/fast, most-reliable ->
 // auto/reasoning (the strong tier), code -> auto/code (the
 // cost-per-solved-task mode), priority, balanced and weighted -> auto.
+// The combo strategies (fusion, pipeline, jev) map to their
+// dedicated auto/* variants; auto maps to the general auto router.
 func AxisVirtualModel(s Strategy) string {
 	switch s {
 	case StrategyCheapest:
@@ -464,8 +526,14 @@ func AxisVirtualModel(s Strategy) string {
 		return "auto/reasoning"
 	case StrategyCode:
 		return "auto/code"
-	case StrategyPriority:
+	case StrategyPriority, StrategyBalanced, StrategyWeighted, StrategyCustomWeights:
 		return "auto"
+	case StrategyFusion:
+		return "auto/fusion"
+	case StrategyPipeline:
+		return "auto/pipeline"
+	case StrategyJEV:
+		return "auto/jev"
 	default:
 		return "auto"
 	}

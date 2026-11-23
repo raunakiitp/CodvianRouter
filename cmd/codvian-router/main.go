@@ -2792,7 +2792,7 @@ func openStack(opts options) (*stack, error) {
 				break
 			}
 		}
-		// Breaker state (M3 Area 1, PARITY row 394): the
+		// // Breaker state (M3 Area 1, PARITY row 394): the
 		// engine's live breaker for this provider, so the
 		// sla-aware hook can filter OPEN candidates before
 		// scoring (and the 16-factor health factor can read
@@ -2807,10 +2807,17 @@ func openStack(opts options) (*stack, error) {
 			sig.BreakerOpen = engine.BreakerOpenForProvider(providerID)
 			sig.BreakerDegraded = engine.BreakerDegradedForProvider(providerID)
 		}
+		// Live attempt stats from the engine (M3 Phase C):
+		// success rate, EWMA latency (p50 proxy), true p95
+		// from histogram (B9), attempts. When samples > 0
+		// these are authoritative — skip the probe fallback.
 		if engine != nil {
 			if st, ok := engine.ProviderStats(providerID); ok && st.Samples > 0 {
 				if st.LatencyMs > 0 {
 					sig.LatencyMs = st.LatencyMs
+				}
+				if st.LatencyP95Ms > 0 {
+					sig.LatencyP95Ms = st.LatencyP95Ms
 				}
 				sig.SuccessRate = st.SuccessRate
 				// Measured quality: the error-free completion
@@ -2831,6 +2838,12 @@ func openStack(opts options) (*stack, error) {
 				return sig
 			}
 		}
+		// Probe fallback: no live stats yet (or engine nil).
+		// The checker's last probe for this provider gives
+		// latency and a success/failure hint. It does NOT
+		// provide a true p95 or a measured success rate —
+		// those are only available from the engine's attempt
+		// record. Unknown stays unknown.
 		for _, st := range checker.Last() {
 			if st.ProviderID != providerID {
 				continue
@@ -2860,8 +2873,7 @@ func openStack(opts options) (*stack, error) {
 		applyLearnedQuota()
 		return sig
 	}
-
-	// Cost/latency/quality-aware auto-router tier ordering: the
+// Cost/latency/quality-aware auto-router tier ordering: the
 	// per-tier candidate models are ranked by the same live signals
 	// the strategies use — real cost from the price book, measured
 	// latency/success from the engine's live provider stats, and

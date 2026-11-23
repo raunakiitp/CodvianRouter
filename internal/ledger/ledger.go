@@ -52,6 +52,7 @@ import (
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/guardrails"
+	"github.com/raunakiitp/codvian-router/internal/provider"
 
 	_ "modernc.org/sqlite"
 )
@@ -1815,8 +1816,36 @@ func (l *Ledger) RecordUsage(ctx context.Context, u Usage, prices Prices) (float
 	// on the same request context must re-read, not serve the
 	// memoised pre-spend row (CHECKLIST 299-300).
 	invalidateBudgetMemo(ctx, r.gatewayKeyID)
-	return r.cost, nil
-}
+		return r.cost, nil
+	}
+
+	// RecordAttempt satisfies the router.Ledger interface by
+	// converting the provider.Usage to ledger.Usage and calling
+	// RecordUsage with an empty gateway key (no per-key accounting).
+	// This is used by the strategy hook context for budget-aware
+	// routing which only needs to record attempts, not attribute
+	// them to a specific gateway key.
+	func (l *Ledger) RecordAttempt(provider, model string, ok bool, latencyMs int64, usage provider.Usage) {
+		ctx := context.Background()
+		_, _ = l.RecordUsage(ctx, Usage{
+			Provider:               provider,
+			Model:                  model,
+			Endpoint:               "",
+			PromptTokens:           usage.PromptTokens,
+			CompletionTokens:       usage.CompletionTokens,
+			TotalTokens:            usage.TotalTokens,
+			CachedTokens:           usage.CachedTokens,
+			ReasoningTokens:        usage.ReasoningTokens,
+			CacheWriteTokens:       usage.CacheWriteTokens,
+			CacheWriteTokens5m:     usage.CacheWriteTokens5m,
+			CacheWriteTokens1h:     usage.CacheWriteTokens1h,
+			LocalEstimate:          usage.LocalEstimate,
+			LocalEstimatePromptTokens: usage.LocalEstimatePrompt,
+			OK:                     ok,
+			LatencyMS:              latencyMs,
+			Shared:                 false,
+		}, nil)
+	}
 
 // RecordShared records one request served from a coalesced
 // (single-flight) upstream call: a row marked shared with zero tokens

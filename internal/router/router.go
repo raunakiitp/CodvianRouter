@@ -349,7 +349,15 @@ type StrategyHookContext struct {
 	// a positive rate without this flag keep working — a
 	// positive rate is used as-is either way.
 	SLAMaxErrorRateSet bool
-}
+		// Ledger is the ledger accessor for budget-aware routing (B11).
+		// It provides access to KeyBudgetStatus and KeyBudgetConfig for
+		// the gateway key. When nil, budget-aware routing falls back to
+		// balanced order.
+		Ledger Ledger
+		// ApiKeyId is the gateway key ID for budget-aware routing (B11).
+		// When empty, budget-aware routing falls back to balanced order.
+		ApiKeyId string
+	}
 
 type Config struct {
 	// DisableAdaptiveLimiter, when true, runs the engine with NO
@@ -1145,9 +1153,13 @@ type breakerState struct {
 
 // providerStats is the mutable live record behind ProviderStats.
 type providerStats struct {
-	attempts    int
-	successes   int
-	latencyEWMA float64 // EWMA (alpha 0.2) of successful latencies
+	attempts     int
+	successes    int
+	latencyEWMA  float64 // EWMA (alpha 0.2) of successful latencies
+	// Latency histogram for true p95 (B9): fixed-bucket histogram
+	// covering 0-10000 ms with 1 ms resolution up to 1000 ms,
+	// then 10 ms resolution up to 10000 ms.
+	latencyHist [1100]int // buckets: 0-1000 (1ms each), 1010-10000 (10ms each)
 }
 
 // RoutingInfo is the routing outcome of the most recently finished
@@ -1178,15 +1190,17 @@ type RoutingInfo struct {
 // real attempts only (hedge losers and limiter-shed calls are never
 // counted), so SuccessRate and LatencyMs are measured, not assumed.
 // Samples is Attempts; when it is 0 there is no signal yet and the
-// other fields are 0.
+// other fields are 0. LatencyP95Ms is the true p95 from the latency
+// histogram (B9), or -1 when insufficient samples (<20).
 type ProviderStats struct {
-	ProviderID  string
-	Attempts    int
-	Successes   int
-	Failures    int
-	SuccessRate float64
-	LatencyMs   float64 // EWMA of successful attempt latency
-	Samples     int
+	ProviderID   string
+	Attempts     int
+	Successes    int
+	Failures     int
+	SuccessRate  float64
+	LatencyMs    float64 // EWMA of successful attempt latency (p50 proxy)
+	LatencyP95Ms float64 // true p95 from histogram, -1 when unavailable
+	Samples      int
 }
 
 // Engine routes chat requests across providers.
@@ -2287,6 +2301,48 @@ func (e *Engine) noteAttemptStats(providerID, keyID string, ok bool, latencyMs i
 	} else {
 		st.latencyEWMA = 0.8*st.latencyEWMA + 0.2*lat
 	}
+	// Record in latency histogram for true p95 (B9).
+	bucket := latencyBucket(latencyMs)
+	if bucket >= 0 && bucket < len(st.latencyHist) {
+		st.latencyHist[bucket]++
+	}
+}
+
+// latencyBucket returns the histogram bucket index for a latency in ms.
+// Buckets 0-1000: 1 ms each (0-1000 ms).
+// Buckets 1001-1099: 10 ms each (1010-10000 ms).
+func latencyBucket(latencyMs int64) int {
+	if latencyMs <= 1000 {
+		return int(latencyMs)
+	}
+	if latencyMs <= 10000 {
+		return 1001 + int((latencyMs-1010)/10)
+	}
+	return 1099 // cap at max bucket
+}
+
+// p95LatencyMs returns the 95th-percentile latency from the histogram,
+// or -1 if insufficient samples.
+func (st *providerStats) p95LatencyMs() float64 {
+	total := 0
+	for _, c := range st.latencyHist {
+		total += c
+	}
+	if total < 20 { // need at least 20 samples for meaningful p95
+		return -1
+	}
+	target := int(float64(total) * 0.95)
+	sum := 0
+	for i, c := range st.latencyHist {
+		sum += c
+		if sum >= target {
+			if i <= 1000 {
+				return float64(i)
+			}
+			return float64(1010 + (i-1001)*10)
+		}
+	}
+	return -1
 }
 
 // ProviderStats returns the live attempt record for one provider,
@@ -2301,15 +2357,16 @@ func (e *Engine) ProviderStats(providerID string) (ProviderStats, bool) {
 		return ProviderStats{ProviderID: providerID}, false
 	}
 	return ProviderStats{
-		ProviderID:  providerID,
-		Attempts:    st.attempts,
-		Successes:   st.successes,
-		Failures:    st.attempts - st.successes,
-		SuccessRate: float64(st.successes) / float64(st.attempts),
-		LatencyMs:   st.latencyEWMA,
-		Samples:     st.attempts,
-	}, true
-}
+			ProviderID:   providerID,
+			Attempts:     st.attempts,
+			Successes:    st.successes,
+			Failures:     st.attempts - st.successes,
+			SuccessRate:  float64(st.successes) / float64(st.attempts),
+			LatencyMs:    st.latencyEWMA,
+			LatencyP95Ms: st.p95LatencyMs(),
+			Samples:      st.attempts,
+		}, true
+	}
 
 // AllProviderStats returns the live attempt record for every provider
 // with at least one recorded attempt, in provider-ID order. Empty
@@ -2328,14 +2385,15 @@ func (e *Engine) AllProviderStats() []ProviderStats {
 	for _, id := range ids {
 		st := e.attemptStats[id]
 		out = append(out, ProviderStats{
-			ProviderID:  id,
-			Attempts:    st.attempts,
-			Successes:   st.successes,
-			Failures:    st.attempts - st.successes,
-			SuccessRate: float64(st.successes) / float64(st.attempts),
-			LatencyMs:   st.latencyEWMA,
-			Samples:     st.attempts,
-		})
+					ProviderID:   id,
+					Attempts:     st.attempts,
+					Successes:    st.successes,
+					Failures:     st.attempts - st.successes,
+					SuccessRate:  float64(st.successes) / float64(st.attempts),
+					LatencyMs:    st.latencyEWMA,
+					LatencyP95Ms: st.p95LatencyMs(),
+					Samples:      st.attempts,
+				})
 	}
 	return out
 }
@@ -2916,6 +2974,11 @@ func (e *Engine) strategyHookContextFor(req provider.ChatRequest, explicitOrder 
 		SLAMaxCostPer1M:    e.cfg.SLAMaxCostPer1M,
 		SLAHardConstraints: e.cfg.SLAHardConstraints,
 		SLAMaxErrorRateSet: e.cfg.SLAMaxErrorRateSet,
+		// Budget-aware routing (B11): provide ledger and caller ID
+		// so the budget-aware hook can read KeyBudgetStatus and
+		// KeyBudgetConfig for the gateway key.
+		Ledger:   e.ledger,
+		ApiKeyId: req.CallerID,
 	}
 	if ctx.SLATargetP95Ms <= 0 {
 		ctx.SLATargetP95Ms = 2000

@@ -64,6 +64,11 @@ type Signals struct {
 	// LatencyMs is the recent p50 latency in milliseconds. <= 0 means
 	// no latency sample is available.
 	LatencyMs float64
+	// LatencyP95Ms is the true p95 latency in milliseconds from the
+	// engine's latency histogram (B9). <= 0 means unavailable
+	// (insufficient samples). When available, SLA-aware routing
+	// uses this instead of the p50 proxy.
+	LatencyP95Ms float64
 	// SuccessRate is the recent fraction of successful attempts, 0..1.
 	// 0 means unknown-or-always-failing; callers should only pass
 	// measured rates.

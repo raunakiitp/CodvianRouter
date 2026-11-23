@@ -667,35 +667,38 @@ func (s *ComboStore) mirrorStrategy(name, strategyName string) func() {
 		s.cfg.Routing.ChainStrategies = map[string]string{}
 	}
 	old, hadOld := s.cfg.Routing.ChainStrategies[name]
-	if _, ok := strategy.Parse(strategyName); !ok {
-		// Combo execution mode: record-only — drop any stale
-		// mirror entry so the feed never claims a strategy
-		// the combo no longer runs.
-		delete(s.cfg.Routing.ChainStrategies, name)
+	// Config-valid strategy: present in strategy.All AND NOT a
+	// combo execution mode (fusion/pipeline/jev). Combo execution
+	// modes are record-only and must not leak into the config
+	// mirror. A strategy not in strategy.All (and not a combo
+	// execution mode) is unknown — drop any stale mirror entry.
+	_, isKnownStrategy := strategy.Parse(strategyName)
+	_, isComboExecution := comboExecutionStrategies[strings.ToLower(strings.TrimSpace(strategyName))]
+	if isKnownStrategy && !isComboExecution {
+		s.cfg.Routing.ChainStrategies[name] = strategyName
 		return func() {
 			if s.cfg == nil {
 				return
 			}
 			s.cfg.LockRouting()
 			defer s.cfg.UnlockRouting()
-			if s.cfg.Routing == nil {
-				return
-			}
 			if hadOld {
 				s.cfg.Routing.ChainStrategies[name] = old
+			} else {
+				delete(s.cfg.Routing.ChainStrategies, name)
 			}
 		}
 	}
-	s.cfg.Routing.ChainStrategies[name] = strategyName
+	// Combo execution mode or unknown: record-only — drop any
+	// stale mirror entry so the feed never claims a strategy
+	// the combo no longer runs.
+	delete(s.cfg.Routing.ChainStrategies, name)
 	return func() {
 		if s.cfg == nil {
 			return
 		}
 		s.cfg.LockRouting()
 		defer s.cfg.UnlockRouting()
-		if s.cfg.Routing == nil {
-			return
-		}
 		if hadOld {
 			s.cfg.Routing.ChainStrategies[name] = old
 		} else {
