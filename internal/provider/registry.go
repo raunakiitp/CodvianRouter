@@ -237,6 +237,12 @@ type Registry struct {
 	// map only — the (slow) resolution itself runs without it.
 	authMu    sync.Mutex
 	authCache map[string]cachedAuth
+	// oauthTokenFn resolves a stored OAuth access token for a catalog
+	// provider ID. Set by main from the server's OAuth connection store
+	// (WithOAuthTokenResolver). Nil means OAuth surfaces stay refused:
+	// the resolver is the only source of OAuth credentials and it is
+	// never faked. Guarded by mu (set once at startup).
+	oauthTokenFn func(catalogProviderID string) (string, error)
 }
 
 // RegistryOption configures a Registry.
@@ -254,6 +260,34 @@ func WithCipher(cipher KeyCipher) RegistryOption {
 // WithClientFactory overrides how upstream clients are built (tests).
 func WithClientFactory(f ClientFactory) RegistryOption {
 	return func(r *Registry) { r.newClient = f }
+}
+
+// WithOAuthTokenResolver wires the OAuth connection store into auth
+// resolution. When a catalog surface's auth kind is OAuth
+// (AuthOAuth — device-code or PKCE), the per-request resolver calls
+// fn(catalogProviderID) to fetch the stored access token and sends it
+// as `Authorization: Bearer <token>`. Production wires this to the
+// server's oauthStore.GetAccessToken. With no resolver wired, OAuth
+// surfaces stay refused — the token is never fabricated.
+func WithOAuthTokenResolver(fn func(catalogProviderID string) (string, error)) RegistryOption {
+	return func(r *Registry) { r.oauthTokenFn = fn }
+}
+
+// SetOAuthTokenResolver sets the OAuth token resolver after
+// construction (production builds the registry before the server that
+// owns the OAuth store, so it wires the resolver once the server
+// exists). Safe to call before any client is built.
+func (r *Registry) SetOAuthTokenResolver(fn func(catalogProviderID string) (string, error)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.oauthTokenFn = fn
+}
+
+// isOAuthExchangeKind reports whether an exchange kind is an OAuth
+// flow (device code, PKCE, or any kind naming oauth).
+func isOAuthExchangeKind(kind string) bool {
+	k := strings.ToLower(kind)
+	return strings.Contains(k, "oauth")
 }
 
 // WithTFOEnabled enables or disables TCP Fast Open on the upstream
@@ -2123,6 +2157,40 @@ func (r *Registry) resolveAuthHeaders(p *Provider, key, keyCiphertext string) (m
 // base-URL catalog match (plus the wire fallback) otherwise. The
 // returned expiry bounds minted-token header sets (Entra ID); static
 // resolutions return the zero time.
+
+// oauthHeadersFor resolves auth for an OAuth catalog surface: it
+// fetches the stored access token via the wired resolver and builds
+// Authorization: Bearer <token> plus the endpoint's extra headers.
+// It never fabricates a credential — no resolver wired, resolver
+// error, or empty token all return an honest error. The returned
+// expiry is a short TTL so the auth cache re-resolves and picks up
+// refreshed/rotated tokens (the cache fingerprint does not include
+// the token itself).
+func (r *Registry) oauthHeadersFor(entry catalog.Provider, ep catalog.EndpointAuth, p *Provider) (map[string]string, string, time.Time, error) {
+	r.mu.RLock()
+	fn := r.oauthTokenFn
+	r.mu.RUnlock()
+	if fn == nil {
+		return nil, "", time.Time{}, fmt.Errorf("provider %q (%s): OAuth surface but no OAuth token resolver is wired", p.ID, entry.ID)
+	}
+	tok, err := fn(entry.ID)
+	if err != nil {
+		return nil, "", time.Time{}, fmt.Errorf("provider %q (%s): resolve OAuth access token: %w", p.ID, entry.ID, err)
+	}
+	if strings.TrimSpace(tok) == "" {
+		return nil, "", time.Time{}, fmt.Errorf("provider %q (%s): OAuth resolver returned an empty token", p.ID, entry.ID)
+	}
+	headers := map[string]string{"Authorization": "Bearer " + tok}
+	for k, v := range ep.ExtraHeaders {
+		headers[k] = v
+	}
+	wire := entry.DefaultWireFormat()
+	if len(entry.WireFormats) > 0 {
+		wire = entry.WireFormats[0]
+	}
+	return headers, string(wire), time.Now().Add(time.Minute), nil
+}
+
 func (r *Registry) resolveAuthHeadersUncached(p *Provider, key string) (map[string]string, string, time.Time, error) {
 	if p.CatalogID != "" {
 		entry, err := lookupCatalog(p.CatalogID)
@@ -2131,6 +2199,20 @@ func (r *Registry) resolveAuthHeadersUncached(p *Provider, key string) (map[stri
 		}
 		if entry.ToSGrey {
 			return nil, "", time.Time{}, fmt.Errorf("provider %q: catalog provider %q is ToS-grey and cannot be a routing target", p.ID, entry.ID)
+		}
+		// A2: OAuth surfaces (device-code / PKCE, category-oauth).
+		// The stored API key is NOT the credential here — the OAuth
+		// connection store is. Resolve the access token via the wired
+		// resolver and send it as the Bearer credential. Keyed off the
+		// endpoint's declared AuthKind so both endpoint-tabled and
+		// endpoint-less OAuth providers are covered. Never fabricated:
+		// no resolver or no connection = an honest error.
+		ep, epOK := entry.Endpoint(p.AuthEndpoint, p.AuthVariant)
+		if !epOK {
+			ep = entry.DefaultEndpointAuth()
+		}
+		if ep.AuthKind == catalog.AuthOAuth {
+			return r.oauthHeadersFor(entry, ep, p)
 		}
 		res, err := catalog.ResolveAuth(entry, p.AuthEndpoint, p.AuthVariant, key)
 		if err != nil {
