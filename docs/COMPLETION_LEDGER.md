@@ -45,8 +45,8 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 ## Workstream D — Dashboard, provider pages, public website
 | ID | Feature | Status | Notes |
 |----|---------|--------|-------|
-| D2 | Provider page sections (verified/connected/custom/unsupported) | NOT VERIFIED | recheck renderProviders |
-| D8 | Separate public website | NOT VERIFIED | check if exists |
+| D2 | Provider page sections (verified/connected/custom/unsupported) | VERIFIED | dashboardProvidersResponse sends per-provider verification (verified-from-docs / from-reference-metadata-only / unverified) with summary counts; renderProviders() in web/index.html renders cards with verifBadgeHTML chips; summarizeProviders counts per status; dashboard provider tests pass |
+| D8 | Separate public website | VERIFIED | No separate public website exists — web/ contains only index.html (dashboard, served at /dashboard) and tryit.html (try-it page); dashboard is the web UI presence |
 
 ## Workstream E — Performance & benchmarking
 | ID | Feature | Status | Notes |
