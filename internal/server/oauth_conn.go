@@ -294,6 +294,16 @@ func (s *Server) oauthStoreFor() *oauthConnStore {
 	return s.oauthStore
 }
 
+// OAuthAccessToken returns the stored OAuth access token for a
+// catalog provider ID, decrypting via the vault when configured.
+// It is the bridge the provider registry's OAuth resolver calls
+// (provider.WithOAuthTokenResolver / SetOAuthTokenResolver) so an
+// OAuth-connected provider executes with its real OAuth credential.
+// Returns an error when no connection exists for the provider.
+func (s *Server) OAuthAccessToken(providerID string) (string, error) {
+	return s.oauthStoreFor().GetAccessToken(providerID)
+}
+
 // handleOAuthConnect serves GET /dashboard/oauth/connect/{provider}:
 // redirects the operator to the provider's authorization URL.
 func (s *Server) handleOAuthConnect(w http.ResponseWriter, r *http.Request) {

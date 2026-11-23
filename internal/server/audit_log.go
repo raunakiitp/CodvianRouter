@@ -348,8 +348,14 @@ func (s *Server) withAudit(next http.Handler) http.Handler {
 		evt.StatusCode = rec.status
 		evt.LatencyMs = time.Since(start).Milliseconds()
 		evt.FailureClass = classifyFailure(rec.status)
-		if s.auditStore != nil {
-			if err := s.auditStore.Record(*evt); err != nil {
+		// Read the store under auditMu: Close() may be releasing it
+		// concurrently. Record on a closed/raced store returns an
+		// error that is logged here — the request is never failed.
+		s.auditMu.Lock()
+		store := s.auditStore
+		s.auditMu.Unlock()
+		if store != nil {
+			if err := store.Record(*evt); err != nil {
 				// Never fail the request because audit storage failed.
 				s.logger.Printf("audit: record failed: %v", err)
 			}

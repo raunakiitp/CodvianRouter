@@ -5108,6 +5108,12 @@ func runServe(opts options) int {
 		// in which case schedule blocks are refused without any
 		// delivery.
 		server.WithWebhooks(webhookDispatcher(st.cfg)),
+		// Request-level compliance audit log (Workstream A1):
+		// hash-chained, append-only SQLite store persisted in the
+		// data dir. A real request through the production server
+		// now produces a durable audit event; failures are logged
+		// by the option itself, never silently dropped.
+		server.WithAuditStore(filepath.Join(st.cfg.DataDir, "audit.db")),
 		server.WithModelsDevStatus(modelsDevStatusFunc(st.modelsDev)),
 		server.WithLedgerPrices(st.ledgerPrices),
 		server.WithGuardrails(st.guardrails),
@@ -5206,6 +5212,13 @@ func runServe(opts options) int {
 			return release.LatestTag(ctx, client, updateAPIBase(), release.DefaultRepo)
 		}),
 	)
+	// Workstream A2: wire the OAuth connection store into the provider
+	// registry's auth resolution, so an OAuth-connected catalog provider
+	// executes with its real stored OAuth access token (Bearer) instead
+	// of being refused as an unsupported exchange. The resolver is
+	// called lazily per client build; a missing connection surfaces as
+	// an honest error, never a fabricated header.
+	st.reg.SetOAuthTokenResolver(srv.OAuthAccessToken)
 	// Responses transcripts (CHECKLIST 315–316): restore the
 	// persisted store before serving — a restart resumes the
 	// pre-restart conversations instead of 404ing them.
