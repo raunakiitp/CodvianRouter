@@ -468,6 +468,20 @@ its key field; the key is kept only in page memory, never stored.
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
 
+### `GET /v1/ws`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `chat` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** WebSocket chat streaming endpoint — upgrades to WebSocket and streams chat completions over WS frames. Gateway-key auth required.
+- **Query parameters:** `model`, `messages` (JSON array), `stream` (must be `true`), `temperature`, `max_tokens`, `top_p`, `stop`, `tools` (JSON array), `tool_choice` (JSON), `api_key` (alternative to Authorization header).
+- **Response:** WebSocket text frames with JSON envelope: `{"event":"start",...}` then `{"event":"token","delta":"...","model":"..."}` per token, then close on completion/error.
+
+  ```sh
+  ws://127.0.0.1:8080/v1/ws?model=<model-id>&messages=[{"role":"user","content":"Hello"}]&api_key=<gateway-key>
+  ```
+
 ### `POST /v1/embeddings`
 
 - **Tier:** `MANAGEMENT`

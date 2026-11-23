@@ -89,7 +89,7 @@ var validStrategies = map[string]bool{
 	"balanced": true, "cheapest": true, "cheap": true,
 	"fastest": true, "fast": true,
 	"most-reliable": true, "reliable": true,
-	"least-latency": true, "latency": true,
+	"least-latency": true, "latency": true, "latency-aware": true,
 	"weighted": true, "custom-weights": true, "custom": true,
 	"round-robin": true, "random": true, "strict-random": true,
 	"fill-first": true, "least-used": true, "p2c": true,
@@ -100,6 +100,7 @@ var validStrategies = map[string]bool{
 	"cost-optimized": true, "eco": true,
 	"ship-fast": true, "cost-saver": true, "quality-first": true,
 	"offline-friendly": true, "reliability-first": true, "chaos-mode": true, "fusion": true,
+	"sla": true, "sla-aware": true,
 }
 
 // IsValidStrategy reports whether s names a known strategy
@@ -136,7 +137,7 @@ func validateNode(n *Node, path string, depth int, seen map[*Node]string) error 
 		return fmt.Errorf("strategy tree node %s exceeds the maximum depth of %d (nesting this deep is a config error, not a deeper tree)", path, MaxDepth)
 	}
 	if n.Strategy != "" && !IsValidStrategy(n.Strategy) {
-		return fmt.Errorf("strategy tree node %s: strategy %q is not a known strategy (priority, balanced, cheapest, fastest, most-reliable, least-latency, weighted, custom-weights, code, round-robin, random, strict-random, fill-first, least-used, p2c, quota-weighted, quota-share, headroom, expiry-first, reset-aware, reset-window, lkgp, context-optimized, cache-optimized, context-relay, cost-optimized, ship-fast, cost-saver, quality-first, offline-friendly, reliability-first, chaos-mode, fusion)", path, n.Strategy)
+		return fmt.Errorf("strategy tree node %s: strategy %q is not a known strategy (priority, balanced, cheapest, fastest, most-reliable, least-latency, latency-aware, weighted, custom-weights, code, sla-aware, round-robin, random, strict-random, fill-first, least-used, p2c, quota-weighted, quota-share, headroom, expiry-first, reset-aware, reset-window, lkgp, context-optimized, cache-optimized, context-relay, cost-optimized, ship-fast, cost-saver, quality-first, offline-friendly, reliability-first, chaos-mode, fusion)", path, n.Strategy)
 	}
 	if len(n.Children) > 0 {
 		if n.Provider != "" || n.Model != "" {
@@ -213,9 +214,10 @@ var canonicalStrategies = map[string]string{
 	"balanced": "balanced", "cheapest": "cheapest", "cheap": "cheapest",
 	"fastest": "fastest", "fast": "fastest",
 	"most-reliable": "most-reliable", "reliable": "most-reliable",
-	"least-latency": "least-latency", "latency": "least-latency",
+	"least-latency": "least-latency", "latency": "least-latency", "latency-aware": "latency-aware",
 	"weighted": "weighted",
 	"fusion":   "fusion",
+	"sla":      "sla-aware", "sla-aware": "sla-aware",
 }
 
 // CanonicalStrategy returns the canonical name for a strategy
