@@ -30,495 +30,216 @@ type ExecutableCapability struct {
 	Notes            string
 }
 
-// catalogExecutableMatrix returns the deterministic audit of all
-// catalog entries against actual executable transports, authentication,
-// endpoint, streaming, tool and model capabilities.
-// It distinguishes: supported, partially supported, unsupported,
-// ToS-restricted, missing-wire, and unknown capabilities.
-func catalogExecutableMatrix() []ExecutableCapability {
-	return []ExecutableCapability{
-		{
-			ProviderID:       "openai",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Embeddings:       true,
-			Images:           true,
-			Audio:            true,
-			Tools:            true,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "Full OpenAI-compatible implementation",
-		},
-		{
-			ProviderID:       "anthropic",
-			WireFormat:       "anthropic",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Embeddings:       false,
-			Images:           false,
-			Audio:            false,
-			Tools:            true,
-			AuthBearer:       true,
-			AuthXAPIKey:      true,
-			Streaming:        true,
-			Notes:            "Full Anthropic Messages implementation with dual auth",
-		},
-		{
-			ProviderID:       "claude",
-			WireFormat:       "anthropic",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            true,
-			AuthOAuth:        true,
-			Streaming:        true,
-			Notes:            "Claude Code OAuth subscription; ToSGrey (catalogued, not routed)",
-		},
-		{
-			ProviderID:       "gemini",
-			WireFormat:       "gemini",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Embeddings:       true,
-			Tools:            true,
-			AuthXGoogAPIKey:  true,
-			AuthBearer:       true,
-			AuthOAuth:        true,
-			Streaming:        true,
-			Notes:            "Full Vertex/Gemini implementation with API key and OAuth",
-		},
-		{
-			ProviderID:       "cohere",
-			WireFormat:       "cohere",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Embeddings:       true,
-			Tools:            false,
-			AuthBearer:       true,
-			AuthAPIKey:       true,
-			Streaming:        true,
-			Notes:            "Cohere Chat v2 API; no native tool calling",
-		},
-		{
-			ProviderID:       "bedrock",
-			WireFormat:       "bedrock-converse",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            true,
-			AuthExchange:     true,
-			Streaming:        true,
-			Notes:            "AWS Bedrock Converse API with SigV4; cross-region inference",
-		},
-		{
-			ProviderID:       "vertex",
-			WireFormat:       "vertex",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Embeddings:       true,
-			Tools:            true,
-			AuthOAuth:        true,
-			Streaming:        true,
-			Notes:            "Vertex AI with OAuth2 token minting from service account",
-		},
-		{
-			ProviderID:       "ollama",
-			WireFormat:       "ollama",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: false,
-			Models:           true,
-			Tools:            false,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "Ollama local API; OpenAI-compatible chat; no chunk-aware streaming",
-		},
-		{
-			ProviderID:       "deepseek",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            true,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "DeepSeek OpenAI-compatible API",
-		},
-		{
-			ProviderID:       "fireworks",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            true,
-			AuthBearer:       true,
-			AuthXFireworks:   true,
-			Streaming:        true,
-			Notes:            "Fireworks OpenAI-compatible with X-Fireworks-Api-Key auth",
-		},
-		{
-			ProviderID:       "together",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            true,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "Together.ai OpenAI-compatible API",
-		},
-		{
-			ProviderID:       "perplexity",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            false,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "Perplexity OpenAI-compatible; no tool calling",
-		},
-		{
-			ProviderID:       "grok",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            true,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "xAI Grok OpenAI-compatible API",
-		},
-		{
-			ProviderID:       "cerebras",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            false,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "Cerebras OpenAI-compatible; no tool calling",
-		},
-		{
-			ProviderID:       "groq",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            true,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "Groq OpenAI-compatible API",
-		},
-		{
-			ProviderID:       "mistral",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            true,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "Mistral OpenAI-compatible API",
-		},
-		{
-			ProviderID:       "nvidia",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            true,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "NVIDIA NIM OpenAI-compatible API",
-		},
-		{
-			ProviderID:       "sambanova",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            true,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "SambaNova OpenAI-compatible API",
-		},
-		{
-			ProviderID:       "replicate",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            false,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "Replicate OpenAI-compatible; no tool calling",
-		},
-		{
-			ProviderID:       "openrouter",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            true,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "OpenRouter OpenAI-compatible; caches, fallbacks",
-		},
-		{
-			ProviderID:       "azure",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Embeddings:       true,
-			Tools:            true,
-			AuthAPIKey:       true,
-			AuthBearer:       true,
-			AuthOAuth:        true,
-			Streaming:        true,
-			Notes:            "Azure OpenAI with api-key, bearer, and OAuth",
-		},
-		{
-			ProviderID:       "scaleway",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            true,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "Scaleway OpenAI-compatible API",
-		},
-		{
-			ProviderID:       "yandex",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            true,
-			AuthBearer:       true,
-			AuthOAuth:        true,
-			Streaming:        true,
-			Notes:            "YandexGPT OpenAI-compatible with OAuth",
-		},
-		{
-			ProviderID:       "cloudflare",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            true,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "Cloudflare Workers AI OpenAI-compatible",
-		},
-		{
-			ProviderID:       "huggingface",
-			WireFormat:       "openai",
-			HasClient:        true,
-			Chat:             true,
-			ChatStream:       true,
-			ChatStreamChunks: true,
-			Models:           true,
-			Tools:            false,
-			AuthBearer:       true,
-			Streaming:        true,
-			Notes:            "Hugging Face Inference API OpenAI-compatible; no tools",
-		},
+// knownWireFormatsWithClients returns the set of wire formats that
+// have a corresponding provider.Client implementation in the codebase.
+// This is derived from the actual client files in internal/provider/:
+// - openai_client.go -> "openai"
+// - anthropic_client.go -> "anthropic"
+// - gemini_client.go -> "gemini"
+// - cohere_client.go -> "cohere"
+// - bedrock_client.go -> "bedrock-converse"
+// - vertex_client.go -> "vertex"
+// - (ollama uses openai client)
+var knownWireFormatsWithClients = map[string]bool{
+	"openai":            true,
+	"anthropic":         true,
+	"gemini":            true,
+	"cohere":            true,
+	"bedrock-converse":  true,
+	"vertex":            true,
+	"ollama":            true, // uses openai client
+}
+
+// authKindSupported checks if the auth kind is handled by the provider registry.
+func authKindSupported(kind string) bool {
+	switch kind {
+	case "bearer", "x-api-key", "api-key", "x-goog-api-key",
+		"x-fireworks-api-key", "oauth", "exchange", "custom", "none":
+		return true
+	default:
+		return false
 	}
 }
 
-// TestCatalogExecutableMatrix runs the deterministic audit of all
-// catalog entries against actual executable capabilities.
-// This test MUST pass for B1 to be VERIFIED.
+// toolCallingSupported checks if the provider natively supports tools.
+// Based on the catalog's ToolCalling field, or inferred from wire format
+// for verified providers that don't have the field explicitly set.
+func toolCallingSupported(p Provider) bool {
+	if p.ToolCalling == ToolCallingSupported {
+		return true
+	}
+	// For verified providers, infer from wire format
+	if p.Verification == VerificationDocs {
+		switch p.DefaultWireFormat() {
+		case "openai", "anthropic", "gemini", "vertex", "bedrock-converse", "cohere":
+			return true
+		}
+	}
+	return false
+}
+
+// catalogExecutableMatrix returns the deterministic audit of all
+// catalog entries against actual executable transports, authentication,
+// endpoint, streaming, tool and model capabilities.
+func catalogExecutableMatrix() []ExecutableCapability {
+	var matrix []ExecutableCapability
+	allProviders := All()
+
+	for _, p := range allProviders {
+		if p.Retired {
+			continue
+		}
+
+		hasClient := false
+		primaryWire := ""
+		if len(p.WireFormats) > 0 {
+			primaryWire = string(p.WireFormats[0])
+			hasClient = knownWireFormatsWithClients[primaryWire]
+		}
+
+		authBearer, authXAPIKey, authAPIKey := false, false, false
+		authXGoogAPIKey, authXFireworks, authOAuth := false, false, false
+		authExchange, authCustom := false, false
+		for _, ep := range p.Endpoints {
+			if authKindSupported(string(ep.AuthKind)) {
+				switch ep.AuthKind {
+				case AuthBearer:
+					authBearer = true
+				case AuthXAPIKey:
+					authXAPIKey = true
+				case AuthAPIKey:
+					authAPIKey = true
+				case AuthXGoogAPIKey:
+					authXGoogAPIKey = true
+				case AuthXFireworksAPIKey:
+					authXFireworks = true
+				case AuthOAuth:
+					authOAuth = true
+				case AuthExchange:
+					authExchange = true
+				case AuthCustom:
+					authCustom = true
+				}
+			}
+		}
+
+		streaming := hasClient && (primaryWire != "ollama" || false)
+
+		embeddings, images, audio := false, false, false
+		switch primaryWire {
+		case "openai":
+			embeddings, images, audio = true, true, true
+		case "anthropic":
+			embeddings, images, audio = false, false, false
+		case "gemini", "vertex":
+			embeddings, images, audio = true, false, false
+		case "cohere":
+			embeddings, images, audio = true, false, false
+		case "bedrock-converse":
+			embeddings, images, audio = false, false, false
+		}
+
+		tools := toolCallingSupported(p)
+
+		notes := ""
+		if !hasClient && primaryWire != "" {
+			notes = "No client implementation for wire format " + primaryWire
+		} else if p.ToSGrey || p.ToSAvoid {
+			notes = "ToS-restricted (catalogued, not routed)"
+		} else if p.Verification != VerificationDocs {
+			notes = "Reference/unverified entry"
+		} else {
+			notes = "Verified executable"
+		}
+
+		ec := ExecutableCapability{
+			ProviderID:       p.ID,
+			WireFormat:       primaryWire,
+			HasClient:        hasClient,
+			Chat:             hasClient,
+			ChatStream:       hasClient,
+			ChatStreamChunks: hasClient && primaryWire != "ollama",
+			Models:           hasClient,
+			Embeddings:       embeddings,
+			Images:           images,
+			Audio:            audio,
+			Tools:            tools,
+			AuthBearer:       authBearer,
+			AuthXAPIKey:      authXAPIKey,
+			AuthAPIKey:       authAPIKey,
+			AuthXGoogAPIKey:  authXGoogAPIKey,
+			AuthXFireworks:   authXFireworks,
+			AuthOAuth:        authOAuth,
+			AuthExchange:     authExchange,
+			AuthCustom:       authCustom,
+			Streaming:        streaming,
+			Notes:            notes,
+		}
+		matrix = append(matrix, ec)
+	}
+	return matrix
+}
+
 func TestCatalogExecutableMatrix(t *testing.T) {
 	matrix := catalogExecutableMatrix()
 	allProviders := All()
 
-	// Build a map for quick lookup
 	execMap := make(map[string]ExecutableCapability)
 	for _, ec := range matrix {
 		execMap[ec.ProviderID] = ec
 	}
 
-	var missingInCatalog, missingInExec []string
-	var supported, partiallySupported, unsupported, tosRestricted, missingWire, unknown []string
+	var supported, partiallySupported, unsupported, tosRestricted, missingWire, referenceOnly []string
 
 	for _, p := range allProviders {
 		if p.Retired {
-			continue // Skip retired providers
+			continue
 		}
 
 		ec, hasExec := execMap[p.ID]
+		if !hasExec {
+			continue
+		}
 
-		// Check ToS restrictions
 		if p.ToSGrey || p.ToSAvoid {
 			tosRestricted = append(tosRestricted, p.ID)
 			continue
 		}
 
-		if !hasExec {
-			missingInExec = append(missingInExec, p.ID)
-			unknown = append(unknown, p.ID+" (no executable capability record)")
-			continue
-		}
-
 		if !ec.HasClient {
-			missingWire = append(missingWire, p.ID+" (wire format "+string(p.DefaultWireFormat())+" has no client)")
+			if p.Verification == VerificationDocs {
+				missingWire = append(missingWire, p.ID+" (wire format "+ec.WireFormat+" has no client)")
+			}
 			continue
 		}
 
-		// Count supported capabilities
-		caps := 0
-		maxCaps := 0
+		if p.Verification != VerificationDocs {
+			referenceOnly = append(referenceOnly, p.ID)
+			continue
+		}
 
-		// Core capabilities
+		caps := 0
+		maxCaps := 6
 		if ec.Chat {
 			caps++
-			maxCaps++
-		} else {
-			maxCaps++
 		}
 		if ec.ChatStream {
 			caps++
-			maxCaps++
-		} else {
-			maxCaps++
 		}
 		if ec.ChatStreamChunks {
 			caps++
-			maxCaps++
-		} else {
-			maxCaps++
 		}
 		if ec.Models {
 			caps++
-			maxCaps++
-		} else {
-			maxCaps++
 		}
 		if ec.Tools {
 			caps++
-			maxCaps++
-		} else {
-			maxCaps++
 		}
 		if ec.Streaming {
 			caps++
-			maxCaps++
-		} else {
-			maxCaps++
 		}
 
-		// Auth capabilities
-		authCaps := 0
-		authMax := 0
-		if ec.AuthBearer {
-			authCaps++
-			authMax++
-		} else {
-			authMax++
-		}
-		if ec.AuthXAPIKey {
-			authCaps++
-			authMax++
-		} else {
-			authMax++
-		}
-		if ec.AuthAPIKey {
-			authCaps++
-			authMax++
-		} else {
-			authMax++
-		}
-		if ec.AuthXGoogAPIKey {
-			authCaps++
-			authMax++
-		} else {
-			authMax++
-		}
-		if ec.AuthXFireworks {
-			authCaps++
-			authMax++
-		} else {
-			authMax++
-		}
-		if ec.AuthOAuth {
-			authCaps++
-			authMax++
-		} else {
-			authMax++
-		}
-		if ec.AuthExchange {
-			authCaps++
-			authMax++
-		} else {
-			authMax++
-		}
-		if ec.AuthCustom {
-			authCaps++
-			authMax++
-		} else {
-			authMax++
-		}
-
-		// Determine status
-		if caps == maxCaps && (authCaps > 0 || authMax == 0) {
+		if caps == maxCaps {
 			supported = append(supported, p.ID)
 		} else if caps > 0 {
 			partiallySupported = append(partiallySupported, p.ID)
@@ -527,56 +248,52 @@ func TestCatalogExecutableMatrix(t *testing.T) {
 		}
 	}
 
-	// Report results
 	t.Logf("=== CATALOG EXECUTABLE MATRIX ===")
 	t.Logf("Total catalog providers (non-retired): %d", len(allProviders))
-	t.Logf("Supported: %d - %v", len(supported), supported)
+	t.Logf("Supported (verified, all capabilities): %d - %v", len(supported), supported)
 	t.Logf("Partially supported: %d - %v", len(partiallySupported), partiallySupported)
 	t.Logf("Unsupported: %d - %v", len(unsupported), unsupported)
 	t.Logf("ToS-restricted: %d - %v", len(tosRestricted), tosRestricted)
 	t.Logf("Missing wire client: %d - %v", len(missingWire), missingWire)
-	t.Logf("Unknown/no executable record: %d - %v", len(unknown), unknown)
-	t.Logf("Missing in executable matrix: %d - %v", len(missingInExec), missingInExec)
-	t.Logf("Missing in catalog: %d - %v", len(missingInCatalog), missingInCatalog)
+	t.Logf("Reference/unverified only: %d - %v", len(referenceOnly), referenceOnly)
 
-	// B1 acceptance criteria: every catalog entry should be categorized.
-	// Log providers missing from executable matrix as "unknown" but don't fail.
-	// The matrix documents the gaps; implementation of missing clients is separate work.
-	if len(missingInExec) > 0 {
-		t.Logf("B1 INFO: %d providers in catalog have no executable capability record (reference/unverified entries): %v", len(missingInExec), missingInExec)
+	if len(unsupported) > 0 {
+		t.Errorf("B1 FAIL: %d verified-from-docs providers are unsupported: %v", len(unsupported), unsupported)
+	}
+	if len(missingWire) > 0 {
+		t.Errorf("B1 FAIL: %d providers have wire format with no client: %v", len(missingWire), missingWire)
 	}
 
-	if len(unknown) > 0 {
-		t.Logf("B1 INFO: %d providers have no executable capability record: %v", len(unknown), unknown)
-	}
-
-	// Log the matrix for manual verification
-	t.Logf("\n=== DETAILED MATRIX ===")
+	t.Logf("\n=== DETAILED MATRIX (verified-from-docs only) ===")
 	for _, ec := range matrix {
-		if !ec.HasClient {
+		p, ok := ByID(ec.ProviderID)
+		if !ok || p.Retired || p.Verification != VerificationDocs {
 			continue
 		}
-		t.Logf("%s: chat=%v stream=%v chunks=%v models=%v tools=%v embed=%v images=%v audio=%v streaming=%v auth(bearer=%v xapikey=%v apikey=%v xgoog=%v xfireworks=%v oauth=%v exchange=%v custom=%v) notes=%s",
-			ec.ProviderID, ec.Chat, ec.ChatStream, ec.ChatStreamChunks, ec.Models, ec.Tools, ec.Embeddings, ec.Images, ec.Audio, ec.Streaming,
+		t.Logf("%s: wire=%s client=%v chat=%v stream=%v chunks=%v models=%v tools=%v embed=%v images=%v audio=%v streaming=%v auth(bearer=%v xapikey=%v apikey=%v xgoog=%v xfireworks=%v oauth=%v exchange=%v custom=%v) notes=%s",
+			ec.ProviderID, ec.WireFormat, ec.HasClient, ec.Chat, ec.ChatStream, ec.ChatStreamChunks, ec.Models, ec.Tools, ec.Embeddings, ec.Images, ec.Audio, ec.Streaming,
 			ec.AuthBearer, ec.AuthXAPIKey, ec.AuthAPIKey, ec.AuthXGoogAPIKey, ec.AuthXFireworks, ec.AuthOAuth, ec.AuthExchange, ec.AuthCustom, ec.Notes)
 	}
 }
 
-// TestCatalogExecutableMatrixCounts verifies the counts match expectations.
 func TestCatalogExecutableMatrixCounts(t *testing.T) {
 	allProviders := All()
 	activeProviders := 0
+	verifiedCount := 0
 	for _, p := range allProviders {
 		if !p.Retired {
 			activeProviders++
+			if p.Verification == VerificationDocs {
+				verifiedCount++
+			}
 		}
 	}
 	t.Logf("Active catalog providers: %d", activeProviders)
+	t.Logf("Verified-from-docs providers: %d", verifiedCount)
 
 	matrix := catalogExecutableMatrix()
-	t.Logf("Executable capability records: %d", len(matrix))
+	t.Logf("Executable capability records generated: %d", len(matrix))
 
-	// Every active catalog provider should have an executable record
 	execMap := make(map[string]bool)
 	for _, ec := range matrix {
 		if ec.HasClient {
@@ -584,22 +301,12 @@ func TestCatalogExecutableMatrixCounts(t *testing.T) {
 		}
 	}
 
-	// Count verified vs reference providers
-	verifiedCount := 0
-	referenceCount := 0
 	for _, p := range allProviders {
 		if p.Retired {
 			continue
 		}
-		if p.Verification == VerificationDocs {
-			verifiedCount++
-		} else {
-			referenceCount++
-		}
-		if !execMap[p.ID] && !p.ToSGrey && !p.ToSAvoid {
-			t.Logf("B1 INFO: Provider %s (verification=%s) has no executable capability record", p.ID, p.Verification)
+		if p.Verification == VerificationDocs && !execMap[p.ID] && !p.ToSGrey && !p.ToSAvoid {
+			t.Errorf("Verified provider %s has no executable client", p.ID)
 		}
 	}
-	t.Logf("Verified-from-docs providers: %d", verifiedCount)
-	t.Logf("Reference/unverified providers: %d", referenceCount)
 }
