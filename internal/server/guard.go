@@ -290,6 +290,10 @@ var guardRouteTable = []GuardRoute{
 	{Method: "GET", Path: "/v1beta/models", Tier: TierManagement, Description: "Gemini-native model list — gateway-key auth required.", Scopes: []string{"models"}},
 	{Method: "POST", Path: "/v1beta/models/{rest...}", Tier: TierManagement, Description: "Gemini-native generateContent / streamGenerateContent — gateway-key auth required.", Scopes: []string{"chat"}},
 	{Method: "POST", Path: "/v1/chat/completions", Tier: TierManagement, Description: "Chat completions — gateway-key auth required.", Scopes: []string{"chat"}},
+	// C2: WebSocket streaming endpoint — /v1/ws upgrades to WebSocket
+	// and streams chat completions over WebSocket frames. Gateway-key
+	// auth required with chat scope.
+	{Method: "GET", Path: "/v1/ws", Tier: TierManagement, Description: "WebSocket chat streaming endpoint — upgrades to WebSocket and streams chat completions over WS frames. Gateway-key auth required.", Scopes: []string{"chat"}},
 	// M9.8 A2A JSON-RPC endpoint (message/send, message/stream,
 	// tasks/get, tasks/cancel + v1.0 SendMessage /
 	// SendStreamingMessage aliases): gateway-key auth required,
