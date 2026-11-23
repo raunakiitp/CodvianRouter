@@ -256,6 +256,7 @@ var guardRouteTable = []GuardRoute{
 	{Method: "GET", Path: "/api/quota-pools/{id}", Tier: TierManagement, Description: "One fair-share quota pool by id; unknown ids answer 404. Management auth (admin scope) required.", Scopes: []string{"admin"}},
 	{Method: "PATCH", Path: "/api/quota-pools/{id}", Tier: TierManagement, Description: "Update one fair-share quota pool (dimensions, allocations). Management auth (admin scope) required.", Scopes: []string{"admin"}},
 	{Method: "DELETE", Path: "/api/quota-pools/{id}", Tier: TierManagement, Description: "Delete one fair-share quota pool. Management auth (admin scope) required.", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/quota/intelligence", Tier: TierManagement, Description: "Unified quota intelligence across pools, schedules, key budgets, internal budgets, and catalog free-tier providers. Management auth (admin scope) required.", Scopes: []string{"admin"}},
 	// M8.19 webhooks (mutations are Tier 2: they point the server
 	// at an operator-chosen URL / drop an alert channel).
 	{Method: "POST", Path: "/api/webhooks", Tier: TierAlwaysProtected, Description: "Registers a webhook URL + event list (quota.exceeded, budget.warning): validates the URL (http/https only, no private/loopback targets), mints a wh_ id, persists to the config file and rebuilds the live dispatcher. Auth always required — it points the server at an operator-chosen URL and stores a signing secret.", Scopes: []string{"admin"}},
