@@ -25,8 +25,8 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 | ID | Feature | Status | Notes |
 |----|---------|--------|-------|
 | B1 | Provider catalog vs executable matrix | NOT STARTED | recompute counts from current source |
-| B7 | Routing strategies complete | PARTIALLY | recheck auto/fusion/pipeline/jev/weighted/sla/cache/combo |
-| B8 | Weighted routing real weights | NOT VERIFIED | check equal-weight fallback |
+| B7 | Routing strategies complete | VERIFIED | all strategies wired: priority/identity, balanced/16-factor, cheapest/fastest/most-reliable/least-latency via HookWithWeights, latency-aware/weighted/sla/cache/m3-orderings via wiringHook, combo strategies (fusion/pipeline/jev/chaos-mode) via combo engine; validStrategies allowlist updated to include sla-aware/latency-aware; strategy tree evaluation wired in router/tree.go |
+| B8 | Weighted routing real weights | VERIFIED | weighted strategy wired via wiringHook (WeightedDraw over chain weights from SetChainWeights/routing.chain_weights, equal-weight uniform fallback when unconfigured, all-zero weights rejected at config validation); TestConformanceWeightedDrawIsAPermutation + TestConformanceWeightedChainWeights pass |
 | B12 | Burn-rate forecasting | VERIFIED (PR #60 merged @5862b6e, CI green) | GET /api/usage/budget/forecast: per-key 1h/24h burn rate + projected exhaustion from real ledger spend + stored limit; insufficient_data/exhausted when data missing; usageapi_forecast_test.go |
 | B5 | OAuth provider executors | VERIFIED (this branch, A2) | resolver wired |
 
