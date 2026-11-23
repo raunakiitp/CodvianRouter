@@ -5778,23 +5778,23 @@ func parseWSChatRequest(r *http.Request) provider.ChatRequest {
 		Stream:      true,
 	}
 	// Parse messages from JSON array in query
-		if msgsJSON := q.Get("messages"); msgsJSON != "" {
-			var msgs []provider.Message
-			_ = json.Unmarshal([]byte(msgsJSON), &msgs)
-			req.Messages = msgs
-		}
-		// Tools
-		if toolsJSON := q.Get("tools"); toolsJSON != "" {
-			var tools []provider.ToolDefinition
-			_ = json.Unmarshal([]byte(toolsJSON), &tools)
-			req.Tools = tools
-		}
-		// Tool choice
-		if tc := q.Get("tool_choice"); tc != "" {
-			req.ToolChoice = json.RawMessage(tc)
-		}
-		return req
+	if msgsJSON := q.Get("messages"); msgsJSON != "" {
+		var msgs []provider.Message
+		_ = json.Unmarshal([]byte(msgsJSON), &msgs)
+		req.Messages = msgs
 	}
+	// Tools
+	if toolsJSON := q.Get("tools"); toolsJSON != "" {
+		var tools []provider.ToolDefinition
+		_ = json.Unmarshal([]byte(toolsJSON), &tools)
+		req.Tools = tools
+	}
+	// Tool choice
+	if tc := q.Get("tool_choice"); tc != "" {
+		req.ToolChoice = json.RawMessage(tc)
+	}
+	return req
+}
 
 // parseFloatPtr parses a string to *float64, returns nil if empty or invalid.
 func parseFloatPtr(s string) *float64 {
@@ -5831,24 +5831,24 @@ func parseStop(s string) []string {
 		return arr
 	}
 	// Fallback: comma-separated
-		return strings.Split(s, ",")
-	}
+	return strings.Split(s, ",")
+}
 
-	// float64Val dereferences a *float64, returning 0 when nil.
-	func float64Val(p *float64) float64 {
-		if p == nil {
-			return 0
-		}
-		return *p
+// float64Val dereferences a *float64, returning 0 when nil.
+func float64Val(p *float64) float64 {
+	if p == nil {
+		return 0
 	}
+	return *p
+}
 
-	// intVal dereferences a *int, returning 0 when nil.
-	func intVal(p *int) int {
-		if p == nil {
-			return 0
-		}
-		return *p
+// intVal dereferences a *int, returning 0 when nil.
+func intVal(p *int) int {
+	if p == nil {
+		return 0
 	}
+	return *p
+}
 
 // handleWSChatStream runs the streaming engine over a WebSocket
 // connection. Mirrors handleChatStream but writes WebSocket frames.
@@ -5882,21 +5882,21 @@ func (s *Server) runWSChatStream(conn *websocket.Conn, ctx context.Context, req 
 		return err
 	}
 	// Call engine with a custom callback that writes WS frames
-		var err error
-		_, err = s.engine.ChatStream(ctx, req, func(delta string) error {
-			// Write token as WebSocket frame
-			data, merr := json.Marshal(map[string]any{
-				"event": "token",
-				"delta": delta,
-				"model": req.Model,
-			})
-			if merr != nil {
-				return merr
-			}
-			return conn.WriteMessage(websocket.TextMessage, data)
+	var err error
+	_, err = s.engine.ChatStream(ctx, req, func(delta string) error {
+		// Write token as WebSocket frame
+		data, merr := json.Marshal(map[string]any{
+			"event": "token",
+			"delta": delta,
+			"model": req.Model,
 		})
-		return err
-	}
+		if merr != nil {
+			return merr
+		}
+		return conn.WriteMessage(websocket.TextMessage, data)
+	})
+	return err
+}
 
 // rewriteRequestWithVault is rewriteRequest with reversible PII
 // tokens (B3-19, parity tracker:782): PII matches are minted into the

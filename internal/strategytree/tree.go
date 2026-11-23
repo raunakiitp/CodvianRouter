@@ -216,7 +216,7 @@ var canonicalStrategies = map[string]string{
 	"most-reliable": "most-reliable", "reliable": "most-reliable",
 	"least-latency": "least-latency", "latency": "least-latency", "latency-aware": "latency-aware",
 	"weighted": "weighted",
-	"sla": "sla-aware", "sla-aware": "sla-aware",
+	"sla":      "sla-aware", "sla-aware": "sla-aware",
 }
 
 // CanonicalStrategy returns the canonical name for a strategy
