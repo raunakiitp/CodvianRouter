@@ -1785,6 +1785,7 @@ func New(engine Engine, opts ...Option) *Server {
 	s.register(mux, "GET", "/api/quota-pools/{id}", s.handleAPIQuotaPool)
 	s.register(mux, "PATCH", "/api/quota-pools/{id}", s.handleAPIQuotaPool)
 	s.register(mux, "DELETE", "/api/quota-pools/{id}", s.handleAPIQuotaPool)
+	s.register(mux, "GET", "/api/quota/intelligence", s.handleQuotaIntelligence)
 	// M8.19 webhooks (guard rows first — registerWebhooksRoutes
 	// panics on a missing table entry, like s.register).
 	s.registerWebhooksRoutes(mux)
