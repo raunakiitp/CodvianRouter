@@ -25,18 +25,22 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 | ID | Feature | Status | Notes |
 |----|---------|--------|-------|
 | B1 | Provider catalog vs executable matrix | NOT STARTED | recompute counts from current source |
-| B7 | Routing strategies complete | PARTIALLY | recheck auto/fusion/pipeline/jev/weighted/sla/cache/combo |
-| B8 | Weighted routing real weights | NOT VERIFIED | check equal-weight fallback |
+| B5 | OAuth provider executors | VERIFIED (PR #52) | resolver wired |
+| B7 | Routing strategies complete | VERIFIED (PR #62 merged @5bba7cf, CI green) | auto/fusion/pipeline/jev/weighted/sla/cache/combo all wired and tested |
+| B8 | Weighted routing real weights | VERIFIED (PR #62 merged @5bba7cf, CI green) | chain weights, equal-weight fallback verified |
+| B9 | SLA-aware routing | VERIFIED (PR #62 merged @5bba7cf, CI green) | p95 target handling via SLAAware strategy |
+| B10 | Context-aware routing | VERIFIED (PR #62 merged @5bba7cf, CI green) | context-optimized selection + context relay |
+| B11 | Budget-aware routing | VERIFIED (PR #62 merged @5bba7cf, CI green) | quota-weighted, headroom, fill-first, expiry-first |
 | B12 | Burn-rate forecasting | VERIFIED (PR #60 merged @5862b6e, CI green) | GET /api/usage/budget/forecast: per-key 1h/24h burn rate + projected exhaustion from real ledger spend + stored limit; insufficient_data/exhausted when data missing; usageapi_forecast_test.go |
-| B5 | OAuth provider executors | VERIFIED (this branch, A2) | resolver wired |
+| B13 | Fallback and recovery | VERIFIED (PR #62 merged @5bba7cf, CI green) | cascade failover chains, circuit breakers, recovery events |
 
 ## Workstream C — API, streaming, MCP, A2A, webhooks
 | ID | Feature | Status | Notes |
 |----|---------|--------|-------|
-| C9 | Webhook delivery (HMAC, retry, DLQ) | PARTIALLY | WithWebhooks wired (main.go:5110); verify delivery worker + events |
-| C2 | WebSocket /v1/ws | NOT VERIFIED | check existence |
+| C2 | WebSocket /v1/ws | VERIFIED (PR #61 merged @75f3b98, CI green) | GET /v1/ws upgrades to WebSocket, streams ChatStream frames, auth via Bearer or api_key, guard row registered |
 | C5 | MCP tools | PARTIALLY | recompute count; verify execution |
 | C8 | A2A execution | PARTIALLY | verify task execution path |
+| C9 | Webhook delivery (HMAC, retry, DLQ) | PARTIALLY | WithWebhooks wired (main.go:5110); verify delivery worker + events |
 
 ## Workstream D — Dashboard, provider pages, public website
 | ID | Feature | Status | Notes |
@@ -54,6 +58,6 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 Pending full re-scan after A–E.
 
 ## CI
-- main @ 5862b6e: PR #59 (A1 audit wiring + A2 OAuth runtime) and PR #60 (B12 burn-rate forecast) merged, all workflows green (ci, bench-smoke, playwright, sbom-and-vuln).
+- main @ f537048: PR #59 (A1/A2), PR #60 (B12), PR #61 (C2 WebSocket + strategy tree allowlist), PR #62 (Workstream B routing engine: B7/B8/B9/B10/B11/B13) merged, all workflows green (ci, bench-smoke, playwright, sbom-and-vuln).
 
-Ledger last update: A1, A2 verified+merged (PR #59); B12 verified+merged (PR #60); A3-A7, A9 verified via passing tests.
+Ledger last update: B7, B8, B9, B10, B11, B13 verified+merged (PR #62); C2 verified+merged (PR #61); B5 verified (PR #52); A1, A2 verified+merged (PR #59); B12 verified+merged (PR #60); A3-A7, A9 verified via passing tests.
