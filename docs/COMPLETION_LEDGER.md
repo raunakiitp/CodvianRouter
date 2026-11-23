@@ -19,7 +19,7 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 | A7 | Secrets & config security (no plaintext keys, redaction) | VERIFIED | audit redaction test; vault-sealed OAuth tokens; no committed secrets |
 | A8 | Error handling / recovery | PARTIALLY VERIFIED | core paths tested; fault-injection coverage partial |
 | A9 | DB/persistence correctness | VERIFIED | SQLite stores (audit, ccr, a2a, ledger) with migration + restart tests |
-| A10 | Core reliability gate | IN PROGRESS | build/vet/test green locally; PR #59 CI pending |
+| A10 | Core reliability gate | VERIFIED | build/vet/test green; PR #59 CI green and merged @b05f076 |
 
 ## Workstream B — Provider execution, routing, auth matrix
 | ID | Feature | Status | Notes |
@@ -27,7 +27,7 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 | B1 | Provider catalog vs executable matrix | NOT STARTED | recompute counts from current source |
 | B7 | Routing strategies complete | PARTIALLY | recheck auto/fusion/pipeline/jev/weighted/sla/cache/combo |
 | B8 | Weighted routing real weights | NOT VERIFIED | check equal-weight fallback |
-| B12 | Burn-rate forecasting | NOT IMPLEMENTED (per prior audit) | implement |
+| B12 | Burn-rate forecasting | VERIFIED (PR #60 merged @5862b6e, CI green) | GET /api/usage/budget/forecast: per-key 1h/24h burn rate + projected exhaustion from real ledger spend + stored limit; insufficient_data/exhausted when data missing; usageapi_forecast_test.go |
 | B5 | OAuth provider executors | VERIFIED (this branch, A2) | resolver wired |
 
 ## Workstream C — API, streaming, MCP, A2A, webhooks
@@ -54,7 +54,6 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 Pending full re-scan after A–E.
 
 ## CI
-- main @ 2eb54c8: all workflows green (ci, browser-smoke, bench-infra-smoke, supply-chain).
-- PR #59 (feat/ws-a-core-correctness): CI PENDING at ledger creation.
+- main @ 5862b6e: PR #59 (A1 audit wiring + A2 OAuth runtime) and PR #60 (B12 burn-rate forecast) merged, all workflows green (ci, bench-smoke, playwright, sbom-and-vuln).
 
-Ledger updated as workstreams complete. Last update: Workstream A fixes landed (A1, A2).
+Ledger last update: A1, A2 verified+merged (PR #59); B12 verified+merged (PR #60); A3-A7, A9 verified via passing tests.
