@@ -8,9 +8,9 @@ the per-route sections; regenerate instead:
 python3 scripts/gen-api-docs.py
 ```
 
-Coverage: **339 routes** (175 GET, 115 POST, 22 DELETE, 22 PATCH, 5 PUT) —
+Coverage: **340 routes** (176 GET, 115 POST, 22 DELETE, 22 PATCH, 5 PUT) —
 11 `LOCAL_ONLY`, 56 `ALWAYS_PROTECTED`,
-272 `MANAGEMENT`; 58 auth-exempt, 270 scope-gated, 11 key-only (gateway key, no scope).
+273 `MANAGEMENT`; 58 auth-exempt, 271 scope-gated, 11 key-only (gateway key, no scope).
 Enforced by `TestAPIReferenceCoversEveryRoute`
 (`internal/server/api_reference_test.go`): the test reads the guard
 table and this doc and FAILS if any route is missing. That test is
@@ -1817,6 +1817,22 @@ its key field; the key is kept only in page memory, never stored.
 
   ```sh
   curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/api/usage/budget
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `GET /api/usage/budget/forecast`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Burn-rate forecast for one gateway key (apiKeyId query param, B12): active window limit, period spend, 1h/24h burn rates and request counts from the ledger, and a projected exhaustion time. Computed only from real ledger spend + the stored limit; reports insufficient_data/exhausted instead of inventing a number when data is missing. Management auth (admin scope) required.
+- **Request:** no body.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X GET -H "Authorization: Bearer $CODVIAN_KEY" http://127.0.0.1:8080/api/usage/budget/forecast
   ```
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
