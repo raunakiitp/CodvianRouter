@@ -94,7 +94,7 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 		"GET /dashboard/benchmark", "GET /dashboard/benchmark/history", "GET /dashboard/release-verify", "GET /dashboard/readiness", "GET /dashboard/streaming", "GET /dashboard/key-budgets", "POST /dashboard/key-budgets", "GET /dashboard/quota-pools", "POST /dashboard/quota-pools", "GET /dashboard/quota-schedules", "POST /dashboard/quota-schedules", "GET /dashboard/internal-budgets", "POST /dashboard/internal-budgets", "GET /dashboard/teams", "POST /dashboard/teams", "POST /dashboard/teams/{id}/members", "GET /dashboard/request-budgets", "GET /dashboard/reasoning", "GET /dashboard/responses", "GET /dashboard/responses/tree", "GET /dashboard/groups", "GET /dashboard/stream-lifetime", "GET /dashboard/headless", "GET /dashboard/plugins", "GET /dashboard/verification", "GET /openapi.json",
 		"GET /dashboard/feedback", "POST /dashboard/feedback", "GET /dashboard/learned", "GET /dashboard/code-outcomes",
 		"GET /dashboard/intent-tiers", "POST /dashboard/intent-tiers", "GET /dashboard/suggestions", "POST /dashboard/suggestions",
-		"GET /api/providers", "POST /api/providers", "DELETE /api/providers/{id}", "POST /api/providers/{id}/keys", "DELETE /api/providers/{id}/keys/{keyId}", "POST /api/providers/{id}/keys/{keyId}/role", "POST /api/providers/{id}/keys/{keyId}/rotate", "POST /api/providers/{id}/enabled", "GET /api/catalog", "GET /api/usage/budget", "POST /api/usage/budget", "GET /api/usage/om-usage", "GET /api/cache/stats", "GET /api/telemetry/model-latency-stats", "GET /metrics",
+		"GET /api/providers", "POST /api/providers", "DELETE /api/providers/{id}", "POST /api/providers/{id}/keys", "DELETE /api/providers/{id}/keys/{keyId}", "POST /api/providers/{id}/keys/{keyId}/role", "POST /api/providers/{id}/keys/{keyId}/rotate", "POST /api/providers/{id}/enabled", "GET /api/catalog", "GET /api/usage/budget", "POST /api/usage/budget", "GET /api/usage/budget/forecast", "GET /api/usage/om-usage", "GET /api/cache/stats", "GET /api/telemetry/model-latency-stats", "GET /metrics",
 		"GET /api/analytics/summary", "GET /api/analytics/by-provider", "GET /api/analytics/by-model", "GET /api/analytics/costs", "GET /api/analytics/compression", "GET /api/analytics/diversity", "GET /api/analytics/auto-routing", "GET /api/analytics/combo-health", "GET /api/resilience", "GET /api/resilience/settings", "PATCH /api/resilience/settings", "POST /api/resilience/breakers/reset", "POST /api/resilience/cooldowns", "DELETE /api/resilience/cooldowns/{model...}", "GET /api/logs", "POST /api/guardrails/test", "GET /api/fallback/chains", "POST /api/fallback/chains", "DELETE /api/fallback/chains",
 		"GET /api/teams", "POST /api/teams", "GET /api/teams/{id}", "PATCH /api/teams/{id}", "DELETE /api/teams/{id}", "GET /api/quota-pools", "POST /api/quota-pools", "GET /api/quota-pools/{id}", "PATCH /api/quota-pools/{id}", "DELETE /api/quota-pools/{id}",
 		"POST /api/webhooks", "GET /api/webhooks", "GET /api/webhooks/{id}", "PUT /api/webhooks/{id}", "DELETE /api/webhooks/{id}",
@@ -225,8 +225,8 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 	for _, r := range table {
 		counts[r.Tier]++
 	}
-	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 56 || counts[TierManagement] != 272 {
-		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/56/272)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
+	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 56 || counts[TierManagement] != 273 {
+		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/56/273)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
 	}
 }
 

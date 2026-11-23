@@ -7,7 +7,7 @@
 # Scope `admin` implies every scope. LOCAL_ONLY = loopback-only
 # even with a valid key. Destructive routes need a typed
 # {"confirm": "<phrase>"} body in addition to the key.
-# Routes: 339
+# Routes: 340
 
 ## Auth
 header: Authorization: Bearer <gateway-key>
@@ -111,6 +111,7 @@ POST /api/providers/{id}/enabled | ALWAYS_PROTECTED | scopes=admin | auth=key | 
 GET /api/catalog | MANAGEMENT | scopes=- | auth=exempt | Live provider catalog for the add-provider selector (id, name, verification, ToS-grey flag, base-URL availability) — catalog facts only, no keys, no base URLs.
 GET /api/usage/budget | MANAGEMENT | scopes=admin | auth=key | Cost summary for one gateway key (apiKeyId query param): calendar limits, warning threshold, reset cadence, last/next reset, spend today / this month / this budget period, the active limit and the allow/warn/deny budget check, plus the rolling 5h cap. Management auth (admin scope) required.
 POST /api/usage/budget | MANAGEMENT | scopes=admin | auth=key | Set the calendar budget for one gateway key: daily/weekly/monthly limits, warning threshold, reset interval/time. Absent fields keep their stored values; the 5h cap and unpriced policy are untouched. Ledger-first, then config persist with rollback. Management auth (admin scope) required.
+GET /api/usage/budget/forecast | MANAGEMENT | scopes=admin | auth=key | Burn-rate forecast for one gateway key (apiKeyId query param, B12): active window limit, period spend, 1h/24h burn rates and request counts from the ledger, and a projected exhaustion time. Computed only from real ledger spend + the stored limit; reports insufficient_data/exhausted instead of inventing a number when data is missing. Management auth (admin scope) required.
 GET /api/analytics/summary | MANAGEMENT | scopes=admin | auth=key | Usage analytics summary for one calendar window: request/token/latency totals, priced spend + cost_status. Management auth (admin scope) required.
 GET /api/analytics/by-provider | MANAGEMENT | scopes=admin | auth=key | Usage analytics roll-up by provider for one calendar window, with priced cost and unpriced-request count. Management auth (admin scope) required.
 GET /api/analytics/by-model | MANAGEMENT | scopes=admin | auth=key | Usage analytics roll-up by model for one calendar window, with priced cost and unpriced-request count. Management auth (admin scope) required.

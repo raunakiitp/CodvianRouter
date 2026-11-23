@@ -1745,6 +1745,10 @@ func New(engine Engine, opts ...Option) *Server {
 	s.register(mux, "GET", "/api/catalog", s.handleCatalog)
 	s.register(mux, "GET", "/api/usage/budget", s.handleUsageBudget)
 	s.register(mux, "POST", "/api/usage/budget", s.handleUsageBudget)
+	// B12: burn-rate forecast for one key. Same management tier as
+	// /api/usage/budget; computed only from real ledger spend + the
+	// stored budget limit — never invented when data is missing.
+	s.register(mux, "GET", "/api/usage/budget/forecast", s.handleUsageBudgetForecast)
 	// M8.17 analytics.
 	s.register(mux, "GET", "/api/analytics/summary", s.handleAnalyticsSummary)
 	s.register(mux, "GET", "/api/analytics/by-provider", s.handleAnalyticsByProvider)

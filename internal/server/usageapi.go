@@ -124,6 +124,156 @@ func (s *Server) handleUsageBudgetGet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, summary)
 }
 
+// usageBudgetForecastResponse is the GET /api/usage/budget/forecast
+// payload (Workstream B12). Every number comes from the ledger or the
+// stored budget; when there is not enough data to project, the fields
+// say so instead of inventing a forecast.
+type usageBudgetForecastResponse struct {
+	KeyID          string    `json:"key_id"`
+	ActiveWindow   string    `json:"active_window"`
+	ActiveLimitUSD *float64  `json:"active_limit_usd,omitempty"`
+	PeriodStart    time.Time `json:"period_start"`
+	PeriodEnd      time.Time `json:"period_end"`
+	PeriodSpendUSD float64   `json:"period_spend_usd"`
+	RemainingUSD   *float64  `json:"remaining_usd,omitempty"`
+	// Recent burn rates (USD/hour) from ledger spend over the last
+	// 1h and 24h windows.
+	BurnRate1hUSDh  float64 `json:"burn_rate_1h_usd_per_h"`
+	BurnRate24hUSDh float64 `json:"burn_rate_24h_usd_per_h"`
+	// Requests in the last 1h / 24h — the confidence basis: a zero
+	// request count means there is no recent activity to project from.
+	Requests1h  int `json:"requests_1h"`
+	Requests24h int `json:"requests_24h"`
+	// ProjectedExhaustion is the time the active budget is projected
+	// to run out at the 1h burn rate; nil when not projectable.
+	ProjectedExhaustion *time.Time `json:"projected_exhaustion,omitempty"`
+	ProjectedInHours    *float64   `json:"projected_in_hours,omitempty"`
+	// Status: "ok" (no burn / plenty of headroom), "projected" (a
+	// finite exhaustion is computed), "exhausted" (already at/over
+	// limit), "insufficient_data" (no recent spend to project from).
+	Status string `json:"status"`
+	Note   string `json:"note,omitempty"`
+}
+
+// handleUsageBudgetForecast serves GET /api/usage/budget/forecast
+// (B12). It computes a burn-rate forecast for one gateway key purely
+// from real ledger spend (SpendFor over recent windows) and the
+// stored budget limit (KeyBudgetStatus). It never fabricates a
+// forecast: with no active limit, no remaining budget, or no recent
+// activity it reports an explicit status instead of a number.
+func (s *Server) handleUsageBudgetForecast(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if s.ledger == nil {
+		writeError(w, http.StatusServiceUnavailable, "usage budget unavailable: no ledger wired")
+		return
+	}
+	keyID := strings.TrimSpace(r.URL.Query().Get("apiKeyId"))
+	if keyID == "" {
+		writeError(w, http.StatusBadRequest, "apiKeyId query param is required")
+		return
+	}
+	if s.cfg != nil {
+		if _, ok := s.cfg.FindGatewayKey(keyID); !ok {
+			writeError(w, http.StatusNotFound, "unknown gateway key "+keyID)
+			return
+		}
+	}
+	fc, err := s.usageBudgetForecast(r.Context(), keyID, time.Now())
+	if err != nil {
+		s.logger.Printf("usage/budget/forecast: failed for key: %v", guardrails.RedactLogLine(err.Error()))
+		writeServerError(w, http.StatusInternalServerError, "could not build budget forecast")
+		return
+	}
+	writeJSON(w, http.StatusOK, fc)
+}
+
+// usageBudgetForecast computes the burn-rate forecast for one key.
+func (s *Server) usageBudgetForecast(ctx context.Context, keyID string, now time.Time) (*usageBudgetForecastResponse, error) {
+	st, err := s.ledger.KeyBudgetStatus(ctx, keyID, now)
+	if err != nil {
+		return nil, err
+	}
+	periodStart, periodEnd := st.WindowStart, st.WindowEnd
+	switch st.ActiveWindow {
+	case "daily":
+		periodStart, periodEnd = st.Daily.PeriodStart, st.Daily.NextReset
+	case "weekly":
+		periodStart, periodEnd = st.Weekly.PeriodStart, st.Weekly.NextReset
+	case "monthly":
+		periodStart, periodEnd = st.Monthly.PeriodStart, st.Monthly.NextReset
+	}
+	// Spend in the active budget window and over the recent 1h/24h
+	// windows — all real ledger reads.
+	periodSpend, err := s.ledger.SpendFor(ctx, keyID, periodStart)
+	if err != nil {
+		return nil, fmt.Errorf("forecast: period spend: %w", err)
+	}
+	spend1h, err := s.ledger.SpendFor(ctx, keyID, now.Add(-1*time.Hour))
+	if err != nil {
+		return nil, fmt.Errorf("forecast: spend 1h: %w", err)
+	}
+	spend24h, err := s.ledger.SpendFor(ctx, keyID, now.Add(-24*time.Hour))
+	if err != nil {
+		return nil, fmt.Errorf("forecast: spend 24h: %w", err)
+	}
+	sum1h, err := s.ledger.Summary(ctx, now.Add(-1*time.Hour), now)
+	if err != nil {
+		return nil, fmt.Errorf("forecast: summary 1h: %w", err)
+	}
+	sum24h, err := s.ledger.Summary(ctx, now.Add(-24*time.Hour), now)
+	if err != nil {
+		return nil, fmt.Errorf("forecast: summary 24h: %w", err)
+	}
+	out := &usageBudgetForecastResponse{
+		KeyID:           keyID,
+		ActiveWindow:    st.ActiveWindow,
+		ActiveLimitUSD:  st.ActiveLimitUSD,
+		PeriodStart:     periodStart,
+		PeriodEnd:       periodEnd,
+		PeriodSpendUSD:  periodSpend,
+		BurnRate1hUSDh:  spend1h / 1.0,   // USD per hour over the last hour
+		BurnRate24hUSDh: spend24h / 24.0, // USD per hour over the last 24h
+		Requests1h:      sum1h.Requests,
+		Requests24h:     sum24h.Requests,
+	}
+	if st.ActiveLimitUSD != nil {
+		rem := *st.ActiveLimitUSD - periodSpend
+		out.RemainingUSD = &rem
+	}
+	// Decide the status honestly.
+	switch {
+	case st.ActiveLimitUSD == nil:
+		out.Status = "insufficient_data"
+		out.Note = "no active budget limit set for this window; nothing to project against"
+	case st.AtLimit || (out.RemainingUSD != nil && *out.RemainingUSD <= 0):
+		out.Status = "exhausted"
+		out.Note = "active budget already reached or exceeded"
+	case sum1h.Requests == 0 && spend1h == 0:
+		out.Status = "insufficient_data"
+		out.Note = "no spend in the last hour; burn rate is zero so no exhaustion time is projected"
+	default:
+		// Project at the 1h burn rate (the most recent signal).
+		rate := out.BurnRate1hUSDh
+		if rate <= 0 {
+			rate = out.BurnRate24hUSDh
+		}
+		if rate > 0 && out.RemainingUSD != nil && *out.RemainingUSD > 0 {
+			hours := *out.RemainingUSD / rate
+			exh := now.Add(time.Duration(hours * float64(time.Hour)))
+			out.ProjectedInHours = &hours
+			out.ProjectedExhaustion = &exh
+			out.Status = "projected"
+		} else {
+			out.Status = "ok"
+			out.Note = "burn rate is zero or budget is unlimited; no exhaustion projected"
+		}
+	}
+	return out, nil
+}
+
 // usageBudgetSummary builds the GET /api/usage/budget payload
 // for one key: the stored calendar limits, the active window's
 // period, spend today / this month / this period from the
