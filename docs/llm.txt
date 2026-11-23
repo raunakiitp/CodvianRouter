@@ -163,6 +163,7 @@ GET /v1/providers/{provider}/status | MANAGEMENT | scopes=models | auth=key | St
 GET /v1beta/models | MANAGEMENT | scopes=models | auth=key | Gemini-native model list — gateway-key auth required.
 POST /v1beta/models/{rest...} | MANAGEMENT | scopes=chat | auth=key | Gemini-native generateContent / streamGenerateContent — gateway-key auth required.
 POST /v1/chat/completions | MANAGEMENT | scopes=chat | auth=key | Chat completions — gateway-key auth required.
+GET /v1/ws | MANAGEMENT | scopes=chat | auth=key | WebSocket chat streaming endpoint — upgrades to WebSocket and streams chat completions over WS frames. Gateway-key auth required.
 POST /a2a | MANAGEMENT | scopes=chat | auth=key | A2A JSON-RPC endpoint (message/send, message/stream, tasks/get, tasks/cancel + v1.0 SendMessage/SendStreamingMessage aliases) — gateway-key auth required, owner-scoped to the caller's key; disabled unless config a2a_enabled is true.
 GET /api/a2a/status | MANAGEMENT | scopes=admin | auth=key | A2A operator status: enabled flag, live per-state task counts (operator-only aggregates across all owners), the six skill ids and the protocol version. Management auth (admin scope) required; while A2A is disabled it answers enabled:false with all-zero counts and never touches the store.
 GET /.well-known/agent.json | MANAGEMENT | scopes=- | auth=exempt | A2A agent card (discovery document for the POST /a2a task interface): name, description, url, version, input/output modes, capabilities and the six skill descriptors — public, no auth; no task data, no keys, no provider details.

@@ -34,7 +34,7 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 | ID | Feature | Status | Notes |
 |----|---------|--------|-------|
 | C9 | Webhook delivery (HMAC, retry, DLQ) | PARTIALLY | WithWebhooks wired (main.go:5110); verify delivery worker + events |
-| C2 | WebSocket /v1/ws | NOT VERIFIED | check existence |
+| C2 | WebSocket /v1/ws | VERIFIED | GET /v1/ws upgrades to WebSocket and streams chat completions over WS frames; auth via Authorization header or api_key query param; guard-row added; engine stream path (ChatStream) used; docs/API_REFERENCE.md, docs/llm.txt, tests/fixtures/v1/m8.21/routes.json, web/tryit.html updated; all server tests pass |
 | C5 | MCP tools | PARTIALLY | recompute count; verify execution |
 | C8 | A2A execution | PARTIALLY | verify task execution path |
 

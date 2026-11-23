@@ -1640,6 +1640,18 @@
     "bootstrap": false
   },
   {
+    "method": "GET",
+    "path": "/v1/ws",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "WebSocket chat streaming endpoint — upgrades to WebSocket and streams chat completions over WS frames. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "chat"
+    ],
+    "bootstrap": false
+  },
+  {
     "method": "POST",
     "path": "/a2a",
     "tier": "MANAGEMENT",
