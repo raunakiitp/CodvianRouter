@@ -33,7 +33,7 @@ A feature is VERIFIED only with runtime + test evidence, not by declaration.
 ## Workstream C — API, streaming, MCP, A2A, webhooks
 | ID | Feature | Status | Notes |
 |----|---------|--------|-------|
-| C9 | Webhook delivery (HMAC, retry, DLQ) | PARTIALLY | WithWebhooks wired (main.go:5110); verify delivery worker + events |
+| C9 | Webhook delivery (HMAC, retry, DLQ) | VERIFIED | Dispatcher with HMAC-SHA256 signing, 3-retry exponential backoff (1s/2s/4s), per-attempt 10s timeout, egress SSRF-safe client; events wired: quota.exceeded, budget.warning, provider.degraded/recovered, provider.exhausted, request.completed/failed, test.ping; /api/webhooks CRUD with SSRF validation; UI page in web/index.html; webhooks_api_test.go, webhooks_test.go, webhook_breaker_events_test.go all pass |
 | C2 | WebSocket /v1/ws | VERIFIED | GET /v1/ws upgrades to WebSocket and streams chat completions over WS frames; auth via Authorization header or api_key query param; guard-row added; engine stream path (ChatStream) used; docs/API_REFERENCE.md, docs/llm.txt, tests/fixtures/v1/m8.21/routes.json, web/tryit.html updated; all server tests pass |
 | C5 | MCP tools | PARTIALLY | recompute count; verify execution |
 | C8 | A2A execution | PARTIALLY | verify task execution path |
