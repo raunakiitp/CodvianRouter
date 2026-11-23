@@ -4449,19 +4449,195 @@ resp = client.chat.completions.create(
   }
 
   function renderProviders(){
-    var grid = $("#provGrid"); grid.innerHTML = "";
+    var verifiedGrid = $("#provGridVerified");
+    var connectedGrid = $("#provGridConnected");
+    var customGrid = $("#provGridCustom");
+    var unsupportedGrid = $("#provGridUnsupported");
+    [verifiedGrid, connectedGrid, customGrid, unsupportedGrid].forEach(function(g){ g.innerHTML = ""; });
+
+    var counts = {verified: 0, connected: 0, custom: 0, unsupported: 0};
+
     if(!providers.length){
-      var empty = document.createElement("div");
-      empty.className = "card prov-empty";
-      empty.innerHTML = feedState === "unavailable"
-        ? "<b>Live provider feed unavailable.</b><br/>The dashboard could not reach the router at <span class=\"mono\">/api/providers</span> — check the router is running and reload this page."
-        : (feedState === "loading"
-          ? "<b>Loading providers…</b>"
-          : "<b>No providers connected yet.</b><br/>Add one from the catalog above.");
-      grid.appendChild(empty);
+      [verifiedGrid, connectedGrid, customGrid, unsupportedGrid].forEach(function(g){
+        var empty = document.createElement("div");
+        empty.className = "card prov-empty";
+        empty.innerHTML = feedState === "unavailable"
+          ? "<b>Live provider feed unavailable.</b><br/>The dashboard could not reach the router at <span class=\"mono\">/api/providers</span> — check the router is running and reload this page."
+          : (feedState === "loading"
+            ? "<b>Loading providers…</b>"
+            : "<b>No providers connected yet.</b><br/>Add one from the catalog above.");
+        g.appendChild(empty);
+      });
+      updateSectionCounts();
       return;
     }
     providers.forEach(function(p){
+      var card = createProviderCard(p);
+      var section = getProviderSection(p);
+      var grid = getGridForSection(section);
+      grid.appendChild(card);
+      counts[section]++;
+    });
+    updateSectionCounts();
+  }
+
+  function getProviderSection(p){
+    if(p.catalogId && p.verification === "verified-from-docs"){
+      return "verified";
+    }
+    if(p.connected){
+      return "connected";
+    }
+    if(!p.catalogId || p.verification === "unverified"){
+      return "custom";
+    }
+    return "unsupported";
+  }
+
+  function getGridForSection(section){
+    switch(section){
+      case "verified": return $("#provGridVerified");
+      case "connected": return $("#provGridConnected");
+      case "custom": return $("#provGridCustom");
+      case "unsupported": return $("#provGridUnsupported");
+    }
+  }
+
+  function updateSectionCounts(){
+    $("#countVerified").textContent = counts.verified;
+    $("#countConnected").textContent = counts.connected;
+    $("#countCustom").textContent = counts.custom;
+    $("#countUnsupported").textContent = counts.unsupported;
+
+    var sections = [
+      {grid: $("#provGridVerified"), section: $("#provSectionVerified")},
+      {grid: $("#provGridConnected"), section: $("#provSectionConnected")},
+      {grid: $("#provGridCustom"), section: $("#provSectionCustom")},
+      {grid: $("#provGridUnsupported"), section: $("#provSectionUnsupported")},
+    ];
+    sections.forEach(function(s){
+      if(s.grid.children.length === 0){
+        s.section.style.display = "none";
+      } else {
+        s.section.style.display = "";
+      }
+    });
+  }
+
+  function createProviderCard(p){
+    var card = document.createElement("div"); card.className = "card prov-card";
+    var chip = p.connected
+      ? (p.healthStatus === "down" ? '<span class="status-chip warn"><span class="dot amber"></span> Degraded</span>' : (p.healthStatus === "unknown" ? '<span class="status-chip off"><span class="dot grey"></span> Connected · not probed</span>' : '<span class="status-chip ok"><span class="dot green"></span> Connected</span>'))
+      : '<span class="status-chip off"><span class="dot grey"></span> Not connected</span>';
+    var h = p.history || {};
+    var stats = p.connected
+      ? '<div class="s"><div class="v">' + p.models + '</div><div class="l">Models</div></div><div class="s"><div class="v mono">' + fmtHistMs(h.p50_ms) + '</div><div class="l">p50 latency</div></div><div class="s"><div class="v">' + fmtHistPct(h.uptime_24h) + '</div><div class="l">24h uptime</div></div>'
+      : '<div class="s"><div class="v">' + p.models + '</div><div class="l">Models available</div></div><div class="s"><div class="v">—</div><div class="l">p50 latency</div></div><div class="s"><div class="v">—</div><div class="l">24h uptime</div></div>';
+    var hist = p.connected ? historyHTML(p) : "";
+    /* Key-creation link (parity tracker Area 3): the feed's
+       key_creation_url is the provider's key-management /
+       signup page from the catalog — a public page, never a
+       credential. Shown only when the catalog records one. */
+    var keyLink = p.keyCreationUrl
+      ? '<div class="key-link"><a href="' + escHtml(p.keyCreationUrl) + '" target="_blank" rel="noopener">Get API key →</a></div>'
+      : "";
+    var actions = p.connected
+      ? '<button class="btn small" data-act="test">Test connection</button><button class="btn small" data-act="manage">Manage key</button><button class="btn small danger" data-act="remove">Remove</button>'
+      : '<button class="btn small primary" data-act="connect">Connect</button><button class="btn small danger" data-act="remove">Remove</button>';
+    var card = document.createElement("div"); card.className = "card prov-card";
+    card.innerHTML =
+      '<div class="prov-card-top"><div class="prov-logo">' + p.init + '</div><div style="min-width:0"><h3>' + p.name + '</h3><div class="desc">' + p.desc + '</div></div>' + chip + '</div>' +
+      '<div class="verif-row">' + verifBadgeHTML(p) + '<span class="tag">' + p.wire + ' wire</span></div>' +
+      (p.keyCreationUrl ? '<div class="key-link"><a href="' + escHtml(p.keyCreationUrl) + '" target="_blank" rel="noopener">Get API key →</a></div>' : "") +
+      '<div class="prov-stats">' + stats + '</div>' +
+      (p.connected ? historyHTML(p) : "") +
+      keysBlockHTML(p) +
+      '<div class="connect-box"><input type="password" placeholder="Paste a replacement key…" aria-label="API key for ' + p.name + '" /><div class="hint">Stored encrypted on this machine only.</div></div>' +
+      '<div class="prov-actions">' + actions + '</div>';
+    card.querySelectorAll("[data-act]").forEach(function(b){
+      b.addEventListener("click", function(ev){
+        ev.preventDefault();
+        var act = b.getAttribute("data-act");
+        var box = card.querySelector(".connect-box");
+        if(act === "connect"){
+          var gwKey = $("#addProvGwKey").value.trim();
+          if(!gwKey){ toast("Paste your gateway key in the Add provider form first — connecting a provider needs gateway-key auth."); return; }
+          b.textContent = "Connecting…"; b.disabled = true;
+          fetch("/api/providers/" + encodeURIComponent(p.id) + "/enabled", {
+            method: "POST",
+            headers: {"Content-Type": "application/json", "Authorization": "Bearer " + gwKey},
+            body: JSON.stringify({enabled: true})
+          }).then(function(r){
+            return r.json().then(function(d){ return {ok: r.ok, status: r.status, body: d}; }, function(){ return {ok: r.ok, status: r.status, body: null}; });
+          }).then(function(res){
+            $("#addProvGwKey").value = "";
+            b.disabled = false; b.textContent = "Connect";
+            if(!res.ok){
+              var msg = (res.body && res.body.error && res.body.error.message) ? res.body.error.message : ("Request failed (HTTP " + res.status + ")");
+              toast(msg);
+              return;
+            }
+            var d = res.body || {};
+            toast(d.routing_live ? ("Connected " + p.name + " — it routes now") : ("Connected " + p.name + " — " + (d.routing_note || "restart the router to route through it")));
+            loadProviders();
+            loadModels();
+          }).catch(function(err){
+            $("#addProvGwKey").value = "";
+            b.disabled = false; b.textContent = "Connect";
+            toast("Request failed: " + err.message);
+          });
+        }
+        if(act === "test"){
+          b.textContent = "Testing…";
+          fetch("/api/providers").then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function(d){
+            b.textContent = "Test connection";
+            var found = null;
+            (d.providers || []).forEach(function(x){ if(x.id === p.id) found = x; });
+            if(!found){ toast(p.name + " · no longer configured"); return; }
+            var hs = found.health_status || "unknown";
+            toast(p.name + " · last probe: " + (hs === "ok" ? "healthy" : (hs === "down" ? "down" : "not probed yet")));
+          }).catch(function(){
+            b.textContent = "Test connection";
+            toast("Couldn't reach the router to test " + p.name);
+          });
+        }
+        if(act === "manage"){ card.querySelector(".connect-box").classList.add("open"); card.querySelector(".connect-box input").value = ""; card.querySelector(".connect-box input").focus(); toast("Paste a new key to rotate it"); }
+        if(act === "remove"){
+          var phrase = "DELETE " + p.id;
+          if(!confirm("Remove " + p.name + "?\n\nThis deletes it from the config file, drops it from the live router and the auto-router tiers, and prunes its probe history. Models served by another provider stay.")) return;
+          var typed = prompt("Type the confirmation phrase to remove " + p.name + ":", "");
+          if(typed !== phrase){ toast("Removal cancelled — the phrase did not match " + phrase); return; }
+          var gwKey = $("#addProvGwKey").value.trim();
+          if(!gwKey){ toast("Paste your gateway key in the Add provider form first — removing a provider needs gateway-key auth."); return; }
+          b.textContent = "Removing…"; b.disabled = true;
+          fetch("/api/providers/" + encodeURIComponent(p.id), {
+            method: "DELETE",
+            headers: {"Content-Type": "application/json", "Authorization": "Bearer " + gwKey},
+            body: JSON.stringify({confirm: typed})
+          }).then(function(r){
+            return r.json().then(function(d){ return {ok: r.ok, status: r.status, body: d}; }, function(){ return {ok: r.ok, status: r.status, body: null}; });
+          }).then(function(res){
+            $("#addProvGwKey").value = "";
+            b.disabled = false; b.textContent = "Remove";
+            if(!res.ok){
+              var msg = (res.body && res.body.error && res.body.error.message) ? res.body.error.message : ("Request failed (HTTP " + res.status + ")");
+              toast(msg);
+              return;
+            }
+            var d = res.body || {};
+            var note = d.live_removed
+              ? "Removed " + (d.name || p.name) + " — " + ((d.models || []).length) + " model" + (((d.models || []).length) === 1 ? "" : "s") + " dropped, no longer routing"
+              : "Removed " + (d.name || p.name) + " — " + (d.note || "restart the router to fully drop it");
+            toast(note);
+            loadProviders();
+            loadModels();
+          }).catch(function(err){
+            $("#addProvGwKey").value = "";
+            b.disabled = false; b.textContent = "Remove";
+            toast("Request failed: " + err.message);
+          });
+        }
+      });
       var card = document.createElement("div"); card.className = "card prov-card";
       var chip = p.connected
         ? (p.healthStatus === "down" ? '<span class="status-chip warn"><span class="dot amber"></span> Degraded</span>' : (p.healthStatus === "unknown" ? '<span class="status-chip off"><span class="dot grey"></span> Connected · not probed</span>' : '<span class="status-chip ok"><span class="dot green"></span> Connected</span>'))
@@ -4936,7 +5112,7 @@ resp = client.chat.completions.create(
     }); }
     var mgBtn = tr.querySelector("[data-catalog-manage]");
     if(mgBtn){ mgBtn.addEventListener("click", function(){
-      var grid = $("#provGrid");
+      var grid = $("#provGridVerified");
       if(grid) grid.scrollIntoView({behavior: "smooth", block: "start"});
     }); }
     return tr;

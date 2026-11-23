@@ -41,13 +41,13 @@ type ExecutableCapability struct {
 // - vertex_client.go -> "vertex"
 // - (ollama uses openai client)
 var knownWireFormatsWithClients = map[string]bool{
-	"openai":            true,
-	"anthropic":         true,
-	"gemini":            true,
-	"cohere":            true,
-	"bedrock-converse":  true,
-	"vertex":            true,
-	"ollama":            true, // uses openai client
+	"openai":           true,
+	"anthropic":        true,
+	"gemini":           true,
+	"cohere":           true,
+	"bedrock-converse": true,
+	"vertex":           true,
+	"ollama":           true, // uses openai client
 }
 
 // authKindSupported checks if the auth kind is handled by the provider registry.
