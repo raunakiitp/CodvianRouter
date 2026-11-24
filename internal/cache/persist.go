@@ -89,7 +89,10 @@ func OpenPersistentCache(path string, maxEntries int) (*PersistentCache, error) 
 	if path == "" {
 		return nil, errors.New("cache: persistent cache path is empty")
 	}
-	db, err := sql.Open("sqlite", path)
+	// Open with WAL + busy_timeout on every connection (AUD-REL-004):
+	// a concurrent write waits for the lock instead of failing with
+	// SQLITE_BUSY.
+	db, err := sql.Open("sqlite", cacheSQLiteDSN(path))
 	if err != nil {
 		return nil, err
 	}

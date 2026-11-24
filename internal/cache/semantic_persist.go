@@ -129,7 +129,8 @@ func openSemanticDB(path string) (*sql.DB, error) {
 	if path == "" {
 		return nil, errors.New("cache: persistent semantic cache path is empty")
 	}
-	db, err := sql.Open("sqlite", path)
+	// Open with WAL + busy_timeout on every connection (AUD-REL-004).
+	db, err := sql.Open("sqlite", cacheSQLiteDSN(path))
 	if err != nil {
 		return nil, err
 	}
