@@ -7,7 +7,7 @@
 # Scope `admin` implies every scope. LOCAL_ONLY = loopback-only
 # even with a valid key. Destructive routes need a typed
 # {"confirm": "<phrase>"} body in addition to the key.
-# Routes: 347
+# Routes: 349
 
 ## Auth
 header: Authorization: Bearer <gateway-key>
@@ -243,6 +243,8 @@ GET /admin/provider/login/callback | LOCAL_ONLY | scopes=- | auth=bootstrap | Br
 POST /admin/bootstrap | LOCAL_ONLY | scopes=- | auth=bootstrap | Fresh-install first-key setup — only while no gateway key exists; claims with the one-shot bootstrap token printed to stdout at first boot (loopback-only).
 POST /admin/settings/export | ALWAYS_PROTECTED | scopes=admin | auth=key | Exports the full settings snapshot. Secrets are redacted and never exported — provider keys and gateway-key hashes stay on disk. Requires gateway-key auth AND the typed confirmation phrase EXPORT SETTINGS (the operator-credential second check).
 POST /admin/db/export | ALWAYS_PROTECTED | scopes=admin | auth=key | Exports the config + ledger usage history as a downloadable JSON file. All secrets redacted (no provider keys, no gateway-key hashes, no base URLs); usage history is read-only, never reset. Requires gateway-key auth AND the typed confirmation phrase EXPORT.
+GET /admin/files/legacy | ALWAYS_PROTECTED | scopes=admin | auth=key | Lists file records that have no owner (they predate ownership scoping) so an operator can see what exists before migrating them. Read-only; no content is exposed. Requires the admin scope, because such a record belongs to no key and listing it must not become a way to enumerate other keys' stranded uploads.
+POST /admin/files/reclaim | ALWAYS_PROTECTED | scopes=admin | auth=key | Assigns ownership of previously unowned file records to a gateway key (AUD-SEC-010 migration). An empty owner is refused — that is the state being repaired — and a record owned by another key is never reassigned, so this cannot transfer a file between keys. Requires the admin scope.
 POST /admin/db/wipe/arm | ALWAYS_PROTECTED | scopes=admin | auth=key | Issues a single-use DB-wipe confirmation token (5-minute TTL, stored hashed, never logged). Requires gateway-key auth AND the typed confirmation phrase WIPE DATABASE — the token is the operator-credential second check for the wipe.
 POST /admin/db/wipe | ALWAYS_PROTECTED | scopes=admin | auth=key | Irreversibly wipes usage history: ledger usage events, budget running spend, feedback decisions/signals, probe history (ring + file + backup). Providers, provider keys, gateway keys, prices and all other config are preserved. Requires gateway-key auth AND the typed phrase WIPE DATABASE AND the single-use confirmation token from /admin/db/wipe/arm — a key alone, or a key plus phrase, cannot wipe.
 POST /admin/db/import | ALWAYS_PROTECTED | scopes=admin | auth=key | Imports a DB export file (codvian-router-db-export/v1) and merges its usage history into the ledger — never resets or wipes existing history; duplicate events are skipped, never double-counted; the file's config section is ignored. Requires gateway-key auth AND the typed confirmation phrase IMPORT.
