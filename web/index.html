@@ -625,6 +625,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10m6 10V4m6 16v-7m4 7H2" transform="translate(1 0)"/></svg>
         Costs
       </button>
+      <button class="nav-item" data-view="quota">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8V4M4 12h8M20 12h-8"/></svg>
+        Quota
+      </button>
       <button class="nav-item" data-view="benchmark">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20a8 8 0 118-8"/><path d="M12 12l4.5-4.5"/><path d="M20 4v4h-4"/></svg>
         Benchmark
@@ -3897,9 +3901,65 @@ resp = client.chat.completions.create(
                   <p style="color:var(--text-2); margin-top:0">Estimated vs actual cost tracking for completed requests. Requires cost estimation to be run before the request and actual cost recorded after.</            <div id="costReconciliationEmpty" style="color:var(--text-2); font-size:13.5px">Cost reconciliation requires integration with the chat completion flow — not yet implemented.</div>
                 </div>
               </div>
-            </section>
+              </section>
 
-            <section class="view" id="view-audit">
+              <section class="view" id="view-quota-intelligence">
+              <div class="page-head">
+                <div>
+                  <h1>Quota Intelligence</h1>
+                  <p>Free-tier eligibility, quota pools, schedules, key budgets, internal budgets, and data-source provenance — live from GET /api/quota/intelligence.</p>
+                </div>
+              </div>
+
+              <div class="card" style="margin-bottom:14px">
+                <div class="card-head"><h3>Summary</h3></div>
+                <div class="card-body" id="quotaSummary">
+                  <div style="color:var(--text-2); font-size:13.5px">Loading live data…</div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-bottom:14px">
+                <div class="card-head"><h3>Filters</h3></div>
+                <div class="card-body">
+                  <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px">
+                    <label style="font-size:12px; color:var(--text-2)">Free tier only</label>
+                    <input type="checkbox" id="quotaFreeTierOnly" />
+                    <label style="font-size:12px; color:var(--text-2); margin-left:8px">Pool</label>
+                    <input id="quotaPoolId" type="text" placeholder="pool id" style="width:140px" />
+                    <label style="font-size:12px; color:var(--text-2); margin-left:8px">Key</label>
+                    <input id="quotaKeyId" type="text" placeholder="key id" style="width:140px" />
+                    <button class="btn small" id="quotaRefreshBtn">Refresh</button>
+                    <button class="btn small" id="quotaClearBtn" style="background:var(--surface-3)">Clear</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card" id="quotaPoolsCard" style="margin-bottom:14px">
+                <div class="card-head"><h3>Quota Pools</h3></div>
+                <div class="card-body" id="quotaPoolsBody" style="color:var(--text-2); font-size:13px">Loading…</div>
+              </div>
+
+              <div class="card" id="quotaSchedulesCard" style="margin-bottom:14px">
+                <div class="card-head"><h3>Quota Schedules</h3></div>
+                <div class="card-body" id="quotaSchedulesBody" style="color:var(--text-2); font-size:13px">Loading…</div>
+              </div>
+
+              <div class="card" id="quotaKeyBudgetsCard" style="margin-bottom:14px">
+                <div class="card-head"><h3>Key Budgets</h3></div>
+                <div class="card-body" id="quotaKeyBudgetsBody" style="color:var(--text-2); font-size:13px">Loading…</div>
+              </div>
+
+              <div class="card" id="quotaInternalBudgetsCard" style="margin-bottom:14px">
+                <div class="card-head"><h3>Internal Budgets</h3></div>
+                <div class="card-body" id="quotaInternalBudgetsBody" style="color:var(--text-2); font-size:13px">Loading…</div>
+              </div>
+
+              <div class="card" id="quotaFreeTierCard" style="margin-bottom:14px">
+                <div class="card-head"><h3>Free-Tier Providers</h3></div>
+                <div class="card-body" id="quotaFreeTierBody" style="color:var(--text-2); font-size:13px">Loading…</div>
+              </div>
+              </section>
+      <section class="view" id="view-audit">
         <div class="page-head">
           <div>
             <h1>Audit</h1>
@@ -4092,9 +4152,105 @@ resp = client.chat.completions.create(
   }
 
   /* ---------- Navigation ---------- */
-  var titles = { overview:"Overview", providers:"Providers", models:"Models", autorouter:"Auto-router", strategies:"Routing strategies", cooldown:"Cooldown", coalescing:"Coalescing", concurrency:"Concurrency", pools:"Connection pools", plugins:"Plugins", mcp:"MCP & CLI", a2a:"A2A", keys:"API Keys", logs:"Logs", costs:"Costs", benchmark:"Benchmark", verification:"Verification", settings:"Settings", combos:"Combos", cache:"Cache", resilience:"Resilience", health:"Health", webhooks:"Webhooks", analytics:"Analytics", batch:"Batch", responses:"Responses", audit:"Audit" };
+  var titles = { overview:"Overview", providers:"Providers", models:"Models", autorouter:"Auto-router", strategies:"Routing strategies", cooldown:"Cooldown", coalescing:"Coalescing", concurrency:"Concurrency", pools:"Connection pools", plugins:"Plugins", mcp:"MCP & CLI", a2a:"A2A", keys:"API Keys", logs:"Logs", costs:"Costs", quota:"Quota Intelligence", benchmark:"Benchmark", verification:"Verification", settings:"Settings", combos:"Combos", cache:"Cache", resilience:"Resilience", health:"Health", webhooks:"Webhooks", analytics:"Analytics", batch:"Batch", responses:"Responses", audit:"Audit" };
   var viewTimer = null;
-  function go(view){
+  function loadQuotaIntelligence(){
+  var params = [];
+  if($("#quotaFreeTierOnly").checked) params.push("free_tier_only=true");
+  var pool = ($("#quotaPoolId")||{value:""}).value.trim();
+  var key = ($("#quotaKeyId")||{value:""}).value.trim();
+  if(pool) params.push("pool_id="+encodeURIComponent(pool));
+  if(key) params.push("key_id="+encodeURIComponent(key));
+  var url = "/api/quota/intelligence"+(params.length?"?"+params.join("&"):"");
+  fetch(url).then(function(r){
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    return r.json();
+  }).then(function(d){
+    var filters = d.filters||{};
+    $("#quotaFreeTierOnly").checked = !!filters.free_tier_only;
+    if(filters.pool_id) $("#quotaPoolId").value = filters.pool_id;
+    if(filters.key_id) $("#quotaKeyId").value = filters.key_id;
+    var gen = d.generated_at? new Date(d.generated_at).toLocaleString() : "—";
+    var counts = {pools: d.pools? d.pools.length : 0, schedules: d.schedules? d.schedules.length : 0, keys: d.key_budgets? d.key_budgets.length : 0, internal: d.internal_budgets? d.internal_budgets.length : 0};
+    $("#quotaSummary").innerHTML =
+      '<div style="display:flex; gap:14px; flex-wrap:wrap">'+
+      '<div style="flex:1; min-width:150px; background:var(--surface-2); border:0; border-radius:14px; padding:12px 14px"><div style="font-size:12px; color:var(--text-3)">Pools</div><div style="font-size:18px; font-weight:700; font-variant-numeric:tabular-nums">'+counts.pools+'</div></div>'+
+      '<div style="flex:1; min-width:150px; background:var(--surface-2); border:0; border-radius:14px; padding:12px 14px"><div style="font-size:12px; color:var(--text-3)">Schedules</div><div style="font-size:18px; font-weight:700; font-variant-numeric:tabular-nums">'+counts.schedules+'</div></div>'+
+      '<div style="flex:1; min-width:150px; background:var(--surface-2); border:0; border-radius:14px; padding:12px 14px"><div style="font-size:12px; color:var(--text-3)">Key budgets</div><div style="font-size:18px; font-weight:700; font-variant-numeric:tabular-nums">'+counts.keys+'</div></div>'+
+      '<div style="flex:1; min-width:150px; background:var(--surface-2); border:0; border-radius:14px; padding:12px 14px"><div style="font-size:12px; color:var(--text-3)">Internal budgets</div><div style="font-size:18px; font-weight:700; font-variant-numeric:tabular-nums">'+counts.internal+'</div></div>'+
+      '<div style="flex:1; min-width:150px; background:var(--surface-2); border:0; border-radius:14px; padding:12px 14px"><div style="font-size:12px; color:var(--text-3)">Updated</div><div style="font-size:12px; font-variant-numeric:tabular-nums">'+escHtml(gen)+'</div></div>'+
+      '</div>';
+    renderQuotaPools(d.pools||[]);
+    renderQuotaSchedules(d.schedules||[]);
+    renderQuotaKeyBudgets(d.key_budgets||[]);
+    renderQuotaInternalBudgets(d.internal_budgets||[]);
+    renderQuotaFreeTier(d.pools||[]);
+  }).catch(function(err){
+    $("#quotaPoolsBody").innerHTML = '<p style="color:var(--red); font-weight:600">Error loading quota intelligence: '+escHtml(err.message)+'</p>';
+    $("#quotaSchedulesBody").innerHTML = "";
+    $("#quotaKeyBudgetsBody").innerHTML = "";
+    $("#quotaInternalBudgetsBody").innerHTML = "";
+    $("#quotaFreeTierBody").innerHTML = "";
+    $("#quotaSummary").innerHTML = '<p style="color:var(--red); font-weight:600">Error loading quota intelligence: '+escHtml(err.message)+'</p>';
+  });
+}
+function renderQuotaPools(pools){
+  var el = $("#quotaPoolsBody");
+  if(!pools.length){ el.innerHTML = '<p style="color:var(--text-2)">No quota pools.</p>'; return; }
+  var rows = pools.map(function(p){
+    var stateClass = p.state==="exhausted"? "off" : (p.state==="approaching_limit"? "warn" : (p.state==="unknown"? "off" : "ok"));
+    var stateDot = p.state==="exhausted"? "red" : (p.state==="approaching_limit"? "amber" : (p.state==="unknown"? "grey" : "green"));
+    var prov = p.provenance||{};
+    var obs = prov.observation_time? new Date(prov.observation_time).toLocaleString() : "—";
+    var conf = prov.confidence != null? (Math.round(prov.confidence*100)+"%") : "—";
+    return '<div style="border:0; border-radius:10px; padding:10px 12px; margin-bottom:8px; background:var(--surface-2); display:flex; justify-content:space-between; align-items:flex-start; gap:10px"><div style="min-width:0"><div style="font-weight:600">'+escHtml(p.name||p.id||"(unnamed)")+'</div><div style="font-size:12px; color:var(--text-3); margin-top:2px">'+escHtml(p.id)+" · saturation "+((p.saturation_threshold||0.5)*100).toFixed(0)+"%</div></div><div style=\"display:flex; gap:8px; align-items:center\"><span class=\"status-chip "+stateClass+'"><span class="dot '+stateDot+'"></span>'+escHtml(p.state)+'</span><div style="font-size:11px; color:var(--text-3); margin-left:6px">source: '+escHtml(prov.source||"—")+' · '+escHtml(conf)+' · '+escHtml(obs)+'</div></div></div>';
+  });
+  el.innerHTML = rows.join("");
+}
+function renderQuotaSchedules(schedules){
+  var el = $("#quotaSchedulesBody");
+  if(!schedules.length){ el.innerHTML = '<p style="color:var(--text-2)">No quota schedules.</p>'; return; }
+  var rows = schedules.map(function(s){
+    var stateClass = s.state==="exhausted"? "off" : (s.state==="approaching_limit"? "warn" : "ok");
+    var stateDot = s.state==="exhausted"? "red" : (s.state==="approaching_limit"? "amber" : "green");
+    return '<div style="border:0; border-radius:10px; padding:10px 12px; margin-bottom:8px; background:var(--surface-2); display:flex; justify-content:space-between; align-items:center; gap:10px"><div style="min-width:0"><div style="font-weight:600">'+escHtml(s.label||s.id||"(unnamed)")+'</div><div style="font-size:12px; color:var(--text-3); margin-top:2px">'+escHtml(s.mode||"")+" · "+escHtml(s.verdict||"")+'</div></div><span class="status-chip '+stateClass+'"><span class="dot '+stateDot+'"></span>'+escHtml(s.state)+'</span></div>';
+  });
+  el.innerHTML = rows.join("");
+}
+function renderQuotaKeyBudgets(budgets){
+  var el = $("#quotaKeyBudgetsBody");
+  if(!budgets.length){ el.innerHTML = '<p style="color:var(--text-2)">No key budgets.</p>'; return; }
+  var rows = budgets.map(function(b){
+    var st = b.key_budget_status||{};
+    var pct = st.limit_usd>0? Math.round(st.spent_usd/st.limit_usd*100) : 0;
+    var stateClass = st.at_limit? "off" : (st.warning_reached? "warn" : "ok");
+    var stateDot = st.at_limit? "red" : (st.warning_reached? "amber" : "green");
+    var prov = b.provenance||{};
+    return '<div style="border:0; border-radius:10px; padding:10px 12px; margin-bottom:8px; background:var(--surface-2); display:flex; justify-content:space-between; align-items:flex-start; gap:10px"><div style="min-width:0"><div style="font-weight:600">'+escHtml(b.name||b.key_id||"(unnamed)")+'</div><div style="font-size:12px; color:var(--text-3); margin-top:2px">'+escHtml(b.key_id)+" · $"+st.spent_usd.toFixed(4)+" / $"+st.limit_usd.toFixed(4)+" ("+pct+"%)"+(st.unpriced_models&&st.unpriced_models.length?" · "+st.unpriced_models.length+" unpriced":"")+'</div></div><span class="status-chip '+stateClass+'"><span class="dot '+stateDot+'"></span>'+escHtml(b.state)+'</span></div>';
+  });
+  el.innerHTML = rows.join("");
+}
+function renderQuotaInternalBudgets(budgets){
+  var el = $("#quotaInternalBudgetsBody");
+  if(!budgets.length){ el.innerHTML = '<p style="color:var(--text-2)">No internal budgets.</p>'; return; }
+  var rows = budgets.map(function(b){
+    var pct = b.budget_value>0? Math.round(b.consumed/b.budget_value*100) : 0;
+    var stateClass = pct>=100? "off" : (pct>=80? "warn" : "ok");
+    var stateDot = pct>=100? "red" : (pct>=80? "amber" : "green");
+    return '<div style="border:0; border-radius:10px; padding:10px 12px; margin-bottom:8px; background:var(--surface-2); display:flex; justify-content:space-between; align-items:flex-start; gap:10px"><div style="min-width:0"><div style="font-weight:600">'+escHtml(b.name||b.id||"(unnamed)")+'</div><div style="font-size:12px; color:var(--text-3); margin-top:2px">'+escHtml(b.scope||"")+" · target "+escHtml(b.target||"")+" · "+escHtml(b.budget_unit||"")+'</div></div><span class="status-chip '+stateClass+'"><span class="dot '+stateDot+'"></span>'+escHtml(b.state)+"</span></div>";
+  });
+  el.innerHTML = rows.join("");
+}
+function renderQuotaFreeTier(pools){
+  var el = $("#quotaFreeTierBody");
+  var free = pools.filter(function(p){ return p.id&&p.id.indexOf("free-tier-")===0; });
+  if(!free.length){ el.innerHTML = '<p style="color:var(--text-2)">No catalog free-tier providers detected.</p>'; return; }
+  var rows = free.map(function(p){
+    return '<div style="border:0; border-radius:10px; padding:10px 12px; margin-bottom:8px; background:var(--surface-2); display:flex; justify-content:space-between; align-items:center; gap:10px"><div style="min-width:0"><div style="font-weight:600">'+escHtml(p.name)+'</div><div style="font-size:12px; color:var(--text-3); margin-top:2px">'+escHtml(p.id)+" · source: catalog_free_tier · state: "+escHtml(p.state)+'</div></div><span class="status-chip off"><span class="dot grey"></span>'+escHtml(p.state)+'</span></div>';
+  });
+  el.innerHTML = rows.join("");
+}
+function go(view){
     var target = $("#view-" + view); if(!target) return;
     /* The Auto-router section shows the last REAL routing decision:
        refresh it every time the section is opened, so it never shows
@@ -4123,6 +4279,7 @@ resp = client.chat.completions.create(
     if(view === "providers"){ loadProviders(); }
     if(view === "logs"){ loadLogs(); }
     if(view === "costs"){ loadUsage(); }
+    if(view === "quota"){ loadQuotaIntelligence(); }
     if(view === "benchmark"){ loadBenchmark(); loadReleaseVerify(); loadMemstats(); loadStreaming(); }
     /* Same for verification status: the honest proven/unproven table. */
     if(view === "verification"){ loadVerification(); }
@@ -13537,6 +13694,15 @@ resp = client.chat.completions.create(
   if(dashChangeBtn){ dashChangeBtn.addEventListener("click", dashAuthChange); }
   var dashLogoutBtn = $("#dashLogoutBtn");
   if(dashLogoutBtn){ dashLogoutBtn.addEventListener("click", dashAuthLogout); }
+  var quotaRefreshBtn = $("#quotaRefreshBtn");
+  if(quotaRefreshBtn){ quotaRefreshBtn.addEventListener("click", loadQuotaIntelligence); }
+  var quotaClearBtn = $("#quotaClearBtn");
+  if(quotaClearBtn){ quotaClearBtn.addEventListener("click", function(){
+    $("#quotaFreeTierOnly").checked = false;
+    $("#quotaPoolId").value = "";
+    $("#quotaKeyId").value = "";
+    loadQuotaIntelligence();
+  }); }
   dashAuthProbe();
 })();
 </script>
