@@ -447,18 +447,18 @@ func (f *fakeSource) QuotaIntelligence(filter string) ([]QuotaIntelEntry, error)
 			state = "approaching_limit"
 		}
 		entry := QuotaIntelEntry{
-			Kind:        "key_budget",
-			ID:          f.quota.KeyID,
-			Name:        f.quota.KeyID,
-			Scope:       "key",
-			Target:      f.quota.KeyID,
-			BudgetUSD:   f.quota.LimitUSD,
-			Consumed:    f.quota.SpentUSD,
-			State:       state,
-			Source:      "test_fake",
-			Confidence:  0.95,
-			UpdatedAt:   "2026-01-01T00:00:00Z",
-			Filters:     map[string]string{"key_id": f.quota.KeyID},
+			Kind:       "key_budget",
+			ID:         f.quota.KeyID,
+			Name:       f.quota.KeyID,
+			Scope:      "key",
+			Target:     f.quota.KeyID,
+			BudgetUSD:  f.quota.LimitUSD,
+			Consumed:   f.quota.SpentUSD,
+			State:      state,
+			Source:     "test_fake",
+			Confidence: 0.95,
+			UpdatedAt:  "2026-01-01T00:00:00Z",
+			Filters:    map[string]string{"key_id": f.quota.KeyID},
 		}
 		if f.quota.LimitUSD > 0 {
 			entry.UsedPct = f.quota.SpentUSD / f.quota.LimitUSD * 100
@@ -470,7 +470,7 @@ func (f *fakeSource) QuotaIntelligence(filter string) ([]QuotaIntelEntry, error)
 
 func (f *fakeSource) BudgetForecast(keyID string) (BudgetForecastEntry, error) {
 	return BudgetForecastEntry{
-		KeyID:          keyID,
+		KeyID:            keyID,
 		InsufficientData: true,
 		UpdatedAt:        "2026-01-01T00:00:00Z",
 	}, nil
