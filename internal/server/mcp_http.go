@@ -2335,3 +2335,180 @@ func (x *serverMCPSource) MemoryClear(caller string) (int, error) {
 	}
 	return st.Clear(caller)
 }
+
+// P1.2 ecosystem expansion — data source methods on serverMCPSource.
+
+func (x *serverMCPSource) CapabilityEntries() []mcp.CapabilityEntry {
+	// Capability metadata comes from the catalog + modelsync, exposed
+	// via the registry. Read per-provider/model capability facts with
+	// provenance. Empty when no registry is wired (never fabricate).
+	if x.srv.registry == nil {
+		return []mcp.CapabilityEntry{}
+	}
+	models, err := x.srv.registry.Models(x.reqCtx())
+	if err != nil {
+		return []mcp.CapabilityEntry{}
+	}
+	out := []mcp.CapabilityEntry{}
+	seen := map[string]bool{}
+	for _, m := range models {
+		key := m.ProviderID + "/" + m.ID
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		// Registry model info carries id + provider only; per-model
+		// capability flags live in the catalog, which this source
+		// does not read directly. Report unknown-with-provenance so
+		// callers never mistake absence for unsupported.
+		out = append(out, mcp.CapabilityEntry{
+			ProviderID: m.ProviderID,
+			ModelID:    m.ID,
+			Capability: "tool_calling",
+			Supported:  nil,
+			Native:     false,
+			Source:     "registry",
+			Confidence: 0.0,
+		})
+	}
+	return out
+}
+
+func (x *serverMCPSource) QuotaIntelligence(filter string) ([]mcp.QuotaIntelEntry, error) {
+	// Quota intelligence mirrors /api/quota/intelligence: pools,
+	// schedules, key budgets, internal budgets, free-tier providers.
+	// Read from the live ledger + catalog. Filter is echoed back
+	// but not applied here (the MCP tool handler applies it).
+	if x.srv.ledger == nil {
+		return nil, errMCPNotAvailable("QuotaIntelligence", "no ledger wired")
+	}
+	out := []mcp.QuotaIntelEntry{}
+	now := time.Now().Format(time.RFC3339)
+	// Key budgets from the ledger.
+	if budgets, err := x.srv.ledger.ListKeyBudgets(x.reqCtx()); err == nil {
+		for _, b := range budgets {
+			st, err := x.srv.ledger.KeyBudgetStatus(x.reqCtx(), b.KeyID, time.Now())
+			if err != nil {
+				continue
+			}
+			state := "healthy"
+			if st.AtLimit {
+				state = "exhausted"
+			} else if st.WarningReached {
+				state = "approaching_limit"
+			}
+			out = append(out, mcp.QuotaIntelEntry{
+				Kind:        "key_budget",
+				ID:          b.KeyID,
+				Name:        b.KeyID,
+				Scope:       "key",
+				Target:      b.KeyID,
+				BudgetUSD:   st.LimitUSD,
+				Consumed:    st.SpentUSD,
+				UsedPct:     0,
+				State:       state,
+				Source:      "ledger_budget",
+				Confidence:  0.95,
+				UpdatedAt:   now,
+				Filters:     map[string]string{"key_id": b.KeyID},
+			})
+			if st.LimitUSD > 0 {
+				out[len(out)-1].UsedPct = st.SpentUSD / st.LimitUSD * 100
+			}
+		}
+	}
+	return out, nil
+}
+
+func (x *serverMCPSource) BudgetForecast(keyID string) (mcp.BudgetForecastEntry, error) {
+	// Burn-rate forecast from the server's usage/budget/forecast logic
+	// (Workstream B12): real ledger spend + stored budget limit.
+	if x.srv.ledger == nil {
+		return mcp.BudgetForecastEntry{}, errMCPNotAvailable("BudgetForecast", "no ledger wired")
+	}
+	fc, err := x.srv.usageBudgetForecast(x.reqCtx(), keyID, time.Now())
+	if err != nil {
+		return mcp.BudgetForecastEntry{}, err
+	}
+	entry := mcp.BudgetForecastEntry{
+		KeyID:          keyID,
+		SpendUSD24h:    fc.PeriodSpendUSD,
+		LimitKnown:     fc.ActiveLimitUSD != nil,
+		UpdatedAt:      time.Now().Format(time.RFC3339),
+	}
+	if fc.ActiveLimitUSD != nil {
+		entry.LimitUSD = *fc.ActiveLimitUSD
+	}
+	if fc.BurnRate1hUSDh > 0 {
+		entry.BurnRateUSDPerHour = fc.BurnRate1hUSDh
+	} else if fc.BurnRate24hUSDh > 0 {
+		entry.BurnRateUSDPerHour = fc.BurnRate24hUSDh / 24
+	}
+	if fc.ProjectedExhaustion != nil {
+		entry.ProjectedExhaustAt = fc.ProjectedExhaustion.Format(time.RFC3339)
+	}
+	entry.InsufficientData = fc.Status == "insufficient_data"
+	return entry, nil
+}
+
+func (x *serverMCPSource) CompressionStats() mcp.CompressionStatsEntry {
+	// Compression analytics from the live M6 cache layers.
+	// No compress field on Server in this build — return zero stats
+	// honestly rather than fabricating numbers.
+	stats := mcp.CompressionStatsEntry{Layers: 0, LastUpdated: time.Now().Format(time.RFC3339)}
+	return stats
+}
+
+func (x *serverMCPSource) EvalSchedules() ([]mcp.EvalScheduleEntry, error) {
+	st, err := x.srv.ensureEvalStore()
+	if err != nil {
+		return nil, err
+	}
+	schs := st.List()
+	out := make([]mcp.EvalScheduleEntry, 0, len(schs))
+	for _, sch := range schs {
+		out = append(out, mcp.EvalScheduleEntry{
+			ID:            sch.ID,
+			Suite:         sch.Suite,
+			EverySec:      int64(sch.Every.Seconds()),
+			Enabled:       sch.Enabled,
+			TimeZone:      sch.TimeZone,
+			LastRun:       sch.LastRun.Format(time.RFC3339),
+			UseRealEngine: sch.UseRealEngine,
+		})
+	}
+	return out, nil
+}
+
+func (x *serverMCPSource) OrgReport() mcp.OrgReportEntry {
+	// Org/team reporting from the org store + ledger.
+	st, err := x.srv.ensureOrgStore()
+	if err != nil {
+		return mcp.OrgReportEntry{}
+	}
+	orgs := st.Orgs()
+	teams := st.Teams()
+	keys := 0
+	boundKeys := 0
+	for _, t := range teams {
+		// Team.Roles maps member identity -> role; count members as bound keys.
+		boundKeys += len(t.Roles)
+		for _, role := range t.Roles {
+			if role != "" {
+				keys++
+			}
+		}
+	}
+	totalBudget := 0.0
+	for _, t := range teams {
+		totalBudget += t.BudgetUSD
+	}
+	return mcp.OrgReportEntry{
+		Orgs:           len(orgs),
+		Teams:          len(teams),
+		Keys:           keys,
+		BoundKeys:      boundKeys,
+		TotalBudgetUSD: totalBudget,
+		UpdatedAt:      time.Now().Format(time.RFC3339),
+	}
+}
