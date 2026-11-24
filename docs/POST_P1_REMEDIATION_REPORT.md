@@ -316,3 +316,28 @@ unless explicitly risk-accepted” — the gate is **not met**.
 - **P2 was not started**: no P2 branch, commit or PR exists in this work.
 - **No scope expansion**: `docs/PARITY.md` was not recreated, no competitor name was introduced, and no public API
   shape or config format was changed.
+
+---
+
+# ADDENDUM — PR #76 code-review blockers (this branch)
+
+The PR #76 review found that four of the fixes above were insufficient or unsafe. Each was reproduced by test,
+re-fixed, and re-verified. The reviewer was right in all four cases; the earlier evidence did not cover the
+failure mode the review named.
+
+| Blocker | Reviewer's defect | Root cause of the earlier gap | Fix | Evidence | Commit |
+|---|---|---|---|---|---|
+| **AUD-REL-005** | `OpenWithRecovery` quarantined after ANY open error although `IsCorrupt` existed | the first fix treated "Open failed" as "the file is unusable" | quarantine only on positively identified corruption: `PRAGMA quick_check(1)` against a COPY of the file (a probe must not mutate sidecars); operational failures return the error with the database and its WAL/SHM untouched; no verdict means no quarantine; a file above `maxProbeBytes` (1 GiB) is never quarantined (a truncated copy could yield a FALSE corruption verdict = data loss) | 13 tests: corruption positively identified; file preserved byte-for-byte and logged; reopen keeps data; busy/locked/permission/IO/disk-full/unsupported-pragma/migration each leave the DB and its sidecar untouched with no artefact; a locked DB is never called corrupt; recovery failure reports both errors | `38682b1` |
+| **AUD-SEC-002** | a 2xx with missing usage created a zero-token/zero-cost row, so a budgeted key could keep spending | the first fix recorded the attempt honestly but left the *charge* at zero, and the budget gate reads accrued spend from the same ledger | charge a CONSERVATIVE, rounded-UP local estimate and PRICE it (`SplitKnown`), marked per `LocalEstimatePromptTokens`' documented contract as locally measured, with the estimate logged; streams are charged for the bytes actually delivered (new `UsageSniffer.EmittedBytes`, `cappedBuffer.total`); one row per request so no double charge | 6 tests + falsification with real output (`accrued spend = 0.00000000 ... the budget bypass is still open` against the pre-fix behaviour, green after); the cap is set BELOW the accrued estimate and the next relayed request is refused (402/429) — the old code answered 200 | `4841462` |
+| **AUD-SEC-010** | legacy records deserialise with an empty owner and are silently stranded by scoping | the first fix closed the leak but supplied no migration | versioned index (v2; v1 still loads), `LegacyUnowned` forensic listing, `ReclaimLegacy` that refuses an empty owner and never reassigns another key's record, admin-scoped `GET /admin/files/legacy` + `POST /admin/files/reclaim` (TierAlwaysProtected in `guardRouteTable`), startup log naming the stranded records | 7 tests against a hand-written pre-change v1 fixture: no key (incl. case variants and a foreign static id) can list/get/open/delete the unowned record; the admin view still sees it; reclaim persists the owner in the v2 envelope and leaves other records intact; empty owner refused; an owned record cannot be stolen; v1 round-trips without loss; a corrupt index is still an error; the current format loads and stays key-isolated | `8f31023` |
+| **AUD-PERF-001** | cancellation was asserted, not demonstrated | no test exercised a client disconnect | proven by test: the mock holds the stream open, the client disconnects, and the upstream request's context must be cancelled (it fires immediately; the abandoned request is not recorded as a clean success); the relayed path is single-attempt, so a 429 + `Retry-After: 7` is propagated with exactly ONE upstream call and no charge | 2 tests | `88ec185` |
+
+## Process defect to disclose
+
+Commit `4841462` (AUD-SEC-002) was staged with `git add internal/server/relay.go` while a parallel workstream was
+mid-edit in that same file. The commit therefore contains a call to `provider.Registry.PooledTransport` /
+`RelayTarget.KeyFingerprint` whose definitions (AUD-PERF-003) were still uncommitted, so that commit alone does not
+build and its CI `browser-smoke` job failed with `undefined (type *provider.Registry has no field or method
+PooledTransport)`. The definitions are committed in the following AUD-PERF-003 commit, which repairs the head.
+No history was rewritten (force-pushing is out of scope): the repair is additive, and this is disclosed rather than
+hidden. Lesson recorded: never `git add` a file a parallel worker is editing; stage explicit hunks or wait.
