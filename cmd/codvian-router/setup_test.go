@@ -226,3 +226,220 @@ func TestSetupClaudeAndContinue(t *testing.T) {
 		t.Errorf("expected Codvian Router model in continue config: %s", string(data))
 	}
 }
+
+// --- P1.3 tests for the ten new CLI integration managers ---
+
+func TestSetupCodexDryRun(t *testing.T) {
+	var out, errOut bytes.Buffer
+	opts := options{configPath: "/tmp/codex_test.toml", dryRun: true, model: "gpt-5", endpoint: "http://127.0.0.1:20128/v1", apiKey: "crk_test_key_123"}
+	exitCode := runSetupIO(opts, []string{"codex"}, &out, &errOut)
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", exitCode, errOut.String())
+	}
+	if !strings.Contains(out.String(), "DRY RUN") {
+		t.Errorf("expected DRY RUN, got: %s", out.String())
+	}
+}
+
+func TestSetupOpenCodeDryRun(t *testing.T) {
+	var out, errOut bytes.Buffer
+	opts := options{configPath: "/tmp/opencode_test.json", dryRun: true, model: "gpt-5", endpoint: "http://127.0.0.1:20128/v1"}
+	exitCode := runSetupIO(opts, []string{"opencode"}, &out, &errOut)
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", exitCode, errOut.String())
+	}
+	if !strings.Contains(out.String(), "DRY RUN") {
+		t.Errorf("expected DRY RUN, got: %s", out.String())
+	}
+}
+
+func TestSetupCursorDryRun(t *testing.T) {
+	var out, errOut bytes.Buffer
+	opts := options{configPath: "/tmp/cursor_test.json", dryRun: true, endpoint: "http://127.0.0.1:20128/v1"}
+	exitCode := runSetupIO(opts, []string{"cursor"}, &out, &errOut)
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", exitCode, errOut.String())
+	}
+	if !strings.Contains(out.String(), "DRY RUN") {
+		t.Errorf("expected DRY RUN, got: %s", out.String())
+	}
+}
+
+func TestSetupUnknownAgentRejected(t *testing.T) {
+	var out, errOut bytes.Buffer
+	opts := options{}
+	exitCode := runSetupIO(opts, []string{"nonexistent-agent"}, &out, &errOut)
+	if exitCode == 0 {
+		t.Fatalf("expected non-zero exit for unknown agent")
+	}
+	if !strings.Contains(errOut.String(), "unknown agent") {
+		t.Errorf("expected 'unknown agent' error, got: %s", errOut.String())
+	}
+}
+
+func TestSetupCodexFreshWrite(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	var out, errOut bytes.Buffer
+	opts := options{configPath: cfgPath, model: "gpt-5", endpoint: "http://127.0.0.1:20128/v1", apiKey: "crk_test_key_123"}
+	exitCode := runSetupIO(opts, []string{"codex"}, &out, &errOut)
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", exitCode, errOut.String())
+	}
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("reading config: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "gpt-5") || !strings.Contains(content, "http://127.0.0.1:20128/v1") || !strings.Contains(content, "crk_test_key_123") {
+		t.Errorf("codex config missing expected fields: %s", content)
+	}
+}
+
+func TestSetupClineFreshWrite(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "settings.json")
+	var out, errOut bytes.Buffer
+	opts := options{configPath: cfgPath, model: "gpt-5", endpoint: "http://127.0.0.1:20128/v1", apiKey: "crk_test_key_123"}
+	exitCode := runSetupIO(opts, []string{"cline"}, &out, &errOut)
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", exitCode, errOut.String())
+	}
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("reading config: %v", err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if parsed["api_base_url"] != "http://127.0.0.1:20128/v1" || parsed["model"] != "gpt-5" || parsed["api_key"] != "crk_test_key_123" {
+		t.Errorf("cline config wrong: %v", parsed)
+	}
+}
+
+func TestSetupAiderFreshWrite(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, ".aider.conf.yml")
+	var out, errOut bytes.Buffer
+	opts := options{configPath: cfgPath, model: "gpt-5", endpoint: "http://127.0.0.1:20128/v1", apiKey: "crk_test_key_123"}
+	exitCode := runSetupIO(opts, []string{"aider"}, &out, &errOut)
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", exitCode, errOut.String())
+	}
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("reading config: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "gpt-5") || !strings.Contains(content, "http://127.0.0.1:20128/v1") || !strings.Contains(content, "crk_test_key_123") {
+		t.Errorf("aider config missing fields: %s", content)
+	}
+}
+
+func TestSetupGeminiFreshWrite(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "settings.json")
+	var out, errOut bytes.Buffer
+	opts := options{configPath: cfgPath, model: "gemini-2.5-pro", endpoint: "http://127.0.0.1:20128/v1"}
+	exitCode := runSetupIO(opts, []string{"gemini"}, &out, &errOut)
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", exitCode, errOut.String())
+	}
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("reading config: %v", err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if parsed["endpoint"] != "http://127.0.0.1:20128/v1" || parsed["model"] != "gemini-2.5-pro" {
+		t.Errorf("gemini config wrong: %v", parsed)
+	}
+}
+
+func TestSetupQwenFreshWrite(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+	var out, errOut bytes.Buffer
+	opts := options{configPath: cfgPath, model: "qwen3-coder", endpoint: "http://127.0.0.1:20128/v1"}
+	exitCode := runSetupIO(opts, []string{"qwen"}, &out, &errOut)
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", exitCode, errOut.String())
+	}
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("reading config: %v", err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if parsed["base_url"] != "http://127.0.0.1:20128/v1" || parsed["model"] != "qwen3-coder" {
+		t.Errorf("qwen config wrong: %v", parsed)
+	}
+}
+
+func TestSetupGooseFreshWrite(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	var out, errOut bytes.Buffer
+	opts := options{configPath: cfgPath, model: "gpt-5", endpoint: "http://127.0.0.1:20128/v1"}
+	exitCode := runSetupIO(opts, []string{"goose"}, &out, &errOut)
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", exitCode, errOut.String())
+	}
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("reading config: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "gpt-5") || !strings.Contains(content, "http://127.0.0.1:20128/v1") {
+		t.Errorf("goose config missing fields: %s", content)
+	}
+}
+
+func TestSetupRooFreshWrite(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "settings.json")
+	var out, errOut bytes.Buffer
+	opts := options{configPath: cfgPath, model: "gpt-5", endpoint: "http://127.0.0.1:20128/v1"}
+	exitCode := runSetupIO(opts, []string{"roo"}, &out, &errOut)
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", exitCode, errOut.String())
+	}
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("reading config: %v", err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if parsed["provider"] != "openai" || parsed["base_url"] != "http://127.0.0.1:20128/v1" {
+		t.Errorf("roo config wrong: %v", parsed)
+	}
+}
+
+func TestSetupKiloFreshWrite(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json")
+	var out, errOut bytes.Buffer
+	opts := options{configPath: cfgPath, model: "gpt-5", endpoint: "http://127.0.0.1:20128/v1"}
+	exitCode := runSetupIO(opts, []string{"kilo"}, &out, &errOut)
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", exitCode, errOut.String())
+	}
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("reading config: %v", err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if parsed["base_url"] != "http://127.0.0.1:20128/v1" || parsed["model"] != "gpt-5" {
+		t.Errorf("kilo config wrong: %v", parsed)
+	}
+}
