@@ -21,8 +21,10 @@ package org
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -154,7 +156,58 @@ func (s *Store) persist() error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(s.path, b, 0o600)
+	return atomicWriteFile(s.path, b)
+}
+
+// atomicWriteFile writes data to path atomically: a temp file in the
+// same directory, fsync'd, then renamed over path, so a crash
+// mid-write leaves either the previous snapshot or the complete new
+// one — never a torn file. A truncated org/team snapshot fails to
+// decode on the next Open, which would drop every org, team and
+// binding, so this is the durability the store needs. It mirrors
+// internal/files/store.go's index write. Callers hold s.mu.
+func atomicWriteFile(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	return fsyncDir(dir)
+}
+
+// fsyncDir flushes the directory entry to disk after the rename: the
+// rename is the atomicity guarantee, the fsync is the durability one.
+// Best effort — skipped on Windows, where Go cannot open a directory
+// for syncing (see internal/files/store.go).
+func fsyncDir(dir string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
 }
 
 // auditLocked appends an audit entry (caller holds s.mu).
@@ -209,6 +262,12 @@ func (s *Store) TeamsForOrg(orgID string) []*Team {
 	return out
 }
 
+// orgLogf reports an audit record that could not be persisted (the
+// error has no caller-visible return channel on the request path).
+// A package variable so tests can capture it; production defaults
+// to the standard logger.
+var orgLogf = log.Printf
+
 // RecordDenial appends an audit entry for a REFUSED request-path
 // decision (team model/strategy policy or org budget). Denials are
 // auditable facts, not management operations: the entry is written
@@ -223,7 +282,12 @@ func (s *Store) RecordDenial(keyID, teamID, detail string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.auditLocked(keyID, "request.denied", teamID, detail)
-	_ = s.persist()
+	if err := s.persist(); err != nil {
+		// A denial whose audit record cannot be persisted is a real
+		// loss (the record of a refused request vanishes on restart);
+		// surface it loudly rather than dropping it silently.
+		orgLogf("org: persist denial audit record failed: %v", err)
+	}
 }
 
 // AddOrg creates an org (actor must be a known member; first org bootstraps).

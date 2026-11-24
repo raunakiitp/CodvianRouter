@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -542,17 +543,35 @@ func (iss *Issuer) mintLocked(client *Client, scopes []string) (*TokenResponse, 
 	}, nil
 }
 
+// persistLogf reports a revocation whose persist step failed but
+// whose error has no return channel (Revoke returns only a bool).
+// A package variable so tests can capture it; production defaults
+// to the standard logger.
+var persistLogf = log.Printf
+
 // Revoke revokes a token: a refresh token is deleted, a JWT has
 // its jti added to the denylist until its expiry. It reports
 // whether anything was actually revoked (the RFC 7009 endpoint
-// answers 200 either way).
+// answers 200 either way). A refresh-token revocation is only
+// reported as successful once it is durable: if the state file
+// cannot be written the deletion is rolled back, false is
+// returned and the error is logged, so a revocation that a restart
+// would silently undo is never claimed as done.
 func (iss *Issuer) Revoke(token string) bool {
 	iss.mu.Lock()
 	defer iss.mu.Unlock()
 	hash := sha256Hex(token)
-	if _, ok := iss.refresh[hash]; ok {
+	if rt, ok := iss.refresh[hash]; ok {
 		delete(iss.refresh, hash)
-		_ = iss.saveLocked()
+		if err := iss.saveLocked(); err != nil {
+			// The deletion did not reach disk. Fail closed and do NOT
+			// leave memory claiming a revocation a restart would undo:
+			// roll the deletion back, log the error, and return false
+			// so the caller learns the revocation did not take effect.
+			iss.refresh[hash] = rt
+			persistLogf("oauth: persist refresh-token revocation failed: %v", err)
+			return false
+		}
 		return true
 	}
 	claims, err := VerifyJWT(iss.key, token, time.Now())
