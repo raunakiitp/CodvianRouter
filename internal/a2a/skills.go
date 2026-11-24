@@ -400,12 +400,12 @@ var skillHandlers = map[string]skillHandler{
 	"health-report":      skillHealthReport,
 	"list-capabilities":  skillListCapabilities,
 	// P1.2 ecosystem expansion skills.
-	"budget-forecasting": skillBudgetForecasting,
-	"cost-estimation":    skillCostEstimation,
-	"route-preview":      skillRoutePreview,
+	"budget-forecasting":    skillBudgetForecasting,
+	"cost-estimation":       skillCostEstimation,
+	"route-preview":         skillRoutePreview,
 	"compression-analytics": skillCompressionAnalytics,
-	"eval-management":    skillEvalManagement,
-	"org-reporting":      skillOrgReporting,
+	"eval-management":       skillEvalManagement,
+	"org-reporting":         skillOrgReporting,
 }
 
 // InvokeSkill invokes one skill by name against the live source.
@@ -1169,15 +1169,15 @@ func skillBudgetForecasting(ctx context.Context, src SkillSource, args json.RawM
 		return nil, fmt.Errorf("unavailable: %w", err)
 	}
 	payload := map[string]any{
-		"key_id":               fc.KeyID,
+		"key_id":                 fc.KeyID,
 		"burn_rate_usd_per_hour": fc.BurnRateUSDPerHour,
-		"spend_usd_24h":        fc.SpendUSD24h,
-		"limit_usd":            fc.LimitUSD,
-		"limit_known":          fc.LimitKnown,
-		"insufficient_data":    fc.InsufficientData,
-		"updated_at":           fc.UpdatedAt,
-		"scope":                "gateway-key",
-		"scoped_to_key":        keyID,
+		"spend_usd_24h":          fc.SpendUSD24h,
+		"limit_usd":              fc.LimitUSD,
+		"limit_known":            fc.LimitKnown,
+		"insufficient_data":      fc.InsufficientData,
+		"updated_at":             fc.UpdatedAt,
+		"scope":                  "gateway-key",
+		"scoped_to_key":          keyID,
 	}
 	if fc.ProjectedExhaustAt != "" {
 		payload["projected_exhaust_at"] = fc.ProjectedExhaustAt
@@ -1227,14 +1227,14 @@ func skillCostEstimation(ctx context.Context, src SkillSource, args json.RawMess
 	}
 
 	payload := map[string]any{
-		"model":               model,
-		"provider_id":         providerID,
-		"prompt_tokens":       tokCount,
+		"model":                 model,
+		"provider_id":           providerID,
+		"prompt_tokens":         tokCount,
 		"est_completion_tokens": int(maxTokens),
-		"cost_known":          false,
-		"price_source":        "unknown",
-		"warning":             "Pricing not available through the MCP source; price book integration is a P1.7 follow-up",
-		"scope":               "gateway-key",
+		"cost_known":            false,
+		"price_source":          "unknown",
+		"warning":               "Pricing not available through the MCP source; price book integration is a P1.7 follow-up",
+		"scope":                 "gateway-key",
 	}
 	if isLocalOperator(ctx) {
 		payload["scope"] = "local-operator"
@@ -1269,13 +1269,13 @@ func skillRoutePreview(ctx context.Context, src SkillSource, args json.RawMessag
 		}
 	}
 	payload := map[string]any{
-		"model":                 model,
-		"eligible_candidates":   candidates,
-		"estimated_cost_usd":    nil,
-		"cost_known":            false,
-		"prompt_tokens":         int(promptTokens),
-		"note":                  "Route preview uses capability metadata from the registry. Full explain_route/simulate_route integration requires the mcp.Source superset — a P1.2 follow-up.",
-		"scope":                 "gateway-key",
+		"model":               model,
+		"eligible_candidates": candidates,
+		"estimated_cost_usd":  nil,
+		"cost_known":          false,
+		"prompt_tokens":       int(promptTokens),
+		"note":                "Route preview uses capability metadata from the registry. Full explain_route/simulate_route integration requires the mcp.Source superset — a P1.2 follow-up.",
+		"scope":               "gateway-key",
 	}
 	if isLocalOperator(ctx) {
 		payload["scope"] = "local-operator"
@@ -1287,14 +1287,14 @@ func skillRoutePreview(ctx context.Context, src SkillSource, args json.RawMessag
 func skillCompressionAnalytics(ctx context.Context, src SkillSource, args json.RawMessage) (json.RawMessage, error) {
 	stats := src.CompressionStats()
 	payload := map[string]any{
-		"layers":           stats.Layers,
-		"original_tokens":  stats.OriginalTokens,
+		"layers":            stats.Layers,
+		"original_tokens":   stats.OriginalTokens,
 		"compressed_tokens": stats.CompressedTokens,
-		"savings_pct":      stats.SavingsPct,
-		"inflation_rate":   stats.InflationRate,
-		"bypass_count":     stats.BypassCount,
-		"last_updated":     stats.LastUpdated,
-		"scope":            "gateway-key",
+		"savings_pct":       stats.SavingsPct,
+		"inflation_rate":    stats.InflationRate,
+		"bypass_count":      stats.BypassCount,
+		"last_updated":      stats.LastUpdated,
+		"scope":             "gateway-key",
 	}
 	if isLocalOperator(ctx) {
 		payload["scope"] = "local-operator"
@@ -1311,12 +1311,12 @@ func skillEvalManagement(ctx context.Context, src SkillSource, args json.RawMess
 	rows := make([]map[string]any, 0, len(schedules))
 	for _, sch := range schedules {
 		rows = append(rows, map[string]any{
-			"id":             sch.ID,
-			"suite":          sch.Suite,
-			"every_sec":      sch.EverySec,
-			"enabled":        sch.Enabled,
-			"timezone":       sch.TimeZone,
-			"last_run":       sch.LastRun,
+			"id":              sch.ID,
+			"suite":           sch.Suite,
+			"every_sec":       sch.EverySec,
+			"enabled":         sch.Enabled,
+			"timezone":        sch.TimeZone,
+			"last_run":        sch.LastRun,
 			"use_real_engine": sch.UseRealEngine,
 		})
 	}
