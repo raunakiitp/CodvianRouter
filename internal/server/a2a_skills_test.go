@@ -54,10 +54,10 @@ func a2aResultSkills(t *testing.T, out map[string]any) []any {
 	return skills
 }
 
-// TestA2ASkillsListReturnsSixDescriptors: skills/list returns the
+// TestA2ASkillsListReturnsTwelveDescriptors: skills/list returns the
 // 6 skill descriptors from the live registry, in fixed order —
 // the same list the agent card reports, never a hardcoded copy.
-func TestA2ASkillsListReturnsSixDescriptors(t *testing.T) {
+func TestA2ASkillsListReturnsTwelveDescriptors(t *testing.T) {
 	srv := newA2ATestServer(t, &fakeEngine{}, t.TempDir(), true)
 	status, out := a2aPost(t, srv, a2aSendBody("skills/list", `{}`), a2aKeyOne)
 	if status != http.StatusOK {
@@ -67,7 +67,7 @@ func TestA2ASkillsListReturnsSixDescriptors(t *testing.T) {
 		t.Fatalf("skills/list: unexpected error %d: %v", code, out)
 	}
 	got := a2aResultSkills(t, out)
-	want := []string{"smart-routing", "quota-management", "provider-discovery", "cost-analysis", "health-report", "list-capabilities"}
+	want := []string{"smart-routing", "quota-management", "provider-discovery", "cost-analysis", "health-report", "list-capabilities", "budget-forecasting", "cost-estimation", "route-preview", "compression-analytics", "eval-management", "org-reporting"}
 	if len(got) != len(want) {
 		t.Fatalf("skills/list: %d skills, want %d: %v", len(got), len(want), got)
 	}
