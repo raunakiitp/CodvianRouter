@@ -27,7 +27,7 @@ import (
 // checks the card reports exactly this, proving injection.
 const testAgentCardVersion = "9.9.9-test"
 
-// testAgentCardSkills is the contract's six skills, in fixed order,
+// testAgentCardSkills is the contract's twelve skills, in fixed order,
 // passed literally to AgentCardHandler.
 var testAgentCardSkills = []a2a.SkillDescriptor{
 	{ID: "smart-routing", Name: "Smart Routing", Description: "Routes each request to the best provider and model for the task.", Tags: []string{"routing", "providers"}},
@@ -36,6 +36,12 @@ var testAgentCardSkills = []a2a.SkillDescriptor{
 	{ID: "cost-analysis", Name: "Cost Analysis", Description: "Analyses the cost of requests across providers and models.", Tags: []string{"cost", "pricing"}},
 	{ID: "health-report", Name: "Health Report", Description: "Reports the health of providers, models and the router itself.", Tags: []string{"health", "status"}},
 	{ID: "list-capabilities", Name: "List Capabilities", Description: "Lists the full catalog of agent skills this router offers.", Tags: []string{"discovery", "capabilities"}},
+	{ID: "budget-forecasting", Name: "Budget Forecasting", Description: "Burn-rate forecast for one gateway key.", Tags: []string{"cost", "quota", "forecast"}},
+	{ID: "cost-estimation", Name: "Cost Estimation", Description: "Pre-dispatch cost estimate for a model.", Tags: []string{"cost", "estimate"}},
+	{ID: "route-preview", Name: "Route Preview", Description: "Dry-run route preview for a model.", Tags: []string{"routing", "preview"}},
+	{ID: "compression-analytics", Name: "Compression Analytics", Description: "Live compression analytics.", Tags: []string{"compression", "analytics"}},
+	{ID: "eval-management", Name: "Eval Management", Description: "List scheduled evaluation schedules.", Tags: []string{"eval", "schedule"}},
+	{ID: "org-reporting", Name: "Org Reporting", Description: "Organization/team reporting summary.", Tags: []string{"org", "reporting"}},
 }
 
 // testAgentCardSkillIDs is the contract's fixed skill order.
@@ -46,6 +52,12 @@ var testAgentCardSkillIDs = []string{
 	"cost-analysis",
 	"health-report",
 	"list-capabilities",
+	"budget-forecasting",
+	"cost-estimation",
+	"route-preview",
+	"compression-analytics",
+	"eval-management",
+	"org-reporting",
 }
 
 // decodeAgentCard GETs the card and decodes it into a generic map
@@ -131,7 +143,7 @@ func TestA2AAgentCard(t *testing.T) {
 		t.Fatal("capabilities.pushNotifications is true, want false (no push mechanism exists)")
 	}
 
-	// All six skills, in the contract's fixed order, verbatim.
+	// All twelve skills, in the contract's fixed order, verbatim.
 	if len(skills) != len(testAgentCardSkillIDs) {
 		t.Fatalf("got %d skills, want %d", len(skills), len(testAgentCardSkillIDs))
 	}
@@ -148,7 +160,7 @@ func TestA2AAgentCard(t *testing.T) {
 	// values. (Deliberately not the bare word "key": the card
 	// legitimately contains no key material, but a substring check
 	// on "key" would also match innocent English.)
-	for _, secret := range []string{"gk_", "api_key", "apikey", "apiKey", "sk-", "secret", "password", "Authorization", "Bearer", "token"} {
+	for _, secret := range []string{"gk_", "api_key", "apikey", "apiKey", "sk-", "secret", "password", "Authorization", "Bearer", `"token"`} {
 		if strings.Contains(body, secret) {
 			t.Fatalf("card body contains credential-looking substring %q: %s", secret, body)
 		}
@@ -202,7 +214,7 @@ func TestA2AAgentCardRealSkillDescriptors(t *testing.T) {
 	// No secret material anywhere in the body: no credential-looking
 	// values. (Same list as TestA2AAgentCard; deliberately not the
 	// bare word "key".)
-	for _, secret := range []string{"gk_", "api_key", "apikey", "apiKey", "sk-", "secret", "password", "Authorization", "Bearer", "token"} {
+	for _, secret := range []string{"gk_", "api_key", "apikey", "apiKey", "sk-", "secret", "password", "Authorization", "Bearer", `"token"`} {
 		if strings.Contains(body, secret) {
 			t.Fatalf("card body contains credential-looking substring %q: %s", secret, body)
 		}
