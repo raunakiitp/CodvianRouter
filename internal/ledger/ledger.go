@@ -1654,6 +1654,14 @@ func normalizeUsage(u Usage, prices Prices, flatRateAsZero bool) normalizedRow {
 		if r.cacheWriteTokens5m+r.cacheWriteTokens1h > 0 {
 			r.cacheWriteTokens = r.cacheWriteTokens5m + r.cacheWriteTokens1h
 		}
+		// localEstimate stays 0 here by design: this row has a KNOWN
+		// split, so it is not one of the local-estimate-only rows the
+		// drift summary aggregates. A split whose prompt side was
+		// LOCALLY measured rather than provider-reported is marked by
+		// LocalEstimatePromptTokens, per that field's contract — that is
+		// how the relay's conservative charge for an unreported usage
+		// stays distinguishable from provider-reported spend
+		// (AUD-SEC-002).
 		r.localEstimate = 0
 		// Hand-computed cost: every leg, every dimension —
 		// cached-input leg, cache-write tiers, per-endpoint

@@ -142,10 +142,20 @@ func TestAUD_SEC_002FailedRelayDoesNotRecordSpend(t *testing.T) {
 	}
 }
 
-// TestAUD_SEC_002MissingUsageIsNotFabricated: a 2xx response with no
-// usage object records the attempt with zero tokens (the ledger's
-// documented "0 means not reported"), and no invented cost.
-func TestAUD_SEC_002MissingUsageIsNotFabricated(t *testing.T) {
+// TestAUD_SEC_002MissingUsageIsNeverRecordedAsZeroCost replaced an
+// earlier assertion in this file that pinned exactly the behaviour the
+// review rejected: a 2xx with no reported usage was recorded with zero
+// tokens and zero cost, which is what let a budgeted key keep spending
+// through /v1/messages without its accrued spend moving.
+//
+// What must still hold is that nothing is FABRICATED: the row must not
+// claim the provider reported a usage split. It is explicitly marked as
+// a local estimate instead (ledger.LocalEstimate), so the dashboard and
+// the estimate-vs-reported drift column can tell the two apart, and the
+// charge is a conservative over-estimate rather than an invented exact
+// number. The full budget-enforcement proof lives in
+// p13_unknown_usage_budget_test.go.
+func TestAUD_SEC_002MissingUsageIsNeverRecordedAsZeroCost(t *testing.T) {
 	mock := &anthropicMock{jsonBody: `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"no usage here"}],"model":"claude-sonnet-4-5","stop_reason":"end_turn"}`}
 	srv, led, keyID := p13RelaySpend(t, mock)
 
@@ -160,15 +170,19 @@ func TestAUD_SEC_002MissingUsageIsNotFabricated(t *testing.T) {
 	if !rows[0].OK {
 		t.Error("2xx relay recorded OK=false")
 	}
-	if rows[0].PromptTokens != 0 || rows[0].CompletionTokens != 0 {
-		t.Errorf("tokens = %d/%d, want 0/0 when the provider reported none", rows[0].PromptTokens, rows[0].CompletionTokens)
+	if rows[0].LocalEstimatePromptTokens != rows[0].PromptTokens || rows[0].LocalEstimatePromptTokens == 0 {
+		t.Error("a row with no provider usage must record that its prompt count was locally measured, not provider-reported")
+	}
+	if rows[0].PromptTokens <= 0 || rows[0].CompletionTokens <= 0 {
+		t.Errorf("tokens = %d/%d, want a positive conservative estimate: unknown usage is not zero usage",
+			rows[0].PromptTokens, rows[0].CompletionTokens)
 	}
 	spend, err := led.SpendFor(context.Background(), keyID, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spend != 0 {
-		t.Fatalf("spend = %.8f, want 0 (no fabricated cost without reported usage)", spend)
+	if spend <= 0 {
+		t.Fatalf("spend = %.8f, want a non-zero conservative charge for a relayed response whose usage was unreported", spend)
 	}
 }
 

@@ -71,6 +71,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/readiness"
 	"github.com/raunakiitp/codvian-router/internal/relay"
 	"github.com/raunakiitp/codvian-router/internal/router"
+	"github.com/raunakiitp/codvian-router/internal/tokencount"
 	"github.com/raunakiitp/codvian-router/internal/wire"
 )
 
@@ -86,6 +87,15 @@ type relayTarget struct {
 	UpstreamModel string
 	Attempts      int
 	IsLocal       bool
+	// Transport is the warm pooled transport for the target's
+	// (provider, key) pair, resolved from the provider registry
+	// (Registry.PooledTransport, keyed by the key fingerprint — never
+	// the key). The verbatim relay uses it so a bursty relay to one
+	// provider shares the engine's idle connections instead of
+	// re-dialing through http.DefaultTransport's 2-idle-conn limit
+	// (AUD-PERF-003). nil for a fake resolver or an unknown provider;
+	// the relay then keeps its own default transport.
+	Transport http.RoundTripper
 }
 
 // relayResolver resolves the relay target for one model ID. The
@@ -109,6 +119,10 @@ func (a providerRegistryAdapter) ResolveRelayTarget(ctx context.Context, model s
 		WireFormat: t.WireFormat, BaseURL: t.BaseURL,
 		AuthHeaders: t.AuthHeaders, UpstreamModel: t.UpstreamModel,
 		Attempts: t.Attempts, IsLocal: t.IsLocal,
+		// AUD-PERF-003: reuse the engine's warm pool for this
+		// (provider, key) pair so the verbatim relay does not
+		// re-dial after http.DefaultTransport's 2 idle conns.
+		Transport: a.reg.PooledTransport(t.ProviderID, t.KeyFingerprint),
 	}, nil
 }
 
@@ -1065,9 +1079,14 @@ func writeVerbatimHeaders(w http.ResponseWriter, resp *http.Response, reason str
 type cappedBuffer struct {
 	buf bytes.Buffer
 	max int
+	// total counts every byte the copy saw, including the part beyond
+	// the kept prefix, so a missing-usage estimate reflects the whole
+	// response (AUD-SEC-002).
+	total int
 }
 
 func (c *cappedBuffer) Write(p []byte) (int, error) {
+	c.total += len(p)
 	if room := c.max - c.buf.Len(); room > 0 {
 		if len(p) <= room {
 			c.buf.Write(p)
@@ -1207,7 +1226,7 @@ func (s *Server) handleMessagesEngineError(w http.ResponseWriter, err error) {
 //
 // Best-effort: a nil ledger, no model to attribute to, or a ledger
 // error never fails the request the client already received.
-func (s *Server) recordRelaySpend(ctx context.Context, keyID string, target *relayTarget, model string, u relay.AnthropicUsage, status int, start time.Time) {
+func (s *Server) recordRelaySpend(ctx context.Context, keyID string, target *relayTarget, model string, u relay.AnthropicUsage, status int, start time.Time, est relayEstimate) {
 	if s.ledger == nil {
 		return
 	}
@@ -1230,19 +1249,79 @@ func (s *Server) recordRelaySpend(ctx context.Context, keyID string, target *rel
 		LatencyMS:    time.Since(start).Milliseconds(),
 	}
 	if row.OK {
-		// SplitKnown is what makes the ledger store (and price) a
-		// provider-reported split; without it the counts are held
-		// back as "not reported" (ledger.Usage contract).
-		row.SplitKnown = u.Reported
-		row.PromptTokens = u.InputTokens
-		row.CompletionTokens = u.OutputTokens
-		row.TotalTokens = u.InputTokens + u.OutputTokens
-		row.CachedTokens = u.CacheReadTokens
-		row.CacheWriteTokens = u.CacheWriteTokens
+		if u.Reported {
+			// SplitKnown is what makes the ledger store (and price) a
+			// provider-reported split.
+			row.SplitKnown = true
+			row.PromptTokens = u.InputTokens
+			row.CompletionTokens = u.OutputTokens
+			row.TotalTokens = u.InputTokens + u.OutputTokens
+			row.CachedTokens = u.CacheReadTokens
+			row.CacheWriteTokens = u.CacheWriteTokens
+		} else {
+			// AUD-SEC-002 review blocker: a 2xx with NO reported usage
+			// used to be recorded as a zero-token / zero-cost row, so a
+			// budgeted key could keep spending through /v1/messages
+			// without its accrued spend ever moving — a budget bypass.
+			// Unknown usage is NOT zero usage. Charge a CONSERVATIVE
+			// local estimate instead, and mark the row as an estimate
+			// (ledger.LocalEstimate) so the dashboard and the drift
+			// column can tell it apart from a provider-reported row:
+			// the prompt estimate counts the request we actually sent,
+			// the completion estimate counts the bytes we actually
+			// delivered (chars/4 rounds up — never an under-count).
+			promptEst, completionEst := est.estimate(model)
+			row.SplitKnown = true
+			// The row is PRICED (so the budget gate sees it) but marked,
+			// per LocalEstimatePromptTokens' contract, as carrying a
+			// LOCALLY measured prompt rather than a provider-reported
+			// one: LocalEstimate stays false (this is not a bare
+			// estimate-only row), while a non-zero
+			// LocalEstimatePromptTokens is what tells an auditor "these
+			// numbers were not the provider's". A provider-reported row
+			// leaves it 0, so unknown and known stay distinguishable.
+			row.LocalEstimatePromptTokens = promptEst
+			row.PromptTokens = promptEst
+			row.CompletionTokens = completionEst
+			row.TotalTokens = promptEst + completionEst
+			s.logger.Printf("ledger: provider reported no usage for a relayed messages request (model=%s provider=%s); charging a conservative local estimate of %d prompt + %d completion tokens so budgets still see it",
+				model, providerName, promptEst, completionEst)
+		}
 	}
 	if _, err := s.ledger.RecordUsage(ctx, row, s.getLedgerPrices()); err != nil {
 		s.logger.Printf("ledger: relay spend row not recorded (model=%s provider=%s): %v", model, providerName, err)
 	}
+}
+
+// relayEstimate carries what a relayed request/response actually had, so
+// a MISSING usage report can be priced conservatively instead of being
+// charged at zero (AUD-SEC-002 review blocker).
+type relayEstimate struct {
+	// promptText is the request body AS SENT. The estimate tokenises the
+	// whole body, JSON syntax included, so it over-counts the prompt
+	// rather than under-counting it.
+	promptText string
+	// completionBytes is how many response bytes were delivered to the
+	// client (SSE framing included for a stream), used as a chars/4
+	// completion estimate.
+	completionBytes int
+}
+
+// estimate returns a conservative token estimate. Both sides round UP and
+// deliberately include framing/JSON overhead, so the result can only
+// over-charge: the safe direction for a budget, and never a claim that
+// unknown usage was free.
+func (e relayEstimate) estimate(model string) (prompt, completion int) {
+	if e.promptText != "" {
+		if tc, err := tokencount.Count(model, e.promptText); err == nil && tc.Tokens > 0 {
+			prompt = tc.Tokens
+		}
+	}
+	if prompt == 0 && e.promptText != "" {
+		prompt = (len(e.promptText) + 3) / 4
+	}
+	completion = (e.completionBytes + 3) / 4
+	return prompt, completion
 }
 
 func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw []byte, head messagesHeader, target *relayTarget, reason string, req provider.ChatRequest, cacheable bool, start time.Time, asyncRun *guardrails.AsyncRun, keyID string) {
@@ -1305,6 +1384,16 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 		upstream.Header.Set("Accept", "application/json")
 	}
 	client := &http.Client{Timeout: s.timeout}
+	// AUD-PERF-003: reuse the target's warm pooled transport — the
+	// engine's own pool for this (provider, key) pair — so a bursty
+	// relay to one provider keeps its idle connections instead of
+	// re-dialing TCP+TLS once http.DefaultTransport's
+	// MaxIdleConnsPerHost=2 is exceeded. A nil transport (a fake
+	// resolver, or an unknown provider with no pool) keeps the
+	// previous default behaviour unchanged.
+	if target.Transport != nil {
+		client.Transport = target.Transport
+	}
 	resp, err := client.Do(upstream)
 	if err != nil {
 		// A BLOCK verdict that cancelled the upstream call is a
@@ -1354,7 +1443,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 		// AUD-SEC-002: the verbatim path bypasses the engine, so it
 		// records its own ledger row from the provider-reported usage
 		// in the bytes it just forwarded.
-		s.recordRelaySpend(ctx, keyID, target, head.Model, relay.ParseAnthropicUsage(buf), resp.StatusCode, start)
+		s.recordRelaySpend(ctx, keyID, target, head.Model, relay.ParseAnthropicUsage(buf), resp.StatusCode, start, relayEstimate{promptText: string(raw), completionBytes: len(buf)})
 		// M6.3: gate the store on the same cacheable condition as
 		// the normal (non-async) branch below — a tool-carrying
 		// request must not be stored just because an async
@@ -1385,7 +1474,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, relayMaxStoreBody+1))
 		_, _ = w.Write(body)
 		// AUD-SEC-002: account the spend of the bytes just forwarded.
-		s.recordRelaySpend(ctx, keyID, target, head.Model, relay.ParseAnthropicUsage(body), resp.StatusCode, start)
+		s.recordRelaySpend(ctx, keyID, target, head.Model, relay.ParseAnthropicUsage(body), resp.StatusCode, start, relayEstimate{promptText: string(raw), completionBytes: len(body)})
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 && len(body) <= relayMaxStoreBody {
 			s.storeMessagesCache(ctx, req, body)
 		}
@@ -1401,7 +1490,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 	if !head.Stream {
 		cb := &cappedBuffer{max: relayMaxStoreBody}
 		_, _ = io.Copy(w, io.TeeReader(resp.Body, cb))
-		s.recordRelaySpend(ctx, keyID, target, head.Model, relay.ParseAnthropicUsage(cb.buf.Bytes()), resp.StatusCode, start)
+		s.recordRelaySpend(ctx, keyID, target, head.Model, relay.ParseAnthropicUsage(cb.buf.Bytes()), resp.StatusCode, start, relayEstimate{promptText: string(raw), completionBytes: cb.total})
 		return
 	}
 	// Stream redaction (B3-26 / :798): the verbatim relay copies
@@ -1433,7 +1522,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 	// could not see it.
 	sniff := relay.NewUsageSniffer(w)
 	defer func() {
-		s.recordRelaySpend(ctx, keyID, target, head.Model, sniff.Usage(), resp.StatusCode, start)
+		s.recordRelaySpend(ctx, keyID, target, head.Model, sniff.Usage(), resp.StatusCode, start, relayEstimate{promptText: string(raw), completionBytes: sniff.EmittedBytes()})
 	}()
 	if flusher, ok := w.(http.Flusher); ok {
 		// Copy in chunks and flush after each, so a streaming SSE

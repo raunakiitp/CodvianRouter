@@ -102,6 +102,7 @@ type UsageSniffer struct {
 	pend    []byte
 	usage   AnthropicUsage
 	dropped bool
+	emitted int
 }
 
 // maxSniffLine bounds one pending SSE line. Usage events are tens of
@@ -114,10 +115,16 @@ func NewUsageSniffer(w io.Writer) *UsageSniffer { return &UsageSniffer{w: w} }
 func (s *UsageSniffer) Write(p []byte) (int, error) {
 	n, err := s.w.Write(p)
 	if n > 0 {
+		s.emitted += n
 		s.absorb(p[:n])
 	}
 	return n, err
 }
+
+// EmittedBytes reports how many bytes the sniffer has passed through —
+// the honest size of what the client received, used to price a response
+// whose provider reported no usage (AUD-SEC-002).
+func (s *UsageSniffer) EmittedBytes() int { return s.emitted }
 
 func (s *UsageSniffer) absorb(p []byte) {
 	for len(p) > 0 {
