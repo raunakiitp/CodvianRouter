@@ -874,7 +874,7 @@ func TestMCPFixtureSession(t *testing.T) {
 // TestMCPFilteredFixtures runs every P2-8 filtered-list fixture
 // as a single exchange against a server carrying that fixture's
 // filter — never the unfiltered server, which would announce all
-// 24 tools and fail the filtered assertions.
+// 32 tools and fail the filtered assertions.
 func TestMCPFilteredFixtures(t *testing.T) {
 	for _, name := range mcpFilteredFixtureNames {
 		t.Run(name, func(t *testing.T) {
@@ -931,7 +931,7 @@ func TestMCPFixtureRecordedResponsesMatch(t *testing.T) {
 // TestCheckMCPResponseWrongJSONPathFails is the toggle proof for the
 // harness's core assertion path: the tools/list response must FAIL
 // when the fixture expects a different third tool — and likewise
-// when it expects a different LAST tool (the 24-tool pin must
+// when it expects a different LAST tool (the 32-tool pin must
 // catch a rename at either end of the list, not just among the
 // three original built-ins).
 func TestCheckMCPResponseWrongJSONPathFails(t *testing.T) {
@@ -952,7 +952,7 @@ func TestCheckMCPResponseWrongJSONPathFails(t *testing.T) {
 }
 
 // TestCheckMCPResponseWrongLengthFails is the toggle proof for the
-// tools/list length pin (json_lengths result.tools = 24): a
+// tools/list length pin (json_lengths result.tools = 32): a
 // recorded response with a 25th tool appended — or one tool
 // dropped — must FAIL even though every pinned tool name still
 // matches. Without the length pin, a silently added tool would
@@ -976,7 +976,7 @@ func TestCheckMCPResponseWrongLengthFails(t *testing.T) {
 		t.Fatalf("marshal 25-tool response: %v", err)
 	}
 	if err := CheckMCPResponse(raw25, f); err == nil {
-		t.Fatal("CheckMCPResponse accepted a tools/list response with 25 tools against a length pin of 24")
+		t.Fatal("CheckMCPResponse accepted a tools/list response with 25 tools against a length pin of 32")
 	} else if !strings.Contains(err.Error(), "result.tools") || !strings.Contains(err.Error(), "25") {
 		t.Fatalf("wrong-length error should name result.tools and length 25, got: %v", err)
 	}
@@ -988,7 +988,7 @@ func TestCheckMCPResponseWrongLengthFails(t *testing.T) {
 		t.Fatalf("marshal 23-tool response: %v", err)
 	}
 	if err := CheckMCPResponse(raw23, f); err == nil {
-		t.Fatal("CheckMCPResponse accepted a tools/list response with 23 tools against a length pin of 24")
+		t.Fatal("CheckMCPResponse accepted a tools/list response with 23 tools against a length pin of 32")
 	} else if !strings.Contains(err.Error(), "result.tools") || !strings.Contains(err.Error(), "23") {
 		t.Fatalf("wrong-length error should name result.tools and length 23, got: %v", err)
 	}
@@ -996,32 +996,32 @@ func TestCheckMCPResponseWrongLengthFails(t *testing.T) {
 
 // TestCheckMCPResponseNonArrayLengthFails is the toggle proof for
 // the non-array branch of the tools/list length pin
-// (json_lengths result.tools = 24). It asserts BOTH branches with
+// (json_lengths result.tools = 32). It asserts BOTH branches with
 // the same fixture, so it genuinely discriminates instead of only
 // documenting one outcome (the weak shape the M9.3 review flagged
 // in TestM93ToggleCreateComboHandlerNeutralised: a toggle test
 // that checks a single branch passes even if the checker always
 // fails, or always succeeds):
 //
-//   - PASS branch: the genuine recorded 24-tool array passes — a
+//   - PASS branch: the genuine recorded 32-tool array passes — a
 //     checker that unconditionally errors would fail here.
 //   - FAIL branch: three non-array values (string, object,
 //     number) must each fail naming result.tools with the
-//     "want an array of length 24" message — proving the branch
+//     "want an array of length 32" message — proving the branch
 //     triggers on any non-array, not just on one canned value.
 //   - DISTINCTNESS branch: a 23-tool array must fail with the
 //     DIFFERENT "got array length 23" message and never with
 //     "want an array" — proving the test pins the non-array
 //     branch specifically, not just any failure. Without the
 //     non-array branch, a non-array value would fail with the
-//     misleading "got array length 0, want 24" error (len of a
+//     misleading "got array length 0, want 32" error (len of a
 //     nil slice is 0) instead of the clear "want an array" error.
 func TestCheckMCPResponseNonArrayLengthFails(t *testing.T) {
 	// Drop the per-tool JSONPaths pins (result.tools.N.name /
 	// result.tools.N.inputSchema): CheckMCPResponse runs JSONPaths
 	// before JSONLengths, so those pins would fail first on a
 	// non-array tools value and mask the branch under test. The
-	// length pin (json_lengths result.tools = 24) stays in place.
+	// length pin (json_lengths result.tools = 32) stays in place.
 	load := func(t *testing.T) MCPFixture {
 		t.Helper()
 		f := LoadMCPFixture(t, "tools-list")
@@ -1053,10 +1053,10 @@ func TestCheckMCPResponseNonArrayLengthFails(t *testing.T) {
 		return raw
 	}
 
-	// PASS branch: the genuine 24-tool array passes the length pin.
+	// PASS branch: the genuine 32-tool array passes the length pin.
 	if f := load(t); true {
 		if err := CheckMCPResponse(f.RecordedResponse, f); err != nil {
-			t.Fatalf("genuine 24-tool tools/list response should pass the length pin: %v", err)
+			t.Fatalf("genuine 32-tool tools/list response should pass the length pin: %v", err)
 		}
 	}
 
@@ -1068,16 +1068,16 @@ func TestCheckMCPResponseNonArrayLengthFails(t *testing.T) {
 	}{
 		{"string", "not an array"},
 		{"object", map[string]any{"name": "not an array"}},
-		{"number", float64(24)},
+		{"number", float64(32)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := load(t)
 			resp, _ := decodeTools(t, f)
 			resp["result"].(map[string]any)["tools"] = tc.value
 			if err := CheckMCPResponse(marshal(t, resp), f); err == nil {
-				t.Fatalf("CheckMCPResponse accepted a tools/list response whose result.tools is a %s against a length pin of 24", tc.name)
-			} else if !strings.Contains(err.Error(), "result.tools") || !strings.Contains(err.Error(), "want an array of length 24") {
-				t.Fatalf("non-array error should name result.tools and want an array of length 24, got: %v", err)
+				t.Fatalf("CheckMCPResponse accepted a tools/list response whose result.tools is a %s against a length pin of 32", tc.name)
+			} else if !strings.Contains(err.Error(), "result.tools") || !strings.Contains(err.Error(), "want an array of length 32") {
+				t.Fatalf("non-array error should name result.tools and want an array of length 32, got: %v", err)
 			} else if strings.Contains(err.Error(), "got array length") {
 				t.Fatalf("non-array error must say 'want an array', not the length-mismatch message, got: %v", err)
 			}
@@ -1090,7 +1090,7 @@ func TestCheckMCPResponseNonArrayLengthFails(t *testing.T) {
 	resp, tools := decodeTools(t, f)
 	resp["result"].(map[string]any)["tools"] = tools[:23]
 	if err := CheckMCPResponse(marshal(t, resp), f); err == nil {
-		t.Fatal("CheckMCPResponse accepted a tools/list response with 23 tools against a length pin of 24")
+		t.Fatal("CheckMCPResponse accepted a tools/list response with 23 tools against a length pin of 32")
 	} else if !strings.Contains(err.Error(), "result.tools") || !strings.Contains(err.Error(), "got array length 23") {
 		t.Fatalf("wrong-length error should name result.tools and got array length 23, got: %v", err)
 	} else if strings.Contains(err.Error(), "want an array") {
@@ -1399,9 +1399,17 @@ func mcpRecordSpecs() []mcpRecordSpec {
 					"result.tools.20.name": "set_routing_strategy", "result.tools.20.inputSchema": nil,
 					"result.tools.21.name": "simulate_route", "result.tools.21.inputSchema": nil,
 					"result.tools.22.name": "switch_combos", "result.tools.22.inputSchema": nil,
-					"result.tools.23.name": "tool_search", "result.tools.23.inputSchema": nil},
-				JSONLengths: map[string]int{"result.tools": 24}},
-			notes: "The full current tool surface: 24 tools — the 3 read-only built-ins first, in stable order, then the M9.3/M9.4/M9.5 registered tools alphabetically. Every tool's name is pinned, and every tool must carry an inputSchema (nil = presence-only). The length pin (json_lengths result.tools = 24) fails if a 25th tool appears or one goes missing, even when every pinned name still matches.",
+					"result.tools.23.name": "tool_search", "result.tools.23.inputSchema": nil,
+					"result.tools.24.name": "budget_forecasting", "result.tools.24.inputSchema": nil,
+					"result.tools.25.name": "capability_discovery", "result.tools.25.inputSchema": nil,
+					"result.tools.26.name": "compression_analytics", "result.tools.26.inputSchema": nil,
+					"result.tools.27.name": "cost_estimation", "result.tools.27.inputSchema": nil,
+					"result.tools.28.name": "eval_management", "result.tools.28.inputSchema": nil,
+					"result.tools.29.name": "org_reporting", "result.tools.29.inputSchema": nil,
+					"result.tools.30.name": "provider_discovery", "result.tools.30.inputSchema": nil,
+					"result.tools.31.name": "quota_intelligence", "result.tools.31.inputSchema": nil},
+				JSONLengths: map[string]int{"result.tools": 32}},
+			notes: "The full current tool surface: 32 tools — the 3 read-only built-ins first, in stable order, then the M9.3/M9.4/M9.5 registered tools alphabetically. Every tool's name is pinned, and every tool must carry an inputSchema (nil = presence-only). The length pin (json_lengths result.tools = 32) fails if a 25th tool appears or one goes missing, even when every pinned name still matches.",
 		},
 		{
 			name:    "tools-call-router-status",
@@ -1528,8 +1536,8 @@ func mcpRecordSpecs() []mcpRecordSpec {
 			method:  "tools/call",
 			request: `{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"heartbeat","arguments":{}}}`,
 			assert: MCPAssert{ID: float64(20), RequiredFields: []string{"result.content", "result.structuredContent.tool_count"},
-				JSONPaths: map[string]any{"jsonrpc": "2.0", "result.structuredContent.uptime_seconds": float64(-1), "result.structuredContent.tool_count": float64(24), "result.structuredContent.protocol_version": "2025-03-26", "result.structuredContent.audit_log": "disabled"}},
-			notes: "heartbeat: liveness snapshot — uptime -1 (no serving loop), 24 announced tools, protocol 2025-03-26, audit log disabled (not wired in the fixture server).",
+				JSONPaths: map[string]any{"jsonrpc": "2.0", "result.structuredContent.uptime_seconds": float64(-1), "result.structuredContent.tool_count": float64(32), "result.structuredContent.protocol_version": "2025-03-26", "result.structuredContent.audit_log": "disabled"}},
+			notes: "heartbeat: liveness snapshot — uptime -1 (no serving loop), 32 announced tools, protocol 2025-03-26, audit log disabled (not wired in the fixture server).",
 		},
 		{
 			name:    "tools-call-tool-search",
@@ -1559,7 +1567,7 @@ func mcpRecordSpecs() []mcpRecordSpec {
 			name:    "error-check-quota-missing-key",
 			method:  "tools/call",
 			request: `{"jsonrpc":"2.0","id":24,"method":"tools/call","params":{"name":"check_quota","arguments":{}}}`,
-			assert: MCPAssert{ID: float64(24), ExpectError: true, ErrorCode: &err32602, RequiredFields: []string{"error.message"},
+			assert: MCPAssert{ID: float64(32), ExpectError: true, ErrorCode: &err32602, RequiredFields: []string{"error.message"},
 				JSONPaths: map[string]any{"jsonrpc": "2.0", "error.code": float64(-32602), "error.message": "key_id: required"}},
 			notes: "check_quota without a key_id is invalid params (-32602): the local operator must name the key (a gateway-key caller would default to its own id).",
 		},
