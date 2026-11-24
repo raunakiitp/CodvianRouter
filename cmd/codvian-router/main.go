@@ -98,6 +98,9 @@ type options struct {
 	port       int // 0 = use the port from the config file
 	listen     string
 	model      string
+	// jsonOut requests machine-readable JSON output for the commands
+	// that support it (currently `clients`). P1.3.
+	jsonOut bool
 	// lowEnd enables the low-end GC profile for serve: GOGC=off plus a
 	// memory limit (see internal/gctune). Same as CODVIAN_ROUTER_LOWEND=1.
 	lowEnd bool
@@ -591,6 +594,8 @@ func parseArgs(args []string) (options, []string, error) {
 			positional = append(positional, "help")
 		case a == "-v" || a == "--version":
 			positional = append(positional, "version")
+		case a == "--json":
+			opts.jsonOut = true
 		case strings.HasPrefix(a, "-"):
 			return opts, nil, fmt.Errorf("unknown flag %q", a)
 		default:
@@ -672,6 +677,8 @@ func run(args []string) int {
 		return runHealth(opts, positional[1:])
 	case "update":
 		return runUpdate(opts, positional[1:])
+	case "clients":
+		return runClients(opts, positional[1:])
 	case "help":
 		usage(os.Stdout)
 		return 0
@@ -711,6 +718,7 @@ Usage:
   codvian-router [--config PATH] logs [--lines N] [--follow]
                                                 show the gateway log (<config-dir>/router.log — written only when the gateway was started by restart/update; a gateway started by hand logs to its terminal)
   codvian-router [--config PATH] [--port PORT] health probe GET /healthz (exit 0 on 200)
+  codvian-router clients [--json]        print the client compatibility matrix (dialect, endpoint, credential, evidence)
   codvian-router [--config PATH] update [--tag TAG] [--check] [--yes]
                                                 self-update from the latest GitHub release: cosign signature (when cosign is installed) + SHA-256 against checksums.txt, then an atomic binary swap; stops and restarts the supervised gateway when it is running
   codvian-router [--config PATH] doctor              check config, keys, providers, ports, dashboard
