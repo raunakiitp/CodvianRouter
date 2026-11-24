@@ -692,8 +692,8 @@ func TestServeStdioRoundTrip(t *testing.T) {
 		t.Fatalf("third response is not JSON: %v", err)
 	}
 	result, _ := third["result"].(map[string]any)
-	if tools, _ := result["tools"].([]any); len(tools) != 24 {
-		t.Errorf("tools/list via Serve returned %d tools, want 24", len(tools))
+	if tools, _ := result["tools"].([]any); len(tools) != 32 {
+		t.Errorf("tools/list via Serve returned %d tools, want 32", len(tools))
 	}
 	if !strings.Contains(lines[1], "Coder") {
 		t.Errorf("provider_list via Serve does not carry live data: %s", lines[1])
