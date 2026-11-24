@@ -49,8 +49,8 @@ func TestHandleMCP(t *testing.T) {
 	if out.Transport != "stdio" || out.Command != "codvian-router mcp" {
 		t.Errorf("transport/command = %q/%q, want stdio/codvian-router mcp", out.Transport, out.Command)
 	}
-	if len(out.Tools) != 24 {
-		t.Fatalf("tools = %d, want 24", len(out.Tools))
+	if len(out.Tools) != 32 {
+		t.Fatalf("tools = %d, want 32", len(out.Tools))
 	}
 	names := map[string]bool{}
 	for _, tool := range out.Tools {
@@ -88,8 +88,8 @@ func TestHandleMCPEmptyState(t *testing.T) {
 	if out.Listen != "unknown" {
 		t.Errorf("listen = %q, want unknown when unset", out.Listen)
 	}
-	if len(out.Tools) != 24 {
-		t.Errorf("tools = %d even with no registry, want 24 (the tool list is static)", len(out.Tools))
+	if len(out.Tools) != 32 {
+		t.Errorf("tools = %d even with no registry, want 32 (the tool list is static)", len(out.Tools))
 	}
 }
 
