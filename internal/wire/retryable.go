@@ -102,7 +102,7 @@ func IsModelNotFoundSignal(text string) bool {
 //   - Gemini: 400 "blocked ... safety", promptFeedback blockReason
 //     SAFETY / OTHER (surfaced as a finish_reason, not an error)
 //   - Bedrock: 400 guardrail_intervened / "guardrail" blocks
-//   - Portkey / LiteLLM gateways: the same upstream text, passed
+//   - Other LLM gateways: the same upstream text, passed
 //     through with the gateway's own envelope
 //
 // The phrases are deliberately multi-word where the single word
@@ -169,7 +169,7 @@ func IsContentRefusalSignal(text string) bool {
 
 // IsQuotaExhaustedSignal reports whether text (an upstream error body,
 // message, or error type + message) signals that the account is out of
-// quota / credits — the reference router failureClassification.ts:26 QUOTA_MESSAGE
+// quota / credits — an upstream gateway's failureClassification.ts:26 QUOTA_MESSAGE
 // (`quota|insufficient balance|credits exhausted|balance is \$0`), plus
 // the "insufficient_quota" / "out of credits" / "no credits" markers
 // the provider package already treats as quota (see isQuotaBody in
@@ -197,7 +197,7 @@ func IsQuotaExhaustedSignal(text string) bool {
 
 // concurrencyLimitPhrases are the (lowercased) substrings that mark an
 // upstream 429 as a concurrency-limit rejection rather than a rate
-// limit — the reference router concurrencyLimit429.ts: the provider is refusing
+// limit — an upstream gateway's concurrencyLimit429.ts: the provider is refusing
 // because too many requests are in flight at once, not because the
 // quota window is full. Such a 429 fails over now, cools the target
 // for 1 s, never climbs the backoff ladder, and never counts toward

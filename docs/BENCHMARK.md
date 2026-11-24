@@ -578,7 +578,7 @@ failing under the 32-client load.**
 | Peak RSS under load | — | 37 MiB (never exceeded idle; median 31–33 MiB during load) | — |
 | Ready time | < 10 s | **0.19 s** to first `/healthz` 200, 0.30 s to first `/v1/models` 200 | MET (by ~50x) |
 
-## The Geekflare reference (research-log entry 148)
+## The Geekflare target baseline (research-log entry 148)
 
 Geekflare, tested 21 Oct 2026 on one DigitalOcean droplet (2 vCPU,
 4 GB RAM, Docker, Ubuntu 24.04) against a stand-in instant NGINX
@@ -586,25 +586,17 @@ provider; median of 1,000 sequential requests; RPS = 32 clients x
 20 s. Baseline with no gateway: 0.17 ms.
 Source: https://geekflare.com/open-source/llm-gateway/
 
-| Gateway | Version | Added latency | RPS (32 clients) | Idle memory | Ready in |
-|---|---|---|---|---|---|
-| agentgateway (Solo.io) | 1.6.0 | 0.46 ms | 3,336 | 8 MB | 4 s |
-| Apache APISIX | 3.19.0 | 0.49 ms | 4,302 | 68 MB | 9 s |
-| Bifrost | 2.3.2 | 1.2 ms | 970 | 180 MB | 19 s |
-| Portkey | 1.15.2 | 2.8 ms | 615 | 36 MB | 8 s |
-| LiteLLM | 1.106.2 | 18.1 ms | 55 | 642 MB | 61 s |
-
-Codvian Router's measured numbers would sit between Bifrost and
-Portkey on latency, below Portkey on RPS, and next to Portkey on
-idle memory — but the machines differ (see caveats), so this is a
-rough placement, not a ranking.
+Only the **targets** from that benchmark are used here (added latency
+< 0.5 ms, > 3,000 RPS on 2 vCPU, idle memory < 70 MB, ready < 10 s).
+Third-party per-gateway measurements are deliberately not republished:
+the numbers below are our own, measured on our own host.
 
 **Deliberate divergence — EQUAL ≠ COPY (2026-11-19, CHECKLIST G2):**
 reference-style marketing presents gateway benchmarks as head-to-head
 tables; we do not. Our numbers are measurements on this shared
 1.5-vCPU VM only, and any cross-machine comparison is labelled a rough
 placement, never a ranking — presenting it as a ranking would be a
-misleading claim, and matching the reference router's capability/standard does not
+misleading claim, and matching another gateway's capability/standard does not
 mean copying its claims. Where our numbers miss the Geekflare targets,
 the miss is shown as a miss (the verdict tables in this file and the
 README benchmark section), never softened into a win.

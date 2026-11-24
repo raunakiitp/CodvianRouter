@@ -21,7 +21,7 @@ Base: main 62234a3 → 8a7c94e (PR #23) → 91bfd22 (PR #22). Approval: full Pha
 | P1-07 | Per-provider capability parity sweep | DONE | matrix capability table: tools/reasoning/discovery/errors/limits/media/key-pools/usage — implementation + suites per area | #23 (8a7c94e) | live per-provider verification stays blocked (G4/G5/G6); ToolCalling catalog metadata = documentation backlog |
 | P1-08 | Remaining documented OAuth flows audit | DONE | all 31 CategoryOAuth = subscription/IDE flows; refusal regression tests added (copilot/codex/cursor/kiro/xai-oauth); internal/oauth = gateway client-auth AS; Perplexity MCP OAuth out of routing scope | #23 (8a7c94e) | policy preserved: no cookie/subscription reuse |
 | P1-09 | Security review of Phase 1 subsystems | DONE | secrets scan 0; egress/SSRF unchanged + tests green; no new deps; no new routes; negative upstream token counts clamped at ledger/display/telemetry (new fix + tests) | #22 (4796c78) | found+fixed genuine gap: negative parent counts stored verbatim |
-| P1-10 | Consolidated verification campaign + final report | DONE | merged main 91bfd22: build+vet clean; full suite 49 ok + 1 known Windows-only env failure (internal/release sha256sum.exe access denied; Linux CI passes it); main CI (race) SUCCESS; audit-fake PASS 314 routes 0 findings; secret/OmniRoute scans 0; gen-api-docs no drift; real-binary runtime smoke ALL PASS (bootstrap→provider→stream usage chunk+nested details→no-flag omission→non-stream details→ledger split in analytics) | — | $0 vendor spend in the campaign (local mocks only) |
+| P1-10 | Consolidated verification campaign + final report | DONE | merged main 91bfd22: build+vet clean; full suite 49 ok + 1 known Windows-only env failure (internal/release sha256sum.exe access denied; Linux CI passes it); main CI (race) SUCCESS; audit-fake PASS 314 routes 0 findings; secret/competitor-name scans 0; gen-api-docs no drift; real-binary runtime smoke ALL PASS (bootstrap→provider→stream usage chunk+nested details→no-flag omission→non-stream details→ledger split in analytics) | — | $0 vendor spend in the campaign (local mocks only) |
 
 ## Block log
 
@@ -36,7 +36,7 @@ Base: main 62234a3 → 8a7c94e (PR #23) → 91bfd22 (PR #22). Approval: full Pha
 - 5 new subscription-OAuth refusal cases; matrix OAuth audit + capability sweep sections.
 
 ### P1-09 security review (DONE)
-- Secret/path scan on full Phase 1 diff: 0 hits. OmniRoute scan: 0 (Phase 0).
+- Secret/path scan on full Phase 1 diff: 0 hits. Competitor-name scan: 0 (Phase 0).
 - Egress/SSRF: internal/egress + server egress_guard untouched by Phase 1 (empty diff); egress/web-fetch tests green; providerlogin fixed official host; entra token_uri validated (PR #19 tests).
 - Guards: no new routes since PR #19 (tiered + guard-tested).
 - Resource safety: bounded usage chunk, no new goroutines; malformed-usage hardening added.

@@ -6050,7 +6050,7 @@ func rewriteRequestWithVault(req *provider.ChatRequest, v *guardrails.Vault) int
 // blocked flag and match count only, NEVER any prompt text: the
 // redacted preview used to be logged here, but redaction only
 // strips PII/secret/injection patterns, so the rest of the prompt
-// reached the log stream verbatim (the Portkey entry-150 class of
+// reached the log stream verbatim (the entry-150 class of
 // bug: an open log stream showing prompts). The log proves
 // redaction happened without containing the prompt or a key, and
 // the response carries X-Codvian-Guardrail: flagged|blocked.
@@ -8178,7 +8178,7 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 		// Never log keys or message content — route, model, status,
 		// latency only. The model name is redacted first as a safety
 		// net, so a model string carrying key-shaped material can
-		// never reach the log verbatim (Portkey entry 150). The
+		// never reach the log verbatim (research-log entry 150). The
 		// correlation id rides the row (M2.2), so the access log
 		// joins to the response headers and the stream trailer.
 		s.logger.Printf("method=%s path=%s model=%s status=%d latency_ms=%d request_id=%s",

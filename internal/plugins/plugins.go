@@ -1,6 +1,6 @@
 // Package plugins is the safe, in-process plugin system for Codvian
 // Router (CHECKLIST 201-202; competitor-sweep P2 gap — LiteLLM /
-// Portkey / Kong plugin hooks for guardrails, transforms, and
+// Other LLM gateways expose plugin hooks for guardrails, transforms, and
 // provider adapters).
 //
 // Design — what it is and what it deliberately is not:
@@ -18,7 +18,7 @@
 //     Wasm plugins (Higress-style, research-log entry 137) are a
 //     future step, not this one.
 //   - Hook points (three, matching the Respan "one trait, four
-//     hooks" shape, research-log entry 144, and the Bifrost
+//     hooks" shape, research-log entry 144, and the upstream-proxy
 //     separately-versioned plugin split, entry 94):
 //     HookPreRequest — runs after the built-in guardrails and
 //     before any provider is dialled; may allow, deny, or

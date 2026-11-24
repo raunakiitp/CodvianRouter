@@ -386,16 +386,16 @@ func (e *Engine) AudioPassthrough(ctx context.Context, req AudioRequest) (*Audio
 		texts = []string{req.Text}
 	}
 	bookReq := bookkeepingRequest(req.Model, texts, endpoint, req.CallerID, req.BudgetUSD, req.BudgetStrict)
-	chain := e.chainFor(req.Model)
-	var aud *AudioResponse
-	_, _, err := e.singleAttempt(ctx, chain, endpoint, bookReq, supportsAudio,
-		func(ctx context.Context, att Attempt) attemptResult {
-			var res attemptResult
-			aud, res = e.callAudio(ctx, att, req, endpoint)
-			return res
-		})
-	if err != nil {
-		return nil, err
+		chain := e.chainFor(req.Model)
+		var aud *AudioResponse
+		_, _, err := e.singleAttempt(ctx, chain, endpoint, bookReq, supportsAudio,
+			func(ctx context.Context, att Attempt) attemptResult {
+				var res attemptResult
+				aud, res = e.callAudio(ctx, att, req, endpoint)
+				return res
+			}, true)
+		if err != nil {
+			return nil, err
+		}
+		return aud, nil
 	}
-	return aud, nil
-}

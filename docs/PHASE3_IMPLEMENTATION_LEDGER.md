@@ -35,10 +35,10 @@
   enforcement of team-level guardrails deferred)
 ## P3-E Linux benchmark - BLOCKED_EXTERNAL (quiet Linux host + admin log access)
 
-## Remaining parity gaps (from OMNIROUTE_PARITY_MATRIX)
+## Remaining gaps
 Not implemented this session: dashboard UI for eval schedules and org/team
 management; engine-side enforcement of team allowlists on live requests;
-P3-C cost estimation; P3-D team guardrail policies; full parity-gap sweep.
+P3-C cost estimation; P3-D team guardrail policies; full capability-gap sweep.
 
 ## Honest completion statement
 Phase 3 is PARTIALLY complete. P3-B (scheduled eval, core+wired+tested) and

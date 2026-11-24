@@ -1,5 +1,5 @@
 // Async guardrail mode (CHECKLIST 185-186, competitor-sweep P1 gap;
-// Portkey guardrails can run async so a slow guardrail never blocks
+// Some gateways run guardrails async so a slow guardrail never blocks
 // the first token).
 //
 // The built-in guardrails (PII / secrets / injection, the local

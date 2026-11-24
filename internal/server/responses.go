@@ -1,6 +1,6 @@
 // POST /v1/responses — the OpenAI Responses API surface (CHECKLIST
 // 169-170; competitor-sweep P1 gap: the Responses API is now a
-// first-class surface in LiteLLM, Portkey and the reference router).
+// first-class surface in comparable LLM gateways).
 //
 // Design: the gateway translates a Responses request into the
 // canonical chat request and routes it through the SAME engine as

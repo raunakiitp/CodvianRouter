@@ -5,7 +5,7 @@
 // Design (from research-log entries 30, 100, 150, 152 and the
 // Respan/GoModel notes — the findings, not their code):
 //
-//   - Portkey 1.15.2 leaked prompts AND provider keys to an open log
+//   - a 1.15.2 gateway release leaked prompts AND provider keys to an open log
 //     stream when not run with NODE_ENV=production, a setting its own
 //     quickstart never set (entry 150). LiteLLM's spend-log token
 //     redaction is OFF by default and must be opted into (entry 152).
@@ -16,7 +16,7 @@
 //     BlockSecrets / BlockInjection, all default off). With every
 //     toggle off a request still flows to the provider unchanged; only
 //     the log/spend copies are redacted, and the event is counted.
-//   - Async-by-default, sync-deny as the opt-in (Portkey entry 30):
+//   - Async-by-default, sync-deny as the opt-in (research-log entry 30):
 //     the check is a local regex/substring scan (~microseconds, no LLM
 //     call, no network), so it never slows the fast path; a blocked
 //     request is refused before any provider is dialled, so a denial
@@ -25,7 +25,7 @@
 //     request never reaches the router at all).
 //   - Streaming-safe by construction: the check runs on the full
 //     inbound request before streaming starts, never on a stream in
-//     flight (Portkey entry 30: a streamed body already left cannot
+//     flight (research-log entry 30: a streamed body already left cannot
 //     be blocked).
 //   - Plugin-style: a guardrail is one entry in the pattern table
 //     below (kind + label + matcher). Adding a new pattern is adding

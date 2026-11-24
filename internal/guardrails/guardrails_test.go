@@ -161,7 +161,7 @@ func TestSanitizeSpendString(t *testing.T) {
 
 // TestRedactProviderKeyShapes proves the redactor catches bare
 // (unlabelled) provider keys of the shapes real providers issue —
-// the Portkey entry-150 class of leak is a key reaching a log
+// the entry-150 class of leak is a key reaching a log
 // stream with no "api_key=" label in front of it, so the pattern
 // table must recognise the key itself, not just its label. All
 // values below are synthetic fixtures shaped like real keys, not

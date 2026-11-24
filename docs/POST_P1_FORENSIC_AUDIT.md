@@ -171,7 +171,7 @@ Notable positives: **zero** TODO/FIXME/HACK/XXX markers in non-test Go; no handl
 
 ## 15. Documentation/repository hygiene audit
 
-**MEDIUM** — AUD-DOC-001 (private competitor parity research is committed publicly: `docs/OMNIROUTE_PARITY_MATRIX.md`, `docs/PHASE2_OMNIROUTE_PARITY.md`, 30 mentions in `docs/PHASE4_GAP_ROADMAP.md`, plus 6 further docs — against the audit's §14 rule).
+**MEDIUM** — AUD-DOC-001 (private competitor parity research is committed publicly: 2 competitor-named parity documents, 30 mentions in `docs/PHASE4_GAP_ROADMAP.md`, plus 6 further docs — against the audit's §14 rule).
 **LOW** — AUD-DOC-002 (published competitor benchmark comparison in `docs/BENCHMARK.md`), AUD-DOC-003 (CLI `usage()` understates `setup` agent support: 13 supported vs 3 documented), AUD-DOC-004 (files store doc says "no upload-size cap" while a 512 MiB cap exists).
 **Precision note (to avoid a false finding):** `OpenRouter` hits are a *provider integration*, and the `LiteLLM` hits in `docs/RELEASE-CHECKLIST.md` are a *supply-chain incident lesson* — both legitimate engineering content, not competitor benchmarking.
 `docs/PARITY.md` is absent, as intended; its absence is **not** reported as a defect. API docs/route parity is exact (347/347).

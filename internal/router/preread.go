@@ -1,7 +1,7 @@
 // Streaming failover via a bounded pre-commit preread buffer
 // (research-log entries 97 + 111; CHECKLIST 133-134).
 //
-// Entry 97 (CLIProxyAPI): fail BEFORE the 200 commit — a stream
+// Entry 97: fail BEFORE the 200 commit — a stream
 // that ends with zero output must fail before the first byte reaches
 // the client, because once 200 is committed the client owns the
 // failure. Entry 111 (GPT-Load): hold the leading events of a

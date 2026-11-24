@@ -204,7 +204,7 @@ Sequencing rationale: WS-1 and WS-2 restore *trustworthiness* (verified CI + one
 
 **Dependencies.** None (independent), but A4 should happen immediately.
 
-**Acceptance criteria.** `git grep -i omniroute -- docs/` empty; `rg` finds no unreferenced exported helper in the audited packages; a forced encode failure yields 500 not a truncated 200; images are digest-pinned; `/readyz` returns 503 while the ledger is unavailable.
+**Acceptance criteria.** No competitor name appears anywhere under `docs/` (case-insensitive `git grep` over the docs tree is empty); `rg` finds no unreferenced exported helper in the audited packages; a forced encode failure yields 500 not a truncated 200; images are digest-pinned; `/readyz` returns 503 while the ledger is unavailable.
 
 **Regression tests.** Encode-failure test per fixed handler; readiness test with an unhealthy ledger.
 

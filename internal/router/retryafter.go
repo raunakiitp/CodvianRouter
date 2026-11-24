@@ -1,6 +1,6 @@
 // Retry-After abandon rule + floor (CHECKLIST 167-168, competitor
-// sweep gap; Portkey: Retry-After >= 60s ends retries for that
-// target; CLIProxyAPI 10s floor, research-log entry 146).
+// sweep gap; Retry-After >= 60s ends retries for that
+// target; 10s floor, research-log entry 146).
 //
 // The two rules, and where each one binds:
 //

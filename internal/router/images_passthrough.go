@@ -178,7 +178,7 @@ func (e *Engine) Images(ctx context.Context, req provider.ImageRequest) (*provid
 			var res attemptResult
 			img, res = e.callImage(ctx, att, req)
 			return res
-		})
+		}, true)
 	if err != nil {
 		return nil, err
 	}

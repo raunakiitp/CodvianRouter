@@ -11,7 +11,7 @@
 //
 // Shapes are OpenAI-compatible where OpenAI defines the shape
 // (/v1/embeddings) and Cohere/LiteLLM-compatible where it does not
-// (OpenAI has no /v1/rerank; LiteLLM and Portkey route rerank with
+// (OpenAI has no /v1/rerank; other gateways route rerank with
 // the Cohere shape: model, query, documents, top_n,
 // return_documents, results with index + relevance_score).
 //
