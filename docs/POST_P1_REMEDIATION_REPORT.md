@@ -341,3 +341,10 @@ build and its CI `browser-smoke` job failed with `undefined (type *provider.Regi
 PooledTransport)`. The definitions are committed in the following AUD-PERF-003 commit, which repairs the head.
 No history was rewritten (force-pushing is out of scope): the repair is additive, and this is disclosed rather than
 hidden. Lesson recorded: never `git add` a file a parallel worker is editing; stage explicit hunks or wait.
+
+## Addendum 2 — delegated findings, and what remains blocked
+
+- **AUD-PERF-003 / AUD-PERF-004** (`3c70aa3`) landed after independent verification: `go build ./...` exit 0; provider 26.6s / tokencount 2.2s / router 73.7s all `ok`; `BenchmarkPoolTransportConcurrentDialReuse` = 30547 ns/op at **0.0765–0.1000 dials/op**, i.e. under one dial per operation.
+- **AUD-TEST-001 is PARTIAL.** The five drivers now run hermetically (`0b31682`) and execute against the real router — 7/9 checks pass each — but A3 (trace shows `attempts=[]`) and A8 (200 with the mock stopped, consistent with a cache-served reply) still fail, with the cause unclassified. **Blocked owner-side:** the CI workflow file (`.github/workflows/client-smoke.yml`) is written and reviewed but cannot be pushed, because the current token has no `workflow` scope (`gho_…`: `gist, read:org, repo`). Fix: `gh auth refresh -h github.com -s workflow` (interactive) or use a PAT with `workflow`. Until then the gate exists on disk only and the finding stays open.
+- **AUD-SEC-009** remains owner-side (rotate the token exposed in the local git remote URL, then `git remote set-url origin https://github.com/raunakiitp/CodvianRouter.git`); the value was never printed here.
+- **AUD-DOC-001 / AUD-DOC-002** (removing published competitor-parity material) remain blocked pending your explicit authorization: they change published content, and the earlier instruction was that removing already-published documents needs a decision that is yours to make.
