@@ -158,6 +158,468 @@ func (c *ContinueConfigManager) ApplyConfig(existing []byte, endpoint, model, ap
 	return out, changes, err
 }
 
+// --- P1.3 CLI Integration Expansion ---
+// Ten additional AI coding client setup integrations.
+
+// CodexConfigManager manages configuration for OpenAI Codex CLI.
+type CodexConfigManager struct{}
+
+func (c *CodexConfigManager) Name() string { return "codex" }
+
+func (c *CodexConfigManager) DefaultConfigPath() (string, error) {
+	// Codex CLI reads TOML config from ~/.codex/config.toml
+	if custom := os.Getenv("CODEX_CONFIG_PATH"); custom != "" {
+		return custom, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".codex", "config.toml"), nil
+}
+
+func (c *CodexConfigManager) ApplyConfig(existing []byte, endpoint, model, apiKey string) ([]byte, map[string]any, error) {
+	changes := make(map[string]any)
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:20128/v1"
+	}
+	if model == "" {
+		model = "gpt-5"
+	}
+
+	var out string
+	if apiKey != "" {
+		out = fmt.Sprintf(`# Codvian Router configuration
+model = %q
+base_url = %q
+api_key = %q
+`, model, endpoint, apiKey)
+		changes["model"] = model
+		changes["base_url"] = endpoint
+		changes["api_key"] = "[set]"
+	} else {
+		out = fmt.Sprintf(`# Codvian Router configuration
+model = %q
+base_url = %q
+api_key_env = "CODVIAN_ROUTER_API_KEY"
+`, model, endpoint)
+		changes["model"] = model
+		changes["base_url"] = endpoint
+		changes["api_key_env"] = "CODVIAN_ROUTER_API_KEY"
+	}
+
+	return []byte(out), changes, nil
+}
+
+// OpenCodeConfigManager manages configuration for OpenCode.
+type OpenCodeConfigManager struct{}
+
+func (c *OpenCodeConfigManager) Name() string { return "opencode" }
+
+func (c *OpenCodeConfigManager) DefaultConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".opencode", "config.json"), nil
+}
+
+func (c *OpenCodeConfigManager) ApplyConfig(existing []byte, endpoint, model, apiKey string) ([]byte, map[string]any, error) {
+	cfgMap := make(map[string]any)
+	if len(existing) > 0 {
+		_ = json.Unmarshal(existing, &cfgMap)
+	}
+	changes := make(map[string]any)
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:20128/v1"
+	}
+	if model == "" {
+		model = "gpt-5"
+	}
+
+	cfgMap["base_url"] = endpoint
+	changes["base_url"] = endpoint
+
+	cfgMap["model"] = model
+	changes["model"] = model
+
+	if apiKey != "" {
+		cfgMap["api_key"] = apiKey
+		changes["api_key"] = "[set]"
+	} else {
+		cfgMap["api_key_env"] = "CODVIAN_ROUTER_API_KEY"
+		changes["api_key_env"] = "CODVIAN_ROUTER_API_KEY"
+	}
+
+	out, err := json.MarshalIndent(cfgMap, "", "  ")
+	return out, changes, err
+}
+
+// CursorConfigManager manages configuration for Cursor.
+type CursorConfigManager struct{}
+
+func (c *CursorConfigManager) Name() string { return "cursor" }
+
+func (c *CursorConfigManager) DefaultConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".cursor", "mcp.json"), nil
+}
+
+func (c *CursorConfigManager) ApplyConfig(existing []byte, endpoint, model, apiKey string) ([]byte, map[string]any, error) {
+	cfgMap := make(map[string]any)
+	if len(existing) > 0 {
+		_ = json.Unmarshal(existing, &cfgMap)
+	}
+	changes := make(map[string]any)
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:20128/v1"
+	}
+	if model == "" {
+		model = "gpt-5"
+	}
+
+	// Cursor uses MCP servers configuration under "mcpServers"
+	mcpServers, _ := cfgMap["mcpServers"].(map[string]any)
+	if mcpServers == nil {
+		mcpServers = make(map[string]any)
+		cfgMap["mcpServers"] = mcpServers
+	}
+
+	codvianMCP := map[string]any{
+		"command": "codvian-router",
+		"args":    []string{"mcp"},
+		"env": map[string]any{
+			"CODVIAN_ROUTER_BASE_URL": endpoint,
+		},
+	}
+	if apiKey != "" {
+		codvianMCP["env"].(map[string]any)["CODVIAN_ROUTER_API_KEY"] = apiKey
+	}
+	mcpServers["codvian-router"] = codvianMCP
+	changes["mcpServers.codvian-router"] = "added Codvian Router MCP server"
+
+	out, err := json.MarshalIndent(cfgMap, "", "  ")
+	return out, changes, err
+}
+
+// ClineConfigManager manages configuration for Cline.
+type ClineConfigManager struct{}
+
+func (c *ClineConfigManager) Name() string { return "cline" }
+
+func (c *ClineConfigManager) DefaultConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".cline", "settings.json"), nil
+}
+
+func (c *ClineConfigManager) ApplyConfig(existing []byte, endpoint, model, apiKey string) ([]byte, map[string]any, error) {
+	cfgMap := make(map[string]any)
+	if len(existing) > 0 {
+		_ = json.Unmarshal(existing, &cfgMap)
+	}
+	changes := make(map[string]any)
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:20128/v1"
+	}
+	if model == "" {
+		model = "gpt-5"
+	}
+
+	cfgMap["api_base_url"] = endpoint
+	changes["api_base_url"] = endpoint
+
+	cfgMap["model"] = model
+	changes["model"] = model
+
+	if apiKey != "" {
+		cfgMap["api_key"] = apiKey
+		changes["api_key"] = "[set]"
+	} else {
+		cfgMap["api_key_env"] = "CODVIAN_ROUTER_API_KEY"
+		changes["api_key_env"] = "CODVIAN_ROUTER_API_KEY"
+	}
+
+	out, err := json.MarshalIndent(cfgMap, "", "  ")
+	return out, changes, err
+}
+
+// AiderConfigManager manages configuration for Aider.
+type AiderConfigManager struct{}
+
+func (c *AiderConfigManager) Name() string { return "aider" }
+
+func (c *AiderConfigManager) DefaultConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".aider.conf.yml"), nil
+}
+
+func (c *AiderConfigManager) ApplyConfig(existing []byte, endpoint, model, apiKey string) ([]byte, map[string]any, error) {
+	changes := make(map[string]any)
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:20128/v1"
+	}
+	if model == "" {
+		model = "gpt-5"
+	}
+
+	var out string
+	if apiKey != "" {
+		out = fmt.Sprintf(`# Codvian Router configuration for Aider
+model = %q
+api-base = %q
+api-key = %q
+`, model, endpoint, apiKey)
+		changes["model"] = model
+		changes["api-base"] = endpoint
+		changes["api-key"] = "[set]"
+	} else {
+		out = fmt.Sprintf(`# Codvian Router configuration for Aider
+model = %q
+api-base = %q
+api-key-env = CODVIAN_ROUTER_API_KEY
+`, model, endpoint)
+		changes["model"] = model
+		changes["api-base"] = endpoint
+		changes["api-key-env"] = "CODVIAN_ROUTER_API_KEY"
+	}
+
+	return []byte(out), changes, nil
+}
+
+// GeminiCLIConfigManager manages configuration for Gemini CLI.
+type GeminiCLIConfigManager struct{}
+
+func (c *GeminiCLIConfigManager) Name() string { return "gemini" }
+
+func (c *GeminiCLIConfigManager) DefaultConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".gemini", "settings.json"), nil
+}
+
+func (c *GeminiCLIConfigManager) ApplyConfig(existing []byte, endpoint, model, apiKey string) ([]byte, map[string]any, error) {
+	cfgMap := make(map[string]any)
+	if len(existing) > 0 {
+		_ = json.Unmarshal(existing, &cfgMap)
+	}
+	changes := make(map[string]any)
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:20128/v1"
+	}
+	if model == "" {
+		model = "gemini-2.5-pro"
+	}
+
+	cfgMap["endpoint"] = endpoint
+	changes["endpoint"] = endpoint
+
+	cfgMap["model"] = model
+	changes["model"] = model
+
+	if apiKey != "" {
+		cfgMap["api_key"] = apiKey
+		changes["api_key"] = "[set]"
+	} else {
+		cfgMap["api_key_env"] = "CODVIAN_ROUTER_API_KEY"
+		changes["api_key_env"] = "CODVIAN_ROUTER_API_KEY"
+	}
+
+	out, err := json.MarshalIndent(cfgMap, "", "  ")
+	return out, changes, err
+}
+
+// QwenCodeConfigManager manages configuration for Qwen Code.
+type QwenCodeConfigManager struct{}
+
+func (c *QwenCodeConfigManager) Name() string { return "qwen" }
+
+func (c *QwenCodeConfigManager) DefaultConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".qwen", "config.json"), nil
+}
+
+func (c *QwenCodeConfigManager) ApplyConfig(existing []byte, endpoint, model, apiKey string) ([]byte, map[string]any, error) {
+	cfgMap := make(map[string]any)
+	if len(existing) > 0 {
+		_ = json.Unmarshal(existing, &cfgMap)
+	}
+	changes := make(map[string]any)
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:20128/v1"
+	}
+	if model == "" {
+		model = "qwen3-coder"
+	}
+
+	cfgMap["base_url"] = endpoint
+	changes["base_url"] = endpoint
+
+	cfgMap["model"] = model
+	changes["model"] = model
+
+	if apiKey != "" {
+		cfgMap["api_key"] = apiKey
+		changes["api_key"] = "[set]"
+	} else {
+		cfgMap["api_key_env"] = "CODVIAN_ROUTER_API_KEY"
+		changes["api_key_env"] = "CODVIAN_ROUTER_API_KEY"
+	}
+
+	out, err := json.MarshalIndent(cfgMap, "", "  ")
+	return out, changes, err
+}
+
+// GooseConfigManager manages configuration for Goose.
+type GooseConfigManager struct{}
+
+func (c *GooseConfigManager) Name() string { return "goose" }
+
+func (c *GooseConfigManager) DefaultConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".config", "goose", "config.yaml"), nil
+}
+
+func (c *GooseConfigManager) ApplyConfig(existing []byte, endpoint, model, apiKey string) ([]byte, map[string]any, error) {
+	changes := make(map[string]any)
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:20128/v1"
+	}
+	if model == "" {
+		model = "gpt-5"
+	}
+
+	var out string
+	if apiKey != "" {
+		out = fmt.Sprintf(`# Codvian Router configuration for Goose
+model: %q
+endpoint: %q
+api_key: %q
+`, model, endpoint, apiKey)
+		changes["model"] = model
+		changes["endpoint"] = endpoint
+		changes["api_key"] = "[set]"
+	} else {
+		out = fmt.Sprintf(`# Codvian Router configuration for Goose
+model: %q
+endpoint: %q
+api_key_env: CODVIAN_ROUTER_API_KEY
+`, model, endpoint)
+		changes["model"] = model
+		changes["endpoint"] = endpoint
+		changes["api_key_env"] = "CODVIAN_ROUTER_API_KEY"
+	}
+
+	return []byte(out), changes, nil
+}
+
+// RooCodeConfigManager manages configuration for Roo Code.
+type RooCodeConfigManager struct{}
+
+func (c *RooCodeConfigManager) Name() string { return "roo" }
+
+func (c *RooCodeConfigManager) DefaultConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".roo", "settings.json"), nil
+}
+
+func (c *RooCodeConfigManager) ApplyConfig(existing []byte, endpoint, model, apiKey string) ([]byte, map[string]any, error) {
+	cfgMap := make(map[string]any)
+	if len(existing) > 0 {
+		_ = json.Unmarshal(existing, &cfgMap)
+	}
+	changes := make(map[string]any)
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:20128/v1"
+	}
+	if model == "" {
+		model = "gpt-5"
+	}
+
+	cfgMap["provider"] = "openai"
+	changes["provider"] = "openai"
+
+	cfgMap["base_url"] = endpoint
+	changes["base_url"] = endpoint
+
+	cfgMap["model"] = model
+	changes["model"] = model
+
+	if apiKey != "" {
+		cfgMap["api_key"] = apiKey
+		changes["api_key"] = "[set]"
+	} else {
+		cfgMap["api_key_env"] = "CODVIAN_ROUTER_API_KEY"
+		changes["api_key_env"] = "CODVIAN_ROUTER_API_KEY"
+	}
+
+	out, err := json.MarshalIndent(cfgMap, "", "  ")
+	return out, changes, err
+}
+
+// KiloCodeConfigManager manages configuration for Kilo Code.
+type KiloCodeConfigManager struct{}
+
+func (c *KiloCodeConfigManager) Name() string { return "kilo" }
+
+func (c *KiloCodeConfigManager) DefaultConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".kilocode", "config.json"), nil
+}
+
+func (c *KiloCodeConfigManager) ApplyConfig(existing []byte, endpoint, model, apiKey string) ([]byte, map[string]any, error) {
+	cfgMap := make(map[string]any)
+	if len(existing) > 0 {
+		_ = json.Unmarshal(existing, &cfgMap)
+	}
+	changes := make(map[string]any)
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:20128/v1"
+	}
+	if model == "" {
+		model = "gpt-5"
+	}
+
+	cfgMap["base_url"] = endpoint
+	changes["base_url"] = endpoint
+
+	cfgMap["model"] = model
+	changes["model"] = model
+
+	if apiKey != "" {
+		cfgMap["api_key"] = apiKey
+		changes["api_key"] = "[set]"
+	} else {
+		cfgMap["api_key_env"] = "CODVIAN_ROUTER_API_KEY"
+		changes["api_key_env"] = "CODVIAN_ROUTER_API_KEY"
+	}
+
+	out, err := json.MarshalIndent(cfgMap, "", "  ")
+	return out, changes, err
+}
+
 func getAgentManager(agentName string) (AgentConfigManager, error) {
 	switch strings.ToLower(strings.TrimSpace(agentName)) {
 	case "", "codevn":
@@ -166,8 +628,29 @@ func getAgentManager(agentName string) (AgentConfigManager, error) {
 		return &ClaudeConfigManager{}, nil
 	case "continue":
 		return &ContinueConfigManager{}, nil
+	// P1.3 CLI Integration Expansion — ten additional clients
+	case "codex", "codex-cli", "openai-codex":
+		return &CodexConfigManager{}, nil
+	case "opencode", "open-code":
+		return &OpenCodeConfigManager{}, nil
+	case "cursor":
+		return &CursorConfigManager{}, nil
+	case "cline":
+		return &ClineConfigManager{}, nil
+	case "aider":
+		return &AiderConfigManager{}, nil
+	case "gemini", "gemini-cli":
+		return &GeminiCLIConfigManager{}, nil
+	case "qwen", "qwen-code":
+		return &QwenCodeConfigManager{}, nil
+	case "goose":
+		return &GooseConfigManager{}, nil
+	case "roo", "roo-code":
+		return &RooCodeConfigManager{}, nil
+	case "kilo", "kilo-code":
+		return &KiloCodeConfigManager{}, nil
 	default:
-		return nil, fmt.Errorf("unknown agent %q: supported agents are codevn, claude, continue", agentName)
+		return nil, fmt.Errorf("unknown agent %q: supported agents are codevn, claude, continue, codex, opencode, cursor, cline, aider, gemini, qwen, goose, roo, kilo", agentName)
 	}
 }
 
@@ -287,6 +770,12 @@ func runSetupIO(opts options, args []string, out, errOut io.Writer) int {
 		fmt.Fprintf(out, "  codevn\n")
 		fmt.Fprintf(out, "or run through router:\n")
 		fmt.Fprintf(out, "  codvian-router run codevn --model %s\n", opts.model)
+	} else if agentName == "codex" || agentName == "codex-cli" || agentName == "openai-codex" {
+		fmt.Fprintf(out, "  codex\n")
+		fmt.Fprintf(out, "or run through router:\n")
+		fmt.Fprintf(out, "  codvian-router run codex --model %s\n", opts.model)
+	} else {
+		fmt.Fprintf(out, "  Run %s and it will read the configured Codvian Router endpoint.\n", mgr.Name())
 	}
 	return 0
 }
