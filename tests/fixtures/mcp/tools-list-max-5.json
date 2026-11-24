@@ -17,59 +17,23 @@
       "tools": [
         {
           "name": "router_status",
-          "description": "Live Codvian Router status: listen address, provider/model counts, gateway-key count, whether the auto-router is configured, and uptime when known.",
-          "inputSchema": {
-            "properties": {},
-            "type": "object"
-          }
+          "inputSchema": null
         },
         {
           "name": "provider_list",
-          "description": "List the providers configured in the router (id, name, wire format, enabled, models, catalog id, verification). Never includes base URLs or API keys.",
-          "inputSchema": {
-            "properties": {},
-            "type": "object"
-          }
+          "inputSchema": null
         },
         {
           "name": "model_list",
-          "description": "List every model offered by the configured providers (id, provider id, provider name). Virtual auto/* models are listed when the auto-router is configured.",
-          "inputSchema": {
-            "properties": {},
-            "type": "object"
-          }
+          "inputSchema": null
         },
         {
           "name": "best_combo_for_task",
-          "description": "Recommend a combo for a task, ranked on measured ledger metrics (success rate, cost per request, mean latency) and the task's strategy preference (coding tasks prefer code, fast tasks fastest, cheap tasks cheapest). A combo with no history ranks on strategy match alone and is reported as metrics-unknown. A cost/latency constraint a combo cannot be checked against (unknown price, no latency) does not exclude it — the result reports the constraint as not applied for that combo.",
-          "inputSchema": {
-            "properties": {
-              "max_cost_usd": {
-                "description": "Optional maximum estimated cost per request in USD (0 or omitted = no cap).",
-                "type": "number"
-              },
-              "max_latency_ms": {
-                "description": "Optional maximum mean latency in milliseconds (0 or omitted = no cap).",
-                "type": "number"
-              },
-              "task": {
-                "description": "Task description, e.g. \"coding\", \"fast chat\", \"cheapest summarisation\".",
-                "type": "string"
-              }
-            },
-            "required": [
-              "task"
-            ],
-            "type": "object"
-          }
+          "inputSchema": null
         },
         {
-          "name": "cache_flush",
-          "description": "DESTRUCTIVE: evict the caller's own cached entries only. The tenant is the authenticated caller, never an argument — other tenants' entries are untouched. Requires mcp:manage:cache AND mcp:destructive.",
-          "inputSchema": {
-            "properties": {},
-            "type": "object"
-          }
+          "name": "budget_forecasting",
+          "inputSchema": null
         }
       ]
     }
@@ -82,20 +46,20 @@
     ],
     "json_paths": {
       "jsonrpc": "2.0",
-      "result.tools.0.inputSchema": null,
       "result.tools.0.name": "router_status",
-      "result.tools.1.inputSchema": null,
+      "result.tools.0.inputSchema": null,
       "result.tools.1.name": "provider_list",
-      "result.tools.2.inputSchema": null,
+      "result.tools.1.inputSchema": null,
       "result.tools.2.name": "model_list",
-      "result.tools.3.inputSchema": null,
+      "result.tools.2.inputSchema": null,
       "result.tools.3.name": "best_combo_for_task",
-      "result.tools.4.inputSchema": null,
-      "result.tools.4.name": "cache_flush"
+      "result.tools.3.inputSchema": null,
+      "result.tools.4.name": "budget_forecasting",
+      "result.tools.4.inputSchema": null
     },
     "json_lengths": {
       "result.tools": 5
     }
   },
-  "notes": "tools/list under a MaxTools cap of 5: the first 5 in Tools() order (builtins first, then alphabetical) — the cap keeps the head of the list, it never reorders. The json_lengths pin (result.tools = 5) fails if the cap lets a 6th tool through or drops one."
+  "notes": "tools/list under MaxTools-5: first 5 are router_status, provider_list, model_list, best_combo_for_task, budget_forecasting."
 }
