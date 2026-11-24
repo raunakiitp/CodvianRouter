@@ -149,7 +149,9 @@ func TestRegistrationsM9M10StatusEnabled(t *testing.T) {
 		t.Error("enabled = false, want true on an A2A-enabled server")
 	}
 	wantSkills := []string{"smart-routing", "quota-management", "provider-discovery",
-		"cost-analysis", "health-report", "list-capabilities"}
+		"cost-analysis", "health-report", "list-capabilities",
+		"budget-forecasting", "cost-estimation", "route-preview",
+		"compression-analytics", "eval-management", "org-reporting"}
 	if !reflect.DeepEqual(out.Skills, wantSkills) {
 		t.Errorf("skills = %v, want %v", out.Skills, wantSkills)
 	}
@@ -190,8 +192,8 @@ func TestRegistrationsM9M10StatusDisabledNoStore(t *testing.T) {
 			t.Errorf("tasks_by_state[%s] = %d, want 0 while disabled", st, n)
 		}
 	}
-	if len(out.Skills) != 6 || out.ProtocolVersion != "2025-03-26" {
-		t.Errorf("disabled shape: skills %v protocol %q, want 6 skills + 2025-03-26", out.Skills, out.ProtocolVersion)
+	if len(out.Skills) != 12 || out.ProtocolVersion != "2025-03-26" {
+		t.Errorf("disabled shape: skills %v protocol %q, want 12 skills + 2025-03-26", out.Skills, out.ProtocolVersion)
 	}
 	dbPath := filepath.Join(s.cfg.DataDir, "a2a", "tasks.db")
 	if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
