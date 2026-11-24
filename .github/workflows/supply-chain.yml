@@ -22,15 +22,37 @@ jobs:
           python3 scripts/sbom.py --self-check
           echo "SBOM components: $(python3 -c 'import json;print(len(json.load(open("/tmp/sbom.json"))["components"]))')"
       - name: govulncheck (G-06 dependency scan)
-        continue-on-error: false
+        # AUD-TEST-003: this step used to run `govulncheck ... || true`,
+        # which meant a report full of reachable vulnerabilities still
+        # exited 0 and the gate could NEVER fail. The pin is deliberate
+        # too: `@latest` made the scanned toolchain drift under the scan.
+        #
+        # Policy, unchanged in spirit: the scan must actually run and its
+        # output must be in the log. Only a clean exit 0 (no findings)
+        # passes. Reachable findings fail the job (govulncheck exits 3).
+        # A tool or vulnerability-DB failure also fails the job, with a
+        # distinct message, because "the scanner could not run" must never
+        # be reported as "no vulnerabilities" - the previous wording
+        # explicitly refused that reading, and this keeps that promise
+        # while removing the swallow.
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./... > /tmp/govulncheck.txt 2>&1 || true
-          echo "=== govulncheck output ==="
+          go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
+          set +e
+          govulncheck -format text ./... > /tmp/govulncheck.txt 2>&1
+          rc=$?
+          set -e
+          echo "=== govulncheck output (exit $rc) ==="
           cat /tmp/govulncheck.txt
-          # Policy: the scan MUST run and report; the job's verdict is
-          # documented, not silently suppressed. A clean output is a
-          # real result; an unavailable vuln DB is reported, never
-          # treated as "zero vulnerabilities". The `|| true` above only
-          # prevents a DB fetch failure from failing the gate; findings
-          # still surface in the log for triage.
+          case "$rc" in
+            0)
+              echo "PASS: govulncheck found no known vulnerabilities"
+              ;;
+            3)
+              echo "FAIL: govulncheck reported reachable vulnerabilities (see the output above)"
+              exit 1
+              ;;
+            *)
+              echo "FAIL: govulncheck could not complete (exit $rc - tool install, network or vulnerability-DB failure); refusing to report this as a clean scan"
+              exit 1
+              ;;
+          esac

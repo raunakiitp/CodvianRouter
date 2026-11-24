@@ -299,6 +299,13 @@ class ClientHarness:
             timeout=30):
         data = json.dumps(body).encode() if body is not None else None
         r = urllib.request.Request(self.base + path, data=data, method=method)
+        # AUD-TEST-001 A7: ask for the connection to be closed with the
+        # response. urllib does not reuse connections, but without this the
+        # server may leave the socket in a half-closed state that Windows
+        # surfaces as a reset (WinError 10054) on the next request - which
+        # showed up as status=0 for the unauthenticated probe. A hand-run
+        # router answers that same request with a clean 401.
+        r.add_header("Connection", "close")
         if data:
             r.add_header("Content-Type", "application/json")
         if key:
