@@ -204,8 +204,10 @@ Recorded after the authorized remediation pass. Full narrative, falsification ev
 | AUD-DOC-001 | MEDIUM | **OPEN — needs authorization** | removing published parity docs is a destructive content decision |
 | AUD-DOC-002 | LOW | **OPEN — needs authorization** | same |
 | AUD-DOC-004 | LOW | **FIXED** | stale “no upload-size cap” comment corrected to the real 512 MiB cap + the open quota gap (`4fa1fc2`) |
-| AUD-TEST-001/002/003/011 | LOW | OPEN | CI wiring / flaky-ratio items not attempted this pass |
+| AUD-TEST-001 | LOW | **PARTIALLY FIXED** | the hardcoded `/home/hatch/go/bin/go` and `~/workspace/codvian-router` are replaced by discovery (`shutil.which("go")`, repo root, `GO_BIN`/`CODVIA_ROUTER_WORKTREE` overrides); the CI job that runs the drivers is still open (`4a9f397`) |
+| AUD-TEST-002/003/011 | LOW | OPEN | CI wiring / flaky-ratio items not attempted this pass |
 | all other ledger items | LOW/MED/INFO | OPEN | unchanged, original evidence stands |
 
 Ledger totals after this pass: **13 findings resolved** (12 here + AUD-SEC-001 previously), 1 blocked external,
-2 awaiting an authorization decision, 1 measured and deliberately not accepted, 63 still open.
+2 awaiting an authorization decision, 1 measured and deliberately not accepted, 1 partially fixed
+(AUD-TEST-001: the hardcoded Go path is gone, the CI wiring is not), 62 still open.

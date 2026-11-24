@@ -15,7 +15,8 @@ Baseline ledger: `docs/POST_P1_FINDINGS_LEDGER.md` (80 findings; AUD-SEC-001 alr
 | Verified present but deliberately NOT changed (needs authorization: published-content decision) | 2 (AUD-DOC-001, AUD-DOC-002) |
 | Open — measured, not accepted (needs a proper concurrent benchmark before shipping) | 1 (AUD-PERF-002) |
 | Blocked external (owner/account action) | 1 (AUD-SEC-009) |
-| Still open from the ledger (not attempted in this pass) | 63 |
+| Partially fixed (hardcoded toolchain path only; CI wiring still open) | 1 (AUD-TEST-001) |
+| Still open from the ledger (not attempted in this pass) | 62 |
 
 Every fix below ships with a regression test that fails against the vulnerable behaviour and passes against the corrected
 behaviour; the falsification evidence is recorded per finding.
@@ -154,14 +155,63 @@ behaviour; the falsification evidence is recorded per finding.
   still-open gap (no aggregate or per-key disk quota).
 - **Commit:** `4fa1fc2`.
 
-## D. Findings deliberately NOT changed
+## D1. Verification campaign (final tree, branch `post-p1-remediation`)
+
+| # | Check | Command | Result |
+| --- | --- | --- | --- |
+| 1 | gofmt | `gofmt -l` per changed file after LF normalisation (`sed 's/\r$//' \| gofmt -d`) | **PASS** — every changed Go file is gofmt-clean. (The repo-wide `gofmt -l` lists 408 files purely because this working tree checks out CRLF: `git ls-files --eol` reports `w/crlf`; that is a checkout artefact, not formatting.) |
+| 2 | Build | `go build -buildvcs=false ./...` | **PASS**, exit 0 |
+| 3 | Vet | `go vet -buildvcs=false ./...` | **PASS**, exit 0 |
+| 4 | Full test suite | `go test -buildvcs=false -count=1 ./...` | **PASS**, exit 0 — **52 packages ok, 0 FAIL** |
+| 5 | Race detector | `CGO_ENABLED=1 go test -race ./internal/server/ -run TestAUD_SEC_010` | **BLOCKED** — `cgo: C compiler "gcc" not found: exec: "gcc": executable file not found in %PATH%` (runs in CI on Linux) |
+| 6 | otel build tag | `go build -buildvcs=false -tags otel ./...` | **PASS**, exit 0 |
+| 7 | Route guard | `bash scripts/check-route-guard.sh` | **PASS**, exit 0 |
+| 8 | AUD-SEC-001 regression (pre-existing) | `go test ./internal/server/ -run TestAUD_SEC_001` | **PASS** (4 tests) |
+| 9 | New regression tests | 48 new test functions + 1 benchmark on this branch | **PASS** — every one green in the full-suite run |
+| 10 | Ownership isolation | `TestAUD_SEC_010*` (7) | **PASS** |
+| 11 | Billing / spend reconciliation | `TestAUD_SEC_002*` (11) | **PASS** |
+| 12 | Streaming / cancellation / retention | `TestAUD_PERF_001*` (4) + `BenchmarkAUD_PERF_001StreamRetention` | **PASS** |
+| 13 | Protocol compatibility | `TestAUD_API_001*`, `TestAUD_REL_001*` (13) | **PASS** |
+| 14 | Concurrency | cache concurrency tests, scheduler concurrency bound, live-stream retention measurement | **PASS** |
+| 15 | Client protocol smoke tests | `scripts/smoke-client-*.py` | **NOT RUN** — they need a booted router and CI wiring (AUD-TEST-001); the hardcoded toolchain path was fixed, the CI job is still open |
+| 16 | Fuzz targets | repo fuzz targets | **NOT RUN** — no time-bounded fuzz invocation in this campaign (CI-only) |
+| 17 | Existing CI workflows | GitHub Actions | **NOT RUN locally** — will run on the PR |
+| 18 | Dependency / vulnerability scan | `govulncheck`, SBOM, cosign | **NOT RUN** — network blocked on this host |
+| 19 | Build/release artifact | `scripts/bench.sh`, Playwright/`npm test` | **NOT RUN** — Linux-only tooling / browsers absent (CI-only) |
+| 20 | Final source/config review | full diff review, incl. two subagent work streams re-verified by the parent | **PASS** — see §C and the note below |
+
+### The first campaign was not green — and that is why it is reported this way
+
+The first `go test -count=1 ./...` on the remediation tree failed **6** tests in `internal/server`
+(`TestEmbeddingsUpstreamFailure502`, `TestUpstreamFailureCodeDistinct`, 4× `TestG21Batch*`). All six were
+real consequences of the fixes and were repaired **without weakening an assertion**:
+
+1. the upstream-error shape (4xx keeps its status + `upstream_error` + no JSON-RPC code; everything else keeps
+   502 + `-32603` + `server_error`) — my first attempt had overwritten the `-32603` signature;
+2. the batch fixtures seeded their input file unowned while creating the batch under a keyed caller — under
+   AUD-SEC-010 an identified key may only use a file it owns, so the fixture now seeds with the key's own id;
+3. a Windows-only harness race (the async batch worker writing into the temp dir during `t.TempDir` cleanup)
+   — the new batch tests now wait for the batch's terminal state; 4/4 consecutive runs of the affected group
+   are clean.
+
+The second campaign is the green one reported above.
+
+### Subagent work: verified, not trusted
+
+Two implementation work streams (ledger/cache, and eval/webhooks/oauth/org) were executed by subagents and then
+**independently re-verified by the parent**: full diff review, package builds, package test runs, and — for the
+ledger work — a benchmark comparison. The ledger candidate fix was **rejected on that evidence** (it regressed
+the common single-threaded path by ~1.8×, forced WAL on existing ledger files, and failed its own regression test
+on re-application) and is reported as OPEN in §D rather than shipped.
+
+## D2. Findings deliberately NOT changed
 
 | Finding | Sev | Why |
 | --- | --- | --- |
 | AUD-SEC-009 | CRITICAL | Owner-side credential action. The token is in the local git remote config, not in the repository. Requires your account authorization; exact commands are in §E. |
 | AUD-DOC-001 / AUD-DOC-002 | MED / LOW | Removing or rewriting *published* documentation (competitor parity docs, benchmark comparison rows) is a content/legal decision and a destructive operation. Flagged for explicit authorization rather than performed. |
 | AUD-PERF-002 | HIGH | A candidate fix (separate SQLite reader pool + WAL for the ledger) was implemented by a subagent and **measured before acceptance**: it removes the multi-second read blocking behind an open write transaction (their test proves the pre-fix block), but it also raised the single-threaded miss latency (`BenchmarkGetKeyBudgetMiss` 16,057 → 29,030 ns/op, `BenchmarkCheckBudgetOrErrorMiss` 16,972 → 26,476 ns/op) and silently converts an existing ledger file to WAL. That trade needs a proper concurrent-writer benchmark before it goes into the accounting path, so it is reported OPEN with the numbers rather than shipped. |
-| Remaining 63 ledger items | LOW/MED | Not attempted in this pass; still recorded in the ledger with their original evidence. |
+| Remaining 62 ledger items + AUD-TEST-001 (partial) | LOW/MED | Not attempted in this pass; still recorded in the ledger with their original evidence. |
 
 ## E. Blockers
 
@@ -174,7 +224,7 @@ behaviour; the falsification evidence is recorded per finding.
    and re-authenticate with `gh auth login` (or a credential helper) so no token lives in the URL.
 2. **Authorize (or decline) the published-doc changes** for AUD-DOC-001/002.
 
-### Environment-blocked in this run
+### Environment-blocked in this run (details in D1)
 | Check | Status | Reason |
 | --- | --- | --- |
 | `go test -race ./...` | BLOCKED | `cgo: C compiler "gcc" not found` on this host (runs green in CI on Linux). |
@@ -187,11 +237,12 @@ behaviour; the falsification evidence is recorded per finding.
 
 **NOT PRODUCTION READY.**
 
-Evidence: 12 findings are now fixed with falsified regression tests, but the ledger still contains an unfixed
-CRITICAL that is not in the code (AUD-SEC-009, exposed credential), an unfixed HIGH accepted as a measured open
-item (AUD-PERF-002), 63 further ledger items, and environment-blocked checks (`-race`, vulnerability scanning,
-client smokes) that could not be executed here. Per the stated gate — “No unresolved Critical finding remains; no
-unresolved High finding unless explicitly risk-accepted” — the gate is not met.
+Evidence: 12 findings are now fixed with falsified regression tests and the whole suite is green (52 packages,
+0 FAIL, exit 0), but the ledger still contains an unfixed CRITICAL that is not in the code (AUD-SEC-009, exposed
+credential — owner-side), an unfixed HIGH that was measured and deliberately not accepted (AUD-PERF-002), 62
+further ledger items, and environment-blocked checks (`-race`, vulnerability scanning, client smokes) that could
+not be executed here. Per the stated gate — “No unresolved Critical finding remains; no unresolved High finding
+unless explicitly risk-accepted” — the gate is **not met**.
 
 ## G. P1 / P2 roadmap status
 
