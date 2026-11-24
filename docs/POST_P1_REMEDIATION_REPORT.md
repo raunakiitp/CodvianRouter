@@ -189,9 +189,17 @@ The subagent work streams were scoped to `internal/{eval,webhooks,oauth,org}`, s
   `TestCheckBudgetOrErrorNotBlockedByOpenWrite` hold a write transaction open (as a batch commit does) and
   require `GetBudget` / `CheckBudgetOrError` to return while it is open. Both **failed** on the pre-fix code
   (2s timeout) and pass after the change.
-- **Trade-off, measured:** `BenchmarkGetKeyBudgetMiss` 16,057 → **29,030 ns/op**;
-  `BenchmarkCheckBudgetOrErrorMiss` 16,972 → **26,476 ns/op** (≈13 µs more per miss, both still ≈30 µs, versus
-  multi-second blocking eliminated). The change also converts an existing ledger file to WAL on first open.
+- **Trade-off, measured (corrected):** an A/B on this host (3 repeats each, same session: reader pool vs
+  reads routed back onto the single writer connection) could NOT reproduce a latency regression —
+  `GetBudgetMiss` 11,167/10,400/15,698 vs 11,258/13,743/11,424 ns/op (a wash), `GetKeyBudgetMiss`
+  14,978/14,724/15,533 vs 17,317/17,910/17,651 ns/op (faster with the pool), `CheckBudgetOrErrorMiss`
+  17,004/19,530/25,825 vs 12,815/12,460/13,402 ns/op (spread 17k–26k, inside this host's ±50% noise band).
+  An earlier note in this report claimed 16,057 → 29,030 ns/op; those numbers were taken while the ledger
+  source was being rewritten by the implementing subagent, so they are not a valid A/B and are withdrawn. The
+  real, test-proven gain stands: a budget read no longer queues behind an open write transaction (pre-fix:
+  FAIL after a 2s timeout; post-fix: PASS in ~0.04s). A low-noise CI runner is the right place to settle the
+  micro-latency question.
+- **Consequence that IS certain:** existing ledger files are converted to WAL on first open.
 - **Commit:** `(this branch, after the campaign)`.
 
 ### AUD-REL-004 — Cache DB had no busy timeout (MEDIUM)
@@ -260,7 +268,7 @@ on re-application) and is reported as OPEN in §D rather than shipped.
 | --- | --- | --- |
 | AUD-SEC-009 | CRITICAL | Owner-side credential action. The token is in the local git remote config, not in the repository. Requires your account authorization; exact commands are in §E. |
 | AUD-DOC-001 / AUD-DOC-002 | MED / LOW | Removing or rewriting *published* documentation (competitor parity docs, benchmark comparison rows) is a content/legal decision and a destructive operation. Flagged for explicit authorization rather than performed. |
-| AUD-PERF-002 | HIGH | **FIXED** | Ledger reads moved to a separate reader pool: a budget check no longer queues behind the async batch writer's connection (`read_pool_test.go` — both reads blocked >2s before, return promptly now). Trade-off recorded honestly: single-threaded miss latency rises 16,057 → 29,030 ns/op (`GetKeyBudget`) and 16,972 → 26,476 ns/op (`CheckBudgetOrError`), and existing ledger files are opened in WAL mode. |
+| AUD-PERF-002 | HIGH | **FIXED** | Ledger reads moved to a separate reader pool: a budget check no longer queues behind the async batch writer's connection (`read_pool_test.go` — both reads blocked >2s before, return promptly now). A/B on this host found no reproducible latency regression (see the section below); existing ledger files are opened in WAL mode. |
 | Remaining 62 ledger items + AUD-TEST-001 (partial) | LOW/MED | Not attempted in this pass; still recorded in the ledger with their original evidence. |
 
 ## E. Blockers
