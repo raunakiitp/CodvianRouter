@@ -30,11 +30,11 @@ import (
 type QuotaState string
 
 const (
-	QuotaStateHealthy         QuotaState = "healthy"
+	QuotaStateHealthy          QuotaState = "healthy"
 	QuotaStateApproachingLimit QuotaState = "approaching_limit"
-	QuotaStateExhausted       QuotaState = "exhausted"
-	QuotaStateUnavailable     QuotaState = "unavailable"
-	QuotaStateUnknown         QuotaState = "unknown"
+	QuotaStateExhausted        QuotaState = "exhausted"
+	QuotaStateUnavailable      QuotaState = "unavailable"
+	QuotaStateUnknown          QuotaState = "unknown"
 )
 
 // QuotaProvenance carries the provenance metadata for a quota/budget observation.
@@ -52,8 +52,8 @@ type QuotaIntelligenceResponse struct {
 	Schedules       []QuotaIntelligenceScheduleView       `json:"schedules"`
 	KeyBudgets      []QuotaIntelligenceKeyBudgetView      `json:"key_budgets"`
 	InternalBudgets []QuotaIntelligenceInternalBudgetView `json:"internal_budgets"`
-	GeneratedAt     time.Time                              `json:"generated_at"`
-	Filters         QuotaIntelligenceFilters               `json:"filters"`
+	GeneratedAt     time.Time                             `json:"generated_at"`
+	Filters         QuotaIntelligenceFilters              `json:"filters"`
 }
 
 // QuotaIntelligenceFilters echoes the filters applied.
@@ -88,17 +88,17 @@ type QuotaIntelligenceKeyBudgetView struct {
 
 // QuotaIntelligenceInternalBudgetView mirrors internal budget with provenance/state.
 type QuotaIntelligenceInternalBudgetView struct {
-	ID           string         `json:"id"`
-	Name         string         `json:"name"`
-	Scope        string         `json:"scope"`
-	Target       string         `json:"target"`
-	Model        string         `json:"model,omitempty"`
-	Provider     string         `json:"provider,omitempty"`
-	BudgetValue  float64        `json:"budget_value"`
-	BudgetUnit   string         `json:"budget_unit"`
-	BudgetWindow string         `json:"budget_window"`
-	Consumed     float64        `json:"consumed"`
-	UsedPercent  float64        `json:"used_percent"`
+	ID           string          `json:"id"`
+	Name         string          `json:"name"`
+	Scope        string          `json:"scope"`
+	Target       string          `json:"target"`
+	Model        string          `json:"model,omitempty"`
+	Provider     string          `json:"provider,omitempty"`
+	BudgetValue  float64         `json:"budget_value"`
+	BudgetUnit   string          `json:"budget_unit"`
+	BudgetWindow string          `json:"budget_window"`
+	Consumed     float64         `json:"consumed"`
+	UsedPercent  float64         `json:"used_percent"`
 	Provenance   QuotaProvenance `json:"provenance"`
 	State        QuotaState      `json:"state"`
 }
@@ -438,8 +438,8 @@ func (s *Server) buildQuotaIntelligenceKeyBudgetView(st ledger.KeyBudgetStatus, 
 
 	return QuotaIntelligenceKeyBudgetView{
 		keyBudgetView: keyBudgetView{
-			KeyID:          st.KeyID,
-			Name:           name,
+			KeyID:           st.KeyID,
+			Name:            name,
 			KeyBudgetStatus: st,
 		},
 		Provenance: prov,
