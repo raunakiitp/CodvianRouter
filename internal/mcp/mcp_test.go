@@ -419,6 +419,75 @@ func (f *fakeSource) MemoryClear(caller string) (int, error) {
 	return f.mem.Clear(caller)
 }
 
+// P1.2 ecosystem expansion — fakeSource stub implementations.
+
+func (f *fakeSource) CapabilityEntries() []CapabilityEntry {
+	out := []CapabilityEntry{}
+	for _, m := range f.models {
+		out = append(out, CapabilityEntry{
+			ProviderID: m.ProviderID,
+			ModelID:    m.ID,
+			Capability: "tool_calling",
+			Supported:  nil,
+			Native:     false,
+			Source:     "test_fake",
+			Confidence: 0.0,
+		})
+	}
+	return out
+}
+
+func (f *fakeSource) QuotaIntelligence(filter string) ([]QuotaIntelEntry, error) {
+	out := []QuotaIntelEntry{}
+	if f.quota.KeyID != "" {
+		state := "healthy"
+		if f.quota.AtLimit {
+			state = "exhausted"
+		} else if f.quota.WarningReached {
+			state = "approaching_limit"
+		}
+		entry := QuotaIntelEntry{
+			Kind:        "key_budget",
+			ID:          f.quota.KeyID,
+			Name:        f.quota.KeyID,
+			Scope:       "key",
+			Target:      f.quota.KeyID,
+			BudgetUSD:   f.quota.LimitUSD,
+			Consumed:    f.quota.SpentUSD,
+			State:       state,
+			Source:      "test_fake",
+			Confidence:  0.95,
+			UpdatedAt:   "2026-01-01T00:00:00Z",
+			Filters:     map[string]string{"key_id": f.quota.KeyID},
+		}
+		if f.quota.LimitUSD > 0 {
+			entry.UsedPct = f.quota.SpentUSD / f.quota.LimitUSD * 100
+		}
+		out = append(out, entry)
+	}
+	return out, nil
+}
+
+func (f *fakeSource) BudgetForecast(keyID string) (BudgetForecastEntry, error) {
+	return BudgetForecastEntry{
+		KeyID:          keyID,
+		InsufficientData: true,
+		UpdatedAt:        "2026-01-01T00:00:00Z",
+	}, nil
+}
+
+func (f *fakeSource) CompressionStats() CompressionStatsEntry {
+	return CompressionStatsEntry{Layers: 0, LastUpdated: "2026-01-01T00:00:00Z"}
+}
+
+func (f *fakeSource) EvalSchedules() ([]EvalScheduleEntry, error) {
+	return []EvalScheduleEntry{}, nil
+}
+
+func (f *fakeSource) OrgReport() OrgReportEntry {
+	return OrgReportEntry{UpdatedAt: "2026-01-01T00:00:00Z"}
+}
+
 func newTestServer() *Server {
 	// The tool-behaviour tests below are about the tools, not the
 	// identity default, so this helper opts into the local
@@ -478,8 +547,10 @@ func TestToolsList(t *testing.T) {
 	out := call(t, newTestServer(), `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`)
 	result, _ := out["result"].(map[string]any)
 	tools, _ := result["tools"].([]any)
-	if len(tools) != 24 {
-		t.Fatalf("tools/list returned %d tools, want 24 (3 built-in + 9 routing + 3 cost + 7 ops + 2 search)", len(tools))
+	// 32 tools: 24 baseline (3 built-in + 9 routing + 3 cost + 7 ops + 2 search)
+	// plus 8 P1.2 ecosystem-expansion tools.
+	if len(tools) != 32 {
+		t.Fatalf("tools/list returned %d tools, want 32: %v", len(tools), tools)
 	}
 	want := map[string]bool{"router_status": true, "provider_list": true, "model_list": true,
 		"list_combos": true, "create_combo": true, "switch_combos": true, "get_combo_metrics": true,
@@ -488,7 +559,11 @@ func TestToolsList(t *testing.T) {
 		"cost_report": true, "check_quota": true, "set_budget_guard": true,
 		"cache_stats": true, "cache_flush": true, "db_health": true, "db_stats": true,
 		"memory_add": true, "memory_search": true, "memory_clear": true,
-		"tool_search": true, "heartbeat": true}
+		"tool_search": true, "heartbeat": true,
+		// P1.2 ecosystem expansion tools.
+		"provider_discovery": true, "capability_discovery": true, "quota_intelligence": true,
+		"budget_forecasting": true, "route_preview": true, "compression_analytics": true,
+		"eval_management": true, "org_reporting": true}
 	for _, tool := range tools {
 		m, _ := tool.(map[string]any)
 		name, _ := m["name"].(string)
