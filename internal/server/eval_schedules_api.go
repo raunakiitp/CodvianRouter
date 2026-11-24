@@ -298,19 +298,20 @@ func (s *Server) handleEvalScheduleDelete(w http.ResponseWriter, r *http.Request
 
 // evalRunView is the history projection.
 type evalRunView struct {
-	ID           string    `json:"id"`
-	ScheduleID   string    `json:"schedule_id"`
-	Suite        string    `json:"suite"`
-	StartedAt    time.Time `json:"started_at"`
-	FinishedAt   time.Time `json:"finished_at"`
-	Status       string    `json:"status"`
-	PassRate     float64   `json:"pass_rate"`
-	Total        int       `json:"total"`
-	Passed       int       `json:"passed"`
-	FailedCases  []string  `json:"failed_cases,omitempty"`
-	LatencyMs    int64     `json:"latency_ms"`
-	Error        string    `json:"error,omitempty"`
-	IsRegression bool      `json:"is_regression"`
+	ID           string             `json:"id"`
+	ScheduleID   string             `json:"schedule_id"`
+	Suite        string             `json:"suite"`
+	StartedAt    time.Time          `json:"started_at"`
+	FinishedAt   time.Time          `json:"finished_at"`
+	Status       string             `json:"status"`
+	PassRate     float64            `json:"pass_rate"`
+	Total        int                `json:"total"`
+	Passed       int                `json:"passed"`
+	FailedCases  []string           `json:"failed_cases,omitempty"`
+	Failures     []eval.CaseFailure `json:"failures,omitempty"`
+	LatencyMs    int64              `json:"latency_ms"`
+	Error        string             `json:"error,omitempty"`
+	IsRegression bool               `json:"is_regression"`
 }
 
 func (s *Server) evalRunViewOf(run eval.Run) evalRunView {
@@ -325,6 +326,7 @@ func (s *Server) evalRunViewOf(run eval.Run) evalRunView {
 		Total:        run.Total,
 		Passed:       run.Passed,
 		FailedCases:  run.FailedCases,
+		Failures:     run.Failures,
 		LatencyMs:    run.LatencyMs,
 		Error:        run.Error,
 		IsRegression: run.IsRegression,
@@ -353,6 +355,30 @@ func (s *Server) handleEvalScheduleHistory(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, views)
 }
 
+// handleEvalScheduleTrends (GET /api/eval/schedules/{id}/trends) returns
+// the schedule's pass-rate series (oldest first, ?limit= default 20) plus
+// a baseline comparison. Direction is "unknown" until two completed runs
+// exist — one number is a measurement, not a trend.
+func (s *Server) handleEvalScheduleTrends(w http.ResponseWriter, r *http.Request) {
+	st, err := s.ensureEvalStore()
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "eval store unavailable: "+err.Error())
+		return
+	}
+	id := r.PathValue("id")
+	if _, ok := st.Get(id); !ok {
+		writeError(w, http.StatusNotFound, "no such schedule")
+		return
+	}
+	limit := 20
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	writeJSON(w, http.StatusOK, st.PassRateTrend(id, limit))
+}
+
 // registerEvalRoutes wires the P3-B evaluation API. guard rows already
 // exist, so register() will not panic on a missing classification.
 func (s *Server) registerEvalRoutes(mux *http.ServeMux) {
@@ -362,4 +388,5 @@ func (s *Server) registerEvalRoutes(mux *http.ServeMux) {
 	s.register(mux, "PATCH", "/api/eval/schedules/{id}", s.handleEvalScheduleByID)
 	s.register(mux, "DELETE", "/api/eval/schedules/{id}", s.handleEvalScheduleDelete)
 	s.register(mux, "GET", "/api/eval/schedules/{id}/history", s.handleEvalScheduleHistory)
+	s.register(mux, "GET", "/api/eval/schedules/{id}/trends", s.handleEvalScheduleTrends)
 }

@@ -3891,6 +3891,18 @@
   },
   {
     "method": "GET",
+    "path": "/api/eval/schedules/{id}/trends",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Pass-rate trend series for one schedule (oldest first, ?limit= default 20) plus the baseline delta and direction (unknown until two completed runs). Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
     "path": "/api/org",
     "tier": "MANAGEMENT",
     "spawn_capable": false,
