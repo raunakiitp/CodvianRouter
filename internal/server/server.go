@@ -97,6 +97,13 @@ const DefaultTimeout = 120 * time.Second
 // maxRequestBody caps a single chat-completions request body (10 MiB).
 const maxRequestBody = 10 << 20
 
+// maxAdminJSONBody bounds a small JSON control payload (org/team, eval
+// schedule, batch job, fallback chain, MCP call, ...). These handlers
+// used to decode r.Body with no limit at all (AUD-SEC-003), so a client
+// could stream an unbounded body into memory. 1 MiB is far above any
+// legitimate payload of this shape and far below a memory risk.
+const maxAdminJSONBody = 1 << 20
+
 // ---------------------------------------------------------------------------
 // Engine contract (router to implement; see package doc).
 // ---------------------------------------------------------------------------

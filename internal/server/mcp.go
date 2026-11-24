@@ -264,6 +264,8 @@ func (s *Server) handleMCPStatus(w http.ResponseWriter, r *http.Request) {
 			Transport string `json:"transport"`
 			Enabled   bool   `json:"enabled"`
 		}
+		// AUD-SEC-003: bound the body before decoding, like every other handler.
+		r.Body = http.MaxBytesReader(w, r.Body, maxAdminJSONBody)
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body")
 			return

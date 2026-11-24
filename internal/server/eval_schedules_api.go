@@ -180,6 +180,8 @@ func (s *Server) handleEvalScheduleCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var in evalScheduleInput
+	// AUD-SEC-003: bound the body before decoding, like every other handler.
+	r.Body = http.MaxBytesReader(w, r.Body, maxAdminJSONBody)
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
 		return
@@ -242,6 +244,8 @@ func (s *Server) handleEvalScheduleByID(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		var in evalScheduleInput
+		// AUD-SEC-003: bound the body before decoding, like every other handler.
+		r.Body = http.MaxBytesReader(w, r.Body, maxAdminJSONBody)
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
 			return

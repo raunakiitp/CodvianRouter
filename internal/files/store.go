@@ -23,15 +23,14 @@
 // (assistants_output, batch_output, fine-tune-results) are
 // server-generated only and are NOT accepted on upload.
 //
-// OPEN LIMIT (flagged, not invented): there is no upload-size cap.
-// No generic file-upload size limit exists anywhere in this
-// codebase (the only upload cap, dbImportMaxBytes 10 MiB in
-// internal/server/dbimport.go, is specific to DB export files and
-// was not copied here — copying it would invent a files limit).
-// Uploads stream to a temp file on disk rather than memory, so an
-// upload is bounded by disk space, not RAM; a real cap (e.g. the
-// 200 MiB OpenAI Batch limit, or a per-purpose limit) is a
-// coordinator decision for M8.8 or later.
+// UPLOAD CAP (corrected — AUD-DOC-004): an upload IS capped, at
+// filesMaxUploadBytes = 512 MiB per file, enforced by the HTTP layer
+// before the body reaches this store (internal/server/files_api.go).
+// The previous text here claimed ""there is no upload-size cap""; that
+// was stale and wrong. Uploads stream to a temp file on disk rather
+// than memory, so within the cap the cost is disk, not RAM. Still
+// open: there is no AGGREGATE or per-key disk quota (AUD-SEC-006), so
+// one key can fill the disk with many individually-legal uploads.
 package files
 
 import (
