@@ -173,3 +173,39 @@ Totals: **80 findings — 2 CRITICAL, 6 HIGH, 22 MEDIUM, 41 LOW, 9 INFO** (AUD-S
 | INFO | 9 | SEC-006, SEC-007, PERF-014..016, CODE-014, TEST-008, TEST-016, TEST-017 |
 
 **P0:** SEC-001, SEC-009 · **P1:** SEC-002, REL-001, PERF-001, PERF-002, API-001, CODE-001, PERF-003, PERF-004, DOC-001 plus the P1-tagged TEST items · **P2/P3:** as tabulated.
+
+---
+
+## POST-P1 REMEDIATION STATUS (branch `post-p1-remediation`)
+
+Recorded after the authorized remediation pass. Full narrative, falsification evidence and the verification report:
+`docs/POST_P1_REMEDIATION_REPORT.md`.
+
+| ID | Sev | Status now | Fix / evidence |
+| --- | --- | --- | --- |
+| AUD-SEC-001 | CRITICAL | FIXED (PR #75, `e75a669`) | unchanged; regression tests re-verified |
+| AUD-SEC-009 | CRITICAL | **BLOCKED EXTERNAL** | token is in the local git remote config, not in the repo; owner-side rotation required |
+| AUD-SEC-010 | MEDIUM | **FIXED** | owner column + owner-scoped store/API/batch paths; 7 tests, falsified by neutering the visibility rule (`73c369d`) |
+| AUD-SEC-002 | HIGH | **FIXED** | verbatim relay records exactly one honest ledger row; 11 tests; 0 rows → 1 row with per-key spend (`83b0555`) |
+| AUD-SEC-003 | LOW | **FIXED** | 8 unbounded `json.NewDecoder(r.Body)` sites now use `maxAdminJSONBody`; falsified (`4fa1fc2`) |
+| AUD-SEC-004/005/006/007 | LOW/INFO | OPEN | not attempted this pass |
+| AUD-REL-001 | HIGH | **FIXED** | upstream 429/quota keep their status + `Retry-After`; internal limits stay distinct; 10 tests (`c218f63`) |
+| AUD-REL-002 | MEDIUM | OPEN | async ledger batch retry not attempted |
+| AUD-REL-003 | MEDIUM | **FIXED** | eval + org stores write temp → fsync → rename → fsync dir (`05618c2`) |
+| AUD-REL-004 | MEDIUM | **FIXED** | cache DSN gets `busy_timeout(5000)` + `journal_mode(WAL)` (`3596f39`) |
+| AUD-REL-005 | MEDIUM | NEEDS MANUAL VERIFICATION | unchanged (was already so classified) |
+| AUD-REL-006 | MEDIUM | **FIXED** | eval scheduler + webhook delivery goroutines recover and log (`05618c2`) |
+| AUD-PERF-001 | HIGH | **FIXED** | O(1) stream counter; live retention 22.4 MB → 68 KiB for an 8 MiB stream (`14c42e6`) |
+| AUD-PERF-002 | HIGH | **OPEN — measured, not accepted** | candidate reader-pool fix removes multi-second read blocking behind a write, but raises single-thread miss latency 16,057 → 29,030 ns/op (`GetKeyBudget`) and 16,972 → 26,476 ns/op (`CheckBudgetOrError`) and forces WAL on existing ledger files; needs a concurrent-writer benchmark before shipping |
+| AUD-API-001 | LOW | **FIXED** | Anthropic error envelope on every `/v1/messages*` error path incl. auth; 3 tests, falsified (`c218f63`) |
+| AUD-CODE-001 | LOW | **FIXED** | disable/enable/revoke roll back and answer 500 when the config write fails; 5 tests, falsified (`1996cb7`) |
+| AUD-CODE-002 | LOW | **FIXED** | 4 handlers encode before committing the status (`14c42e6`) |
+| AUD-CODE-012 | MEDIUM | **FIXED** | OAuth revoke fails closed on a persist error; 2 tests (`05618c2`) |
+| AUD-DOC-001 | MEDIUM | **OPEN — needs authorization** | removing published parity docs is a destructive content decision |
+| AUD-DOC-002 | LOW | **OPEN — needs authorization** | same |
+| AUD-DOC-004 | LOW | **FIXED** | stale “no upload-size cap” comment corrected to the real 512 MiB cap + the open quota gap (`4fa1fc2`) |
+| AUD-TEST-001/002/003/011 | LOW | OPEN | CI wiring / flaky-ratio items not attempted this pass |
+| all other ledger items | LOW/MED/INFO | OPEN | unchanged, original evidence stands |
+
+Ledger totals after this pass: **13 findings resolved** (12 here + AUD-SEC-001 previously), 1 blocked external,
+2 awaiting an authorization decision, 1 measured and deliberately not accepted, 63 still open.
