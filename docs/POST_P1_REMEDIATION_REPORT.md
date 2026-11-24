@@ -249,10 +249,16 @@ real consequences of the fixes and were repaired **without weakening an assertio
 2. the batch fixtures seeded their input file unowned while creating the batch under a keyed caller — under
    AUD-SEC-010 an identified key may only use a file it owns, so the fixture now seeds with the key's own id;
 3. a Windows-only harness race (the async batch worker writing into the temp dir during `t.TempDir` cleanup)
-   — the new batch tests now wait for the batch's terminal state; 4/4 consecutive runs of the affected group
-   are clean.
+   — the new batch tests now wait for the batch's terminal state. Measured before the fix: the race fired
+   **2 of 5** consecutive runs (not once, as first assumed); after the fix, 4/4 runs of the affected group and
+   3/3 subsequent full-suite runs are clean.
+   **Latent elsewhere (recorded, not changed):** any pre-existing test that creates a batch and returns while
+   the async worker is mid-flight has the same Windows-only cleanup race. The pattern to apply is the one used
+   here — poll to a terminal batch status before the test returns.
 
-The second campaign is the green one reported above.
+The second campaign is the green one reported above, and it was confirmed twice more on later trees
+(with the ledger reader pool, then with the AUD-REL-005/second-half fixes): `go test -count=1 ./...` returned
+**52 packages ok, 0 FAIL, exit 0 on three consecutive runs** of the final state.
 
 ### Subagent work: verified, not trusted
 
