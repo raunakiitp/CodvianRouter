@@ -2081,6 +2081,17 @@ func (s *Server) keyPolicyAllows(w http.ResponseWriter, r *http.Request) bool {
 	}
 	keyID := s.callerKeyID(r)
 	if keyID == "" {
+		// AUD-SEC-001: a credential that authenticated but could not be
+		// resolved to a key identity must FAIL CLOSED. It must never
+		// inherit the unrestricted "no key presented" path, which is
+		// how a vendor-header caller used to escape its own IP /
+		// endpoint policy. With no credential at all (auth-relaxed) or
+		// a verifier that cannot name identities by design, the
+		// previous no-op behaviour stands.
+		if credentialPresented(r) && s.identityResolvable() {
+			writeError(w, http.StatusForbidden, "credential could not be resolved to a gateway key identity")
+			return false
+		}
 		return true
 	}
 	key, ok := s.cfg.FindGatewayKey(keyID)
@@ -2285,19 +2296,21 @@ func (s *Server) callerKeyID(r *http.Request) string {
 	if s.verifier == nil {
 		return ""
 	}
-	auth := r.Header.Get("Authorization")
-	if auth == "" {
-		return ""
-	}
-	parts := strings.SplitN(auth, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
+	// AUD-SEC-001: the credential is read through requestKey, the SAME
+	// parser auth and scope use, so every accepted presentation
+	// (Authorization: Bearer, X-Api-Key, X-Goog-Api-Key) resolves to the
+	// caller's real identity. Parsing only the Authorization header here
+	// made a vendor-header caller look like "no key", which bypassed
+	// per-key policy, budgets, limits and cache tenancy.
+	raw := requestKey(r)
+	if raw == "" {
 		return ""
 	}
 	idv, ok := s.verifier.(KeyIDVerifier)
 	if !ok {
 		return ""
 	}
-	id, ok := idv.KeyID(r.Context(), parts[1])
+	id, ok := idv.KeyID(r.Context(), raw)
 	if !ok {
 		// B3-07: a JWT caller is named "oauth:<client_id>" —
 		// the caller identity for prompt-cache affinity and
@@ -2305,13 +2318,31 @@ func (s *Server) callerKeyID(r *http.Request) string {
 		// untouched (no stored gateway key matches it), since
 		// a token's scope IS its policy.
 		if iss, err := s.oauthIssuer(); err == nil && iss != nil {
-			if claims, err := iss.VerifyAccessToken(parts[1]); err == nil {
+			if claims, err := iss.VerifyAccessToken(raw); err == nil && claims.ClientID != "" {
 				return "oauth:" + claims.ClientID
 			}
 		}
 		return ""
 	}
 	return id
+}
+
+// credentialPresented reports whether the request carried ANY credential
+// in a form this server accepts (the same surfaces as requestKey).
+func credentialPresented(r *http.Request) bool { return requestKey(r) != "" }
+
+// identityResolvable reports whether the configured verifier can name a
+// caller identity at all. When it cannot (a shared-key verifier with no
+// key IDs), an unresolved identity is a property of the deployment, not
+// an anomaly, so per-key checks keep their no-op semantics. When it can,
+// a presented credential that resolves to nothing must fail closed
+// (AUD-SEC-001).
+func (s *Server) identityResolvable() bool {
+	if s.verifier == nil {
+		return false
+	}
+	_, ok := s.verifier.(KeyIDVerifier)
+	return ok
 }
 
 // ---------------------------------------------------------------------------

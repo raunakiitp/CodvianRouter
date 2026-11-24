@@ -111,6 +111,25 @@ type batchCreateRequest struct {
 	Metadata         json.RawMessage `json:"metadata"`
 }
 
+// batchCaller resolves the caller identity for the batch routes.
+//
+// AUD-SEC-001: a credential that authenticated but cannot be resolved to
+// a key identity FAILS CLOSED here. Falling back to the shared "no
+// identity" bucket would put the caller in the auth-relaxed trust
+// domain, where an unowned batch is visible — and where, before the fix,
+// a vendor-header caller could reach every other key's batches.
+//
+// An absent credential keeps auth-relaxed semantics (no identity, no
+// per-key ownership), exactly as before.
+func (s *Server) batchCaller(w http.ResponseWriter, r *http.Request) (string, bool) {
+	keyID := s.callerKeyID(r)
+	if keyID == "" && credentialPresented(r) && s.identityResolvable() {
+		writeError(w, http.StatusForbidden, "credential could not be resolved to a gateway key identity")
+		return "", false
+	}
+	return keyID, true
+}
+
 // handleBatches is the dispatcher for the whole /v1/batches
 // surface: POST /v1/batches (create), GET /v1/batches (list),
 // GET|DELETE /v1/batches/{id}, POST /v1/batches/{id}/cancel,
@@ -233,7 +252,11 @@ func (s *Server) handleBatchesCreate(w http.ResponseWriter, r *http.Request) {
 	if refused := s.enforceBatchModelPolicy(w, r, fs, req.InputFileID); refused {
 		return
 	}
-	b, err := st.createBatch(req.InputFileID, req.Endpoint, window, metadata, s.callerKeyID(r))
+	keyID, ok := s.batchCaller(w, r)
+	if !ok {
+		return
+	}
+	b, err := st.createBatch(req.InputFileID, req.Endpoint, window, metadata, keyID)
 	if err != nil {
 		s.logger.Printf("batches create: store failed: %v", err)
 		writeServerError(w, http.StatusInternalServerError, "could not create the batch")
@@ -384,7 +407,11 @@ func (s *Server) handleBatchesList(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	data, total := st.list(s.callerKeyID(r), limit)
+	callerID, ok := s.batchCaller(w, r)
+	if !ok {
+		return
+	}
+	data, total := st.list(callerID, limit)
 	resp := batchListResponse{Object: "list", Data: data, HasMore: total > limit}
 	if len(data) == 0 {
 		resp.Data = []*Batch{}
@@ -420,7 +447,11 @@ func (s *Server) handleBatchesGet(w http.ResponseWriter, r *http.Request, id str
 		writeServerError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	b := st.get(id, s.callerKeyID(r))
+	callerID, ok := s.batchCaller(w, r)
+	if !ok {
+		return
+	}
+	b := st.get(id, callerID)
 	if b == nil {
 		writeError(w, http.StatusNotFound, "batch not found: "+id)
 		return
@@ -442,7 +473,11 @@ func (s *Server) handleBatchesCancel(w http.ResponseWriter, r *http.Request, id 
 		writeServerError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	b, res := st.cancelBatch(id, s.callerKeyID(r))
+	callerID, ok := s.batchCaller(w, r)
+	if !ok {
+		return
+	}
+	b, res := st.cancelBatch(id, callerID)
 	switch res {
 	case cancelNotFound:
 		writeError(w, http.StatusNotFound, "batch not found: "+id)
@@ -466,7 +501,11 @@ func (s *Server) handleBatchesDelete(w http.ResponseWriter, r *http.Request, id 
 		writeServerError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	ok, conflict := st.deleteBatch(id, s.callerKeyID(r))
+	callerID, ok := s.batchCaller(w, r)
+	if !ok {
+		return
+	}
+	ok, conflict := st.deleteBatch(id, callerID)
 	if conflict {
 		writeError(w, http.StatusConflict, "batch "+id+" is not terminal; only a completed, cancelled, failed or expired batch can be deleted")
 		return
@@ -492,7 +531,11 @@ func (s *Server) handleBatchesDeleteCompleted(w http.ResponseWriter, r *http.Req
 		writeServerError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	ids := st.deleteCompleted(s.callerKeyID(r))
+	callerID, ok := s.batchCaller(w, r)
+	if !ok {
+		return
+	}
+	ids := st.deleteCompleted(callerID)
 	if ids == nil {
 		ids = []string{}
 	}

@@ -230,16 +230,21 @@ func timePtrCopy(p *int64) *int64 {
 	return &v
 }
 
-// batchVisible reports whether callerID may see batch b. "" is
-// the auth-relaxed caller (no verifier / no key presented): it
-// sees everything, exactly like the rest of this server in
-// auth-relaxed mode. A batch with no owner (created while
-// auth-relaxed) is visible to any caller. Otherwise the owner
-// must match — a foreign id answers 404, never a 403 that would
-// confirm the batch exists.
+// batchVisible reports whether callerID may see batch b.
+//
+// An IDENTIFIED caller (callerID != "") sees only the batches it owns:
+// a batch with no owner is NOT visible to it (AUD-SEC-001 — an empty
+// owner must never be a wildcard).
+//
+// An UNIDENTIFIED caller (callerID == "") sees only UNOWNED batches —
+// the auth-relaxed trust domain that created them. It must never see a
+// batch owned by a key: before this fix a caller that resolved to ""
+// (which a vendor header used to cause) could list, read, cancel and
+// delete every other key's batches. A foreign id still answers 404,
+// never a 403 that would confirm the batch exists.
 func batchVisible(b *Batch, callerID string) bool {
-	if callerID == "" || b.OwnerKeyID == "" {
-		return true
+	if callerID == "" {
+		return b.OwnerKeyID == ""
 	}
 	return b.OwnerKeyID == callerID
 }

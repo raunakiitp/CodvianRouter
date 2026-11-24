@@ -1,6 +1,6 @@
 # Codvian Router — Post-P1 Recommendations
 
-Derived exclusively from the findings in `docs/POST_P1_FINDINGS_LEDGER.md` (79 findings: 2 CRITICAL, 6 HIGH, 21 MEDIUM, 41 LOW, 9 INFO). Nothing here was implemented during the audit.
+Derived exclusively from the findings in `docs/POST_P1_FINDINGS_LEDGER.md` (80 findings: 2 CRITICAL, 6 HIGH, 22 MEDIUM, 41 LOW, 9 INFO; AUD-SEC-001 fixed on request). Nothing here was implemented during the audit.
 
 ---
 

@@ -5,20 +5,28 @@
 **Severity:** CRITICAL / HIGH / MEDIUM / LOW / INFO. **Priority:** P0 (before safe production operation) / P1 (before the next milestone) / P2 (planned engineering) / P3 (optional).
 **RT** = a regression test is required (yes/no).
 
-Totals: **79 findings — 2 CRITICAL, 6 HIGH, 21 MEDIUM, 41 LOW, 9 INFO.** Statuses: 77 CONFIRMED, 2 NEEDS MANUAL VERIFICATION (AUD-REL-005, AUD-CFG-005); environment-blocked checks are recorded in the audit doc §17, not as findings.
+Totals: **80 findings — 2 CRITICAL, 6 HIGH, 22 MEDIUM, 41 LOW, 9 INFO** (AUD-SEC-001 is now FIXED; AUD-SEC-010 was added during the hotfix). Statuses: 77 CONFIRMED, 2 NEEDS MANUAL VERIFICATION (AUD-REL-005, AUD-CFG-005); environment-blocked checks are recorded in the audit doc §17, not as findings.
 
 ---
 
 ## CRITICAL
 
-### AUD-SEC-001 — Vendor-header authentication bypasses per-key identity, policy, budgets and tenant isolation
+### AUD-SEC-001 — Vendor-header authentication bypasses per-key identity, policy, budgets and tenant isolation — **FIXED**
 - **Sev/Pri:** CRITICAL / P0 · **Category:** Security / tenant isolation · **RT:** yes
+- **Resolution:** fixed on branch `aud-sec-001-identity-hotfix` (see the resolution block at the end of this entry) — identity now resolves through `requestKey`, per-key policy fails closed, `batchVisible` treats an empty owner as visible only to an equally-unowned caller, and the batch routes fail closed on an unresolvable credential.
 - **Location:** `internal/server/server.go:2284` (`callerKeyID`) vs `internal/server/server.go:2169` (`requestKey`); consumers `server.go:2078` (`keyPolicyAllows`), `server.go:5154` (`req.CallerID`), `internal/server/batches.go:240` (`batchVisible`)
 - **Evidence:** `callerKeyID` parses only the `Authorization` header: `auth := r.Header.Get("Authorization"); ... if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" { return "" }` — while `requestKey` (used by `authorized`/`requireScope`) also returns `X-Api-Key`/`X-Goog-Api-Key`. `keyPolicyAllows` then does `keyID := s.callerKeyID(r); if keyID == "" { return true }`. `batchVisible`: `if callerID == "" || b.OwnerKeyID == "" { return true }`. 60 call sites of `callerKeyID(r)` exist across `internal/server/`.
 - **Repro:** static; functional: send a key that has an IP allowlist/budget/limits as `X-Api-Key:` instead of `Authorization: Bearer`, then `GET /v1/batches`.
 - **Impact:** any holder of a restricted key authenticating via a vendor header acts as "no key": per-key IP/endpoint policy, per-key USD budget + reservations, per-key RPM/TPM/RPD, per-key guardrail scope and prompt-cache tenancy are all bypassed, and — because `batchVisible` treats the empty owner as all-visible — they can list/read/cancel/delete **other key owners' batches**.
 - **Fix:** resolve the identity through `requestKey(r)` in `callerKeyID` (vendor headers accepted), and change `batchVisible` so a missing/empty owner is never treated as visible to others.
-- **Deps:** regression from PR #72 (P1.3). Do not fix silently under the audit — see `docs/POST_P1_RECOMMENDATIONS.md` §Critical.
+- **Deps:** regression from PR #72 (P1.3).
+
+**Resolution (verified):**
+- **Commit:** `__SHA__` · **PR:** #__PR__ (branch `aud-sec-001-identity-hotfix`, merged after CI).
+- **Changes:** `internal/server/server.go` — `callerKeyID` resolves the credential through `requestKey` (Bearer / `X-Api-Key` / `X-Goog-Api-Key`) and names a JWT caller only when its client id is non-empty; `keyPolicyAllows` fails closed (403) when a credential was presented, the verifier can name identities, and none resolved; new `credentialPresented` / `identityResolvable` helpers. `internal/server/batches.go` — `batchVisible` returns true for an empty caller id only when the batch is also unowned. `internal/server/batches_api.go` — new `batchCaller` used by all seven batch routes (fail closed on an unresolvable credential).
+- **Tests:** `internal/server/p13_security_hotfix_test.go` — `TestAUD_SEC_001_VendorHeaderIdentityResolution` (all three headers resolve to the key ID; no credential → empty; `Basic` is not a credential), `TestAUD_SEC_001_PerKeyPolicyEnforcedViaVendorHeader` (an endpoint-restricted key is 200 on the allowed path and 403 elsewhere under every header), `TestAUD_SEC_001_CrossKeyBatchIsolation` (key B via `X-Api-Key` cannot list/read/cancel/delete key A's batch; key A still reads its own), `TestAUD_SEC_001_EmptyOwnerFailClosed` (empty owner is not a wildcard).
+- **Failure-before-fix evidence:** with the source change reverted, all four tests fail and the leak reproduces verbatim — `cross-key leak: key B's list contains key A's batch batch-968d401e8b8cc04f5b193858`; `X-Api-Key: callerKeyID = "" , want the key ID "gk_c1ec98aa7cc2453d"`.
+- **Test-helper note:** `waitBatchStatus` in `internal/server/batches_api_test.go` polled the store as `get(id, "")`, which relied on the old wildcard; it now reads the store through a test-only `batchByIDUnscoped` accessor. No production behaviour was relaxed to keep any test green.
 
 ### AUD-SEC-009 — GitHub access token embedded in the local git remote URL
 - **Sev/Pri:** CRITICAL / P0 · **Category:** Secrets / delivery hygiene · **RT:** no (operational)
@@ -28,6 +36,20 @@ Totals: **79 findings — 2 CRITICAL, 6 HIGH, 21 MEDIUM, 41 LOW, 9 INFO.** Statu
 - **Impact:** the token is exposed by any `git remote -v`, CI log echo, screen share or paste, and violates the project's own rule ("Do not put tokens in remote URLs"). It is not committed, so the public repository is not exposed.
 - **Fix:** rotate the token, set the remote to `https://github.com/raunakiitp/CodvianRouter.git`, and push using `gh auth git-helper` (the workflow this host already documented) instead of a credentialed URL.
 - **Deps:** none.
+
+---
+
+## MEDIUM-adjacent to the hotfix (documented, NOT fixed here)
+
+### AUD-SEC-010 — Uploaded files are not owner-scoped: any key can list and download every key's files
+- **Sev/Pri:** MEDIUM / P2 · **Category:** Security / tenant isolation · **RT:** yes
+- **Location:** `internal/files/store.go` (no owner column) and the Files API routes (`/v1/files`), documented in `internal/server/batches_api.go:23-30`
+- **Evidence:** the batch package doc states it plainly: "the Files store records no owner for an uploaded file (M8.7 design — the Files API itself lists every file to any key), so the create handler CANNOT check that the input file belongs to the caller's key"; the same comment notes the upstream project fixed exactly this as a published advisory for null-owner/foreign input files.
+- **Repro:** static; functional: key A uploads a file, key B calls `GET /v1/files` / `GET /v1/files/{id}/content` and reads it.
+- **Impact:** every gateway key can enumerate and download every other key's uploaded content, and can reference another key's file as a batch input.
+- **Fix:** add an owner column to `files.File` (owner = caller key id at upload), scope list/get/content and batch input-file resolution to the owner, and refuse a null/foreign owner (the upstream behaviour).
+- **Deps:** the Files store is a separate slice; it needs its own change + migration.
+- **Note:** outside the AUD-SEC-001 scope of the hotfix by explicit instruction; recorded here so it is not lost.
 
 ---
 
@@ -146,7 +168,7 @@ Totals: **79 findings — 2 CRITICAL, 6 HIGH, 21 MEDIUM, 41 LOW, 9 INFO.** Statu
 | --- | --- | --- |
 | CRITICAL | 2 | SEC-001, SEC-009 |
 | HIGH | 6 | SEC-002, REL-001, PERF-001, PERF-002, API-001, CODE-001 |
-| MEDIUM | 21 | REL-002..005, PERF-003..007, PROV-002, PROV-004, API-002, API-003, CFG-001, CODE-002, CODE-012, TEST-001, TEST-002, TEST-003, TEST-011, DOC-001 |
+| MEDIUM | 22 | REL-002..005, PERF-003..007, PROV-002, PROV-004, API-002, API-003, CFG-001, CODE-002, CODE-012, TEST-001, TEST-002, TEST-003, TEST-011, DOC-001, SEC-010 |
 | LOW | 41 | SEC-003..005, REL-006..008, PERF-008..013, PROV-001, PROV-003, PROV-005, PROV-006, API-005, CFG-002..005, CODE-006..011, CODE-013, TEST-004..007, TEST-009, TEST-010, TEST-012..015, DOC-002..004 |
 | INFO | 9 | SEC-006, SEC-007, PERF-014..016, CODE-014, TEST-008, TEST-016, TEST-017 |
 

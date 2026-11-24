@@ -180,7 +180,7 @@ Notable positives: **zero** TODO/FIXME/HACK/XXX markers in non-test Go; no handl
 
 ## 16. Confirmed findings
 
-**79 findings: 2 CRITICAL, 6 HIGH, 21 MEDIUM, 41 LOW, 9 INFO** (77 CONFIRMED, 2 NEEDS MANUAL VERIFICATION: AUD-REL-005, AUD-CFG-005). Every one carries file:line evidence, a reproduction, an impact, a fix and a regression-test flag in `docs/POST_P1_FINDINGS_LEDGER.md`, which is the authoritative list; this document's sections 7–15 group them by area.
+**80 findings: 2 CRITICAL, 6 HIGH, 22 MEDIUM, 41 LOW, 9 INFO** (78 CONFIRMED, 2 NEEDS MANUAL VERIFICATION: AUD-REL-005, AUD-CFG-005). AUD-SEC-001 is **FIXED** (see the ledger's resolution block); AUD-SEC-010 (files are not owner-scoped) was added during that hotfix. Every one carries file:line evidence, a reproduction, an impact, a fix and a regression-test flag in `docs/POST_P1_FINDINGS_LEDGER.md`, which is the authoritative list; this document's sections 7–15 group them by area.
 
 The two CRITICALs are AUD-SEC-001 (vendor-header identity bypass with cross-key batch access) and AUD-SEC-009 (token in the local remote URL). Six HIGHs: AUD-SEC-002, AUD-REL-001, AUD-PERF-001, AUD-PERF-002, AUD-API-001, AUD-CODE-001.
 
