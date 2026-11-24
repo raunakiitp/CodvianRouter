@@ -148,6 +148,22 @@ func decodeBatch(t *testing.T, rec *httptest.ResponseRecorder) *Batch {
 	return &b
 }
 
+// batchByIDUnscoped reads one batch from the store regardless of
+// ownership. Test-only: the route handlers must go through the
+// owner-scoped accessors, but a test polling for a batch's completion
+// has no caller identity to present (and "" is no longer a wildcard
+// after AUD-SEC-001 — an unidentified caller sees only unowned
+// batches).
+func batchByIDUnscoped(st *batchStore, id string) *Batch {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	b, ok := st.byID[id]
+	if !ok {
+		return nil
+	}
+	return batchCopy(b)
+}
+
 // waitBatchStatus polls the store until the batch reaches one
 // of the wanted statuses (or the deadline passes).
 func waitBatchStatus(t *testing.T, srv *Server, id string, want ...string) *Batch {
@@ -158,7 +174,7 @@ func waitBatchStatus(t *testing.T, srv *Server, id string, want ...string) *Batc
 	}
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		if b := st.get(id, ""); b != nil {
+		if b := batchByIDUnscoped(st, id); b != nil {
 			for _, w := range want {
 				if string(b.Status) == w {
 					return b
