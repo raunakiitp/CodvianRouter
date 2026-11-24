@@ -21,13 +21,10 @@ VERIFIED client shape (sources checked 2026-11-19):
     "system" string — per the Anthropic Messages API reference
     as used in the curl examples at the sources above.
 
-AUTH NOTE (honest limitation, verified by check K2 below):
-Codvian's gateway auth is `Authorization: Bearer <gateway key>`
-only; the Anthropic SDK's `x-api-key` header alone does NOT
-authenticate. A real Claude Code pointed at Codvian must therefore
-supply the gateway key as ANTHROPIC_AUTH_TOKEN (which the SDK
-sends as Bearer), not only as ANTHROPIC_API_KEY. This script sends
-both headers, the way a gateway-configured client would.
+P1.3 AUTH CHANGE: Codvian now accepts the gateway key via
+`x-api-key` (Anthropic-style), `x-goog-api-key` (Gemini SDKs),
+or `Authorization: Bearer`. All three authenticate identically.
+TestP13GatewayKeyXApiKeyAuthenticates pins this behaviour.
 
 UNVERIFIED (marked, not presented as real behaviour):
   * The exact extra headers a live Claude Code session sends
@@ -37,17 +34,17 @@ UNVERIFIED (marked, not presented as real behaviour):
 Checks:
   K0 harness ready (real binary builds, router ready, provider added)
   K1 non-streaming /v1/messages -> 200
-  K2 x-api-key alone (no Bearer) -> 401 (auth-shape gap, see above)
+  K2 x-api-key alone (no Bearer) -> 200 (P1.3 vendor-header auth)
   K3 Anthropic response shape: type message, text content verbatim,
      stop_reason end_turn, usage present
   K4 trace recorded: endpoint "messages", mock attempt success
-  K5 mock hit exactly once, upstream saw model mock-model
+  K5 mock hit exactly twice (K1 + K2), upstream saw model mock-model
   K6 streaming /v1/messages -> Anthropic SSE (message_start,
      content_block_delta, message_stop)
   K7 response carries X-Codvian-Request-Id
-  K8 unauthenticated -> 401
+  K8 unauthenticated -> 401 (robust: retry on transport errors)
   K9 NEGATIVE: mock stopped -> fresh request fails fast (non-200),
-     never hangs and never reports success
+     never hangs and never reports success (unique prompt)
 """
 import importlib.util
 import json
@@ -68,7 +65,9 @@ MODEL = "mock-model"
 # never serve a stale hit in place of a live upstream call.
 PROMPT_1 = "claude-code smoke probe one: say hi"
 PROMPT_STREAM = "claude-code smoke probe stream: say hi"
-PROMPT_NEG = "claude-code smoke probe negative: say hi"
+# Unique negative prompt with ZERO word overlap with any prior prompt
+# to avoid semantic-cache (token-overlap threshold 0.85) false hits.
+PROMPT_NEG = "NEGATIVE CHECK: UNIQUE PROBE XYZ-98765 NO OVERLAP"
 
 
 def messages_body(prompt, stream=False):
@@ -78,10 +77,23 @@ def messages_body(prompt, stream=False):
             "stream": stream}
 
 
+def req_401_robust(h, path, body, headers=None, retries=5, delay=0.8):
+    """Assert 401, retrying on transport errors (status=0)."""
+    for i in range(retries):
+        st, _, body = h.req("POST", path, body, headers=headers)
+        if st == 401:
+            return True, st, body
+        if st == 0:
+            time.sleep(delay)
+            continue
+        return False, st, body
+    return False, st, body
+
+
 def main():
     c = Checklist()
     try:
-        h = ClientHarness("claude-code", router_port=21601)
+        h = ClientHarness("claude-code", router_port=21701)
     except Exception as e:
         print(f"SETUP FAILED: {e}")
         return 1
@@ -101,13 +113,13 @@ def main():
         c.check("K1 non-streaming /v1/messages -> 200", st == 200,
                 f"status={st} {body[:160]}")
 
-        # Auth-shape gap: x-api-key alone must NOT authenticate.
+        # P1.3: x-api-key alone NOW authenticates (vendor-header auth).
         st2, _, body2 = h.req("POST", "/v1/messages",
                               messages_body("auth probe"),
                               headers={"anthropic-version": "2023-06-01",
                                        "x-api-key": h.key})
-        c.check("K2 x-api-key alone (no Bearer) -> 401",
-                st2 == 401, f"status={st2} {body2[:120]}")
+        c.check("K2 x-api-key alone (no Bearer) -> 200 (P1.3 vendor-header auth)",
+                st2 == 200, f"status={st2} {body2[:120]}")
 
         content = ""
         try:
@@ -132,8 +144,8 @@ def main():
                 f"{detail} trace_endpoint={tr.get('endpoint')}")
 
         last = h.last_upstream_request()
-        c.check("K5 mock hit exactly once, upstream saw model mock-model",
-                h.hits() == 1 and last.get("model") == MODEL,
+        c.check("K5 mock hit exactly twice (K1 + K2), upstream saw model mock-model",
+                h.hits() == 2 and last.get("model") == MODEL,
                 f"hits={h.hits()} upstream_model={last.get('model')}")
 
         st, rh, body = h.req("POST", "/v1/messages",
@@ -153,16 +165,22 @@ def main():
         c.check("K7 response carries X-Codvian-Request-Id",
                 st == 200 and bool(rid), f"status={st} request_id={rid}")
 
-        st, _, body = h.req("POST", "/v1/messages",
-                            messages_body("no key probe"))
-        c.check("K8 unauthenticated -> 401", st == 401, f"status={st}")
+        # Robust unauthenticated check: retry on transport errors (status=0)
+        ok, st, body = req_401_robust(h, "/v1/messages",
+                                      messages_body("no key probe"))
+        c.check("K8 unauthenticated -> 401 (robust)", ok,
+                f"status={st} {body[:120]}")
 
         # NEGATIVE: upstream down must fail fast, not hang or succeed.
+        # Use a unique prompt with zero overlap + cache bypass header to force
+        # a genuine upstream call (which will fail since mock is stopped).
         h.stop_mock()
+        neg_hdrs = dict(hdrs)
+        neg_hdrs["X-Codvian-No-Cache"] = "true"
         t0 = time.time()
         st, _, body = h.req("POST", "/v1/messages",
                             messages_body(PROMPT_NEG),
-                            key=h.key, headers=hdrs, timeout=30)
+                            key=h.key, headers=neg_hdrs, timeout=30)
         elapsed = time.time() - t0
         c.check("K9 NEGATIVE: mock stopped -> fresh request fails fast "
                 "(non-200), never hangs or reports success",

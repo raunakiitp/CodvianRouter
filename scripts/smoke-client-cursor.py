@@ -65,17 +65,32 @@ MODEL = "mock-model"
 SYSTEM = "You are Cursor, an AI coding assistant in the editor."
 PROMPT_STREAM = "cursor smoke probe stream: say hi"
 PROMPT_MULTI = "cursor smoke probe multi-turn: say hi again"
-PROMPT_NEG = "cursor smoke probe negative: say hi"
+# Unique negative prompt with ZERO word overlap with any prior prompt
+# to avoid semantic-cache (token-overlap threshold 0.85) false hits.
+PROMPT_NEG = "NEGATIVE CHECK: UNIQUE PROBE XYZ-98765 NO OVERLAP"
 
 
 def chat_body(messages, stream=False):
     return {"model": MODEL, "messages": messages, "stream": stream}
 
 
+def req_401_robust(h, path, body, headers=None, retries=3, delay=0.5):
+    """Assert 401, retrying on transport errors (status=0)."""
+    for i in range(retries):
+        st, _, body = h.req("POST", path, body, headers=headers)
+        if st == 401:
+            return True, st, body
+        if st == 0:
+            time.sleep(delay)
+            continue
+        return False, st, body
+    return False, st, body
+
+
 def main():
     c = Checklist()
     try:
-        h = ClientHarness("cursor", router_port=21621)
+        h = ClientHarness("cursor", router_port=21721)
     except Exception as e:
         print(f"SETUP FAILED: {e}")
         return 1
@@ -144,16 +159,20 @@ def main():
         c.check("U6 streaming response carried X-Codvian-Request-Id",
                 bool(rid), f"request_id={rid}")
 
-        st, _, body = h.req("POST", "/v1/chat/completions",
-                            chat_body([{"role": "user", "content": "no key probe"}]))
-        c.check("U7 unauthenticated chat -> 401", st == 401, f"status={st}")
+        # Robust unauthenticated check: retry on transport errors (status=0)
+        ok, st, body = req_401_robust(h, "/v1/chat/completions",
+                                      chat_body([{"role": "user", "content": "no key probe"}]))
+        c.check("U7 unauthenticated chat -> 401 (robust)", ok,
+                f"status={st} {body[:120]}")
 
         # NEGATIVE: upstream down must fail fast, not hang or succeed.
+        # Use a unique prompt with zero overlap + cache bypass header to force
+        # a genuine upstream call (which will fail since mock is stopped).
         h.stop_mock()
         t0 = time.time()
         st, _, body = h.req("POST", "/v1/chat/completions",
                             chat_body([{"role": "user", "content": PROMPT_NEG}]),
-                            key=h.key, timeout=30)
+                            key=h.key, headers={"X-Codvian-No-Cache": "true"}, timeout=30)
         elapsed = time.time() - t0
         c.check("U8 NEGATIVE: mock stopped -> fresh request fails fast "
                 "(non-200), never hangs or reports success",
