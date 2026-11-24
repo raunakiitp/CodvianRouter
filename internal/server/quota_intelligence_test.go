@@ -38,8 +38,8 @@ func newQuotaIntelSetup(t *testing.T) *keyBudgetSetup {
 	s.raw = raw
 	s.id = adminKey.ID
 	if err := s.led.SetQuotaPool(context.Background(), ledger.QuotaPool{
-		ID:          "pool-alpha",
-		Name:        "Alpha Pool",
+		ID:   "pool-alpha",
+		Name: "Alpha Pool",
 		Dimensions: []ledger.QuotaDimension{
 			{Unit: "requests", Window: "daily", Limit: 1000},
 		},
