@@ -512,7 +512,7 @@ func (l *Ledger) GetKeyBudget(ctx context.Context, keyID string) (KeyBudget, err
 		})
 	} else {
 		out, err = scanKeyBudgetRow(func(dest ...any) error {
-			return l.db.QueryRowContext(ctx, `
+			return l.rdb.QueryRowContext(ctx, `
 				SELECT key_id, limit_usd, unpriced_policy,
 				       daily_limit_usd, weekly_limit_usd, monthly_limit_usd,
 				       warning_threshold, reset_interval, reset_time
@@ -533,7 +533,7 @@ func (l *Ledger) GetKeyBudget(ctx context.Context, keyID string) (KeyBudget, err
 
 // ListKeyBudgets returns every key budget, ordered by key ID.
 func (l *Ledger) ListKeyBudgets(ctx context.Context) ([]KeyBudget, error) {
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT key_id, limit_usd, unpriced_policy,
 		       daily_limit_usd, weekly_limit_usd, monthly_limit_usd,
 		       warning_threshold, reset_interval, reset_time
@@ -673,7 +673,7 @@ func (l *Ledger) keyBudgetStatusWithBudget(ctx context.Context, keyID string, no
 	// Priced spend in the window: successful or failed, the cost
 	// column already holds the priced cost (failed attempts and
 	// shared rows record 0 — fallback attempts consume no quota).
-	if err := l.db.QueryRowContext(ctx, `
+	if err := l.rdb.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(cost_usd), 0) FROM usage_events
 		WHERE gateway_key_id = ? AND ts >= ? AND shared = 0`,
 		keyID, sinceMs).Scan(&st.SpentUSD); err != nil {
@@ -763,7 +763,7 @@ func (l *Ledger) keyBudgetStatusWithBudget(ctx context.Context, keyID string, no
 	// attempts are excluded (ok = 0): a failed attempt bought no
 	// tokens, so its $0 is known, not unknown. Shared rows are
 	// excluded: the leader's row carries the call.
-	if err := l.db.QueryRowContext(ctx, `
+	if err := l.rdb.QueryRowContext(ctx, `
 		SELECT COUNT(*), COALESCE(SUM(total_tokens), 0) FROM usage_events
 		WHERE gateway_key_id = ? AND ts >= ? AND shared = 0 AND ok = 1
 		  AND (tokens_split_known = 0 OR price_known = 0)`,
@@ -775,7 +775,7 @@ func (l *Ledger) keyBudgetStatusWithBudget(ctx context.Context, keyID string, no
 	// to count_as_zero) to make the spend knowable. Split-unknown
 	// rows name no model price gap (their usage was never
 	// reported), so they are counted above, not listed here.
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT DISTINCT model FROM usage_events
 		WHERE gateway_key_id = ? AND ts >= ? AND shared = 0 AND ok = 1
 		  AND tokens_split_known = 1 AND price_known = 0
@@ -800,7 +800,7 @@ func (l *Ledger) keyBudgetStatusWithBudget(ctx context.Context, keyID string, no
 	// Next roll-off: the oldest priced spend in the window ages
 	// out 5 hours after it was recorded.
 	var oldestMs sql.NullInt64
-	if err := l.db.QueryRowContext(ctx, `
+	if err := l.rdb.QueryRowContext(ctx, `
 		SELECT MIN(ts) FROM usage_events
 		WHERE gateway_key_id = ? AND ts >= ? AND shared = 0 AND cost_usd > 0`,
 		keyID, sinceMs).Scan(&oldestMs); err != nil {
@@ -999,7 +999,7 @@ func enforceKeyBudgetUnpriced(ctx context.Context, l *Ledger, keyID string, mode
 // keyBudgetMonthUnpricedModels and called it for the month only;
 // B2 calls it for every set window's current period.)
 func (l *Ledger) keyBudgetWindowUnpricedModels(ctx context.Context, keyID string, start, end time.Time) ([]string, error) {
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT DISTINCT model FROM usage_events
 		WHERE gateway_key_id = ? AND ts >= ? AND ts < ? AND shared = 0 AND ok = 1
 		  AND price_known = 0

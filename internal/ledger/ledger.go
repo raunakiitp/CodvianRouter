@@ -47,6 +47,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -658,7 +659,25 @@ func (u Usage) WithAttribution(sessionID, projectID, clientID string) Usage {
 
 // Ledger is the usage/budget store backed by a local SQLite file.
 type Ledger struct {
-	db   *sql.DB
+	// db is the single WRITER connection (SetMaxOpenConns(1) in
+	// Open): SQLite serialises writers, so one writer connection
+	// avoids in-process "database is locked" churn between two
+	// concurrent write paths.
+	db *sql.DB
+
+	// rdb is the READER pool (AUD-PERF-002). Every pure read runs on
+	// its own connections here, so a budget check no longer queues
+	// behind the async batch writer holding the single writer
+	// connection. Both handles open the file in WAL mode, which lets
+	// these readers run concurrently with the one writer; the DSN
+	// busy_timeout lets a reader wait out a checkpoint instead of
+	// failing with SQLITE_BUSY. Consistency is unchanged: a write
+	// commits on db before any later read inspects it, and there is
+	// no read-modify-write that spans the two pools (the one
+	// read-after-write, reservedSpendLocked's prune-then-sum, runs
+	// its DELETE on db and its SELECT here, both against committed
+	// state, and ordered by reserveMu).
+	rdb  *sql.DB
 	path string
 
 	// importMu serialises ImportEvents calls in-process (see
@@ -678,10 +697,11 @@ type Ledger struct {
 	// bench, CHECKLIST 249-250: _sqlite3Prepare cumulated
 	// 3.49 s — every QueryRowContext re-parsed its SQL — and
 	// GetBudget alone cumulated 4.07 s, called twice per
-	// request by CheckBudgetOrError). *sql.Stmt is safe for
-	// concurrent use, and the ledger runs on a single
-	// connection (SetMaxOpenConns(1) in Open), so one prepared
-	// statement serves every goroutine. A prepare failure
+	// request by CheckBudgetOrError). Both statements read, so
+	// they are prepared on the reader pool (rdb, AUD-PERF-002);
+	// *sql.Stmt is safe for concurrent use and database/sql
+	// prepares (and re-prepares, after a schema change) the SQL
+	// per reader connection on demand. A prepare failure
 	// leaves the field nil and the caller falls back to the
 	// direct query — a cold-cache slowdown, never an error.
 	// Close closes any prepared statement.
@@ -1056,6 +1076,22 @@ CREATE INDEX IF NOT EXISTS idx_agent_sessions_key_client
   ON agent_sessions(gateway_key_id, client_session_id);
 `
 
+// ledgerDSN builds the SQLite DSN for path with the pragmas every
+// connection needs: WAL journaling (so readers never block the one
+// writer, and the writer never blocks readers) and a 5s busy
+// timeout (so a connection waits for a contended lock instead of
+// failing with SQLITE_BUSY). They are supplied in the DSN rather
+// than as a one-shot `db.Exec("PRAGMA ...")` because a pooled
+// *sql.DB opens many connections and a PRAGMA executed through the
+// pool lands on only whatever single connection served that call —
+// every other connection would then run with the default journal
+// mode and a zero busy timeout. With the pragmas in the DSN, every
+// connection the driver opens (writer and reader pool alike) starts
+// in WAL mode with the busy timeout.
+func ledgerDSN(path string) string {
+	return path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
+}
+
 // Open opens (creating if needed) the SQLite ledger at path, applies
 // the schema, and returns the Ledger. Parent directories are created.
 func Open(path string) (*Ledger, error) {
@@ -1064,21 +1100,15 @@ func Open(path string) (*Ledger, error) {
 			return nil, fmt.Errorf("ledger: create directory: %w", err)
 		}
 	}
-	db, err := sql.Open("sqlite", path)
+	dsn := ledgerDSN(path)
+	// Writer connection: one. SQLite (even in WAL mode) serialises
+	// writers, and one writer connection avoids "database is locked"
+	// churn between two in-process writers.
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("ledger: open sqlite: %w", err)
 	}
-	// Single writer connection: SQLite (even in WAL mode) serialises
-	// writers, and one connection avoids "database is locked" churn.
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(`PRAGMA journal_mode=WAL;`); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("ledger: enable WAL: %w", err)
-	}
-	if _, err := db.Exec(`PRAGMA busy_timeout=5000;`); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("ledger: busy timeout: %w", err)
-	}
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("ledger: apply schema: %w", err)
@@ -1102,7 +1132,28 @@ func Open(path string) (*Ledger, error) {
 		db.Close()
 		return nil, err
 	}
-	l := &Ledger{db: db, path: path}
+	// Reader pool (AUD-PERF-002): a budget check is a SELECT; giving
+	// reads their own connections means the check no longer queues
+	// behind an async batch commit that is holding the single writer
+	// connection. WAL (from the DSN) lets these readers run
+	// concurrently with the writer. The limit is bounded — each
+	// reader holds a small SQLite connection — but greater than 1 so
+	// several checks run in parallel.
+	rdb, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("ledger: open read pool: %w", err)
+	}
+	readers := runtime.GOMAXPROCS(0)
+	if readers < 4 {
+		readers = 4
+	}
+	if readers > 16 {
+		readers = 16
+	}
+	rdb.SetMaxOpenConns(readers)
+	rdb.SetMaxIdleConns(readers)
+	l := &Ledger{db: db, rdb: rdb, path: path}
 	// Startup cleanup (G16, Area 11 retention): prune usage rows
 	// older than the default retention window, so the table
 	// cannot grow unbounded across restarts. Best-effort: a
@@ -1287,8 +1338,8 @@ func ensureKeyBudgetColumns(db *sql.DB) error {
 	return nil
 }
 
-// Close closes the underlying database (and any prepared
-// hot-path statement, first).
+// Close closes the underlying databases (any prepared hot-path
+// statement, prepared on the reader pool, first).
 func (l *Ledger) Close() error {
 	if l.db == nil {
 		return nil
@@ -1303,20 +1354,29 @@ func (l *Ledger) Close() error {
 		l.getKeyBudgetStmt = nil
 	}
 	l.stmtMu.Unlock()
-	return l.db.Close()
+	// Close the reader pool too (AUD-PERF-002); its prepared
+	// statements were just closed above.
+	var rerr error
+	if l.rdb != nil {
+		rerr = l.rdb.Close()
+	}
+	if err := l.db.Close(); err != nil {
+		return err
+	}
+	return rerr
 }
 
 // preparedGetBudget returns the prepared SELECT for GetBudget,
-// preparing it once on first use. ok=false means preparation
-// failed (e.g. the DB is already closed): the caller must fall
-// back to the direct query on l.db.
+// preparing it once on first use, on the reader pool. ok=false
+// means preparation failed (e.g. the DB is already closed): the
+// caller must fall back to the direct query on rdb.
 func (l *Ledger) preparedGetBudget(ctx context.Context) (*sql.Stmt, bool) {
 	l.stmtMu.Lock()
 	defer l.stmtMu.Unlock()
 	if l.getBudgetStmt != nil {
 		return l.getBudgetStmt, true
 	}
-	stmt, err := l.db.PrepareContext(ctx, `
+	stmt, err := l.rdb.PrepareContext(ctx, `
 		SELECT key_id, cap_usd, spent_usd, period FROM budgets
 		WHERE key_id = ?`)
 	if err != nil {
@@ -1334,7 +1394,7 @@ func (l *Ledger) preparedGetKeyBudget(ctx context.Context) (*sql.Stmt, bool) {
 	if l.getKeyBudgetStmt != nil {
 		return l.getKeyBudgetStmt, true
 	}
-	stmt, err := l.db.PrepareContext(ctx, `
+	stmt, err := l.rdb.PrepareContext(ctx, `
 		SELECT key_id, limit_usd, unpriced_policy,
 		       daily_limit_usd, weekly_limit_usd, monthly_limit_usd,
 		       warning_threshold, reset_interval, reset_time
@@ -2002,7 +2062,7 @@ func (l *Ledger) RecentEvents(ctx context.Context, limit int, filter LogFilter) 
 		// filter excludes them.
 		where = "WHERE ok = 0 AND cancelled = 0"
 	}
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT id, ts, gateway_key_id, provider, model, endpoint,
 		       prompt_tokens,
 		       completion_tokens, total_tokens, cached_tokens,
@@ -2094,7 +2154,7 @@ func (l *Ledger) RecentEventsByAttribution(ctx context.Context, f AttributionFil
 		where = "WHERE 1=1" + where
 	}
 	args = append(args, limit)
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT id, ts, gateway_key_id, provider, model, endpoint,
 		       prompt_tokens,
 		       completion_tokens, total_tokens, cached_tokens,
@@ -2170,7 +2230,7 @@ type CompressionProviderRow struct {
 // saved, local estimates — see Usage), never from a separate
 // compression log.
 func (l *Ledger) CompressionByProvider(ctx context.Context, start, end time.Time) ([]CompressionProviderRow, error) {
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT provider,
 		       COUNT(*) AS requests,
 		       SUM(prompt_before_compression_tokens) AS prompt_before,
@@ -2226,7 +2286,7 @@ type AutoRoutingBreakdown struct {
 // the breakdown is auto-routed traffic only.
 func (l *Ledger) AutoRoutingBreakdown(ctx context.Context, start, end time.Time) (AutoRoutingBreakdown, error) {
 	out := AutoRoutingBreakdown{Variants: map[string]int{}, TopProviders: []AutoRoutingProviderRow{}}
-	vrows, err := l.db.QueryContext(ctx, `
+	vrows, err := l.rdb.QueryContext(ctx, `
 		SELECT auto_variant, COUNT(*) AS n
 		FROM usage_events
 		WHERE ts >= ? AND ts < ? AND auto_variant != ''
@@ -2251,7 +2311,7 @@ func (l *Ledger) AutoRoutingBreakdown(ctx context.Context, start, end time.Time)
 		return out, fmt.Errorf("ledger: auto-routing variants: %w", err)
 	}
 	vrows.Close()
-	prows, err := l.db.QueryContext(ctx, `
+	prows, err := l.rdb.QueryContext(ctx, `
 		SELECT provider, COUNT(*) AS n
 		FROM usage_events
 		WHERE ts >= ? AND ts < ? AND auto_variant != ''
@@ -2504,7 +2564,7 @@ func (l *Ledger) DriftSummary(ctx context.Context, since, until time.Time) ([]Dr
 		untilClause = " AND ts < ?"
 		args = append(args, untilMs)
 	}
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT provider, model, COUNT(*),
 		       COALESCE(AVG(100.0 * (local_estimate_prompt_tokens - prompt_tokens) / prompt_tokens), 0),
 		       COALESCE(AVG(ABS(100.0 * (local_estimate_prompt_tokens - prompt_tokens) / prompt_tokens)), 0),
@@ -2551,7 +2611,7 @@ func (l *Ledger) Summary(ctx context.Context, since, until time.Time) (UsageSumm
 		untilClause = " AND ts < ?"
 		args = append(args, untilMs)
 	}
-	err := l.db.QueryRowContext(ctx, `
+	err := l.rdb.QueryRowContext(ctx, `
 		SELECT COUNT(*),
 		       COALESCE(SUM(CASE WHEN ok = 1 THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN ok = 0 AND cancelled = 0 THEN 1 ELSE 0 END), 0),
@@ -2587,7 +2647,7 @@ func (l *Ledger) Summary(ctx context.Context, since, until time.Time) (UsageSumm
 	if err != nil {
 		return s, fmt.Errorf("ledger: summary: %w", err)
 	}
-	provRows, err := l.db.QueryContext(ctx, `
+	provRows, err := l.rdb.QueryContext(ctx, `
 		SELECT provider, COUNT(*),
 		       COALESCE(SUM(CASE WHEN ok = 1 THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(CASE WHEN ok = 0 AND cancelled = 0 THEN 1 ELSE 0 END), 0),
@@ -2626,7 +2686,7 @@ func (l *Ledger) Summary(ctx context.Context, since, until time.Time) (UsageSumm
 		return s, fmt.Errorf("ledger: summary by provider: %w", err)
 	}
 	provRows.Close()
-	modelRows, err := l.db.QueryContext(ctx, `
+	modelRows, err := l.rdb.QueryContext(ctx, `
 		SELECT model, provider, COUNT(*),
 		       COALESCE(SUM(prompt_tokens), 0),
 		       COALESCE(SUM(completion_tokens), 0),
@@ -2670,7 +2730,7 @@ func (l *Ledger) Summary(ctx context.Context, since, until time.Time) (UsageSumm
 	// here, so a pair with no spend in the window is absent,
 	// never zero-filled. CostUSD is SUM(cost_usd): priced spend
 	// only (see KeyUsage for the fail-closed unpriced policy).
-	keyRows, err := l.db.QueryContext(ctx, `
+	keyRows, err := l.rdb.QueryContext(ctx, `
 		SELECT gateway_key_id, provider, COUNT(*),
 		       COALESCE(SUM(CASE WHEN ok = 1 THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(prompt_tokens), 0),
@@ -2727,7 +2787,7 @@ func (l *Ledger) Summary(ctx context.Context, since, until time.Time) (UsageSumm
 // stale all-time fraction would rank a long-cold pair as warm.
 func (l *Ledger) CachedTokenFraction(ctx context.Context, provider, model string, since time.Time) (fraction float64, ok bool, err error) {
 	var cached, prompt int64
-	err = l.db.QueryRowContext(ctx, `
+	err = l.rdb.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(cached_tokens), 0), COALESCE(SUM(prompt_tokens), 0)
 		FROM usage_events
 		WHERE provider = ? AND model = ? AND ts >= ? AND ok = 1 AND tokens_split_known = 1`,
@@ -2788,7 +2848,7 @@ func (l *Ledger) Buckets(ctx context.Context, since time.Time, width time.Durati
 	}
 	widthMs := width.Milliseconds()
 	sinceMs := since.UnixMilli()
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT CAST((ts - ?) / ? AS INTEGER) AS b, COUNT(*),
 		       COALESCE(SUM(CASE WHEN ok = 0 AND cancelled = 0 THEN 1 ELSE 0 END), 0),
 		       COALESCE(AVG(latency_ms), 0),
@@ -2861,7 +2921,7 @@ func (l *Ledger) DayBuckets(ctx context.Context, days int, now time.Time) ([]Tim
 		out[i].Start = start.AddDate(0, 0, i)
 	}
 	startMs := start.UnixMilli()
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT CAST((ts - ?) / ? AS INTEGER) AS b, COUNT(*),
 		       COALESCE(SUM(CASE WHEN ok = 0 AND cancelled = 0 THEN 1 ELSE 0 END), 0),
 		       COALESCE(SUM(latency_ms), 0),
@@ -2970,7 +3030,7 @@ type ProviderKeySpend struct {
 // dashboard reports "no usage yet" for it from the pool list,
 // never from this feed.
 func (l *Ledger) ProviderKeySpendTotals(ctx context.Context) ([]ProviderKeySpend, error) {
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT provider, provider_key_id,
 		       COUNT(*),
 		       COALESCE(SUM(CASE WHEN ok = 1 THEN 1 ELSE 0 END), 0),
@@ -3009,7 +3069,7 @@ func (l *Ledger) ProviderKeySpendTotals(ctx context.Context) ([]ProviderKeySpend
 // RecordUsage.
 func (l *Ledger) SpendFor(ctx context.Context, keyID string, since time.Time) (float64, error) {
 	var total sql.NullFloat64
-	err := l.db.QueryRowContext(ctx, `
+	err := l.rdb.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(cost_usd), 0) FROM usage_events
 		WHERE gateway_key_id = ? AND ts >= ?`,
 		keyID, since.UnixMilli()).Scan(&total)
@@ -3065,8 +3125,8 @@ func (l *Ledger) GetBudget(ctx context.Context, keyID string) (Budget, error) {
 }
 
 // getBudgetUncached is the database read behind GetBudget: the
-// prepared statement when one is cached for this connection,
-// else a direct query. It knows nothing about the memo.
+// prepared statement when one is cached for the reader pool,
+// else a direct query on rdb. It knows nothing about the memo.
 func (l *Ledger) getBudgetUncached(ctx context.Context, keyID string) (Budget, error) {
 	var b Budget
 	if stmt, ok := l.preparedGetBudget(ctx); ok {
@@ -3076,7 +3136,7 @@ func (l *Ledger) getBudgetUncached(ctx context.Context, keyID string) (Budget, e
 		}
 		return b, nil
 	}
-	err := l.db.QueryRowContext(ctx, `
+	err := l.rdb.QueryRowContext(ctx, `
 		SELECT key_id, cap_usd, spent_usd, period FROM budgets
 		WHERE key_id = ?`, keyID).Scan(&b.KeyID, &b.CapUSD, &b.SpentUSD, &b.Period)
 	if err != nil {

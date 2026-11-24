@@ -266,7 +266,7 @@ func (l *Ledger) AgentSessions(ctx context.Context, keyID string, limit int) ([]
 	if limit > 1000 {
 		limit = 1000
 	}
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT id, client_session_id, client_id, project_id, git_branch,
 		       model, provider, requests, errors, input_tokens, output_tokens,
 		       total_tokens, cost_usd, unpriced_count, created_at_ms, last_seen_ms

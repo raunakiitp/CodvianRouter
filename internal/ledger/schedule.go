@@ -425,7 +425,7 @@ func (l *Ledger) SetQuotaSchedule(ctx context.Context, s QuotaSchedule) error {
 
 // GetQuotaSchedule returns one schedule by id.
 func (l *Ledger) GetQuotaSchedule(ctx context.Context, id string) (QuotaSchedule, error) {
-	row := l.db.QueryRowContext(ctx, `
+	row := l.rdb.QueryRowContext(ctx, `
 		SELECT id, pool_id, label, days, start_minute, end_minute, timezone, mode, budget_value, budget_unit, budget_window, priority, enabled
 		FROM quota_schedules WHERE id = ?`, id)
 	s, err := scanQuotaScheduleRow(row)
@@ -443,7 +443,7 @@ func (l *Ledger) GetQuotaSchedule(ctx context.Context, id string) (QuotaSchedule
 // ListQuotaSchedules returns a pool's schedules, priority DESC
 // then id ASC (the resolution order).
 func (l *Ledger) ListQuotaSchedules(ctx context.Context, poolID string) ([]QuotaSchedule, error) {
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT id, pool_id, label, days, start_minute, end_minute, timezone, mode, budget_value, budget_unit, budget_window, priority, enabled
 		FROM quota_schedules WHERE pool_id = ? ORDER BY priority DESC, id ASC`, poolID)
 	if err != nil {
@@ -480,7 +480,7 @@ func (l *Ledger) DeleteQuotaSchedule(ctx context.Context, id string) error {
 }
 
 func (l *Ledger) loadScheduleReserves(ctx context.Context, scheduleID string) ([]ReserveRule, error) {
-	rows, err := l.db.QueryContext(ctx, `SELECT window, percent FROM quota_schedule_reserves WHERE schedule_id = ? ORDER BY rowid`, scheduleID)
+	rows, err := l.rdb.QueryContext(ctx, `SELECT window, percent FROM quota_schedule_reserves WHERE schedule_id = ? ORDER BY rowid`, scheduleID)
 	if err != nil {
 		return nil, fmt.Errorf("ledger: schedule reserves: %w", err)
 	}

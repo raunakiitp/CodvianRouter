@@ -151,7 +151,7 @@ func budgetResetTimeParts(resetTime string) (hours, minutes int) {
 // record $0, so no extra filter is needed.
 func (l *Ledger) budgetWindowSpent(ctx context.Context, keyID string, start, end time.Time) (float64, error) {
 	var spent float64
-	err := l.db.QueryRowContext(ctx,
+	err := l.rdb.QueryRowContext(ctx,
 		`SELECT COALESCE(SUM(cost_usd), 0) FROM usage_events
 		WHERE gateway_key_id = ? AND ts >= ? AND ts < ? AND shared = 0`,
 		keyID, start.UnixMilli(), end.UnixMilli()).Scan(&spent)

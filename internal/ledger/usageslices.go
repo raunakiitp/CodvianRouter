@@ -39,7 +39,7 @@ type ModelUsageSlice struct {
 // in [start, end). Empty (not an error) when the key used nothing
 // in the window.
 func (l *Ledger) UsageSlices(ctx context.Context, keyID string, start, end time.Time) ([]ModelUsageSlice, error) {
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT provider, model, COUNT(*),
 		       COALESCE(SUM(prompt_tokens), 0),
 		       COALESCE(SUM(completion_tokens), 0),

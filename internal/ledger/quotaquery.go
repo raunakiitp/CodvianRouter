@@ -100,7 +100,7 @@ func Utilisation(spent, limit float64) float64 {
 // nothing. A pair with no rows spends $0.
 func (l *Ledger) SpendForProviderModel(ctx context.Context, provider, model string, since time.Time) (float64, error) {
 	var total sql.NullFloat64
-	err := l.db.QueryRowContext(ctx, `
+	err := l.rdb.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(cost_usd), 0) FROM usage_events
 		WHERE provider = ? AND model = ? AND ts >= ? AND shared = 0`,
 		provider, model, since.UnixMilli()).Scan(&total)
@@ -129,7 +129,7 @@ func (l *Ledger) PairQuota(ctx context.Context, provider, model string, now time
 	fiveHStart := now.Add(-RollingWindow).UnixMilli()
 	sevenDStart := now.Add(-WeeklyWindow).UnixMilli()
 	var oldestMs sql.NullInt64
-	err := l.db.QueryRowContext(ctx, `
+	err := l.rdb.QueryRowContext(ctx, `
 		SELECT
 		  COALESCE(SUM(CASE WHEN ts >= ? THEN cost_usd ELSE 0 END), 0),
 		  COALESCE(SUM(cost_usd), 0),

@@ -142,7 +142,7 @@ func (l *Ledger) tokenWindowUsed(ctx context.Context, keyID, provider, model str
 		args = append(args, model)
 	}
 	var used int
-	if err := l.db.QueryRowContext(ctx, query, args...).Scan(&used); err != nil {
+	if err := l.rdb.QueryRowContext(ctx, query, args...).Scan(&used); err != nil {
 		return 0, fmt.Errorf("ledger: token window usage: %w", err)
 	}
 	return used, nil

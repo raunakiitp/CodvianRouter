@@ -82,7 +82,7 @@ func (l *Ledger) upsertLearnedRateLimit(ctx context.Context, providerID, keyID, 
 // TTL. One signal per (provider, key), requests and tokens combined
 // from their rows.
 func (l *Ledger) LearnedRateLimits(ctx context.Context, now time.Time) ([]LearnedRateLimit, error) {
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT provider_id, provider_key_id, kind, limit_value, remaining, reset_at_ms, updated_ms
 		FROM learned_rate_limits
 		WHERE (reset_at_ms IS NULL OR reset_at_ms > ?)
