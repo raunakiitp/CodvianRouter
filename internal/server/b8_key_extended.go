@@ -49,9 +49,19 @@ func (s *Server) handleKeyDisable(w http.ResponseWriter, r *http.Request) {
 	defer s.keyMu.Unlock()
 	for i := range s.cfg.GatewayKeys {
 		if s.cfg.GatewayKeys[i].ID == id {
+			// AUD-CODE-001: persist BEFORE claiming success. A
+			// failed write used to answer 200 anyway, so the key
+			// came back enabled on the next start while the
+			// operator believed it was disabled — a security
+			// operation that silently did not happen.
+			prev := s.cfg.GatewayKeys[i].Disabled
 			s.cfg.GatewayKeys[i].Disabled = true
-			if s.configPersist != nil {
-				_ = s.configPersist()
+			if err := s.persistConfig(); err != nil {
+				// Roll the in-memory state back so it can never
+				// diverge from the file, and say what happened.
+				s.cfg.GatewayKeys[i].Disabled = prev
+				writeError(w, http.StatusInternalServerError, "key state was not persisted: "+err.Error())
+				return
 			}
 			writeJSON(w, http.StatusOK, map[string]any{
 				"id":       id,
@@ -82,8 +92,14 @@ func (s *Server) handleKeyEnable(w http.ResponseWriter, r *http.Request) {
 	defer s.keyMu.Unlock()
 	for i := range s.cfg.GatewayKeys {
 		if s.cfg.GatewayKeys[i].ID == id {
+			// AUD-CODE-001: same truthful-persistence rule as disable.
+			prev := s.cfg.GatewayKeys[i].Disabled
 			s.cfg.GatewayKeys[i].Disabled = false
-			s.persistConfig()
+			if err := s.persistConfig(); err != nil {
+				s.cfg.GatewayKeys[i].Disabled = prev
+				writeError(w, http.StatusInternalServerError, "key state was not persisted: "+err.Error())
+				return
+			}
 			writeJSON(w, http.StatusOK, map[string]any{
 				"id":       id,
 				"disabled": false,
@@ -114,8 +130,22 @@ func (s *Server) handleKeyRevoke(w http.ResponseWriter, r *http.Request) {
 	defer s.keyMu.Unlock()
 	for i, k := range s.cfg.GatewayKeys {
 		if k.ID == id {
+			// AUD-CODE-001: a revocation that did not reach the file
+			// must NOT answer "revoked" — the credential would come
+			// back alive on the next start. Restore the key and fail.
+			removed := s.cfg.GatewayKeys[i]
 			s.cfg.GatewayKeys = append(s.cfg.GatewayKeys[:i], s.cfg.GatewayKeys[i+1:]...)
-			s.persistConfig()
+			if err := s.persistConfig(); err != nil {
+				// Put the key back at its old position: grow by one
+				// (duplicate the tail), shift right, then overwrite.
+				keys := s.cfg.GatewayKeys
+				keys = append(keys, keys[len(keys)-1])
+				copy(keys[i+1:], keys[i:])
+				keys[i] = removed
+				s.cfg.GatewayKeys = keys
+				writeError(w, http.StatusInternalServerError, "key state was not persisted: "+err.Error())
+				return
+			}
 			writeJSON(w, http.StatusOK, map[string]any{
 				"id":     id,
 				"status": "revoked",
@@ -273,11 +303,18 @@ func generateSecureToken(n int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// persistConfig calls s.configPersist if set (no-op otherwise).
-func (s *Server) persistConfig() {
-	if s.configPersist != nil {
-		_ = s.configPersist()
+// persistConfig saves the config file after a state change and RETURNS
+// the error (AUD-CODE-001). It used to swallow the error, so a
+// security-sensitive change (disable/enable/revoke) could answer 200
+// while nothing was written — the in-memory state and the persisted
+// state silently diverged, and the change was lost on restart. Callers
+// must treat an error as a failed operation: roll the change back and
+// report it. A nil hook (no persistence wired) is not an error.
+func (s *Server) persistConfig() error {
+	if s.configPersist == nil {
+		return nil
 	}
+	return s.configPersist()
 }
 
 // registerB8KeyRoutes registers all B8 key management endpoints.
