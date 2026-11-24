@@ -246,3 +246,43 @@ the master prompt"; (3) internal `parity tracker` references with no competitor 
 plumbing in ~100 source comments and `scripts/parity.sh`); (4) provider-catalog entries where the name is a real
 integrated upstream provider (`internal/catalog`, `internal/modelsync`, `internal/config`), not parity tracking.
 `git grep -inE "omniroute|cheaper-inference"` over the tree is empty.
+
+---
+
+# FINAL RECONCILIATION (authoritative — supersedes the status tables above)
+
+Reconciled line by line against the current source on `post-p1-remediation`, not against earlier prose. Where an
+earlier table disagrees with this section, **this section is correct**; the disagreements are listed at the end.
+
+**Totals: 81 findings** (the original 80 plus AUD-SEC-011, discovered during this campaign) — 2 CRITICAL, **7 HIGH**
+(AUD-SEC-011 added), 22 MEDIUM, 41 LOW, 9 INFO.
+
+## P0 / P1 status, with the evidence that was actually checked
+
+| Finding | Sev | Status | Evidence checked in the current source |
+|---|---|---|---|
+| AUD-SEC-001 | CRIT | **FIXED** | `callerKeyID` resolves via `requestKey` (Bearer/X-Api-Key/X-Goog-Api-Key); `keyPolicyAllows` fails closed; `batchVisible` matches owner exactly; six batch routes route through `batchCaller`. 4 tests pass. |
+| AUD-SEC-002 | HIGH | **FIXED** | one relayed-spend row per request; missing usage charged a conservative priced estimate (`LocalEstimatePromptTokens`); 402/429 once the cap is passed. 6 + 11 tests + falsification. |
+| AUD-SEC-009 | CRIT | **PARTIAL — owner-side only** | `remote.origin.url` is now `https://github.com/raunakiitp/CodvianRouter.git` with no userinfo; pushes authenticate via `gh auth git-credential`. Remaining: revoke the exposed token at GitHub — not verifiable from the repo. |
+| AUD-SEC-010 | MED | **FIXED** | owner-scoped store + versioned index + admin-gated `LegacyUnowned`/`ReclaimLegacy`; empty owner refused; no cross-key reassignment. 7 tests on a real v1 fixture. |
+| AUD-SEC-011 | HIGH | **FIXED (hygiene); liveness owner-side** | issued-format gateway keys redacted from two published benchmark documents; both re-validated as JSON. |
+| AUD-REL-001 | HIGH | **FIXED** | 429 + upstream `Retry-After` (zero clamps to 1s), quota clamped to 402, upstream 4xx keeps its status. 7 tests. |
+| AUD-REL-005 | MED | **FIXED** | quarantine only on positively identified corruption, probed on a copy; operational failures leave DB and sidecars untouched. 13 tests. |
+| AUD-PERF-001 | HIGH | **FIXED** | O(1) stream counter + proven client-disconnect cancellation + single-attempt no-retry. 5 tests + benchmark. |
+| AUD-PERF-002 | HIGH | **FIXED** | separate reader pool (`l.rdb`) with the single writer on `l.db`; reader-not-blocked tests. Latency-regression claim withdrawn earlier. |
+| AUD-PERF-003 | MED | **FIXED** (previously under-recorded as OPEN) | `Registry.PooledTransport` + `RelayTarget.KeyFingerprint`; relay and Nadir reuse the warm pool; benchmark under one dial/op; connection-count tests. |
+| AUD-PERF-004 | MED | **FIXED** (previously under-recorded as OPEN) | per-request `RequestMemo`; compute-count tests (1 across 5 calls, 0 on hit); 11013 → 46.87 ns/op. |
+| AUD-API-001 | **HIGH** (was mislabelled LOW in two tables) | **FIXED** | all handler error sites use `writeAnthropicError`, and the readiness gate — the residual found in this reconciliation — now does too; envelope asserted for `/v1/messages`. |
+| AUD-CODE-001 | **HIGH** (was mislabelled LOW in two tables) | **FIXED** | persist-before-success with in-memory rollback and 500 on failure. 5 tests. |
+| AUD-DOC-001/002 | MED | **FIXED** (with documented exceptions) | parity documents deleted; competitor-named clusters and citations neutralised across docs, CHECKLIST, ROADMAP and code comments; `git grep` for the competitor names is empty. Kept and disclosed: supply-chain incident citations, `docs/GOAL.md`, competitor-free parity tooling, real provider-catalog entries. |
+| AUD-TEST-001 | MED/P1 | **PARTIAL** | drivers run hermetically and execute; the vendor-header auth and trace expectations are corrected and the trace-pollution defect is fixed. **Not closed:** `A7` still returns `status=0 [WinError 10054]` on this host despite bounded retries, and the CI workflow is unpushed (no `workflow` scope). Not claimed green. |
+| AUD-TEST-002 | MED/P1 | **FIXED** | `scripts/ci.sh` now builds and tests `-tags otel`; verified locally (build 0, package ok). |
+| AUD-TEST-003 | MED/P1 | **OPEN — BLOCKED on workflow scope** | `.github/workflows/supply-chain.yml:28` still runs `govulncheck … || true` (a gate that can never fail) and installs `@latest` unpinned. The fix is written but cannot be pushed without the `workflow` scope; suppressing it was not an option under the project rules. |
+
+## Earlier tables that this section corrects
+
+- AUD-API-001 and AUD-CODE-001 are **HIGH**; two tables labelled them LOW.
+- AUD-SEC-010 is **MEDIUM** and must not be counted among the HIGH fixes.
+- AUD-PERF-003 and AUD-PERF-004 were listed OPEN by a catch-all row while the code and tests were already in place.
+- AUD-SEC-009 is **PARTIAL**, not wholly external: the local remote-URL half is fixed in this branch.
+- AUD-SEC-001's "seven batch routes" is six (`server.go:1917-1922`).
