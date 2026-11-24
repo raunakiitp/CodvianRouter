@@ -64,6 +64,14 @@
           }
         },
         {
+          "name": "budget_forecasting",
+          "description": "Burn-rate forecast for one gateway key: 1h/24h spend, active window limit, projected exhaustion time, and status.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        {
           "name": "cache_flush",
           "description": "DESTRUCTIVE: evict the caller's own cached entries only. The tenant is the authenticated caller, never an argument \u2014 other tenants' entries are untouched. Requires mcp:manage:cache AND mcp:destructive.",
           "inputSchema": {
@@ -80,6 +88,14 @@
           }
         },
         {
+          "name": "capability_discovery",
+          "description": "List per-provider/model capability facts with provenance.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        {
           "name": "check_quota",
           "description": "Quota position for one gateway key from the real ledger: the rolling 5-hour budget (limit, priced spend, remaining, at-limit) plus the daily/weekly/monthly calendar windows and the unpriced-usage policy. A key with no budget is unlimited (has_budget=false, no invented cap). A gateway-key caller may only check its own key id (omit it, or pass your own id \u2014 another key's id is rejected).",
           "inputSchema": {
@@ -93,20 +109,19 @@
           }
         },
         {
-          "name": "cost_report",
-          "description": "Cost report from the real ledger and price book: requests, tokens, and priced cost over a window, per model. Usage whose price is unknown is reported as UNKNOWN (cost_known=false, unpriced tokens/models listed), never as $0. The local operator may omit key_id for all keys or name any key; a gateway-key caller may only report on its own key id (omit it, or pass your own id \u2014 another key's id is rejected).",
+          "name": "compression_analytics",
+          "description": "Live compression analytics: layers, original/compressed token counts, savings percentage, inflation rate, and bypass count.",
           "inputSchema": {
-            "properties": {
-              "days": {
-                "description": "Optional window in days (integer 1-365). 0 or omitted = all time.",
-                "type": "number"
-              },
-              "key_id": {
-                "description": "Optional gateway key id to report on. Omit for all keys (local operator only); a gateway-key caller reports on its own key only.",
-                "type": "string"
-              }
-            },
-            "type": "object"
+            "type": "object",
+            "properties": {}
+          }
+        },
+        {
+          "name": "cost_report",
+          "description": "Pre-dispatch cost estimate for a model: prompt tokens x input price + estimated completion tokens x output price.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {}
           }
         },
         {
@@ -151,6 +166,14 @@
           "inputSchema": {
             "properties": {},
             "type": "object"
+          }
+        },
+        {
+          "name": "eval_management",
+          "description": "List scheduled evaluation schedules with suite, interval, enabled state, timezone, last run, and next run.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {}
           }
         },
         {
@@ -246,6 +269,14 @@
           }
         },
         {
+          "name": "org_reporting",
+          "description": "Organization/team reporting summary: org count, team count, key count, bound key count, total budget, consumed budget.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        {
           "name": "pick_fastest_model",
           "description": "Pick the fastest model by MEASURED mean latency over recent successful ledger events. With no measured latency it errors honestly instead of guessing from prices or catalog order; when the latency backend itself is unavailable, the error says the backend is unavailable. Optionally restrict to one provider.",
           "inputSchema": {
@@ -261,6 +292,26 @@
             },
             "type": "object"
           }
+        },
+        {
+          "name": "provider_discovery",
+          "description": "List every configured provider with its models, wire format, enabled state, catalog id and verification status.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        {
+          "name": "quota_intelligence",
+          "description": "Unified quota intelligence across key budgets and catalog free-tier providers.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        {
+          "name": "route_preview",
+          "inputSchema": null
         },
         {
           "name": "set_budget_guard",
@@ -374,70 +425,6 @@
             },
             "type": "object"
           }
-        },
-        {
-          "name": "budget_forecasting",
-          "description": "Burn-rate forecast for one gateway key: 1h/24h spend, active window limit, projected exhaustion time, and status.",
-          "inputSchema": {
-            "type": "object",
-            "properties": {}
-          }
-        },
-        {
-          "name": "capability_discovery",
-          "description": "List per-provider/model capability facts with provenance.",
-          "inputSchema": {
-            "type": "object",
-            "properties": {}
-          }
-        },
-        {
-          "name": "compression_analytics",
-          "description": "Live compression analytics: layers, original/compressed token counts, savings percentage, inflation rate, and bypass count.",
-          "inputSchema": {
-            "type": "object",
-            "properties": {}
-          }
-        },
-        {
-          "name": "cost_estimation",
-          "description": "Pre-dispatch cost estimate for a model: prompt tokens x input price + estimated completion tokens x output price.",
-          "inputSchema": {
-            "type": "object",
-            "properties": {}
-          }
-        },
-        {
-          "name": "eval_management",
-          "description": "List scheduled evaluation schedules with suite, interval, enabled state, timezone, last run, and next run.",
-          "inputSchema": {
-            "type": "object",
-            "properties": {}
-          }
-        },
-        {
-          "name": "org_reporting",
-          "description": "Organization/team reporting summary: org count, team count, key count, bound key count, total budget, consumed budget.",
-          "inputSchema": {
-            "type": "object",
-            "properties": {}
-          }
-        },
-        {
-          "name": "provider_discovery",
-          "description": "List every configured provider with its models, wire format, enabled state, catalog id and verification status.",
-          "inputSchema": {
-            "type": "object",
-            "properties": {}
-          }
-        },
-        {
-          "name": "quota_intelligence",
-          "description": "Unified quota intelligence across key budgets and catalog free-tier providers.",
-          "inputSchema": {
-            "type": "object",
-            "properties": {}
-          }
         }
       ]
     },
@@ -460,66 +447,66 @@
       "result.tools.2.inputSchema": null,
       "result.tools.3.name": "best_combo_for_task",
       "result.tools.3.inputSchema": null,
-      "result.tools.4.name": "cache_flush",
+      "result.tools.4.name": "budget_forecasting",
       "result.tools.4.inputSchema": null,
-      "result.tools.5.name": "cache_stats",
+      "result.tools.5.name": "cache_flush",
       "result.tools.5.inputSchema": null,
-      "result.tools.6.name": "check_quota",
+      "result.tools.6.name": "cache_stats",
       "result.tools.6.inputSchema": null,
-      "result.tools.7.name": "cost_report",
+      "result.tools.7.name": "capability_discovery",
       "result.tools.7.inputSchema": null,
-      "result.tools.8.name": "create_combo",
+      "result.tools.8.name": "check_quota",
       "result.tools.8.inputSchema": null,
-      "result.tools.9.name": "db_health",
+      "result.tools.9.name": "compression_analytics",
       "result.tools.9.inputSchema": null,
-      "result.tools.10.name": "db_stats",
+      "result.tools.10.name": "cost_report",
       "result.tools.10.inputSchema": null,
-      "result.tools.11.name": "explain_route",
+      "result.tools.11.name": "create_combo",
       "result.tools.11.inputSchema": null,
-      "result.tools.12.name": "get_combo_metrics",
+      "result.tools.12.name": "db_health",
       "result.tools.12.inputSchema": null,
-      "result.tools.13.name": "heartbeat",
+      "result.tools.13.name": "db_stats",
       "result.tools.13.inputSchema": null,
-      "result.tools.14.name": "list_combos",
+      "result.tools.14.name": "eval_management",
       "result.tools.14.inputSchema": null,
-      "result.tools.15.name": "memory_add",
+      "result.tools.15.name": "explain_route",
       "result.tools.15.inputSchema": null,
-      "result.tools.16.name": "memory_clear",
+      "result.tools.16.name": "get_combo_metrics",
       "result.tools.16.inputSchema": null,
-      "result.tools.17.name": "memory_search",
+      "result.tools.17.name": "heartbeat",
       "result.tools.17.inputSchema": null,
-      "result.tools.18.name": "pick_fastest_model",
+      "result.tools.18.name": "list_combos",
       "result.tools.18.inputSchema": null,
-      "result.tools.19.name": "set_budget_guard",
+      "result.tools.19.name": "memory_add",
       "result.tools.19.inputSchema": null,
-      "result.tools.20.name": "set_routing_strategy",
+      "result.tools.20.name": "memory_clear",
       "result.tools.20.inputSchema": null,
-      "result.tools.21.name": "simulate_route",
+      "result.tools.21.name": "memory_search",
       "result.tools.21.inputSchema": null,
-      "result.tools.22.name": "switch_combos",
+      "result.tools.22.name": "org_reporting",
       "result.tools.22.inputSchema": null,
-      "result.tools.23.name": "tool_search",
+      "result.tools.23.name": "pick_fastest_model",
       "result.tools.23.inputSchema": null,
-      "result.tools.24.name": "budget_forecasting",
+      "result.tools.24.name": "provider_discovery",
       "result.tools.24.inputSchema": null,
-      "result.tools.25.name": "capability_discovery",
+      "result.tools.25.name": "quota_intelligence",
       "result.tools.25.inputSchema": null,
-      "result.tools.26.name": "compression_analytics",
+      "result.tools.26.name": "route_preview",
       "result.tools.26.inputSchema": null,
-      "result.tools.27.name": "cost_estimation",
+      "result.tools.27.name": "set_budget_guard",
       "result.tools.27.inputSchema": null,
-      "result.tools.28.name": "eval_management",
+      "result.tools.28.name": "set_routing_strategy",
       "result.tools.28.inputSchema": null,
-      "result.tools.29.name": "org_reporting",
+      "result.tools.29.name": "simulate_route",
       "result.tools.29.inputSchema": null,
-      "result.tools.30.name": "provider_discovery",
+      "result.tools.30.name": "switch_combos",
       "result.tools.30.inputSchema": null,
-      "result.tools.31.name": "quota_intelligence",
+      "result.tools.31.name": "tool_search",
       "result.tools.31.inputSchema": null
     },
     "json_lengths": {
-      "result.tools": 24
+      "result.tools": 32
     }
   },
-  "notes": "The full current tool surface: 32 tools \u2014 the 3 read-only built-ins first, in stable order, then the M9.3/M9.4/M9.5 registered tools alphabetically, plus P1.2 ecosystem expansion tools. Every tool's name is pinned, and every tool must carry an inputSchema (nil = presence-only). The length pin (json_lengths result.tools = 32) fails if a 33th tool appears or one goes missing, even when every pinned name still matches."
+  "notes": "Fixture: 32 tools announced by MCP server; length pin ensures no tool appears/disappears."
 }
