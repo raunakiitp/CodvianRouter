@@ -286,3 +286,11 @@ earlier table disagrees with this section, **this section is correct**; the disa
 - AUD-PERF-003 and AUD-PERF-004 were listed OPEN by a catch-all row while the code and tests were already in place.
 - AUD-SEC-009 is **PARTIAL**, not wholly external: the local remote-URL half is fixed in this branch.
 - AUD-SEC-001's "seven batch routes" is six (`server.go:1917-1922`).
+
+### AUD-SEC-012 — A reachable vulnerable dependency was invisible because the vulnerability gate could never fail — **FIXED**
+- **Sev/Pri:** HIGH / P0 · **Category:** Security / supply chain · **RT:** yes (the gate itself, now enforced)
+- **Location:** `github.com/gorilla/websocket@v1.5.3` (`go.mod`), reachable at `internal/server/server.go:5848` (`handleWebSocketChat` → `websocket.Upgrader.Upgrade`), `:5853` (`websocket.Conn.Close`), `:6005` (`runWSChatStream` → `websocket.Conn.WriteMessage`).
+- **Evidence:** `govulncheck ./...` reported **GO-2026-6278** ("Gorilla WebSocket Uses Cryptographically Weak PRNG for WebSocket Mask Key"), *"Your code is affected by 1 vulnerability from 1 module"*, with four reachability traces through the WebSocket chat path. It surfaced only after AUD-TEST-003 removed `|| true`: the old step exited 0 on a report full of reachable findings, so this had never been seen. `Fixed in: github.com/gorilla/websocket@v1.5.4-0.20240701034025-d67f41855da4`.
+- **Impact:** the WebSocket mask key is generated with a weak PRNG; masking is what prevents a proxy from predicting frame contents, so a predictable mask weakens the confidentiality of the WebSocket chat surface.
+- **Resolution:** the module is upgraded to the fixed version (`go mod tidy` moves it out of the indirect block, so the direct dependency is now explicit). `go build ./...` exit 0 and the WebSocket/chat tests in `internal/server` pass. The upstream fix is a pseudo-version because no tagged release carries it yet.
+- **Status:** FIXED, verified by re-running the pinned scanner (`govulncheck@v1.10.0`) after the upgrade.
