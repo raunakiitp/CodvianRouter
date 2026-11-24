@@ -86,15 +86,15 @@ func toolCapabilityDiscovery(s *Server, args map[string]any) (map[string]any, st
 			}
 		}
 		out = append(out, map[string]any{
-			"provider_id":    e.ProviderID,
-			"model_id":       e.ModelID,
-			"capability":     e.Capability,
-			"supported":      supported,
-			"native":         e.Native,
-			"source":         e.Source,
-			"verified_at":    e.VerifiedAt,
-			"confidence":     e.Confidence,
-			"documentation":  e.Documentation,
+			"provider_id":   e.ProviderID,
+			"model_id":      e.ModelID,
+			"capability":    e.Capability,
+			"supported":     supported,
+			"native":        e.Native,
+			"source":        e.Source,
+			"verified_at":   e.VerifiedAt,
+			"confidence":    e.Confidence,
+			"documentation": e.Documentation,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -192,13 +192,13 @@ func toolBudgetForecasting(s *Server, args map[string]any) (map[string]any, stri
 		return nil, "unavailable: " + err.Error()
 	}
 	out := map[string]any{
-		"key_id":               fc.KeyID,
+		"key_id":                 fc.KeyID,
 		"burn_rate_usd_per_hour": fc.BurnRateUSDPerHour,
-		"spend_usd_24h":        fc.SpendUSD24h,
-		"limit_usd":            fc.LimitUSD,
-		"limit_known":          fc.LimitKnown,
-		"insufficient_data":    fc.InsufficientData,
-		"updated_at":           fc.UpdatedAt,
+		"spend_usd_24h":          fc.SpendUSD24h,
+		"limit_usd":              fc.LimitUSD,
+		"limit_known":            fc.LimitKnown,
+		"insufficient_data":      fc.InsufficientData,
+		"updated_at":             fc.UpdatedAt,
 	}
 	if fc.ProjectedExhaustAt != "" {
 		out["projected_exhaust_at"] = fc.ProjectedExhaustAt
@@ -216,7 +216,7 @@ func init() {
 		Name:        "route_preview",
 		Description: "Dry-run route preview: given a model, returns eligible candidates, estimated cost, strategy, and notes. Makes no provider call and consumes no quota.",
 		InputSchema: schemaProps(map[string]any{
-			"model":       strProp("Model id (required)."),
+			"model":         strProp("Model id (required)."),
 			"prompt_tokens": numProp("Optional prompt token count for context-fit check."),
 		}, []string{"model"}),
 	}, toolRoutePreview)
@@ -242,17 +242,17 @@ func toolRoutePreview(s *Server, args map[string]any) (map[string]any, string) {
 	}
 
 	out := map[string]any{
-		"model":                 model,
-		"eligible_candidates":   routeAttemptsToAny(expl.Attempts),
-		"rejected_candidates":   []any{},
-		"rejection_reasons":     expl.Note,
-		"estimated_cost_usd":    sim.EstimatedPromptCostUSD,
-		"cost_known":            sim.CostKnown,
-		"prompt_tokens":         sim.PromptTokens,
-		"strategy":              expl.Strategy,
-		"rule":                  expl.Rule,
-		"combo":                 expl.Combo,
-		"note":                  expl.Note + " Dry run — no provider call made, no quota consumed.",
+		"model":               model,
+		"eligible_candidates": routeAttemptsToAny(expl.Attempts),
+		"rejected_candidates": []any{},
+		"rejection_reasons":   expl.Note,
+		"estimated_cost_usd":  sim.EstimatedPromptCostUSD,
+		"cost_known":          sim.CostKnown,
+		"prompt_tokens":       sim.PromptTokens,
+		"strategy":            expl.Strategy,
+		"rule":                expl.Rule,
+		"combo":               expl.Combo,
+		"note":                expl.Note + " Dry run — no provider call made, no quota consumed.",
 	}
 	return map[string]any{
 		"content": []any{map[string]any{"type": "text", "text": marshalJSON(out)}},
@@ -273,13 +273,13 @@ func init() {
 func toolCompressionAnalytics(s *Server, args map[string]any) (map[string]any, string) {
 	stats := s.src.CompressionStats()
 	out := map[string]any{
-		"layers":           stats.Layers,
-		"original_tokens":  stats.OriginalTokens,
+		"layers":            stats.Layers,
+		"original_tokens":   stats.OriginalTokens,
 		"compressed_tokens": stats.CompressedTokens,
-		"savings_pct":      stats.SavingsPct,
-		"inflation_rate":   stats.InflationRate,
-		"bypass_count":     stats.BypassCount,
-		"last_updated":     stats.LastUpdated,
+		"savings_pct":       stats.SavingsPct,
+		"inflation_rate":    stats.InflationRate,
+		"bypass_count":      stats.BypassCount,
+		"last_updated":      stats.LastUpdated,
 	}
 	return map[string]any{
 		"content": []any{map[string]any{"type": "text", "text": marshalJSON(out)}},
@@ -305,12 +305,12 @@ func toolEvalManagement(s *Server, args map[string]any) (map[string]any, string)
 	rows := make([]map[string]any, 0, len(schedules))
 	for _, sch := range schedules {
 		rows = append(rows, map[string]any{
-			"id":             sch.ID,
-			"suite":          sch.Suite,
-			"every_sec":      sch.EverySec,
-			"enabled":        sch.Enabled,
-			"timezone":       sch.TimeZone,
-			"last_run":       sch.LastRun,
+			"id":              sch.ID,
+			"suite":           sch.Suite,
+			"every_sec":       sch.EverySec,
+			"enabled":         sch.Enabled,
+			"timezone":        sch.TimeZone,
+			"last_run":        sch.LastRun,
 			"use_real_engine": sch.UseRealEngine,
 		})
 	}
@@ -389,11 +389,11 @@ func routeAttemptsToAny(attempts []RouteAttempt) []any {
 	out := make([]any, 0, len(attempts))
 	for _, a := range attempts {
 		entry := map[string]any{
-			"provider":       a.Provider,
-			"provider_name":  a.ProviderName,
-			"model":          a.Model,
-			"enabled":        a.Enabled,
-			"price_known":    a.PriceKnown,
+			"provider":      a.Provider,
+			"provider_name": a.ProviderName,
+			"model":         a.Model,
+			"enabled":       a.Enabled,
+			"price_known":   a.PriceKnown,
 		}
 		if a.PromptUSDPer1M != nil {
 			entry["prompt_usd_per_1m"] = *a.PromptUSDPer1M
