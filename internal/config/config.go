@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/autorouter"
+	"github.com/raunakiitp/codvian-router/internal/capability"
 	"github.com/raunakiitp/codvian-router/internal/guardrails"
 	"github.com/raunakiitp/codvian-router/internal/mcptools"
 	"github.com/raunakiitp/codvian-router/internal/plugins"
@@ -1271,6 +1272,15 @@ type RoutingConfig struct {
 	// default (5); the engine clamps any value above 200 to 200,
 	// and Validate rejects values outside [1, 200] when set.
 	MaxAttempts int `json:"max_attempts,omitempty"`
+	// RequireCapabilities (P1.5) lists capability names that every
+	// routing attempt must hold with VERIFIED support before it is
+	// dialled: e.g. ["vision"], ["tool_calling"]. A model whose
+	// capability is unknown or merely declared (unverified) does
+	// NOT satisfy a requirement — absence of evidence is never
+	// treated as support. Empty (the default) applies no filter.
+	// Unknown names are rejected at load, with the full vocabulary
+	// in the error, never silently ignored.
+	RequireCapabilities []string `json:"require_capabilities,omitempty"`
 	// PerTargetTimeoutMs bounds one non-streaming attempt's
 	// time-to-first-response in milliseconds (M4.7c). 0 means the
 	// 120 s default; -1 disables the timeout. Streaming attempts
@@ -1821,6 +1831,14 @@ func (c *Config) Validate() error {
 		// load, with the field named — never silently.
 		if !isCooldownMode(rc.CooldownMode) {
 			return fmt.Errorf("config: routing.cooldown_mode %q is not a known cooldown mode (hard, soft-demote)", rc.CooldownMode)
+		}
+		// Capability requirements (P1.5): each name must be one the
+		// capability registry can actually record, otherwise the
+		// filter would silently skip every attempt forever.
+		for _, name := range rc.RequireCapabilities {
+			if _, ok := capability.ParseCapability(name); !ok {
+				return fmt.Errorf("config: routing.require_capabilities %q is not a known capability (known: %s)", name, strings.Join(capability.KnownCapabilities(), ", "))
+			}
 		}
 		for model, m := range rc.ChainCooldownModes {
 			if model == "" {
@@ -3403,6 +3421,9 @@ func (c *Config) cloneRoutingLocked() *RoutingConfig {
 		for k, v := range c.Routing.ChainCooldownModes {
 			out.ChainCooldownModes[k] = v
 		}
+	}
+	if c.Routing.RequireCapabilities != nil {
+		out.RequireCapabilities = append([]string(nil), c.Routing.RequireCapabilities...)
 	}
 	if c.Routing.AccountFallbackStrategies != nil {
 		out.AccountFallbackStrategies = make(map[string]string, len(c.Routing.AccountFallbackStrategies))

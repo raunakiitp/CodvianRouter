@@ -50,6 +50,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/adaptive"
 	"github.com/raunakiitp/codvian-router/internal/autorouter"
 	"github.com/raunakiitp/codvian-router/internal/cache"
+	"github.com/raunakiitp/codvian-router/internal/capability"
 	"github.com/raunakiitp/codvian-router/internal/coalescing"
 	"github.com/raunakiitp/codvian-router/internal/compress"
 	"github.com/raunakiitp/codvian-router/internal/config"
@@ -588,6 +589,20 @@ type Config struct {
 	// candidate never wins an audio-blocked request. If nil,
 	// the bridge falls back to the vision-only pool.
 	ModalityPool func() []modality.Candidate
+	// CapabilityLookup reports one model's unified capability record
+	// (P1.5). ok is false when the provider/model pair is unknown,
+	// which the filter treats as "no capability is verified" — never
+	// as an empty set that passes. Set by CapabilityLookupFunc over
+	// a capability.Index. Consulted only when RequireCapabilities is
+	// non-empty, so it must stay cheap.
+	CapabilityLookup func(providerID, model string) (capability.ModelCapabilities, bool)
+	// RequireCapabilities lists capabilities an attempt must hold
+	// with verification (Support == supported && Verification ==
+	// verified) to be dialled. Empty means no filter — the default
+	// path is unchanged. Unknown and merely-declared capabilities
+	// never satisfy a requirement: absence of evidence is not
+	// evidence of support.
+	RequireCapabilities []capability.Capability
 	// EffortBudgetFor, if set, returns the operator-declared
 	// thinking-token budget for one (wire, effort) pair
 	// (CHECKLIST 285-286): the `reasoning.effort_budgets`
@@ -2766,6 +2781,30 @@ func ModalityPoolFunc(reg *provider.Registry) func() []modality.Candidate {
 			}
 		}
 		return out
+	}
+}
+
+// CapabilityLookupFromRegistry adapts a provider registry to
+// Config.CapabilityLookup (P1.5), computing each model's capability set
+// on demand from the same sources the API reports. A live lookup means
+// the routing gate never consults a stale snapshot: a model added or
+// synced a second ago is already seen. A nil registry reports
+// ok=false for every pair.
+func CapabilityLookupFromRegistry(reg *provider.Registry) func(providerID, model string) (capability.ModelCapabilities, bool) {
+	b := capability.Builder{Registry: reg}
+	return func(providerID, model string) (capability.ModelCapabilities, bool) {
+		return b.Model(providerID, model)
+	}
+}
+
+// CapabilityLookupFunc adapts a capability.Index to
+// Config.CapabilityLookup (P1.5). A model missing from the index
+// reports ok=false — the router's capability gate treats that as
+// "nothing verified" and skips the attempt when a capability is
+// required. A nil index reports ok=false for every pair.
+func CapabilityLookupFunc(idx *capability.Index) func(providerID, model string) (capability.ModelCapabilities, bool) {
+	return func(providerID, model string) (capability.ModelCapabilities, bool) {
+		return idx.Lookup(providerID, model)
 	}
 }
 
@@ -5170,6 +5209,29 @@ func (e *Engine) chatWithChainStrategy(ctx context.Context, chain []Attempt, req
 		// the loop top, so a target skipped by a gate is never
 		// counted as stepped-to.
 		e.noteRegionFailoverFromTrace(trace, att, &regionCounted)
+
+		// P1.5 capability gate: when the request (or operator policy)
+		// requires capabilities, an attempt must hold every one of them
+		// with VERIFIED support. Unknown is not evidence of support and
+		// never passes — unlike the CT-1 tool pre-check below, which
+		// fails open by design for plain chat traffic. No filter is
+		// applied when RequireCapabilities is empty, so default routing
+		// is unchanged.
+		if len(e.cfg.RequireCapabilities) > 0 && e.cfg.CapabilityLookup != nil {
+			mc, known := e.cfg.CapabilityLookup(att.ProviderID, att.Model)
+			missing := ""
+			for _, need := range e.cfg.RequireCapabilities {
+				if !known || !mc.HasVerified(need) {
+					missing = string(need)
+					break
+				}
+			}
+			if missing != "" {
+				addTraceAttempt(trace, att, 0, "skipped_capability_unverified:"+missing, nil)
+				idx++
+				continue
+			}
+		}
 
 		// CT-1 direct-path tool-capability pre-check: a
 		// tool-bearing request never dials a CONFIRMED-incapable

@@ -594,6 +594,10 @@ type Server struct {
 	providerRemovedHook    ProviderRemovedHook     // nil = removed providers stay live in the engine until restart (honest live_removed=false)
 	providerKeyManager     ProviderKeyManager      // nil = provider-key endpoints answer 503; set by WithProviderRegistry
 	providerKeyChangedHook ProviderKeyChangedHook  // nil = key changes do not route until restart (honest routing_live=false)
+	// capabilitySource serves the P1.5 capability matrix endpoints
+	// (provider_capabilities.go). Nil = both answer 503; set by
+	// WithCapabilityRegistry.
+	capabilitySource capabilitiesSource
 	// providerLogin drives provider account login flows (Phase 1,
 	// provider_login.go): OpenRouter OAuth PKCE today. Created in
 	// New; WithProviderLoginFlow overrides it for tests.
@@ -1739,6 +1743,9 @@ func New(engine Engine, opts ...Option) *Server {
 	s.register(mux, "POST", "/api/providers", s.handleAddProvider)
 	s.register(mux, "DELETE", "/api/providers/{id}", s.handleDeleteProvider)
 	s.register(mux, "POST", "/api/providers/{id}/keys", s.handleAddProviderKey)
+	s.register(mux, "GET", "/api/capabilities", s.handleCapabilities)
+	s.register(mux, "POST", "/api/capabilities/refresh", s.handleCapabilitiesRefresh)
+	s.register(mux, "GET", "/api/providers/{id}/capabilities", s.handleProviderCapabilities)
 	s.register(mux, "DELETE", "/api/providers/{id}/keys/{keyId}", s.handleDeleteProviderKey)
 	s.register(mux, "POST", "/api/providers/{id}/keys/{keyId}/role", s.handleSetProviderKeyRole)
 	s.register(mux, "POST", "/api/providers/{id}/keys/{keyId}/rotate", s.handleRotateProviderKey)
