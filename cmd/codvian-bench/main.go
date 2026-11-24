@@ -741,7 +741,7 @@ func runRPS(args []string) int {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: codvian-bench <mock|latency|rps> [flags]")
+		fmt.Fprintln(os.Stderr, "usage: codvian-bench <mock|latency|rps|compression> [flags]")
 		os.Exit(2)
 	}
 	var code int
@@ -752,8 +752,10 @@ func main() {
 		code = runLatency(os.Args[2:])
 	case "rps":
 		code = runRPS(os.Args[2:])
+	case "compression":
+		code = runCompression(os.Args[2:])
 	default:
-		fmt.Fprintf(os.Stderr, "codvian-bench: unknown subcommand %q (want mock|latency|rps)\n", os.Args[1])
+		fmt.Fprintf(os.Stderr, "codvian-bench: unknown subcommand %q (want mock|latency|rps|compression)\n", os.Args[1])
 		code = 2
 	}
 	os.Exit(code)

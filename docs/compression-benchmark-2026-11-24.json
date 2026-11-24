@@ -1,0 +1,1657 @@
+{
+  "model": "gpt-4o",
+  "cases": [
+    {
+      "name": "go-code-fenced",
+      "category": "code",
+      "engines": [
+        {
+          "engine": "lossless",
+          "input_tokens": 80,
+          "output_tokens": 77,
+          "saved_tokens": 3,
+          "saved_pct": 3.75,
+          "lossless_verified": true,
+          "lossy_applied": false,
+          "lossy_budget": 0,
+          "steps": [
+            "stripped_redundant_whitespace"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 4,
+              "facts_kept": 4,
+              "prose_word_types": 28,
+              "prose_words_kept": 28
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        },
+        {
+          "engine": "lossy",
+          "input_tokens": 80,
+          "output_tokens": 80,
+          "saved_tokens": 0,
+          "saved_pct": 0,
+          "lossless_verified": false,
+          "lossy_applied": false,
+          "lossy_budget": 50,
+          "steps": [
+            "fidelity_gate_refused"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 4,
+              "facts_kept": 4,
+              "prose_word_types": 28,
+              "prose_words_kept": 28
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "name": "python-code-fenced",
+      "category": "code",
+      "engines": [
+        {
+          "engine": "lossless",
+          "input_tokens": 69,
+          "output_tokens": 67,
+          "saved_tokens": 2,
+          "saved_pct": 2.898550724637681,
+          "lossless_verified": true,
+          "lossy_applied": false,
+          "lossy_budget": 0,
+          "steps": [
+            "stripped_redundant_whitespace"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 1,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 1,
+              "json_values_kept": 1,
+              "json_splices": 0,
+              "facts": 2,
+              "facts_kept": 2,
+              "prose_word_types": 24,
+              "prose_words_kept": 24
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        },
+        {
+          "engine": "lossy",
+          "input_tokens": 69,
+          "output_tokens": 69,
+          "saved_tokens": 0,
+          "saved_pct": 0,
+          "lossless_verified": false,
+          "lossy_applied": false,
+          "lossy_budget": 45,
+          "steps": [
+            "fidelity_gate_refused"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 1,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 1,
+              "json_values_kept": 1,
+              "json_splices": 0,
+              "facts": 2,
+              "facts_kept": 2,
+              "prose_word_types": 24,
+              "prose_words_kept": 24
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "name": "json-nested",
+      "category": "json",
+      "engines": [
+        {
+          "engine": "lossless",
+          "input_tokens": 123,
+          "output_tokens": 121,
+          "saved_tokens": 2,
+          "saved_pct": 1.6260162601626016,
+          "lossless_verified": true,
+          "lossy_applied": false,
+          "lossy_budget": 0,
+          "steps": [
+            "stripped_redundant_whitespace"
+          ],
+          "fidelity": {
+            "instruction_preservation": 0,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 1,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 0,
+              "instructions_kept": 0,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 1,
+              "json_values_kept": 1,
+              "json_splices": 0,
+              "facts": 9,
+              "facts_kept": 9,
+              "prose_word_types": 34,
+              "prose_words_kept": 34
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        },
+        {
+          "engine": "lossy",
+          "input_tokens": 123,
+          "output_tokens": 123,
+          "saved_tokens": 0,
+          "saved_pct": 0,
+          "lossless_verified": false,
+          "lossy_applied": false,
+          "lossy_budget": 80,
+          "steps": [
+            "fidelity_gate_refused"
+          ],
+          "fidelity": {
+            "instruction_preservation": 0,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 1,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 0,
+              "instructions_kept": 0,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 1,
+              "json_values_kept": 1,
+              "json_splices": 0,
+              "facts": 9,
+              "facts_kept": 9,
+              "prose_word_types": 34,
+              "prose_words_kept": 34
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "name": "json-tabular",
+      "category": "json",
+      "engines": [
+        {
+          "engine": "lossless",
+          "input_tokens": 150,
+          "output_tokens": 148,
+          "saved_tokens": 2,
+          "saved_pct": 1.3333333333333333,
+          "lossless_verified": true,
+          "lossy_applied": false,
+          "lossy_budget": 0,
+          "steps": [
+            "stripped_redundant_whitespace"
+          ],
+          "fidelity": {
+            "instruction_preservation": 0,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 1,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 0,
+              "instructions_kept": 0,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 1,
+              "json_values_kept": 1,
+              "json_splices": 0,
+              "facts": 6,
+              "facts_kept": 6,
+              "prose_word_types": 40,
+              "prose_words_kept": 40
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        },
+        {
+          "engine": "lossy",
+          "input_tokens": 150,
+          "output_tokens": 150,
+          "saved_tokens": 0,
+          "saved_pct": 0,
+          "lossless_verified": false,
+          "lossy_applied": false,
+          "lossy_budget": 100,
+          "steps": [
+            "fidelity_gate_refused"
+          ],
+          "fidelity": {
+            "instruction_preservation": 0,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 1,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 0,
+              "instructions_kept": 0,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 1,
+              "json_values_kept": 1,
+              "json_splices": 0,
+              "facts": 6,
+              "facts_kept": 6,
+              "prose_word_types": 40,
+              "prose_words_kept": 40
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "name": "prose-short",
+      "category": "prose",
+      "engines": [
+        {
+          "engine": "lossless",
+          "input_tokens": 12,
+          "output_tokens": 12,
+          "saved_tokens": 0,
+          "saved_pct": 0,
+          "lossless_verified": true,
+          "lossy_applied": false,
+          "lossy_budget": 0,
+          "fidelity": {
+            "instruction_preservation": 0,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 0,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 0,
+              "instructions_kept": 0,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 0,
+              "facts_kept": 0,
+              "prose_word_types": 10,
+              "prose_words_kept": 10
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        },
+        {
+          "engine": "lossy",
+          "input_tokens": 12,
+          "output_tokens": 12,
+          "saved_tokens": 0,
+          "saved_pct": 0,
+          "lossless_verified": false,
+          "lossy_applied": false,
+          "lossy_budget": 200,
+          "fidelity": {
+            "instruction_preservation": 0,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 0,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 0,
+              "instructions_kept": 0,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 0,
+              "facts_kept": 0,
+              "prose_word_types": 10,
+              "prose_words_kept": 10
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "name": "prose-long",
+      "category": "prose",
+      "engines": [
+        {
+          "engine": "lossless",
+          "input_tokens": 184,
+          "output_tokens": 177,
+          "saved_tokens": 7,
+          "saved_pct": 3.8043478260869565,
+          "lossless_verified": true,
+          "lossy_applied": false,
+          "lossy_budget": 0,
+          "steps": [
+            "stripped_redundant_whitespace"
+          ],
+          "fidelity": {
+            "instruction_preservation": 0,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 0,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 0,
+              "instructions_kept": 0,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 0,
+              "facts_kept": 0,
+              "prose_word_types": 97,
+              "prose_words_kept": 97
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        },
+        {
+          "engine": "lossy",
+          "input_tokens": 184,
+          "output_tokens": 113,
+          "saved_tokens": 71,
+          "saved_pct": 38.58695652173913,
+          "lossless_verified": false,
+          "lossy_applied": true,
+          "lossy_budget": 120,
+          "steps": [
+            "stripped_redundant_whitespace",
+            "lossy_truncated_messages",
+            "hard_budget_truncated_messages"
+          ],
+          "fidelity": {
+            "instruction_preservation": 0,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 0,
+            "prose_preservation": 0.5567010309278351,
+            "units": {
+              "instructions": 0,
+              "instructions_kept": 0,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 0,
+              "facts_kept": 0,
+              "prose_word_types": 97,
+              "prose_words_kept": 54
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "name": "tool-output-json",
+      "category": "tool-output",
+      "engines": [
+        {
+          "engine": "lossless",
+          "input_tokens": 78,
+          "output_tokens": 57,
+          "saved_tokens": 21,
+          "saved_pct": 26.923076923076923,
+          "lossless_verified": true,
+          "lossy_applied": false,
+          "lossy_budget": 0,
+          "steps": [
+            "stripped_redundant_whitespace",
+            "canonicalised_tool_results"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 1,
+            "tool_result_preservation": 1,
+            "json_preserved": 1,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 1,
+              "tool_calls_kept": 1,
+              "tool_results": 1,
+              "tool_results_kept": 1,
+              "json_values": 2,
+              "json_values_kept": 2,
+              "json_splices": 0,
+              "facts": 2,
+              "facts_kept": 2,
+              "prose_word_types": 10,
+              "prose_words_kept": 10
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        },
+        {
+          "engine": "lossy",
+          "input_tokens": 78,
+          "output_tokens": 15,
+          "saved_tokens": 63,
+          "saved_pct": 80.76923076923077,
+          "lossless_verified": false,
+          "lossy_applied": true,
+          "lossy_budget": 40,
+          "steps": [
+            "stripped_redundant_whitespace",
+            "canonicalised_tool_results",
+            "lossy_dropped_messages"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 0.3333333333333333,
+            "prose_preservation": 0.7,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 1,
+              "tool_calls_kept": 0,
+              "tool_results": 2,
+              "tool_results_kept": 0,
+              "json_values": 3,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 3,
+              "facts_kept": 1,
+              "prose_word_types": 10,
+              "prose_words_kept": 7
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "name": "tool-output-ansi",
+      "category": "tool-output",
+      "engines": [
+        {
+          "engine": "lossless",
+          "input_tokens": 135,
+          "output_tokens": 130,
+          "saved_tokens": 5,
+          "saved_pct": 3.7037037037037037,
+          "lossless_verified": true,
+          "lossy_applied": false,
+          "lossy_budget": 0,
+          "steps": [
+            "stripped_redundant_whitespace"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 1,
+            "json_preserved": 0,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 1,
+              "tool_results_kept": 1,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 6,
+              "facts_kept": 6,
+              "prose_word_types": 12,
+              "prose_words_kept": 12
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        },
+        {
+          "engine": "lossy",
+          "input_tokens": 135,
+          "output_tokens": 18,
+          "saved_tokens": 117,
+          "saved_pct": 86.66666666666667,
+          "lossless_verified": false,
+          "lossy_applied": true,
+          "lossy_budget": 100,
+          "steps": [
+            "stripped_redundant_whitespace",
+            "lossy_dropped_messages"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 0,
+            "prose_preservation": 0.75,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 1,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 6,
+              "facts_kept": 0,
+              "prose_word_types": 12,
+              "prose_words_kept": 9
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "name": "system-prompt-heavy",
+      "category": "system-heavy",
+      "engines": [
+        {
+          "engine": "lossless",
+          "input_tokens": 108,
+          "output_tokens": 52,
+          "saved_tokens": 56,
+          "saved_pct": 51.851851851851855,
+          "lossless_verified": true,
+          "lossy_applied": false,
+          "lossy_budget": 0,
+          "steps": [
+            "deduped_system_blocks"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 4,
+              "facts_kept": 4,
+              "prose_word_types": 7,
+              "prose_words_kept": 7
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        },
+        {
+          "engine": "lossy",
+          "input_tokens": 108,
+          "output_tokens": 38,
+          "saved_tokens": 70,
+          "saved_pct": 64.81481481481481,
+          "lossless_verified": false,
+          "lossy_applied": true,
+          "lossy_budget": 35,
+          "steps": [
+            "deduped_system_blocks",
+            "lossy_dropped_messages"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 0.6666666666666666,
+            "prose_preservation": 0.7142857142857143,
+            "units": {
+              "instructions": 3,
+              "instructions_kept": 3,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 6,
+              "facts_kept": 4,
+              "prose_word_types": 7,
+              "prose_words_kept": 5
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "name": "mixed-code-tool-prose",
+      "category": "mixed",
+      "engines": [
+        {
+          "engine": "lossless",
+          "input_tokens": 87,
+          "output_tokens": 78,
+          "saved_tokens": 9,
+          "saved_pct": 10.344827586206897,
+          "lossless_verified": true,
+          "lossy_applied": false,
+          "lossy_budget": 0,
+          "steps": [
+            "stripped_redundant_whitespace",
+            "deduped_system_blocks"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 1,
+            "json_preserved": 1,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 1,
+              "tool_results_kept": 1,
+              "json_values": 3,
+              "json_values_kept": 3,
+              "json_splices": 0,
+              "facts": 4,
+              "facts_kept": 4,
+              "prose_word_types": 23,
+              "prose_words_kept": 23
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        },
+        {
+          "engine": "lossy",
+          "input_tokens": 87,
+          "output_tokens": 48,
+          "saved_tokens": 39,
+          "saved_pct": 44.827586206896555,
+          "lossless_verified": false,
+          "lossy_applied": true,
+          "lossy_budget": 50,
+          "steps": [
+            "stripped_redundant_whitespace",
+            "deduped_system_blocks",
+            "lossy_dropped_messages"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 1,
+            "json_preserved": 0.3333333333333333,
+            "fact_preservation": 0.75,
+            "prose_preservation": 0.30434782608695654,
+            "units": {
+              "instructions": 2,
+              "instructions_kept": 2,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 1,
+              "tool_results_kept": 1,
+              "json_values": 3,
+              "json_values_kept": 1,
+              "json_splices": 0,
+              "facts": 4,
+              "facts_kept": 3,
+              "prose_word_types": 23,
+              "prose_words_kept": 7
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "name": "noop-clean-prose",
+      "category": "prose",
+      "engines": [
+        {
+          "engine": "lossless",
+          "input_tokens": 7,
+          "output_tokens": 7,
+          "saved_tokens": 0,
+          "saved_pct": 0,
+          "lossless_verified": true,
+          "lossy_applied": false,
+          "lossy_budget": 0,
+          "fidelity": {
+            "instruction_preservation": 0,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 0,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 0,
+              "instructions_kept": 0,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 0,
+              "facts_kept": 0,
+              "prose_word_types": 5,
+              "prose_words_kept": 5
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        },
+        {
+          "engine": "lossy",
+          "input_tokens": 7,
+          "output_tokens": 7,
+          "saved_tokens": 0,
+          "saved_pct": 0,
+          "lossless_verified": false,
+          "lossy_applied": false,
+          "lossy_budget": 200,
+          "fidelity": {
+            "instruction_preservation": 0,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 0,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 0,
+              "instructions_kept": 0,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 0,
+              "facts_kept": 0,
+              "prose_word_types": 5,
+              "prose_words_kept": 5
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "name": "whitespace-heavy-prose",
+      "category": "prose",
+      "engines": [
+        {
+          "engine": "lossless",
+          "input_tokens": 48,
+          "output_tokens": 38,
+          "saved_tokens": 10,
+          "saved_pct": 20.833333333333332,
+          "lossless_verified": true,
+          "lossy_applied": false,
+          "lossy_budget": 0,
+          "steps": [
+            "stripped_redundant_whitespace"
+          ],
+          "fidelity": {
+            "instruction_preservation": 0,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 0,
+              "instructions_kept": 0,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 1,
+              "facts_kept": 1,
+              "prose_word_types": 26,
+              "prose_words_kept": 26
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        },
+        {
+          "engine": "lossy",
+          "input_tokens": 48,
+          "output_tokens": 22,
+          "saved_tokens": 26,
+          "saved_pct": 54.166666666666664,
+          "lossless_verified": false,
+          "lossy_applied": true,
+          "lossy_budget": 30,
+          "steps": [
+            "stripped_redundant_whitespace",
+            "lossy_truncated_messages",
+            "hard_budget_truncated_messages"
+          ],
+          "fidelity": {
+            "instruction_preservation": 0,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 0,
+            "prose_preservation": 0.2692307692307692,
+            "units": {
+              "instructions": 0,
+              "instructions_kept": 0,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 1,
+              "facts_kept": 0,
+              "prose_word_types": 26,
+              "prose_words_kept": 7
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "name": "multi-turn-history",
+      "category": "history",
+      "engines": [
+        {
+          "engine": "lossless",
+          "input_tokens": 119,
+          "output_tokens": 118,
+          "saved_tokens": 1,
+          "saved_pct": 0.8403361344537815,
+          "lossless_verified": true,
+          "lossy_applied": false,
+          "lossy_budget": 0,
+          "steps": [
+            "stripped_redundant_whitespace"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 1,
+              "facts_kept": 1,
+              "prose_word_types": 60,
+              "prose_words_kept": 60
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        },
+        {
+          "engine": "lossy",
+          "input_tokens": 119,
+          "output_tokens": 66,
+          "saved_tokens": 53,
+          "saved_pct": 44.53781512605042,
+          "lossless_verified": false,
+          "lossy_applied": true,
+          "lossy_budget": 80,
+          "steps": [
+            "stripped_redundant_whitespace",
+            "lossy_dropped_messages"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 0,
+            "prose_preservation": 0.7166666666666667,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 1,
+              "facts_kept": 0,
+              "prose_word_types": 60,
+              "prose_words_kept": 43
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "name": "long-context-middle-turn",
+      "category": "long-context-middle",
+      "engines": [
+        {
+          "engine": "lossless",
+          "input_tokens": 5966,
+          "output_tokens": 5966,
+          "saved_tokens": 0,
+          "saved_pct": 0,
+          "lossless_verified": true,
+          "lossy_applied": false,
+          "lossy_budget": 0,
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 90,
+              "facts_kept": 90,
+              "prose_word_types": 262,
+              "prose_words_kept": 262
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        },
+        {
+          "engine": "lossy",
+          "input_tokens": 5966,
+          "output_tokens": 26,
+          "saved_tokens": 5940,
+          "saved_pct": 99.56419711699631,
+          "lossless_verified": false,
+          "lossy_applied": true,
+          "lossy_budget": 3500,
+          "steps": [
+            "lossy_dropped_messages"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 0,
+            "prose_preservation": 0.03816793893129771,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 90,
+              "facts_kept": 0,
+              "prose_word_types": 262,
+              "prose_words_kept": 10
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        }
+      ]
+    },
+    {
+      "name": "long-context-final-turn",
+      "category": "long-context-final",
+      "engines": [
+        {
+          "engine": "lossless",
+          "input_tokens": 5966,
+          "output_tokens": 5966,
+          "saved_tokens": 0,
+          "saved_pct": 0,
+          "lossless_verified": true,
+          "lossy_applied": false,
+          "lossy_budget": 0,
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 1,
+            "prose_preservation": 1,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 90,
+              "facts_kept": 90,
+              "prose_word_types": 262,
+              "prose_words_kept": 262
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        },
+        {
+          "engine": "lossy",
+          "input_tokens": 5966,
+          "output_tokens": 3491,
+          "saved_tokens": 2475,
+          "saved_pct": 41.4850821320818,
+          "lossless_verified": false,
+          "lossy_applied": true,
+          "lossy_budget": 3500,
+          "steps": [
+            "lossy_dropped_messages",
+            "lossy_truncated_messages",
+            "hard_budget_truncated_messages"
+          ],
+          "fidelity": {
+            "instruction_preservation": 1,
+            "tool_call_preservation": 0,
+            "tool_result_preservation": 0,
+            "json_preserved": 0,
+            "fact_preservation": 0.5777777777777777,
+            "prose_preservation": 0.8015267175572519,
+            "units": {
+              "instructions": 1,
+              "instructions_kept": 1,
+              "tool_calls": 0,
+              "tool_calls_kept": 0,
+              "tool_results": 0,
+              "tool_results_kept": 0,
+              "json_values": 0,
+              "json_values_kept": 0,
+              "json_splices": 0,
+              "facts": 90,
+              "facts_kept": 52,
+              "prose_word_types": 262,
+              "prose_words_kept": 210
+            }
+          },
+          "latency": {
+            "repeats": 3,
+            "min_ms": 0,
+            "p50_ms": 0,
+            "max_ms": 0
+          },
+          "pass": true
+        }
+      ]
+    }
+  ],
+  "totals": [
+    {
+      "engine": "lossless",
+      "cases": 15,
+      "input_tokens": 13132,
+      "saved_tokens": 118,
+      "saved_pct": 0.8985683825769114,
+      "passed": 15,
+      "failed": 0
+    },
+    {
+      "engine": "lossy",
+      "cases": 15,
+      "input_tokens": 13132,
+      "saved_tokens": 8854,
+      "saved_pct": 67.42308863844045,
+      "passed": 15,
+      "failed": 0
+    }
+  ],
+  "thresholds": [
+    {
+      "engine": "lossless",
+      "category": "code",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 1,
+        "MinToolResultPreservation": 1,
+        "MinJSONPreserved": 1,
+        "MinFactPreservation": 1,
+        "MinProsePreservation": 1,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": true
+      }
+    },
+    {
+      "engine": "lossy",
+      "category": "code",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 0,
+        "MinToolResultPreservation": 0,
+        "MinJSONPreserved": 0,
+        "MinFactPreservation": 0,
+        "MinProsePreservation": 0.2,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": false
+      }
+    },
+    {
+      "engine": "lossless",
+      "category": "json",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 1,
+        "MinToolResultPreservation": 1,
+        "MinJSONPreserved": 1,
+        "MinFactPreservation": 1,
+        "MinProsePreservation": 1,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": true
+      }
+    },
+    {
+      "engine": "lossy",
+      "category": "json",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 0,
+        "MinToolResultPreservation": 0,
+        "MinJSONPreserved": 0.9,
+        "MinFactPreservation": 0,
+        "MinProsePreservation": 0,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": false
+      }
+    },
+    {
+      "engine": "lossless",
+      "category": "prose",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 1,
+        "MinToolResultPreservation": 1,
+        "MinJSONPreserved": 1,
+        "MinFactPreservation": 1,
+        "MinProsePreservation": 1,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": true
+      }
+    },
+    {
+      "engine": "lossy",
+      "category": "prose",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 0,
+        "MinToolResultPreservation": 0,
+        "MinJSONPreserved": 0,
+        "MinFactPreservation": 0,
+        "MinProsePreservation": 0.2,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": false
+      }
+    },
+    {
+      "engine": "lossless",
+      "category": "tool-output",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 1,
+        "MinToolResultPreservation": 1,
+        "MinJSONPreserved": 1,
+        "MinFactPreservation": 1,
+        "MinProsePreservation": 1,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": true
+      }
+    },
+    {
+      "engine": "lossy",
+      "category": "tool-output",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 0,
+        "MinToolResultPreservation": 0,
+        "MinJSONPreserved": 0,
+        "MinFactPreservation": 0,
+        "MinProsePreservation": 0.2,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": false
+      }
+    },
+    {
+      "engine": "lossless",
+      "category": "system-heavy",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 1,
+        "MinToolResultPreservation": 1,
+        "MinJSONPreserved": 1,
+        "MinFactPreservation": 1,
+        "MinProsePreservation": 1,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": true
+      }
+    },
+    {
+      "engine": "lossy",
+      "category": "system-heavy",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 0,
+        "MinToolResultPreservation": 0,
+        "MinJSONPreserved": 0,
+        "MinFactPreservation": 0,
+        "MinProsePreservation": 0.2,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": false
+      }
+    },
+    {
+      "engine": "lossless",
+      "category": "mixed",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 1,
+        "MinToolResultPreservation": 1,
+        "MinJSONPreserved": 1,
+        "MinFactPreservation": 1,
+        "MinProsePreservation": 1,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": true
+      }
+    },
+    {
+      "engine": "lossy",
+      "category": "mixed",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 0,
+        "MinToolResultPreservation": 0,
+        "MinJSONPreserved": 0,
+        "MinFactPreservation": 0,
+        "MinProsePreservation": 0.2,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": false
+      }
+    },
+    {
+      "engine": "lossless",
+      "category": "history",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 1,
+        "MinToolResultPreservation": 1,
+        "MinJSONPreserved": 1,
+        "MinFactPreservation": 1,
+        "MinProsePreservation": 1,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": true
+      }
+    },
+    {
+      "engine": "lossy",
+      "category": "history",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 0,
+        "MinToolResultPreservation": 0,
+        "MinJSONPreserved": 0,
+        "MinFactPreservation": 0,
+        "MinProsePreservation": 0.2,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": false
+      }
+    },
+    {
+      "engine": "lossless",
+      "category": "long-context-middle",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 1,
+        "MinToolResultPreservation": 1,
+        "MinJSONPreserved": 1,
+        "MinFactPreservation": 1,
+        "MinProsePreservation": 1,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": true
+      }
+    },
+    {
+      "engine": "lossy",
+      "category": "long-context-middle",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 0,
+        "MinToolResultPreservation": 0,
+        "MinJSONPreserved": 0,
+        "MinFactPreservation": 0,
+        "MinProsePreservation": 0,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": false
+      }
+    },
+    {
+      "engine": "lossless",
+      "category": "long-context-final",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 1,
+        "MinToolResultPreservation": 1,
+        "MinJSONPreserved": 1,
+        "MinFactPreservation": 1,
+        "MinProsePreservation": 1,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": true
+      }
+    },
+    {
+      "engine": "lossy",
+      "category": "long-context-final",
+      "thresholds": {
+        "MinInstructionPreservation": 1,
+        "MinToolCallPreservation": 0,
+        "MinToolResultPreservation": 0,
+        "MinJSONPreserved": 0,
+        "MinFactPreservation": 0,
+        "MinProsePreservation": 0.5,
+        "MaxJSONSplices": 0,
+        "RequireLosslessVerified": false
+      }
+    }
+  ],
+  "repeats": 3
+}
