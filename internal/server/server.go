@@ -3912,9 +3912,16 @@ func (s *Server) handleAutoRoute(w http.ResponseWriter, r *http.Request) {
 		// No concrete model configured for the picked tier: the
 		// decision itself is the honest answer — report it with a
 		// 502 so the dashboard shows why instead of a bare error.
+		// AUD-CODE-002: encode before committing the 502, so an
+		// unmarshalable decision cannot answer with an empty body.
 		w.Header().Set("Content-Type", "application/json")
+		buf, err := json.Marshal(s.enrichDecision(r, dec))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "decision could not be encoded")
+			return
+		}
 		w.WriteHeader(http.StatusBadGateway)
-		_ = json.NewEncoder(w).Encode(s.enrichDecision(r, dec))
+		_, _ = w.Write(buf)
 		return
 	}
 	writeJSON(w, http.StatusOK, s.enrichDecision(r, dec))
@@ -7265,12 +7272,16 @@ func (s *Server) handleEngineError(w http.ResponseWriter, err error) {
 		return
 	}
 	// Any other upstream answer keeps the upstream's own status when it
-	// is a client error, and clamps to 502 otherwise (a malformed
-	// upstream 200 must never be relayed as success).
+	// is a CLIENT error (4xx) — that is truthful and actionable — and
+	// stays the gateway's own 502 for 5xx, 1xx/3xx and unparseable
+	// statuses. The chat surface's documented contract is that an
+	// exhausted chain reports the gateway's upstream-failure signature
+	// (-32603 / 502); relaying an upstream 500 would change that
+	// contract and the client-side failover semantics built on it.
 	var ue *provider.UpstreamError
 	if errors.As(err, &ue) {
 		status := ue.StatusCode
-		if status < 400 || status > 599 {
+		if status < 400 || status >= 500 {
 			status = http.StatusBadGateway
 		}
 		if s.recorder != nil {
@@ -7477,7 +7488,13 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 	// cost/tokens/fallback ride the final trailer instead.
 	s.writeStreamStartHeaders(w, ctx, req.Model)
 
-	var sent strings.Builder // full content already sent to the client
+	// AUD-PERF-001: the full text already sent was retained in a
+	// strings.Builder that was only ever read for its length, so every
+	// in-flight stream held its entire completion in memory to compute a
+	// boolean — memory grew with concurrency x response size, uncapped.
+	// A byte counter carries exactly the same information (whether any
+	// content has been delivered) at O(1) memory.
+	var sentBytes int // bytes of content already sent to the client
 	headersSent := false
 	flusher, _ := w.(http.Flusher)
 
@@ -7663,7 +7680,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 		if err := writeChunk(d, nil); err != nil {
 			return err
 		}
-		sent.WriteString(checked.Body)
+		sentBytes += len(checked.Body)
 		return nil
 	}
 	// flushToolCalls emits every accumulated tool call, in
@@ -7707,7 +7724,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 		if err := writeChunk(d, nil); err != nil {
 			return
 		}
-		sent.WriteString(tail)
+		sentBytes += len(tail)
 	}
 	onChunk := func(chunk provider.StreamChunk) error {
 		if err := ctx.Err(); err != nil {
@@ -7793,7 +7810,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 		if err := writeChunk(d, fr); err != nil {
 			return err
 		}
-		sent.WriteString(content)
+		sentBytes += len(content)
 		return nil
 	}
 	onDelta := func(delta string) error {
@@ -7880,7 +7897,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 	// blocked_after_delivery — too late to act, and said so.
 	if err != nil && asyncRun != nil {
 		if res, blocked := asyncRun.BlockVerdict(); blocked {
-			if sent.Len() == 0 && !headersSent {
+			if sentBytes == 0 && !headersSent {
 				writePolicyRefusal(w, res.Kind, "request")
 			} else {
 				payload, _ := json.Marshal(errorBody{Error: errorDetail{Message: "guardrail blocked stream: " + res.Kind, Type: "policy_refusal", Code: guardrails.PolicyRefusalCode, Reason: res.Kind}})
@@ -7914,7 +7931,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 		} else if f := respRedactor.Findings(); len(f) > 0 {
 			kind = f[0].Kind
 		}
-		if sent.Len() == 0 && !headersSent {
+		if sentBytes == 0 && !headersSent {
 			writePolicyRefusal(w, kind, "response")
 		} else {
 			payload, _ := json.Marshal(errorBody{Error: errorDetail{Message: "guardrail blocked stream: " + kind, Type: "policy_refusal", Code: guardrails.PolicyRefusalCode, Reason: kind}})
@@ -7991,7 +8008,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 	// The engine failed. If nothing was sent yet, headers have not gone
 	// out (they are written lazily on the first chunk), so a plain JSON
 	// error with a 502/504 status is still possible.
-	if sent.Len() == 0 && !headersSent {
+	if sentBytes == 0 && !headersSent {
 		// Strict per-request budget stop (CHECKLIST 155):
 		// record the mid-chain refusal for the dashboard feed
 		// before mapping the typed error to 402.
@@ -8032,7 +8049,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 	if errors.Is(err, router.ErrStreamLifetimeExceeded) {
 		errDetail = errorDetail{Message: err.Error(), Type: "server_error", Deployment: errDetail.Deployment}
 	}
-	s.logger.Printf("stream failed after %d bytes sent: deployment=%s %v", sent.Len(), errDetail.Deployment, logSafeError(err))
+	s.logger.Printf("stream failed after %d bytes sent: deployment=%s %v", sentBytes, errDetail.Deployment, logSafeError(err))
 	payload, _ := json.Marshal(errorBody{Error: errDetail})
 	_ = writeSSENow("data: " + string(payload) + "\n\n")
 	// Always-terminal (CHECKLIST 153): a committed stream ends

@@ -577,9 +577,17 @@ func (s *Server) handleClassify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if status != http.StatusOK {
+		// AUD-CODE-002: encode BEFORE committing the status, so an
+		// unmarshalable payload cannot answer a committed non-200
+		// with an empty or truncated body.
 		w.Header().Set("Content-Type", "application/json")
+		buf, err := json.Marshal(s.enrichDecision(r, dec))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "response could not be encoded")
+			return
+		}
 		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(s.enrichDecision(r, dec))
+		_, _ = w.Write(buf)
 		return
 	}
 	writeJSON(w, http.StatusOK, s.enrichDecision(r, dec))
@@ -680,9 +688,15 @@ func (s *Server) handleExplainRouting(w http.ResponseWriter, r *http.Request) {
 		// Unresolved decision: the explanation itself is the
 		// honest answer — report it with a 502, as the
 		// dashboard auto-route endpoint does.
+		// AUD-CODE-002: encode before committing the status.
 		w.Header().Set("Content-Type", "application/json")
+		buf, err := json.Marshal(resp)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "response could not be encoded")
+			return
+		}
 		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(resp)
+		_, _ = w.Write(buf)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)

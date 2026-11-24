@@ -1177,6 +1177,13 @@ func (s *Server) handleMessagesEngineError(w http.ResponseWriter, err error) {
 		writeAnthropicError(w, ce.Status, ce.Msg)
 		return
 	}
+	// A 5xx upstream answer stays a gateway-side api_error (the chat
+	// contract), while a 4xx keeps its own status.
+	var ue *provider.UpstreamError
+	if errors.As(err, &ue) && ue.StatusCode >= 400 && ue.StatusCode < 500 {
+		writeAnthropicError(w, ue.StatusCode, "upstream rejected the request")
+		return
+	}
 	status := s.statusForEngineError(err)
 	message := "upstream provider error"
 	switch status {
