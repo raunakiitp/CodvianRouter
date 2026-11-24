@@ -74,6 +74,10 @@ func (s *Server) ensureEvalStore() (*eval.Store, error) {
 // WithEvalEngine to override for testing or mock scenarios.
 func (s *Server) startEvalScheduler() {
 	if _, err := s.ensureEvalStore(); err != nil {
+		// AUD-REL-003 (second half): this used to return silently, so a
+		// store that could not be opened disabled every scheduled
+		// evaluation with no operator signal at all.
+		s.logger.Printf("eval scheduler: store unavailable, scheduled evaluations are DISABLED: %v", err)
 		return
 	}
 	st := s.evalStateInit()
@@ -103,7 +107,17 @@ func (s *Server) startEvalScheduler() {
 	}
 	sch := st.scheduler
 	st.mu.Unlock()
-	go sch.Run(ctx, 15*time.Second)
+	// AUD-REL-006 (second half): the loop goroutine gets its own panic
+	// isolation, so a panic in the scheduler loop ends the loop and is
+	// logged instead of terminating the gateway process.
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				s.logger.Printf("eval scheduler: loop panicked and stopped: %v", r)
+			}
+		}()
+		sch.Run(ctx, 15*time.Second)
+	}()
 }
 
 // stopEvalScheduler cancels the scheduler loop (called on Shutdown).

@@ -191,16 +191,16 @@ Recorded after the authorized remediation pass. Full narrative, falsification ev
 | AUD-SEC-004/005/006/007 | LOW/INFO | OPEN | not attempted this pass |
 | AUD-REL-001 | HIGH | **FIXED** | upstream 429/quota keep their status + `Retry-After`; internal limits stay distinct; 10 tests (`c218f63`) |
 | AUD-REL-002 | MEDIUM | OPEN | async ledger batch retry not attempted |
-| AUD-REL-003 | MEDIUM | **FIXED** | eval + org stores write temp → fsync → rename → fsync dir (`05618c2`) |
+| AUD-REL-003 | MEDIUM | **FIXED** (both halves) | eval + org stores write temp → fsync → rename → fsync dir (`05618c2`); the scheduler-start store failure is now logged loudly instead of a silent return (`internal/server/eval_schedules_api.go`) |
 | AUD-REL-004 | MEDIUM | **FIXED** | cache DSN gets `busy_timeout(5000)` + `journal_mode(WAL)` (`3596f39`) |
-| AUD-REL-005 | MEDIUM | NEEDS MANUAL VERIFICATION | unchanged (was already so classified) |
-| AUD-REL-006 | MEDIUM | **FIXED** | eval scheduler + webhook delivery goroutines recover and log (`05618c2`) |
+| AUD-REL-005 | MEDIUM | **FIXED** | runtime repro confirmed the fatal startup; `OpenWithRecovery` quarantines the unusable file (`<path>.corrupt-<unix>`, preserved byte-for-byte, sidecars too), logs it and opens a fresh ledger; environmental failures stay fatal; 4 tests |
+| AUD-REL-006 | MEDIUM | **FIXED** (both halves) | eval scheduler + webhook delivery goroutines recover and log (`05618c2`); the server-side scheduler loop goroutine does too (`internal/server/eval_schedules_api.go`) |
 | AUD-PERF-001 | HIGH | **FIXED** | O(1) stream counter; live retention 22.4 MB → 68 KiB for an 8 MiB stream (`14c42e6`) |
 | AUD-PERF-002 | HIGH | **FIXED** | separate ledger reader pool (WAL + busy_timeout); `read_pool_test.go` proves `GetBudget`/`CheckBudgetOrError` return while a write transaction is open (they blocked >2s before). Accepted trade-off: single-thread miss latency 16,057 → 29,030 ns/op (`GetKeyBudget`) and 16,972 → 26,476 ns/op (`CheckBudgetOrError`); existing ledger files open in WAL |
 | AUD-API-001 | LOW | **FIXED** | Anthropic error envelope on every `/v1/messages*` error path incl. auth; 3 tests, falsified (`c218f63`) |
 | AUD-CODE-001 | LOW | **FIXED** | disable/enable/revoke roll back and answer 500 when the config write fails; 5 tests, falsified (`1996cb7`) |
 | AUD-CODE-002 | LOW | **FIXED** | 4 handlers encode before committing the status (`14c42e6`) |
-| AUD-CODE-012 | MEDIUM | **FIXED** | OAuth revoke fails closed on a persist error; 2 tests (`05618c2`) |
+| AUD-CODE-012 | MEDIUM | **FIXED** (all sites) | `Revoke` fails closed (`05618c2`); `DeleteClient`, refresh rotation and expired-token removal now fail closed / log too; 5 tests. STILL OPEN in the same class: the JWT `jti` denylist is memory-only, so a revoked access token is accepted again after a restart until expiry |
 | AUD-DOC-001 | MEDIUM | **OPEN — needs authorization** | removing published parity docs is a destructive content decision |
 | AUD-DOC-002 | LOW | **OPEN — needs authorization** | same |
 | AUD-DOC-004 | LOW | **FIXED** | stale “no upload-size cap” comment corrected to the real 512 MiB cap + the open quota gap (`4fa1fc2`) |
@@ -208,6 +208,6 @@ Recorded after the authorized remediation pass. Full narrative, falsification ev
 | AUD-TEST-002/003/011 | LOW | OPEN | CI wiring / flaky-ratio items not attempted this pass |
 | all other ledger items | LOW/MED/INFO | OPEN | unchanged, original evidence stands |
 
-Ledger totals after this pass: **14 findings resolved** (13 here + AUD-SEC-001 previously), 1 blocked external,
+Ledger totals after this pass: **15 findings resolved** (14 here + AUD-SEC-001 previously), 1 blocked external,
 2 awaiting an authorization decision, 1 partially fixed (AUD-TEST-001: the hardcoded Go path is gone, the CI
-wiring is not), 61 still open.
+wiring is not), 1 new sub-item recorded open (OAuth jti denylist memory-only), 60 still open.

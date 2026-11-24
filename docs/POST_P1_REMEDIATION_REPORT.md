@@ -10,13 +10,14 @@ Baseline ledger: `docs/POST_P1_FINDINGS_LEDGER.md` (80 findings; AUD-SEC-001 alr
 | Metric | Count |
 | --- | --- |
 | Findings in the reconciled ledger | 80 |
-| Fixed in this remediation | 13 (AUD-SEC-010, AUD-SEC-002, AUD-SEC-003, AUD-REL-001, AUD-REL-003, AUD-REL-004, AUD-REL-006, AUD-PERF-001, AUD-PERF-002, AUD-API-001, AUD-CODE-001, AUD-CODE-002, AUD-CODE-012, AUD-DOC-004) |
+| Fixed in this remediation | 14 (AUD-SEC-010, AUD-SEC-002, AUD-SEC-003, AUD-REL-001, AUD-REL-003, AUD-REL-004, AUD-REL-005, AUD-REL-006, AUD-PERF-001, AUD-PERF-002, AUD-API-001, AUD-CODE-001, AUD-CODE-002, AUD-CODE-012, AUD-DOC-004) |
 | Already fixed before this branch (AUD-SEC-001, PR #75) | 1 |
 | Verified present but deliberately NOT changed (needs authorization: published-content decision) | 2 (AUD-DOC-001, AUD-DOC-002) |
+| New sub-item found during this pass and recorded open (same class as AUD-CODE-012) | 1 (OAuth jti denylist is in-memory only) |
 
 | Blocked external (owner/account action) | 1 (AUD-SEC-009) |
 | Partially fixed (hardcoded toolchain path only; CI wiring still open) | 1 (AUD-TEST-001) |
-| Still open from the ledger (not attempted in this pass) | 61 |
+| Still open from the ledger (not attempted in this pass) | 60 |
 
 Every fix below ships with a regression test that fails against the vulnerable behaviour and passes against the corrected
 behaviour; the falsification evidence is recorded per finding.
@@ -144,6 +145,40 @@ behaviour; the falsification evidence is recorded per finding.
   `TestIssuerRevokeRefreshTokenPersistsAcrossRestart`.
 - **Commit:** `05618c2`.
 
+### AUD-REL-005 — A corrupt ledger made the gateway unstartable (MEDIUM, was NEEDS MANUAL VERIFICATION)
+- **Root cause (confirmed by runtime probe, not just inspection):** `ledger.Open` returns an error for every
+  failure mode (WAL, busy_timeout, schema, column migrations) and `cmd/codvian-router/main.go` treated any error
+  as fatal. Writing a garbage `ledger.db` and calling `Open` produced
+  `ledger: enable WAL: file is not a database (26)` with **no quarantine and no signal** — the gateway refused to
+  start until an operator moved the file by hand. Contrast the LKGP store, which degrades loudly instead.
+- **Fix:** new `internal/ledger/recover.go` — `OpenWithRecovery(path)` preserves the unusable file by renaming it
+  to `<path>.corrupt-<unix>` (plus its `-wal`/`-shm` sidecars), logs the move through a `ledger.Logf` hook and
+  opens a fresh ledger; `IsCorrupt` distinguishes "file is not a database" / "disk image is malformed" from
+  environmental failures, and an environmental failure (nothing on disk to quarantine) stays fatal. `main.go`
+  wires the hook to `log.Printf` and reports the quarantine path.
+- **Data safety:** the unusable file is never deleted and never overwritten in place; the test asserts the
+  quarantined bytes equal the original garbage.
+- **Tests:** `TestAUD_REL_005CorruptLedgerIsQuarantinedAndRecreated`,
+  `TestAUD_REL_005HealthyLedgerIsUntouched`, `TestAUD_REL_005EnvironmentalFailureStaysFatal`,
+  `TestAUD_REL_005IsCorruptClassifies` (4 PASS).
+
+### Second halves of REL-003 / REL-006 / CODE-012 (server + oauth call sites)
+The subagent work streams were scoped to `internal/{eval,webhooks,oauth,org}`, so the call sites in
+`internal/server` and the remaining oauth writes were left. All are now fixed:
+- `internal/server/eval_schedules_api.go` — the scheduler-start store failure is **logged loudly**
+  ("scheduled evaluations are DISABLED") instead of a silent `return` (REL-003 second half), and the scheduler
+  loop goroutine runs under its own `recover` so a panic ends the loop instead of the process (REL-006 second half).
+- `internal/oauth/oauth.go` — the three remaining `_ = iss.saveLocked()` sites now fail closed:
+  `DeleteClient` captures and restores the revoked codes/refresh tokens and the client on a failed write and
+  returns `false`; a failed refresh rotation restores the consumed token (so the client is not locked out of a
+  credential that was never persisted) and reports the error; an expired-token removal logs its failure.
+- **Tests:** `TestAUD_CODE_012DeleteClientPersistFailureRollsBack`,
+  `TestAUD_CODE_012RefreshRotationPersistFailureFailsClosed`,
+  `TestAUD_CODE_012ExpiredRefreshRemovalLogsPersistFailure` (3 PASS).
+- **Still open (recorded, not fixed):** the OAuth JWT `jti` denylist (`iss.revoked`) is in-memory only, so a
+  revoked access token is accepted again after a restart until its expiry — same durability class, needs a
+  design decision (persist the denylist).
+
 ### AUD-PERF-002 — Ledger reads serialised behind writes (HIGH)
 - **Root cause:** one SQLite handle served reads and writes (`SetMaxOpenConns(1)`), so a budget check checked
   out the only connection and waited for the async batch writer's transaction to finish.
@@ -252,9 +287,9 @@ on re-application) and is reported as OPEN in §D rather than shipped.
 
 **NOT PRODUCTION READY.**
 
-Evidence: 13 findings are now fixed with falsified regression tests and the whole suite is green (52 packages,
+Evidence: 14 findings are now fixed with falsified regression tests and the whole suite is green (52 packages,
 0 FAIL, exit 0), but the ledger still contains an unfixed CRITICAL that is not in the code (AUD-SEC-009, exposed
-credential — owner-side), 61 further ledger items, and environment-blocked checks (`-race`, vulnerability
+credential — owner-side), 60 further ledger items, and environment-blocked checks (`-race`, vulnerability
 scanning, client smokes) that could not be executed here. Per the stated gate — “No unresolved Critical finding remains; no unresolved High finding
 unless explicitly risk-accepted” — the gate is **not met**.
 

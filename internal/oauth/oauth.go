@@ -351,21 +351,48 @@ func (iss *Issuer) ListClients() []ClientView {
 func (iss *Issuer) DeleteClient(id string) bool {
 	iss.mu.Lock()
 	defer iss.mu.Unlock()
-	if _, ok := iss.clients[id]; !ok {
+	client, ok := iss.clients[id]
+	if !ok {
 		return false
 	}
-	delete(iss.clients, id)
+	// AUD-CODE-012 (same class, remaining site): deleting a client
+	// revokes its tokens, so a persist failure must NOT silently claim
+	// success — the tokens would come back after a restart. Capture what
+	// is removed and put it back if the write fails.
+	var delCodes []string
 	for code, c := range iss.codes {
 		if c.ClientID == id {
-			delete(iss.codes, code)
+			delCodes = append(delCodes, code)
 		}
 	}
+	var delRefresh []string
 	for hash, t := range iss.refresh {
 		if t.ClientID == id {
-			delete(iss.refresh, hash)
+			delRefresh = append(delRefresh, hash)
 		}
 	}
-	_ = iss.saveLocked()
+	savedCodes := make(map[string]*authCode, len(delCodes))
+	for _, code := range delCodes {
+		savedCodes[code] = iss.codes[code]
+		delete(iss.codes, code)
+	}
+	savedRefresh := make(map[string]*refreshToken, len(delRefresh))
+	for _, hash := range delRefresh {
+		savedRefresh[hash] = iss.refresh[hash]
+		delete(iss.refresh, hash)
+	}
+	delete(iss.clients, id)
+	if err := iss.saveLocked(); err != nil {
+		for code, c := range savedCodes {
+			iss.codes[code] = c
+		}
+		for hash, t := range savedRefresh {
+			iss.refresh[hash] = t
+		}
+		iss.clients[id] = client
+		persistLogf("oauth: persist client deletion failed, rolled back: %v", err)
+		return false
+	}
 	return true
 }
 
@@ -492,7 +519,11 @@ func (iss *Issuer) RefreshToken(refresh, clientID, secret string) (*TokenRespons
 		return nil, errors.New("oauth: invalid refresh_token")
 	}
 	if time.Now().After(rt.ExpiresAt) {
-		_ = iss.saveLocked()
+		if err := iss.saveLocked(); err != nil {
+			// The token is expired and refused either way, but a failed
+			// write must be visible (AUD-CODE-012 class).
+			persistLogf("oauth: persist expired refresh-token removal failed: %v", err)
+		}
 		return nil, errors.New("oauth: refresh_token expired")
 	}
 	if rt.ClientID != clientID {
@@ -507,9 +538,24 @@ func (iss *Issuer) RefreshToken(refresh, clientID, secret string) (*TokenRespons
 	}
 	resp, err := iss.mintLocked(client, rt.Scopes)
 	if err != nil {
+		// AUD-CODE-012 (same class, remaining site): the old token was
+		// already consumed above but the rotation was not persisted, so
+		// the client would be locked out with nothing to show for it.
+		// Put it back and report the failure.
+		iss.refresh[hash] = rt
+		persistLogf("oauth: refresh token mint failed, consumed token restored: %v", err)
 		return nil, err
 	}
-	_ = iss.saveLocked()
+	if err := iss.saveLocked(); err != nil {
+		// AUD-CODE-012 (same class, remaining site): the old token was
+		// already consumed and a new one minted, but nothing was written.
+		// Fail closed: put the consumed token back so the client can
+		// retry, drop the un-persisted mint, and report the error instead
+		// of handing out a credential a restart would invalidate.
+		iss.refresh[hash] = rt
+		persistLogf("oauth: persist refresh-token rotation failed: %v", err)
+		return nil, fmt.Errorf("oauth: refresh token rotation could not be persisted: %w", err)
+	}
 	return resp, nil
 }
 
