@@ -160,3 +160,41 @@ func TestProviderCapabilitiesEndpoint(t *testing.T) {
 		t.Fatalf("unknown provider status = %d, want 404", rec.Code)
 	}
 }
+
+// TestCapabilitiesRefreshEndpoint: the rebuild is authenticated (it is a
+// mutating management route, not an exempt read-only GET) and reports
+// the rebuilt size without inventing capabilities.
+func TestCapabilitiesRefreshEndpoint(t *testing.T) {
+	reg := p15CapabilityRegistry(t)
+	srv := newTestServer(t, &fakeEngine{}, WithCapabilityRegistry(reg))
+
+	// Unauthenticated: refused; the endpoint is not exempt.
+	rec := doReq(t, srv, http.MethodPost, "/api/capabilities/refresh", "", "")
+	if rec.Code == http.StatusOK {
+		t.Fatalf("unauthenticated refresh returned 200, want a refusal")
+	}
+
+	rec = doReq(t, srv, http.MethodPost, "/api/capabilities/refresh", "", "test-key-123")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Object string `json:"object"`
+		Count  int    `json:"count"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Object != "capabilities.refresh" {
+		t.Fatalf("object = %q", body.Object)
+	}
+	if body.Count < 4 {
+		t.Fatalf("count = %d, want the four registry models at least", body.Count)
+	}
+
+	// The matrix is still served after the refresh.
+	rec = doReq(t, srv, http.MethodGet, "/api/capabilities", "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("matrix after refresh = %d, want 200", rec.Code)
+	}
+}

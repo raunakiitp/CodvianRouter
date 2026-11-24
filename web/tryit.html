@@ -1040,6 +1040,38 @@ const ROUTES = [
     "bootstrap": false
   },
   {
+    "method": "GET",
+    "path": "/api/capabilities",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Capability matrix (P1.5): every known provider/model with each capability's support state and provenance. Read-only metadata \u2014 no keys, no base URLs.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/capabilities/refresh",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Rebuilds the in-process capability snapshot from registry + opt-in sync state (P1.5). No network I/O, no cost, cannot invent capabilities \u2014 it re-reads existing sources only. Authenticated like every other mutating management route (exempt routes are read-only GETs).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
+    "path": "/api/providers/{id}/capabilities",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "One provider's models with capability support and provenance (P1.5). Read-only metadata.",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
     "method": "POST",
     "path": "/api/providers",
     "tier": "ALWAYS_PROTECTED",

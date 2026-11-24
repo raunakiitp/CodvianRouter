@@ -1059,8 +1059,8 @@ func TestExemptRoutesAreReadOnlyGet(t *testing.T) {
 	// guard.go:223 — plus POST /oauth/token and POST /oauth/revoke
 	// in B3-07: public by design, client auth is the code_verifier
 	// / client secret, not a gateway key).
-	if exempt != 58 {
-		t.Errorf("exempt routes = %d, want 58 (51 before M8 + GET /api/pricing in M8.15 + GET /api/mcp/audit and GET /api/mcp/status in M9.7 + GET /.well-known/agent.json in M9.9 + GET /api/telemetry/model-latency-stats in M10 + POST /oauth/token and POST /oauth/revoke in B3-07)", exempt)
+	if exempt != 60 {
+		t.Errorf("exempt routes = %d, want 60 (58 before P1.5 + GET /api/capabilities and GET /api/providers/{id}/capabilities in P1.5)", exempt)
 	}
 }
 

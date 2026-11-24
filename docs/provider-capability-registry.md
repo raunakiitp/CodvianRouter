@@ -65,8 +65,10 @@ verify.
 | `GET /api/providers/{id}/capabilities` | the same for one provider (`object: provider.capabilities`); 404 when the provider is unknown |
 | `POST /api/capabilities/refresh` | rebuilds the in-process snapshot from existing sources; no network I/O, no cost, cannot invent capabilities |
 
-All three are Tier MANAGEMENT (`AuthExempt: true`): read-only metadata, or
-a bounded local rebuild. No keys and no base URLs are ever included.
+All three are Tier MANAGEMENT. The two GETs are `AuthExempt` read-only
+feeds (the same class as `GET /api/providers`); the refresh POST is
+authenticated like every other mutating management route, because exempt
+routes must be read-only GETs. No keys and no base URLs are ever included.
 
 ## Capability-aware routing
 
