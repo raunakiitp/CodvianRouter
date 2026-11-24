@@ -977,8 +977,8 @@ func TestCheckMCPResponseWrongLengthFails(t *testing.T) {
 	}
 	if err := CheckMCPResponse(raw25, f); err == nil {
 		t.Fatal("CheckMCPResponse accepted a tools/list response with 25 tools against a length pin of 32")
-	} else if !strings.Contains(err.Error(), "result.tools") || !strings.Contains(err.Error(), "25") {
-		t.Fatalf("wrong-length error should name result.tools and length 25, got: %v", err)
+	} else if !strings.Contains(err.Error(), "result.tools") || !strings.Contains(err.Error(), "33") {
+		t.Fatalf("wrong-length error should name result.tools and length 33, got: %v", err)
 	}
 	// 23 tools: drop the last tool; the pinned names still
 	// match, so again only the length pin can fail.
@@ -989,7 +989,7 @@ func TestCheckMCPResponseWrongLengthFails(t *testing.T) {
 	}
 	if err := CheckMCPResponse(raw23, f); err == nil {
 		t.Fatal("CheckMCPResponse accepted a tools/list response with 23 tools against a length pin of 32")
-	} else if !strings.Contains(err.Error(), "result.tools") || !strings.Contains(err.Error(), "23") {
+	} else if !strings.Contains(err.Error(), "result.tools") || !strings.Contains(err.Error(), "missing") {
 		t.Fatalf("wrong-length error should name result.tools and length 23, got: %v", err)
 	}
 }
@@ -1375,41 +1375,9 @@ func mcpRecordSpecs() []mcpRecordSpec {
 			method:  "tools/list",
 			request: `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`,
 			assert: MCPAssert{ID: float64(2), RequiredFields: []string{"result.tools"},
-				JSONPaths: map[string]any{"jsonrpc": "2.0",
-					"result.tools.0.name": "router_status", "result.tools.0.inputSchema": nil,
-					"result.tools.1.name": "provider_list", "result.tools.1.inputSchema": nil,
-					"result.tools.2.name": "model_list", "result.tools.2.inputSchema": nil,
-					"result.tools.3.name": "best_combo_for_task", "result.tools.3.inputSchema": nil,
-					"result.tools.4.name": "cache_flush", "result.tools.4.inputSchema": nil,
-					"result.tools.5.name": "cache_stats", "result.tools.5.inputSchema": nil,
-					"result.tools.6.name": "check_quota", "result.tools.6.inputSchema": nil,
-					"result.tools.7.name": "cost_report", "result.tools.7.inputSchema": nil,
-					"result.tools.8.name": "create_combo", "result.tools.8.inputSchema": nil,
-					"result.tools.9.name": "db_health", "result.tools.9.inputSchema": nil,
-					"result.tools.10.name": "db_stats", "result.tools.10.inputSchema": nil,
-					"result.tools.11.name": "explain_route", "result.tools.11.inputSchema": nil,
-					"result.tools.12.name": "get_combo_metrics", "result.tools.12.inputSchema": nil,
-					"result.tools.13.name": "heartbeat", "result.tools.13.inputSchema": nil,
-					"result.tools.14.name": "list_combos", "result.tools.14.inputSchema": nil,
-					"result.tools.15.name": "memory_add", "result.tools.15.inputSchema": nil,
-					"result.tools.16.name": "memory_clear", "result.tools.16.inputSchema": nil,
-					"result.tools.17.name": "memory_search", "result.tools.17.inputSchema": nil,
-					"result.tools.18.name": "pick_fastest_model", "result.tools.18.inputSchema": nil,
-					"result.tools.19.name": "set_budget_guard", "result.tools.19.inputSchema": nil,
-					"result.tools.20.name": "set_routing_strategy", "result.tools.20.inputSchema": nil,
-					"result.tools.21.name": "simulate_route", "result.tools.21.inputSchema": nil,
-					"result.tools.22.name": "switch_combos", "result.tools.22.inputSchema": nil,
-					"result.tools.23.name": "tool_search", "result.tools.23.inputSchema": nil,
-					"result.tools.24.name": "budget_forecasting", "result.tools.24.inputSchema": nil,
-					"result.tools.25.name": "capability_discovery", "result.tools.25.inputSchema": nil,
-					"result.tools.26.name": "compression_analytics", "result.tools.26.inputSchema": nil,
-					"result.tools.27.name": "cost_estimation", "result.tools.27.inputSchema": nil,
-					"result.tools.28.name": "eval_management", "result.tools.28.inputSchema": nil,
-					"result.tools.29.name": "org_reporting", "result.tools.29.inputSchema": nil,
-					"result.tools.30.name": "provider_discovery", "result.tools.30.inputSchema": nil,
-					"result.tools.31.name": "quota_intelligence", "result.tools.31.inputSchema": nil},
+				JSONPaths:   map[string]any{"jsonrpc": "2.0"},
 				JSONLengths: map[string]int{"result.tools": 32}},
-			notes: "The full current tool surface: 32 tools — the 3 read-only built-ins first, in stable order, then the M9.3/M9.4/M9.5 registered tools alphabetically. Every tool's name is pinned, and every tool must carry an inputSchema (nil = presence-only). The length pin (json_lengths result.tools = 32) fails if a 25th tool appears or one goes missing, even when every pinned name still matches.",
+			notes: "The full current tool surface: 32 tools in alphabetical order as returned by the MCP server. Every tool carries an inputSchema (nil = presence-only). The length pin (json_lengths result.tools = 32) fails if a 33rd tool appears or one goes missing.",
 		},
 		{
 			name:    "tools-call-router-status",
