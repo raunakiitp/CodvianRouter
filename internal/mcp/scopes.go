@@ -56,25 +56,37 @@ const (
 	ScopeReadProviders = "mcp:read:providers"
 	ScopeReadModels    = "mcp:read:models"
 	// Read scopes for the M9.3 tool families (added M9.3 — the
-	// 9-scope set had manage scopes for routing/cost but no read
-	// scopes for them, so a read-only key could not use
-	// explain_route at all; see tools_routing.go for the choice).
-	ScopeReadRouting = "mcp:read:routing"
-	ScopeReadCost    = "mcp:read:cost"
-	// Manage scopes — one per future tool family (M9.3/M9.4).
-	// A tool declares the family scope(s) it needs; granting a
-	// family scope never grants another family.
-	ScopeManageRouting = "mcp:manage:routing"
-	ScopeManageCost    = "mcp:manage:cost"
-	ScopeManageCache   = "mcp:manage:cache"
-	ScopeManageMemory  = "mcp:manage:memory"
-	ScopeManageOps     = "mcp:manage:ops"
-	// ScopeDestructive is the separate grant for destructive tools
-	// (cache_flush, memory_clear, DB autoRepair — M9.4). A
-	// destructive tool requires its family scope AND this scope;
-	// neither alone suffices.
-	ScopeDestructive = "mcp:destructive"
-)
+		// 9-scope set had manage scopes for routing/cost but no read
+		// scopes for them, so a read-only key could not use
+		// explain_route at all; see tools_routing.go for the choice).
+		ScopeReadRouting = "mcp:read:routing"
+		ScopeReadCost    = "mcp:read:cost"
+		// P1.2 ecosystem expansion read scopes.
+		ScopeReadCapabilities = "mcp:read:capabilities"
+		ScopeReadQuota        = "mcp:read:quota"
+		ScopeReadBudget       = "mcp:read:budget"
+		ScopeReadCostEst      = "mcp:read:cost_est"
+		ScopeReadRoutingPlan  = "mcp:read:routing_plan"
+		ScopeReadCompression  = "mcp:read:compression"
+		ScopeReadEval         = "mcp:read:eval"
+		ScopeReadOrg          = "mcp:read:org"
+		// Manage scopes — one per future tool family (M9.3/M9.4).
+		// A tool declares the family scope(s) it needs; granting a
+		// family scope never grants another family.
+		ScopeManageRouting = "mcp:manage:routing"
+		ScopeManageCost    = "mcp:manage:cost"
+		ScopeManageCache   = "mcp:manage:cache"
+		ScopeManageMemory  = "mcp:manage:memory"
+		ScopeManageOps     = "mcp:manage:ops"
+		// P1.2 ecosystem expansion manage scopes.
+		ScopeManageEval   = "mcp:manage:eval"
+		ScopeManageOrg    = "mcp:manage:org"
+		// ScopeDestructive is the separate grant for destructive tools
+		// (cache_flush, memory_clear, DB autoRepair — M9.4). A
+		// destructive tool requires its family scope AND this scope;
+		// neither alone suffices.
+		ScopeDestructive = "mcp:destructive"
+	)
 
 // AllScopes returns every scope in the set, in a stable order.
 func AllScopes() []string {
@@ -84,11 +96,21 @@ func AllScopes() []string {
 		ScopeReadModels,
 		ScopeReadRouting,
 		ScopeReadCost,
+		ScopeReadCapabilities,
+		ScopeReadQuota,
+		ScopeReadBudget,
+		ScopeReadCostEst,
+		ScopeReadRoutingPlan,
+		ScopeReadCompression,
+		ScopeReadEval,
+		ScopeReadOrg,
 		ScopeManageRouting,
 		ScopeManageCost,
 		ScopeManageCache,
 		ScopeManageMemory,
 		ScopeManageOps,
+		ScopeManageEval,
+		ScopeManageOrg,
 		ScopeDestructive,
 	}
 }
