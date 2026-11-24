@@ -72,6 +72,25 @@ func (pinStubSource) MemorySearch(caller, query string) ([]mcp.MemoryEntry, erro
 }
 func (pinStubSource) MemoryClear(caller string) (int, error) { return 0, nil }
 
+// P1.2 ecosystem expansion — pinStubSource stub implementations.
+
+func (pinStubSource) CapabilityEntries() []mcp.CapabilityEntry        { return nil }
+func (pinStubSource) QuotaIntelligence(filter string) ([]mcp.QuotaIntelEntry, error) {
+	return nil, nil
+}
+func (pinStubSource) BudgetForecast(keyID string) (mcp.BudgetForecastEntry, error) {
+	return mcp.BudgetForecastEntry{}, nil
+}
+func (pinStubSource) CompressionStats() mcp.CompressionStatsEntry {
+	return mcp.CompressionStatsEntry{}
+}
+func (pinStubSource) EvalSchedules() ([]mcp.EvalScheduleEntry, error) {
+	return nil, nil
+}
+func (pinStubSource) OrgReport() mcp.OrgReportEntry {
+	return mcp.OrgReportEntry{}
+}
+
 // mcpPinFixtureNames is the 8 fixtures this test pins, in tool
 // order. Each fixture's assert.json_paths["error.message"] is the
 // exact -32602 message the live server must produce.
