@@ -568,6 +568,50 @@ func (m *mockMCPSource) MemoryClear(caller string) (int, error) {
 	return n, nil
 }
 
+// P1.2 ecosystem expansion — mockMCPSource stub implementations.
+
+func (m *mockMCPSource) CapabilityEntries() []mcp.CapabilityEntry {
+	out := []mcp.CapabilityEntry{}
+	for _, p := range m.Providers() {
+		for _, modelID := range p.Models {
+			out = append(out, mcp.CapabilityEntry{
+				ProviderID: p.ID,
+				ModelID:    modelID,
+				Capability: "tool_calling",
+				Supported:  nil,
+				Native:     false,
+				Source:     "mock",
+				Confidence: 0.0,
+			})
+		}
+	}
+	return out
+}
+
+func (m *mockMCPSource) QuotaIntelligence(filter string) ([]mcp.QuotaIntelEntry, error) {
+	return []mcp.QuotaIntelEntry{}, nil
+}
+
+func (m *mockMCPSource) BudgetForecast(keyID string) (mcp.BudgetForecastEntry, error) {
+	return mcp.BudgetForecastEntry{
+		KeyID:            keyID,
+		InsufficientData: true,
+		UpdatedAt:        "2026-01-01T00:00:00Z",
+	}, nil
+}
+
+func (m *mockMCPSource) CompressionStats() mcp.CompressionStatsEntry {
+	return mcp.CompressionStatsEntry{}
+}
+
+func (m *mockMCPSource) EvalSchedules() ([]mcp.EvalScheduleEntry, error) {
+	return []mcp.EvalScheduleEntry{}, nil
+}
+
+func (m *mockMCPSource) OrgReport() mcp.OrgReportEntry {
+	return mcp.OrgReportEntry{}
+}
+
 func newMockMCPServer() *mcp.Server {
 	// The fixture harness drives the server in-process as the local
 	// operator (same explicit opt-in stdio uses) — New() defaults to
