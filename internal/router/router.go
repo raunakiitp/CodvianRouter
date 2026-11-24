@@ -2808,6 +2808,40 @@ func CapabilityLookupFunc(idx *capability.Index) func(providerID, model string) 
 	}
 }
 
+// filterByRequiredCapabilities drops the attempts that do not hold
+// every capability in cfg.RequireCapabilities with VERIFIED support
+// (P1.5). Unknown is not evidence of support and never qualifies, so a
+// model whose capability was never observed is filtered out exactly
+// like one confirmed incapable — unlike the CT-1 tool pre-check, which
+// fails open by design for plain chat traffic. No requirements (the
+// default) returns the chain untouched, so default routing behaviour is
+// unchanged. Applied before the dial on both the non-streaming and
+// streaming paths, so a filtered-out attempt never costs a provider
+// call.
+func (e *Engine) filterByRequiredCapabilities(chain []Attempt) (kept []Attempt, skipped []Attempt, reasons []string) {
+	if len(e.cfg.RequireCapabilities) == 0 || e.cfg.CapabilityLookup == nil {
+		return chain, nil, nil
+	}
+	kept = make([]Attempt, 0, len(chain))
+	for _, att := range chain {
+		mc, known := e.cfg.CapabilityLookup(att.ProviderID, att.Model)
+		missing := ""
+		for _, need := range e.cfg.RequireCapabilities {
+			if !known || !mc.HasVerified(need) {
+				missing = string(need)
+				break
+			}
+		}
+		if missing != "" {
+			skipped = append(skipped, att)
+			reasons = append(reasons, "skipped_capability_unverified:"+missing)
+			continue
+		}
+		kept = append(kept, att)
+	}
+	return kept, skipped, reasons
+}
+
 // filterZeroQuota splits a chain into the attempts that may serve
 // (quota hint > 0) and the zero-quota attempts, which are skipped
 // and reported on the trace. Shared by orderAttempts and the
@@ -4963,6 +4997,20 @@ func (e *Engine) chatWithChainStrategy(ctx context.Context, chain []Attempt, req
 	for _, att := range zeroSkipped {
 		addTraceAttempt(trace, att, 0, "skipped_zero_quota", nil)
 	}
+	// P1.5 capability filter: with operator-required capabilities
+	// (routing.require_capabilities), an attempt must hold every one
+	// of them with VERIFIED support — unknown and merely-declared
+	// never qualify — and the filter runs before any dial, so a
+	// dropped attempt costs no provider call. No requirements leaves
+	// the chain untouched.
+	ordered, capSkipped, capReasons := e.filterByRequiredCapabilities(ordered)
+	for i, att := range capSkipped {
+		reason := "skipped_capability_unverified"
+		if i < len(capReasons) {
+			reason = capReasons[i]
+		}
+		addTraceAttempt(trace, att, 0, reason, nil)
+	}
 	if len(ordered) == 0 {
 		return nil, trace, ErrNoAvailableAttempt
 	}
@@ -5209,29 +5257,6 @@ func (e *Engine) chatWithChainStrategy(ctx context.Context, chain []Attempt, req
 		// the loop top, so a target skipped by a gate is never
 		// counted as stepped-to.
 		e.noteRegionFailoverFromTrace(trace, att, &regionCounted)
-
-		// P1.5 capability gate: when the request (or operator policy)
-		// requires capabilities, an attempt must hold every one of them
-		// with VERIFIED support. Unknown is not evidence of support and
-		// never passes — unlike the CT-1 tool pre-check below, which
-		// fails open by design for plain chat traffic. No filter is
-		// applied when RequireCapabilities is empty, so default routing
-		// is unchanged.
-		if len(e.cfg.RequireCapabilities) > 0 && e.cfg.CapabilityLookup != nil {
-			mc, known := e.cfg.CapabilityLookup(att.ProviderID, att.Model)
-			missing := ""
-			for _, need := range e.cfg.RequireCapabilities {
-				if !known || !mc.HasVerified(need) {
-					missing = string(need)
-					break
-				}
-			}
-			if missing != "" {
-				addTraceAttempt(trace, att, 0, "skipped_capability_unverified:"+missing, nil)
-				idx++
-				continue
-			}
-		}
 
 		// CT-1 direct-path tool-capability pre-check: a
 		// tool-bearing request never dials a CONFIRMED-incapable
@@ -6386,6 +6411,18 @@ func (e *Engine) runStream(parentCtx, ctx context.Context, chain []Attempt, req 
 	ordered = pinFirst(ordered, req.PinProviderID)
 	for _, att := range zeroSkipped {
 		addTraceAttempt(trace, att, 0, "skipped_zero_quota", nil)
+	}
+	// P1.5 capability filter (streaming path): identical semantics to
+	// the non-streaming filter — required capabilities must be
+	// VERIFIED, unknown never qualifies, and the filter runs before
+	// any dial so a dropped attempt costs no provider call.
+	ordered, capSkipped, capReasons := e.filterByRequiredCapabilities(ordered)
+	for i, att := range capSkipped {
+		reason := "skipped_capability_unverified"
+		if i < len(capReasons) {
+			reason = capReasons[i]
+		}
+		addTraceAttempt(trace, att, 0, reason, nil)
 	}
 	if len(ordered) == 0 {
 		e.sendTerminal(out, ErrNoAvailableAttempt)

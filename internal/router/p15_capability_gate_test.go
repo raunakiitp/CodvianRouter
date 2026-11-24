@@ -93,6 +93,81 @@ func TestP15CapabilityGateNoVerifiedAttempt(t *testing.T) {
 	}
 }
 
+// TestP15CapabilityGateAppliesToStreaming: the same requirement is
+// enforced on the streaming path — an unverified attempt never dials, a
+// verified one serves, and the stream is never opened against a
+// filtered target.
+func TestP15CapabilityGateAppliesToStreaming(t *testing.T) {
+	ctx := context.Background()
+	declared := errClient(&provider.UpstreamError{StatusCode: 500, Body: "must never be dialled"})
+	known := okClient("ok")
+	eng := NewEngine(map[string]provider.Client{"declared": declared, "known": known}, nil, Config{
+		HedgeDelay:          -1,
+		RequireCapabilities: []capability.Capability{capability.CapVision},
+		CapabilityLookup: capabilityLookupFrom(map[string]capability.ModelCapabilities{
+			"declared": unverifiedVision(),
+			"known":    verifiedVision(),
+		}),
+	})
+	events, err := eng.ChatStreamWithChain(ctx, chainFor("declared", "known"), coolReq("m"))
+	if err != nil {
+		t.Fatalf("ChatStreamWithChain: %v", err)
+	}
+	var terminal error
+	got := ""
+	for ev := range events {
+		if ev.Delta != "" {
+			got += ev.Delta
+		}
+		if ev.Err != nil {
+			terminal = ev.Err
+		}
+	}
+	if terminal != nil {
+		t.Fatalf("stream terminal error = %v, want nil", terminal)
+	}
+	if got == "" {
+		t.Fatal("stream produced no delta")
+	}
+	if declared.streamCalls() != 0 {
+		t.Fatalf("unverified attempt was dialled on the streaming path (%d calls), want 0", declared.streamCalls())
+	}
+	if known.streamCalls() != 1 {
+		t.Fatalf("verified attempt stream calls = %d, want 1", known.streamCalls())
+	}
+}
+
+// TestP15CapabilityGateStreamingNoVerifiedAttempt: with nothing
+// verified, the stream terminates with ErrNoAvailableAttempt and no
+// provider is ever dialled.
+func TestP15CapabilityGateStreamingNoVerifiedAttempt(t *testing.T) {
+	ctx := context.Background()
+	a := errClient(&provider.UpstreamError{StatusCode: 500, Body: "must never be dialled"})
+	eng := NewEngine(map[string]provider.Client{"a": a}, nil, Config{
+		HedgeDelay:          -1,
+		RequireCapabilities: []capability.Capability{capability.CapVision},
+		CapabilityLookup: capabilityLookupFrom(map[string]capability.ModelCapabilities{
+			"a": unverifiedVision(),
+		}),
+	})
+	events, err := eng.ChatStreamWithChain(ctx, chainFor("a"), coolReq("m"))
+	if err != nil {
+		t.Fatalf("ChatStreamWithChain: %v", err)
+	}
+	var terminal error
+	for ev := range events {
+		if ev.Err != nil {
+			terminal = ev.Err
+		}
+	}
+	if terminal != ErrNoAvailableAttempt {
+		t.Fatalf("stream terminal error = %v, want ErrNoAvailableAttempt", terminal)
+	}
+	if got := a.streamCalls(); got != 0 {
+		t.Fatalf("unverified provider streamed %d times, want 0", got)
+	}
+}
+
 // TestP15NoRequirementKeepsDefaultRouting: an empty
 // RequireCapabilities list leaves the chain untouched even when the
 // lookup says nothing is verified — default behaviour must not change.

@@ -161,6 +161,51 @@ func TestProviderCapabilitiesEndpoint(t *testing.T) {
 	}
 }
 
+// TestCapabilityRoutesGuardPolicy pins the classification of the three
+// P1.5 routes: the GETs are exempt read-only MANAGEMENT feeds, and the
+// refresh POST is MANAGEMENT with the admin scope (exempt routes must be
+// read-only GETs, so a mutating rebuild is never exempt).
+func TestCapabilityRoutesGuardPolicy(t *testing.T) {
+	want := map[string]struct {
+		tier   GuardTier
+		exempt bool
+		scopes []string
+	}{
+		"GET /api/capabilities":                {TierManagement, true, nil},
+		"GET /api/providers/{id}/capabilities": {TierManagement, true, nil},
+		"POST /api/capabilities/refresh":       {TierManagement, false, []string{"admin"}},
+	}
+	seen := map[string]bool{}
+	for _, r := range RouteTable() {
+		key := r.Method + " " + r.Path
+		exp, ok := want[key]
+		if !ok {
+			continue
+		}
+		seen[key] = true
+		if r.Tier != exp.tier {
+			t.Errorf("%s tier = %v, want %v", key, r.Tier, exp.tier)
+		}
+		if r.AuthExempt != exp.exempt {
+			t.Errorf("%s AuthExempt = %v, want %v", key, r.AuthExempt, exp.exempt)
+		}
+		if len(r.Scopes) != len(exp.scopes) {
+			t.Errorf("%s scopes = %v, want %v", key, r.Scopes, exp.scopes)
+			continue
+		}
+		for i := range exp.scopes {
+			if r.Scopes[i] != exp.scopes[i] {
+				t.Errorf("%s scopes = %v, want %v", key, r.Scopes, exp.scopes)
+			}
+		}
+	}
+	for key := range want {
+		if !seen[key] {
+			t.Errorf("route %s is missing from the guard table", key)
+		}
+	}
+}
+
 // TestCapabilitiesRefreshEndpoint: the rebuild is authenticated (it is a
 // mutating management route, not an exempt read-only GET) and reports
 // the rebuilt size without inventing capabilities.
