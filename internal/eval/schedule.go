@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -81,21 +82,61 @@ func (s *Schedule) Due(now time.Time) bool {
 	return s.LastRun.IsZero() || now.Sub(s.LastRun) >= s.Every
 }
 
+// CaseFailure records WHY one case failed, so run history carries the
+// detail an operator needs to triage a regression without re-running
+// it. Reason is the case's Result.Error when set, otherwise the missing
+// substrings; Missing holds the expected substrings that were absent.
+type CaseFailure struct {
+	CaseID    string   `json:"case_id"`
+	Reason    string   `json:"reason,omitempty"`
+	Missing   []string `json:"missing,omitempty"`
+	LatencyMs int64    `json:"latency_ms,omitempty"`
+}
+
 // Run is one persisted evaluation run.
 type Run struct {
-	ID           string    `json:"id"`
-	ScheduleID   string    `json:"schedule_id"`
-	Suite        string    `json:"suite"`
+	ID           string        `json:"id"`
+	ScheduleID   string        `json:"schedule_id"`
+	Suite        string        `json:"suite"`
+	StartedAt    time.Time     `json:"started_at"`
+	FinishedAt   time.Time     `json:"finished_at"`
+	Status       string        `json:"status"` // running|completed|failed
+	PassRate     float64       `json:"pass_rate"`
+	Total        int           `json:"total"`
+	Passed       int           `json:"passed"`
+	FailedCases  []string      `json:"failed_cases,omitempty"`
+	Failures     []CaseFailure `json:"failures,omitempty"`
+	LatencyMs    int64         `json:"latency_ms"`
+	Error        string        `json:"error,omitempty"`
+	IsRegression bool          `json:"is_regression"`
+}
+
+// TrendPoint is one run's pass rate in a trend series.
+type TrendPoint struct {
+	RunID        string    `json:"run_id"`
 	StartedAt    time.Time `json:"started_at"`
-	FinishedAt   time.Time `json:"finished_at"`
-	Status       string    `json:"status"` // running|completed|failed
 	PassRate     float64   `json:"pass_rate"`
 	Total        int       `json:"total"`
 	Passed       int       `json:"passed"`
-	FailedCases  []string  `json:"failed_cases,omitempty"`
-	LatencyMs    int64     `json:"latency_ms"`
-	Error        string    `json:"error,omitempty"`
+	Status       string    `json:"status"`
 	IsRegression bool      `json:"is_regression"`
+}
+
+// Trend is a schedule's pass-rate series plus a baseline comparison.
+// BaselinePassRate is the mean pass rate of the completed runs BEFORE
+// the latest completed one; Delta is latest - baseline. Direction is
+// "unknown" until there are at least two completed runs (a single
+// number is not a trend), and "flat" when Delta is zero. A failed or
+// case-less latest run leaves LatestPassRate 0 but is reported with its
+// own status, so a broken run is never read as a 0% quality score.
+type Trend struct {
+	ScheduleID       string       `json:"schedule_id"`
+	Points           []TrendPoint `json:"points"`
+	BaselinePassRate float64      `json:"baseline_pass_rate"`
+	LatestPassRate   float64      `json:"latest_pass_rate"`
+	Delta            float64      `json:"delta"`
+	Direction        string       `json:"direction"`
+	CompletedRuns    int          `json:"completed_runs"`
 }
 
 // Store persists schedules and run history. The zero value is usable
@@ -265,6 +306,60 @@ func (s *Store) DetectRegression(scheduleID string, run *Run, sch *Schedule) boo
 	return drop > sch.RegressionMaxPassRateDrop
 }
 
+// PassRateTrend returns a schedule's pass-rate series (chronological,
+// oldest first, bounded by limit when > 0) plus a baseline comparison.
+// Direction is deliberately "unknown" with fewer than two completed
+// runs: one number is a measurement, not a trend. Non-completed runs
+// appear as points (so a broken run is visible) but never contribute to
+// the baseline mean.
+func (s *Store) PassRateTrend(scheduleID string, limit int) Trend {
+	newestFirst := s.History(scheduleID, limit)
+	points := make([]TrendPoint, 0, len(newestFirst))
+	for i := len(newestFirst) - 1; i >= 0; i-- {
+		r := newestFirst[i]
+		points = append(points, TrendPoint{
+			RunID:        r.ID,
+			StartedAt:    r.StartedAt,
+			PassRate:     r.PassRate,
+			Total:        r.Total,
+			Passed:       r.Passed,
+			Status:       r.Status,
+			IsRegression: r.IsRegression,
+		})
+	}
+	tr := Trend{ScheduleID: scheduleID, Points: points, Direction: "unknown"}
+	// Completed runs, newest first.
+	completed := make([]Run, 0, len(newestFirst))
+	for _, r := range newestFirst {
+		if r.Status == "completed" {
+			completed = append(completed, r)
+		}
+	}
+	tr.CompletedRuns = len(completed)
+	if len(completed) == 0 {
+		return tr
+	}
+	tr.LatestPassRate = completed[0].PassRate
+	if len(completed) < 2 {
+		return tr
+	}
+	sum := 0.0
+	for _, r := range completed[1:] {
+		sum += r.PassRate
+	}
+	tr.BaselinePassRate = sum / float64(len(completed)-1)
+	tr.Delta = tr.LatestPassRate - tr.BaselinePassRate
+	switch {
+	case tr.Delta > 0:
+		tr.Direction = "up"
+	case tr.Delta < 0:
+		tr.Direction = "down"
+	default:
+		tr.Direction = "flat"
+	}
+	return tr
+}
+
 // Scheduler runs due schedules against a Harness engine in a bounded
 // loop. It is safe to start in a goroutine; Run blocks until ctx is done.
 type Scheduler struct {
@@ -380,9 +475,21 @@ func (s *Scheduler) execute(ctx context.Context, sch *Schedule) {
 	run.Passed = rep.Passed
 	run.LatencyMs = run.FinishedAt.Sub(run.StartedAt).Milliseconds()
 	for _, r := range rep.Results {
-		if !r.OK {
-			run.FailedCases = append(run.FailedCases, r.CaseID)
+		if r.OK {
+			continue
 		}
+		run.FailedCases = append(run.FailedCases, r.CaseID)
+		// Carry WHY the case failed so history is triageable without a
+		// re-run. Reason is the case error when set; a pure
+		// missing-substring failure names the absent expectations.
+		f := CaseFailure{CaseID: r.CaseID, Reason: r.Error, LatencyMs: r.LatencyMs}
+		if len(r.Missing) > 0 {
+			f.Missing = append([]string(nil), r.Missing...)
+			if f.Reason == "" {
+				f.Reason = "missing expected substrings: " + strings.Join(r.Missing, ", ")
+			}
+		}
+		run.Failures = append(run.Failures, f)
 	}
 	if rep.Total == 0 {
 		run.Status = "failed"

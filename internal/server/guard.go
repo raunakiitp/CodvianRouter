@@ -561,6 +561,7 @@ var guardRouteTable = []GuardRoute{
 	{Method: "PATCH", Path: "/api/eval/schedules/{id}", Tier: TierAlwaysProtected, Description: "Partial update of one schedule (interval, enabled, regression threshold, concurrency). Management auth (admin scope) required.", Scopes: []string{"admin"}},
 	{Method: "DELETE", Path: "/api/eval/schedules/{id}", Tier: TierAlwaysProtected, Description: "Deletes one schedule (its history is preserved); unknown ids answer 404. Management auth (admin scope) required.", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/eval/schedules/{id}/history", Tier: TierManagement, Description: "Run history for one schedule, newest first (?limit=, default 100). Gateway-key auth required.", Scopes: []string{"admin"}},
+	{Method: "GET", Path: "/api/eval/schedules/{id}/trends", Tier: TierManagement, Description: "Pass-rate trend series for one schedule (oldest first, ?limit= default 20) plus the baseline delta and direction (unknown until two completed runs). Gateway-key auth required.", Scopes: []string{"admin"}},
 	// P3-A org/team/RBAC (org_api.go): mutations rewrite tenant state,
 	// so admin scope; reads are MANAGEMENT.
 	{Method: "GET", Path: "/api/org", Tier: TierManagement, Description: "Lists organizations and teams (id, name, budget, allowed models/strategies, roles). Gateway-key auth required.", Scopes: []string{"admin"}},
