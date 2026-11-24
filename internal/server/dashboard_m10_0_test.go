@@ -125,10 +125,11 @@ func TestDashboardM10_0NavSlots(t *testing.T) {
 		}
 	}
 	// Nav inventory pin: 20 pre-M10 entries - 2 removed + 14 new = 32
-	// (Activity is not a slot — its section never landed; see above).
-	if got := strings.Count(body, "data-view="); got != 32 {
-		t.Errorf("nav data-view count = %d, want 32 (20 - 2 removed + 14 new)", got)
-	}
+		// (Activity is not a slot — its section never landed; see above).
+		// Plus 1 P1.1 Quota Intelligence entry = 33.
+		if got := strings.Count(body, "data-view="); got != 33 {
+			t.Errorf("nav data-view count = %d, want 33 (20 - 2 removed + 14 new + 1 P1.1 Quota)", got)
+		}
 	// No nav button may point at a missing section: every data-view
 	// value must have a matching id="view-<name>" section, so no dead
 	// nav entry can show nothing on click (M10-17 gate-prep G7: the
