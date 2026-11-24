@@ -573,7 +573,8 @@ var guardRouteTable = []GuardRoute{
 	{Method: "GET", Path: "/api/org/analytics", Tier: TierManagement, Description: "Organization-level usage analytics across all teams (requests, tokens, costs, budget status). Gateway-key auth required.", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/api/org/teams/{id}/analytics", Tier: TierManagement, Description: "Team-level usage analytics for a specific team (budget status, member breakdown). Gateway-key auth required.", Scopes: []string{"admin"}},
 	// P3-C Cost Estimation & Reconciliation
-	{Method: "POST", Path: "/api/cost/estimate", Tier: TierManagement, Description: "Estimate the cost of a chat completion request (prompt tokens × model prices). Gateway-key auth required.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/api/cost/estimate", Tier: TierManagement, Description: "Pre-dispatch cost estimate (P1.7): local token count (wire-framed calibrated tiktoken when a wire is given, tools and multimodal parts included), provider- or model-level pricing with cached-input/cache-write rates, explicit unknown-price handling, requested-output-token estimation and an optional read-only budget check. Never calls a provider — an estimate is not an invoice. Gateway-key auth required.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/api/cost/reconcile", Tier: TierManagement, Description: "Reconcile an estimate against provider-reported usage (P1.7): actual cost from the price book including cached-input and cache-write legs, with status usage_missing / actual_unknown / estimate_unknown / reconciled and a variance only when both sides are known. Never calls a provider. Gateway-key auth required.", Scopes: []string{"admin"}},
 }
 
 // RouteTable returns a copy of the guard classification table: every

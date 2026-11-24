@@ -7,7 +7,7 @@
 # Scope `admin` implies every scope. LOCAL_ONLY = loopback-only
 # even with a valid key. Destructive routes need a typed
 # {"confirm": "<phrase>"} body in addition to the key.
-# Routes: 345
+# Routes: 346
 
 ## Auth
 header: Authorization: Bearer <gateway-key>
@@ -360,7 +360,8 @@ POST /api/org/teams/{id}/unbind | ALWAYS_PROTECTED | scopes=admin | auth=key | R
 GET /api/org/audit | MANAGEMENT | scopes=admin | auth=key | Append-only admin audit log, newest first (?limit=, default 200). Gateway-key auth required.
 GET /api/org/analytics | MANAGEMENT | scopes=admin | auth=key | Organization-level usage analytics across all teams (requests, tokens, costs, budget status). Gateway-key auth required.
 GET /api/org/teams/{id}/analytics | MANAGEMENT | scopes=admin | auth=key | Team-level usage analytics for a specific team (budget status, member breakdown). Gateway-key auth required.
-POST /api/cost/estimate | MANAGEMENT | scopes=admin | auth=key | Estimate the cost of a chat completion request (prompt tokens × model prices). Gateway-key auth required.
+POST /api/cost/estimate | MANAGEMENT | scopes=admin | auth=key | Pre-dispatch cost estimate (P1.7): local token count (wire-framed calibrated tiktoken when a wire is given, tools and multimodal parts included), provider- or model-level pricing with cached-input/cache-write rates, explicit unknown-price handling, requested-output-token estimation and an optional read-only budget check. Never calls a provider — an estimate is not an invoice. Gateway-key auth required.
+POST /api/cost/reconcile | MANAGEMENT | scopes=admin | auth=key | Reconcile an estimate against provider-reported usage (P1.7): actual cost from the price book including cached-input and cache-write legs, with status usage_missing / actual_unknown / estimate_unknown / reconciled and a variance only when both sides are known. Never calls a provider. Gateway-key auth required.
 
 ## Examples (one per family)
 health: curl http://127.0.0.1:8080/healthz  # -> {"status":"ok"}
