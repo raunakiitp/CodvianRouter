@@ -356,7 +356,17 @@ func (m *PoolManager) Size() int {
 // creating it on first use. The apiKey is fingerprinted, never
 // stored: the map key carries only the fingerprint.
 func (m *PoolManager) TransportFor(providerID, apiKey string) *pooledTransport {
-	key := poolKey{providerID: providerID, keyFP: KeyFingerprint(apiKey)}
+	return m.TransportForFingerprint(providerID, KeyFingerprint(apiKey))
+}
+
+// TransportForFingerprint returns the warm transport for a pool
+// identified by (providerID, keyFP), creating it on first use. keyFP
+// is a KeyFingerprint value (12 hex chars), never key material, so a
+// caller that holds only the fingerprint (the native relay target,
+// which decrypts the key but must not carry it) reuses the SAME pool
+// the engine clients use — see Registry.PooledTransport (AUD-PERF-003).
+func (m *PoolManager) TransportForFingerprint(providerID, keyFP string) *pooledTransport {
+	key := poolKey{providerID: providerID, keyFP: keyFP}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if p, ok := m.pools[key]; ok {

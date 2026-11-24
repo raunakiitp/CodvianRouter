@@ -5021,6 +5021,17 @@ func (e *Engine) chatWithChainStrategy(ctx context.Context, chain []Attempt, req
 	// long-context fallback chain when nothing in the primary
 	// chain fits; when nothing fits anywhere it fails honestly
 	// here, before any provider is called.
+	// AUD-PERF-004: compression and reasoning restore have run, so
+	// this request's messages are final for the request — attach a
+	// per-request token-count memo. Every later estimate (this
+	// context-fit gate, the per-hop budget gate below, reconcileUsage)
+	// then reuses one CountPromptWire per (model, wire) instead of
+	// re-joining, re-hashing and re-marshalling the prompt on each
+	// hop. A caller that already attached one (a request re-entering
+	// the engine) is left as-is.
+	if req.TokenCountMemo() == nil {
+		req.SetTokenCountMemo(tokencount.NewRequestMemo())
+	}
 	ordered, err = e.applyContextFit(trace, ordered, req)
 	if err != nil {
 		e.setLastTrace(trace)
@@ -6437,6 +6448,13 @@ func (e *Engine) runStream(parentCtx, ctx context.Context, chain []Attempt, req 
 	// error; the server turns it into a 400 while nothing was
 	// sent yet).
 	var err error
+	// AUD-PERF-004: attach the per-request token-count memo here,
+	// after runStream's own reasoning restore + compression, so the
+	// stream's context-fit gate and per-hop budget gate reuse one
+	// CountPromptWire instead of recounting per attempt.
+	if req.TokenCountMemo() == nil {
+		req.SetTokenCountMemo(tokencount.NewRequestMemo())
+	}
 	ordered, err = e.applyContextFit(trace, ordered, req)
 	if err != nil {
 		e.sendTerminal(out, err)

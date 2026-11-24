@@ -909,7 +909,34 @@ type ChatRequest struct {
 	// warming, never a user request): replaying it would only
 	// double the upstream load it was sent to avoid.
 	WarmUp bool `json:"-"`
+	// tokenCountMemo is an opaque per-request scratch slot for the
+	// local prompt-token memo (tokencount.RequestMemo). The engine
+	// attaches one once the request's Messages/Tools are final, so
+	// the per-hop budget gate and the other estimate sites reuse a
+	// single CountPromptWire instead of re-joining, re-hashing and
+	// re-marshalling the prompt on every hop (AUD-PERF-004). It is
+	// unexported and json-ignored: never on the wire, never in a
+	// coalescing or cache key, and never part of a re-encoded body.
+	// The zero value (nil) means "no memo": every caller then
+	// computes fresh, exactly as before this field existed. See
+	// TokenCountMemo / SetTokenCountMemo.
+	tokenCountMemo any
 }
+
+// TokenCountMemo returns the per-request token-count memo attached by
+// the engine (an opaque *tokencount.RequestMemo), or nil when none is
+// attached. internal/tokencount reads it to reuse a CountPromptWire
+// result within one request; nothing else should.
+func (r *ChatRequest) TokenCountMemo() any { return r.tokenCountMemo }
+
+// SetTokenCountMemo attaches a per-request token-count memo. Contract:
+// it must be set only once this request's Messages and Tools are FINAL
+// for the request — the memo caches a CountPromptWire result keyed by
+// (model, wire, message count, tools count), so replacing the messages
+// afterwards would let a stale count stand. internal/router sets it
+// right after its own compression + reasoning restore, which is that
+// point. A nil memo leaves every caller computing fresh.
+func (r *ChatRequest) SetTokenCountMemo(m any) { r.tokenCountMemo = m }
 
 // chatRequestAlias is ChatRequest without its methods, so decoding
 // into chatRequestJSON cannot recurse back into UnmarshalJSON.
