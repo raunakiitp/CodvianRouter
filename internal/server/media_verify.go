@@ -773,6 +773,12 @@ func (s *Server) serveMediaVerify(w http.ResponseWriter, r *http.Request, spec m
 	if refused := s.checkInternalBudgets(w, r, bookReq.Model); refused {
 		return
 	}
+	// P1.6 org/team policy: the authenticated key's team allowlists
+	// (model, strategy) decide before dispatch, on this dialect too —
+	// no alternate API is a policy bypass.
+	if !s.enforceTeamPolicy(w, r, bookReq.Model, "") {
+		return
+	}
 	if !s.checkTeamBudget(w, r) {
 		return
 	}

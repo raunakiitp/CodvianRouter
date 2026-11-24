@@ -24,6 +24,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/config"
 	"github.com/raunakiitp/codvian-router/internal/guardrails"
 	"github.com/raunakiitp/codvian-router/internal/ledger"
+	"github.com/raunakiitp/codvian-router/internal/org"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 )
 
@@ -108,43 +109,180 @@ func (s *Server) checkTeamBudget(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-// checkTeamPolicy enforces P3-A org/team policy: cross-team isolation
-// via the org store. It checks:
-//  1. If the key is bound to a team in the org store
-//  2. If the requested model is allowed by the team's allowlist
-//  3. If the requested routing strategy is allowed by the team's allowlist
-//
-// Returns false if it wrote a refusal (403 for isolation).
+// routingStrategy reports the routing strategy a chat-shaped request
+// asks for (the contract's Sort field), or "" when none is declared.
+// Used so every dialect's policy gate reads the same field the engine
+// will honour.
+func routingStrategy(req *provider.ChatRequest) string {
+	if req == nil || req.Routing == nil {
+		return ""
+	}
+	return req.Routing.Sort
+}
+
+// checkTeamPolicy enforces org/team policy on the chat path: cross-team
+// isolation plus the team's model and strategy allowlists, resolved from
+// the caller's gateway key through the org store. It is a thin wrapper
+// over enforceTeamPolicy so every dialect shares ONE decision path.
 func (s *Server) checkTeamPolicy(w http.ResponseWriter, r *http.Request, req *provider.ChatRequest) bool {
-	// No org store configured -> no team policy enforcement
-	st, err := s.ensureOrgStore()
-	if err != nil || st == nil {
+	model := ""
+	if req != nil {
+		model = req.Model
+	}
+	return s.enforceTeamPolicy(w, r, model, routingStrategy(req))
+}
+
+// enforceTeamPolicy is the single org/team policy gate (P1.6). It runs
+// BEFORE provider dispatch on every model-addressed dialect — chat
+// completions, Anthropic Messages, Responses, legacy completions, Gemini
+// generateContent, embeddings, images, audio, media verification, batch
+// items and A2A tasks — so no alternate dialect is a policy bypass.
+//
+// Resolution is by the AUTHENTICATED key: the org store's binding for
+// the caller's gateway key decides the team, and the team decides
+// what the request may do. A key with no binding, or a deployment with
+// no org store, is unrestricted (no policy was declared, so none is
+// invented).
+//
+// Checks, in order:
+//  1. model allowlist — a team with a non-empty list refuses any other
+//     requested model (403 team_policy).
+//  2. strategy allowlist — same, for the requested routing strategy.
+//  3. org budget — the organization's declared budget compared against
+//     the estimated list cost of its teams' usage in each team's
+//     current window (400 org_budget). Unpriced usage in the window
+//     fails closed, exactly like the team gate: usage that cannot be
+//     priced cannot prove the org is under budget.
+//
+// Every refusal is written to the store's append-only audit log
+// (action request.denied) with the key, team and reason, so a denial
+// survives a restart. Returns false when it already wrote a refusal.
+func (s *Server) enforceTeamPolicy(w http.ResponseWriter, r *http.Request, model, strategy string) bool {
+	ref := s.evaluateTeamPolicy(r.Context(), s.callerKeyID(r), model, strategy)
+	if ref == nil {
 		return true
 	}
-	keyID := s.callerKeyID(r)
+	if ref.Status >= http.StatusInternalServerError {
+		writeServerError(w, ref.Status, ref.Message)
+		return false
+	}
+	writeJSON(w, ref.Status, errorBody{Error: errorDetail{Message: ref.Message, Type: ref.Type}})
+	return false
+}
+
+// teamPolicyRefusal is one policy decision's refusal: the status, the
+// message and the error type the caller should see. Detail is the
+// audit-log line (it may name the model/strategy, which the client
+// message already does).
+type teamPolicyRefusal struct {
+	Status  int
+	Message string
+	Type    string
+	Detail  string
+}
+
+// evaluateTeamPolicy is the key-addressed core of the gate: it resolves
+// the org store's binding for keyID and returns nil when the request is
+// allowed, or the refusal to report. Callers that have no
+// http.Request (batch workers, A2A task runners) use this directly so
+// they enforce exactly the same policy as the HTTP handlers. Every
+// refusal is audited.
+func (s *Server) evaluateTeamPolicy(ctx context.Context, keyID, model, strategy string) *teamPolicyRefusal {
+	st, err := s.ensureOrgStore()
+	if err != nil || st == nil {
+		return nil
+	}
 	if keyID == "" {
-		return true
+		return nil
 	}
 	team := st.TeamForKey(keyID)
 	if team == nil {
-		// Key not bound to any team in org store -> no policy enforcement
-		return true
+		return nil
 	}
-	// Check model allowlist
-	model := req.Model
 	if model != "" && !st.AllowModel(team.ID, model) {
-		writeJSON(w, http.StatusForbidden, errorBody{Error: errorDetail{Message: fmt.Sprintf("model %q not allowed for this team", model), Type: "team_policy"}})
-		return false
-	}
-	// Check strategy allowlist (from routing contract Sort field)
-	// The Sort field in RequestRouting can specify a fallback strategy.
-	if req.Routing != nil && req.Routing.Sort != "" {
-		if !st.AllowStrategy(team.ID, req.Routing.Sort) {
-			writeJSON(w, http.StatusForbidden, errorBody{Error: errorDetail{Message: fmt.Sprintf("routing strategy %q not allowed for this team", req.Routing.Sort), Type: "team_policy"}})
-			return false
+		st.RecordDenial(keyID, team.ID, "model "+model+" denied by team allowlist")
+		return &teamPolicyRefusal{
+			Status:  http.StatusForbidden,
+			Message: fmt.Sprintf("model %q not allowed for this team", model),
+			Type:    "team_policy",
 		}
 	}
-	return true
+	if strategy != "" && !st.AllowStrategy(team.ID, strategy) {
+		st.RecordDenial(keyID, team.ID, "strategy "+strategy+" denied by team allowlist")
+		return &teamPolicyRefusal{
+			Status:  http.StatusForbidden,
+			Message: fmt.Sprintf("routing strategy %q not allowed for this team", strategy),
+			Type:    "team_policy",
+		}
+	}
+	org := st.OrgOf(team.ID)
+	if org == nil || org.DefaultBudgetUSD <= 0 || s.ledger == nil {
+		return nil
+	}
+	spent, unpriced, err := s.orgWindowListCost(ctx, org)
+	if err != nil {
+		// Fail closed: an org whose spend cannot be read cannot
+		// prove it is under budget.
+		return &teamPolicyRefusal{Status: http.StatusServiceUnavailable, Message: "org budget check failed", Type: "org_budget"}
+	}
+	if unpriced || spent >= org.DefaultBudgetUSD {
+		st.RecordDenial(keyID, team.ID, fmt.Sprintf("org %s budget: spent %.6f unpriced=%v budget %.6f", org.ID, spent, unpriced, org.DefaultBudgetUSD))
+		return &teamPolicyRefusal{
+			Status:  http.StatusBadRequest,
+			Message: fmt.Sprintf("This API key's organization reached its shared usage budget (%s).", org.ID),
+			Type:    "org_budget",
+		}
+	}
+	return nil
+}
+
+// orgBudgetWindow is the window an organization budget is measured
+// over: the current calendar month, UTC. An organization budget is a
+// monthly cap (see config docs for org budgets), so it does not borrow
+// a member team's rolling window — mixing per-team windows into one org
+// figure would compare spend from different periods.
+func orgBudgetWindow(now time.Time) (start, end time.Time) {
+	start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	end = start.AddDate(0, 1, 0)
+	return start, end
+}
+
+// orgWindowListCost sums the estimated LIST cost of every team under an
+// org over the org's budget window (see orgBudgetWindow), from the
+// ledger. It is a read: nothing is written, and a team the ledger does
+// not know simply contributes nothing. unpriced is true when any usage
+// in the window cannot be repriced at catalog prices — the caller fails
+// closed on it, because a list figure that omits unpriced usage is a lie
+// by omission.
+func (s *Server) orgWindowListCost(ctx context.Context, org *org.Organization) (spentUSD float64, unpriced bool, err error) {
+	if s.ledger == nil {
+		return 0, false, nil
+	}
+	st, err := s.ensureOrgStore()
+	if err != nil || st == nil {
+		return 0, false, err
+	}
+	prices := s.catalogListPrices(ctx)
+	start, end := orgBudgetWindow(time.Now())
+	for _, team := range st.TeamsForOrg(org.ID) {
+		slices, err := s.ledger.UsageSlicesForTeam(ctx, team.ID, start, end)
+		if err != nil {
+			return 0, false, err
+		}
+		for _, sl := range slices {
+			if !sl.PriceKnown || !sl.SplitKnown {
+				unpriced = true
+				continue
+			}
+			p, ok := prices[sl.Model]
+			if !ok {
+				unpriced = true
+				continue
+			}
+			spentUSD += (float64(sl.PromptTokens)*p[0] + float64(sl.CompletionTokens)*p[1]) / 1e6
+		}
+	}
+	return spentUSD, unpriced, nil
 }
 
 // teamMemberView is one member row of the cost-center report:

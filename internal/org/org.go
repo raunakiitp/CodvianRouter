@@ -163,6 +163,69 @@ func (s *Store) auditLocked(actor, action, target, detail string) {
 	s.audit = append(s.audit, AuditEntry{Seq: s.nextSeq, At: time.Now(), Actor: actor, Action: action, Target: target, Detail: detail})
 }
 
+// OrgOf returns the organization a team belongs to (nil when the team
+// is unknown or its org id resolves to nothing). A copy is returned so
+// callers cannot mutate store state.
+func (s *Store) OrgOf(teamID string) *Organization {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.teams[teamID]
+	if !ok {
+		return nil
+	}
+	o, ok := s.orgs[t.OrgID]
+	if !ok {
+		return nil
+	}
+	c := *o
+	return &c
+}
+
+// OrgByID returns one organization by id (nil when unknown).
+func (s *Store) OrgByID(id string) *Organization {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	o, ok := s.orgs[id]
+	if !ok {
+		return nil
+	}
+	c := *o
+	return &c
+}
+
+// TeamsForOrg returns every team under an org, sorted by id.
+func (s *Store) TeamsForOrg(orgID string) []*Team {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]*Team, 0, len(s.teams))
+	for _, t := range s.teams {
+		if t.OrgID != orgID {
+			continue
+		}
+		c := *t
+		out = append(out, &c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// RecordDenial appends an audit entry for a REFUSED request-path
+// decision (team model/strategy policy or org budget). Denials are
+// auditable facts, not management operations: the entry is written
+// through the same append-only log, with the caller's key as actor, and
+// persisted — so a restart does not lose the record of what was
+// refused. Nothing is recorded when the store has no path (memory
+// store) beyond the in-memory log.
+func (s *Store) RecordDenial(keyID, teamID, detail string) {
+	if keyID == "" && teamID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.auditLocked(keyID, "request.denied", teamID, detail)
+	_ = s.persist()
+}
+
 // AddOrg creates an org (actor must be a known member; first org bootstraps).
 func (s *Store) AddOrg(o *Organization, actor Role) error {
 	if o.ID == "" || o.Name == "" {

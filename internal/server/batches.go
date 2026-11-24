@@ -820,6 +820,17 @@ func (s *Server) runBatchWorker(b *Batch) {
 		req.Stream = false
 		req.Endpoint = provider.EndpointChatCompletions
 		req.CallerID = b.OwnerKeyID
+		// P1.6 org/team policy, per item: the batch owner's key is
+		// resolved to its team exactly as an interactive request is,
+		// so a batch cannot smuggle a model the team is not allowed
+		// to call. A denied item is reported as its own error line —
+		// the rest of the batch still runs.
+		if ref := s.evaluateTeamPolicy(b.ctx, b.OwnerKeyID, req.Model, routingStrategy(&req)); ref != nil {
+			s.writeBatchErrorLine(errW, vl.customID, "policy_denied", truncateErr(ref.Message, 200))
+			counts.Failed++
+			executed++
+			continue
+		}
 		resp, err := s.engine.Chat(b.ctx, req)
 		if err != nil {
 			if cancelled() {

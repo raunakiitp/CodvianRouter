@@ -1165,6 +1165,12 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 	if refused := s.checkInternalBudgets(w, r, chat.Model); refused {
 		return
 	}
+	// P1.6 org/team policy: the authenticated key's team allowlists
+	// (model, strategy) decide before dispatch, on this dialect too —
+	// no alternate API is a policy bypass.
+	if !s.enforceTeamPolicy(w, r, chat.Model, routingStrategy(&chat)) {
+		return
+	}
 	if !s.checkTeamBudget(w, r) {
 		return
 	}
