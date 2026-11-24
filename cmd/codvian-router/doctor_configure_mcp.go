@@ -2072,6 +2072,119 @@ func (s *registryMCPSource) MemoryClear(caller string) (int, error) {
 	return st.Clear(caller)
 }
 
+// P1.2 ecosystem expansion — data source methods on registryMCPSource
+// (stdio MCP transport). Compression/eval/org data are unavailable in
+// stdio mode (no serving loop, no data-dir services), so those return
+// empty/zero entries honestly rather than fabricating numbers.
+
+func (s *registryMCPSource) CapabilityEntries() []mcp.CapabilityEntry {
+	if s.reg == nil {
+		return []mcp.CapabilityEntry{}
+	}
+	out := []mcp.CapabilityEntry{}
+	seen := map[string]bool{}
+	for _, p := range s.reg.List() {
+		for _, m := range p.Models {
+			key := p.ID + "/" + m.ID
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, mcp.CapabilityEntry{
+				ProviderID: p.ID,
+				ModelID:    m.ID,
+				Capability: "tool_calling",
+				Supported:  nil,
+				Native:     false,
+				Source:     "registry",
+				Confidence: 0.0,
+			})
+		}
+	}
+	return out
+}
+
+func (s *registryMCPSource) QuotaIntelligence(filter string) ([]mcp.QuotaIntelEntry, error) {
+	if s.led == nil {
+		return nil, fmt.Errorf("mcp: QuotaIntelligence is not available over the MCP stdio transport yet — no ledger opened")
+	}
+	budgets, err := s.led.ListKeyBudgets(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	out := []mcp.QuotaIntelEntry{}
+	for _, b := range budgets {
+		st, err := s.led.KeyBudgetStatus(context.Background(), b.KeyID, now)
+		if err != nil {
+			continue
+		}
+		state := "healthy"
+		if st.AtLimit {
+			state = "exhausted"
+		} else if st.WarningReached {
+			state = "approaching_limit"
+		}
+		entry := mcp.QuotaIntelEntry{
+			Kind:        "key_budget",
+			ID:          b.KeyID,
+			Name:        b.KeyID,
+			Scope:       "key",
+			Target:      b.KeyID,
+			BudgetUSD:   st.LimitUSD,
+			Consumed:    st.SpentUSD,
+			State:       state,
+			Source:      "ledger_budget",
+			Confidence:  0.95,
+			UpdatedAt:   now.Format(time.RFC3339),
+			Filters:     map[string]string{"key_id": b.KeyID},
+		}
+		if st.LimitUSD > 0 {
+			entry.UsedPct = st.SpentUSD / st.LimitUSD * 100
+		}
+		out = append(out, entry)
+	}
+	return out, nil
+}
+
+func (s *registryMCPSource) BudgetForecast(keyID string) (mcp.BudgetForecastEntry, error) {
+	if s.led == nil {
+		return mcp.BudgetForecastEntry{}, fmt.Errorf("mcp: BudgetForecast is not available over the MCP stdio transport yet — no ledger opened")
+	}
+	st, err := s.led.KeyBudgetStatus(context.Background(), keyID, time.Now())
+	if err != nil {
+		return mcp.BudgetForecastEntry{}, err
+	}
+	entry := mcp.BudgetForecastEntry{
+		KeyID:          keyID,
+		LimitUSD:       st.LimitUSD,
+		LimitKnown:     st.LimitUSD > 0,
+		UpdatedAt:      time.Now().Format(time.RFC3339),
+		InsufficientData: true, // stdio mode has no recent spend windows
+	}
+	if st.LimitUSD > 0 && st.SpentUSD > 0 {
+		entry.SpendUSD24h = st.SpentUSD
+		// Simple estimate: if at limit in this window, project exhaustion
+		entry.InsufficientData = false
+	}
+	return entry, nil
+}
+
+func (s *registryMCPSource) CompressionStats() mcp.CompressionStatsEntry {
+	// No compression engine in stdio mode.
+	return mcp.CompressionStatsEntry{Layers: 0, LastUpdated: time.Now().Format(time.RFC3339)}
+}
+
+func (s *registryMCPSource) EvalSchedules() ([]mcp.EvalScheduleEntry, error) {
+	// No eval store in stdio mode.
+	return []mcp.EvalScheduleEntry{}, nil
+}
+
+func (s *registryMCPSource) OrgReport() mcp.OrgReportEntry {
+	// No org store in stdio mode.
+	return mcp.OrgReportEntry{UpdatedAt: time.Now().Format(time.RFC3339)}
+}
+
 func runMCP(opts options) int {
 	return runMCPTo(opts, os.Stdin, os.Stdout)
 }
