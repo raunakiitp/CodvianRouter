@@ -29,7 +29,7 @@
       "structuredContent": {
         "audit_log": "enabled",
         "protocol_version": "2025-03-26",
-        "tool_count": 24,
+        "tool_count": 32,
         "uptime_seconds": 0
       }
     }
@@ -46,10 +46,10 @@
       "jsonrpc": "2.0",
       "result.structuredContent.audit_log": "enabled",
       "result.structuredContent.protocol_version": "2025-03-26",
-      "result.structuredContent.tool_count": 24,
+      "result.structuredContent.tool_count": 32,
       "result.structuredContent.uptime_seconds": null
     },
     "http_status": 200
   },
-  "notes": "heartbeat with the mcp:read:status key: live snapshot — protocol 2025-03-26, all 24 tools announced, audit log enabled (the HTTP transport opens \u003cdata-dir\u003e/mcp/audit.jsonl); uptime is live so presence-only."
+  "notes": "heartbeat with the mcp:read:status key: live snapshot \u2014 protocol 2025-03-26, all 24 tools announced, audit log enabled (the HTTP transport opens <data-dir>/mcp/audit.jsonl); uptime is live so presence-only."
 }
