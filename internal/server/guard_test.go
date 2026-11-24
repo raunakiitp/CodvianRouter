@@ -115,6 +115,7 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 		"GET /admin/tunnel/status", "POST /admin/provider/login", "GET /admin/provider/login/callback",
 		"POST /admin/bootstrap", "POST /admin/settings/export",
 		"POST /admin/db/export", "POST /admin/db/wipe/arm",
+		"GET /admin/files/legacy", "POST /admin/files/reclaim",
 		"POST /admin/db/wipe", "POST /admin/db/import",
 		"POST /admin/keys/revoke-all", "POST /admin/keys/{id}", "DELETE /admin/keys/{id}", "POST /admin/keys/{id}/rotate", "POST /admin/config/reset", "POST /admin/keys", "POST /admin/keys/import", "GET /admin/key-templates",
 		"POST /oauth/clients", "GET /oauth/clients", "DELETE /oauth/clients/{id}", "GET /oauth/authorize", "POST /oauth/token", "POST /oauth/revoke",
@@ -232,8 +233,8 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 	for _, r := range table {
 		counts[r.Tier]++
 	}
-	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 56 || counts[TierManagement] != 280 {
-		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/56/280)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
+	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 58 || counts[TierManagement] != 280 {
+		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/58/280, the two extra always-protected routes being the admin file-reclaim pair added for AUD-SEC-010)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
 	}
 }
 

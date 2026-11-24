@@ -1910,6 +1910,8 @@ func New(engine Engine, opts ...Option) *Server {
 	s.register(mux, "GET", "/v1/files", s.handleFiles)
 	s.register(mux, "GET", "/v1/files/{id}", s.handleFiles)
 	s.register(mux, "DELETE", "/v1/files/{id}", s.handleFiles)
+	s.register(mux, "GET", "/admin/files/legacy", s.handleFilesLegacyList)
+	s.register(mux, "POST", "/admin/files/reclaim", s.handleFilesReclaim)
 	s.register(mux, "GET", "/v1/files/{id}/content", s.handleFiles)
 	// M8.8 batches (single dispatcher; 405 for wrong methods).
 	s.register(mux, "POST", "/v1/batches", s.handleBatches)

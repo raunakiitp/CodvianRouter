@@ -160,6 +160,15 @@ func (s *Server) filesStore() (*files.Store, error) {
 	actual, loaded := filesStores.LoadOrStore(dir, files.New(dir))
 	st := actual.(*files.Store)
 	if !loaded {
+		if unowned, err := st.LegacyUnowned(); err != nil {
+			s.logger.Printf("files: could not read %s while checking for pre-ownership records: %v", dir, err)
+		} else if len(unowned) > 0 {
+			// Operational and forensic visibility: these records are
+			// private (no key can see them) but they must not be
+			// invisible to the operator, or legitimate older uploads
+			// would look lost (AUD-SEC-010).
+			s.logger.Printf("files: %d file record(s) under %s predate ownership scoping and have NO owner; they are not visible to any gateway key. List them with GET /admin/files/legacy and assign them with POST /admin/files/reclaim", len(unowned), dir)
+		}
 		if n, err := st.SweepStaleUploadTemps(files.StaleUploadTempAge); err != nil {
 			s.logger.Printf("files: orphan staging sweep failed: %v (removed %d stale upload temp(s) before error)", err, n)
 		} else if n > 0 {

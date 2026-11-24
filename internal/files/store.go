@@ -164,6 +164,11 @@ func SanitizeFilename(name string) (string, error) {
 type Store struct {
 	root string
 	mu   sync.Mutex
+	// legacyIndex records that the index last read was in the
+	// pre-ownership v1 format (a bare array). The caller logs it once so
+	// unowned legacy records are never invisible to the OPERATOR, only
+	// to unauthenticated callers (AUD-SEC-010).
+	legacyIndex bool
 }
 
 // New returns a store rooted at dir. The directory (0700, like the
@@ -255,6 +260,19 @@ func (s *Store) contentPath(id string) string {
 	return filepath.Join(s.root, id)
 }
 
+// indexEnvelope is the persisted index format from v2 on. The v1 format
+// was a bare JSON array of File, which had no room for a format marker
+// and (before AUD-SEC-010) no owner field at all. Loading accepts BOTH;
+// saving always writes v2. The marker is what lets an operator (and a
+// test) tell a pre-ownership index from a current one.
+type indexEnvelope struct {
+	Version int    `json:"version"`
+	Files   []File `json:"files"`
+}
+
+// indexVersion is the format saveIndexLocked writes.
+const indexVersion = 2
+
 // loadIndexLocked reads the index; a missing index is an empty
 // store, not an error. A corrupt index is an error — silently
 // dropping metadata would orphan content files.
@@ -266,21 +284,118 @@ func (s *Store) loadIndexLocked() ([]File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("files: read index: %w", err)
 	}
-	var idx []File
-	if err := json.Unmarshal(raw, &idx); err != nil {
+	var env indexEnvelope
+	if err := json.Unmarshal(raw, &env); err == nil && env.Version > 0 {
+		s.legacyIndex = env.Version < indexVersion
+		return env.Files, nil
+	}
+	// Either the v1 bare array, or something genuinely unreadable.
+	var legacy []File
+	if err := json.Unmarshal(raw, &legacy); err != nil {
 		return nil, fmt.Errorf("files: corrupt index %s: %w", s.indexPath(), err)
 	}
-	return idx, nil
+	s.legacyIndex = true
+	return legacy, nil
+}
+
+// legacyIndexLoaded reports whether the index on disk predates ownership
+// scoping (a v1 bare array) — the caller logs it once, so an operator
+// learns that unowned records exist instead of wondering where their
+// older uploads went.
+func (s *Store) legacyIndexLoaded() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.loadIndexLocked()
+	return err == nil && s.legacyIndex
+}
+
+// LegacyUnowned lists records that have no owner: they predate owner
+// scoping, or were written by a path that could not identify its caller.
+// They are NOT visible to any authenticated key (see visibleTo — an
+// empty caller id matches only these, and a real key id never does), so
+// this listing is the forensic view an administrator needs before
+// reclaiming them with ReclaimLegacy. It never mutates anything.
+func (s *Store) LegacyUnowned() ([]File, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx, err := s.loadIndexLocked()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]File, 0)
+	for _, f := range idx {
+		if f.OwnerKeyID == "" {
+			out = append(out, f)
+		}
+	}
+	return out, nil
+}
+
+// ReclaimLegacy assigns ownership of unowned records to ownerKeyID —
+// the supported migration for files that predate owner scoping. An
+// empty owner is refused: that is exactly the state being repaired, and
+// accepting it would let the wildcard state back in. With no ids, every
+// unowned record is reclaimed; with ids, only those (and only if they
+// are in fact unowned — a record owned by another key is never
+// reassigned here, so this cannot be used to steal a file). Returns how
+// many were reclaimed and how many unowned records remain.
+func (s *Store) ReclaimLegacy(ownerKeyID string, ids []string) (int, int, error) {
+	if strings.TrimSpace(ownerKeyID) == "" {
+		return 0, 0, errors.New("files: reclaim requires a non-empty owner key id")
+	}
+	want := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if !ValidID(id) {
+			return 0, 0, fmt.Errorf("files: reclaim: invalid file id %q", id)
+		}
+		want[id] = true
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx, err := s.loadIndexLocked()
+	if err != nil {
+		return 0, 0, err
+	}
+	reclaimed := 0
+	for i := range idx {
+		if idx[i].OwnerKeyID != "" {
+			continue
+		}
+		if len(want) > 0 && !want[idx[i].ID] {
+			continue
+		}
+		idx[i].OwnerKeyID = ownerKeyID
+		reclaimed++
+	}
+	if reclaimed > 0 {
+		if err := s.saveIndexLocked(idx); err != nil {
+			return 0, 0, err
+		}
+	}
+	remaining := 0
+	for _, f := range idx {
+		if f.OwnerKeyID == "" {
+			remaining++
+		}
+	}
+	return reclaimed, remaining, nil
 }
 
 // saveIndexLocked writes the index atomically (temp file in the
 // same directory + rename) and fsyncs both the file and the
 // directory, so a recorded file is durable, not merely buffered.
 func (s *Store) saveIndexLocked(idx []File) error {
-	raw, err := json.Marshal(idx)
+	raw, err := json.Marshal(indexEnvelope{Version: indexVersion, Files: idx})
 	if err != nil {
 		return fmt.Errorf("files: encode index: %w", err)
 	}
+	if idx == nil {
+		raw, err = json.Marshal(indexEnvelope{Version: indexVersion, Files: []File{}})
+		if err != nil {
+			return fmt.Errorf("files: encode index: %w", err)
+		}
+	}
+	s.legacyIndex = false
 	tmp, err := os.CreateTemp(s.root, "index-*.tmp")
 	if err != nil {
 		return fmt.Errorf("files: write index: %w", err)
