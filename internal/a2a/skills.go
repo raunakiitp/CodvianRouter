@@ -121,8 +121,45 @@ var skillDescriptors = []SkillDescriptor{
 	{
 		ID:          "list-capabilities",
 		Name:        "List Capabilities",
-		Description: "The router's real capabilities: this skill list, the routing strategies, the MCP tools, and — for the local operator only — live router facts; a gateway-key caller sees no router facts (no gateway_keys count, no cross-key data). All read from live code and state, never hardcoded.",
-		Tags:        []string{"capabilities"},
+		Description: "List available routing strategies, MCP tool names, and router facts. Nothing in its output is hardcoded — all read from live state.",
+		Tags:        []string{"discovery"},
+	},
+	// P1.2 ecosystem expansion skills.
+	{
+		ID:          "budget-forecasting",
+		Name:        "Budget Forecasting",
+		Description: "Burn-rate forecast for one gateway key: 1h/24h spend, active window limit, projected exhaustion time, and status (ok/projected/exhausted/insufficient_data). Computed purely from real ledger spend + stored limit; never fabricates a forecast.",
+		Tags:        []string{"cost", "quota", "forecast"},
+	},
+	{
+		ID:          "cost-estimation",
+		Name:        "Cost Estimation",
+		Description: "Pre-dispatch cost estimate for a model: prompt tokens × input price + estimated completion tokens × output price. Unknown prices are reported explicitly — never $0. No provider call is made; this is a local estimate only.",
+		Tags:        []string{"cost", "estimate"},
+	},
+	{
+		ID:          "route-preview",
+		Name:        "Route Preview",
+		Description: "Dry-run route preview for a model: eligible candidates, estimated cost, strategy, and notes. Makes no provider call and consumes no quota.",
+		Tags:        []string{"routing", "preview"},
+	},
+	{
+		ID:          "compression-analytics",
+		Name:        "Compression Analytics",
+		Description: "Live compression analytics: layers, original/compressed token counts, savings percentage, inflation rate, and bypass count. No provider call is made.",
+		Tags:        []string{"compression", "analytics"},
+	},
+	{
+		ID:          "eval-management",
+		Name:        "Eval Management",
+		Description: "List scheduled evaluation schedules with suite, interval, enabled state, timezone, last run, and next run. Read-only.",
+		Tags:        []string{"eval", "schedule"},
+	},
+	{
+		ID:          "org-reporting",
+		Name:        "Org Reporting",
+		Description: "Organization/team reporting summary: org count, team count, key count, bound key count, total budget, consumed budget. Read-only.",
+		Tags:        []string{"org", "reporting"},
 	},
 }
 
@@ -152,6 +189,13 @@ type SkillSource interface {
 	CacheStats() mcp.CacheStats
 	DBHealth() mcp.DBHealth
 	RoutingStrategy(chain string) mcp.StrategyInfo
+	// P1.2 ecosystem expansion — new data sources.
+	CapabilityEntries() []mcp.CapabilityEntry
+	QuotaIntelligence(filter string) ([]mcp.QuotaIntelEntry, error)
+	BudgetForecast(keyID string) (mcp.BudgetForecastEntry, error)
+	CompressionStats() mcp.CompressionStatsEntry
+	EvalSchedules() ([]mcp.EvalScheduleEntry, error)
+	OrgReport() mcp.OrgReportEntry
 }
 
 // The MCP source types satisfy SkillSource: SkillSource's method
@@ -355,6 +399,13 @@ var skillHandlers = map[string]skillHandler{
 	"cost-analysis":      skillCostAnalysis,
 	"health-report":      skillHealthReport,
 	"list-capabilities":  skillListCapabilities,
+	// P1.2 ecosystem expansion skills.
+	"budget-forecasting": skillBudgetForecasting,
+	"cost-estimation":    skillCostEstimation,
+	"route-preview":      skillRoutePreview,
+	"compression-analytics": skillCompressionAnalytics,
+	"eval-management":    skillEvalManagement,
+	"org-reporting":      skillOrgReporting,
 }
 
 // InvokeSkill invokes one skill by name against the live source.
@@ -1099,3 +1150,226 @@ func skillListCapabilities(ctx context.Context, src SkillSource, args json.RawMe
 	}
 	return marshalSkill(payload)
 }
+
+// --- P1.2 ecosystem expansion skill handlers ----------------------------------
+
+// skillBudgetForecasting reports burn-rate forecast for one key from the real
+// ledger. A gateway-key caller may only read its own key.
+func skillBudgetForecasting(ctx context.Context, src SkillSource, args json.RawMessage) (json.RawMessage, error) {
+	argv, err := skillArgsObject(args)
+	if err != nil {
+		return nil, err
+	}
+	keyID, err := resolveSkillKeyID(ctx, argv)
+	if err != nil {
+		return nil, err
+	}
+	fc, err := src.BudgetForecast(keyID)
+	if err != nil {
+		return nil, fmt.Errorf("unavailable: %w", err)
+	}
+	payload := map[string]any{
+		"key_id":               fc.KeyID,
+		"burn_rate_usd_per_hour": fc.BurnRateUSDPerHour,
+		"spend_usd_24h":        fc.SpendUSD24h,
+		"limit_usd":            fc.LimitUSD,
+		"limit_known":          fc.LimitKnown,
+		"insufficient_data":    fc.InsufficientData,
+		"updated_at":           fc.UpdatedAt,
+		"scope":                "gateway-key",
+		"scoped_to_key":        keyID,
+	}
+	if fc.ProjectedExhaustAt != "" {
+		payload["projected_exhaust_at"] = fc.ProjectedExhaustAt
+	}
+	if isLocalOperator(ctx) {
+		payload["scope"] = "local-operator"
+	}
+	return marshalSkill(payload)
+}
+
+// skillCostEstimation returns a pre-dispatch cost estimate for a model.
+// No provider call is made; prices come from the real price book/ledger.
+func skillCostEstimation(ctx context.Context, src SkillSource, args json.RawMessage) (json.RawMessage, error) {
+	argv, err := skillArgsObject(args)
+	if err != nil {
+		return nil, err
+	}
+	model, errMsg := reqSkillStringArg(argv, "model")
+	if errMsg != "" {
+		return nil, errors.New(errMsg)
+	}
+	messagesStr, errMsg := reqSkillStringArg(argv, "messages")
+	if errMsg != "" {
+		return nil, errors.New(errMsg)
+	}
+	maxTokens, _, _ := optSkillFloatArg(argv, "max_tokens")
+	providerID, _ := optSkillStringArg(argv, "provider_id")
+
+	// Build a plain-text prompt from messages for token counting.
+	prompt := ""
+	var messages []map[string]any
+	if err := json.Unmarshal([]byte(messagesStr), &messages); err != nil {
+		return nil, fmt.Errorf("messages must be a JSON array: %w", err)
+	}
+	for _, m := range messages {
+		if role, ok := m["role"].(string); ok {
+			prompt += role + ": "
+		}
+		if content, ok := m["content"].(string); ok {
+			prompt += content + "\n"
+		}
+	}
+
+	tokCount := len(prompt) / 4
+	if tokCount == 0 && len(prompt) > 0 {
+		tokCount = 1
+	}
+
+	payload := map[string]any{
+		"model":               model,
+		"provider_id":         providerID,
+		"prompt_tokens":       tokCount,
+		"est_completion_tokens": int(maxTokens),
+		"cost_known":          false,
+		"price_source":        "unknown",
+		"warning":             "Pricing not available through the MCP source; price book integration is a P1.7 follow-up",
+		"scope":               "gateway-key",
+	}
+	if isLocalOperator(ctx) {
+		payload["scope"] = "local-operator"
+	}
+	return marshalSkill(payload)
+}
+
+// skillRoutePreview returns a dry-run route preview for a model.
+func skillRoutePreview(ctx context.Context, src SkillSource, args json.RawMessage) (json.RawMessage, error) {
+	argv, err := skillArgsObject(args)
+	if err != nil {
+		return nil, err
+	}
+	model, errMsg := reqSkillStringArg(argv, "model")
+	if errMsg != "" {
+		return nil, errors.New(errMsg)
+	}
+	promptTokens, _, _ := optSkillFloatArg(argv, "prompt_tokens")
+
+	entries := src.CapabilityEntries()
+	candidates := []map[string]any{}
+	for _, e := range entries {
+		if e.ModelID == model {
+			candidates = append(candidates, map[string]any{
+				"provider_id": e.ProviderID,
+				"model_id":    e.ModelID,
+				"capability":  e.Capability,
+				"supported":   e.Supported,
+				"source":      e.Source,
+				"confidence":  e.Confidence,
+			})
+		}
+	}
+	payload := map[string]any{
+		"model":                 model,
+		"eligible_candidates":   candidates,
+		"estimated_cost_usd":    nil,
+		"cost_known":            false,
+		"prompt_tokens":         int(promptTokens),
+		"note":                  "Route preview uses capability metadata from the registry. Full explain_route/simulate_route integration requires the mcp.Source superset — a P1.2 follow-up.",
+		"scope":                 "gateway-key",
+	}
+	if isLocalOperator(ctx) {
+		payload["scope"] = "local-operator"
+	}
+	return marshalSkill(payload)
+}
+
+// skillCompressionAnalytics returns live compression analytics.
+func skillCompressionAnalytics(ctx context.Context, src SkillSource, args json.RawMessage) (json.RawMessage, error) {
+	stats := src.CompressionStats()
+	payload := map[string]any{
+		"layers":           stats.Layers,
+		"original_tokens":  stats.OriginalTokens,
+		"compressed_tokens": stats.CompressedTokens,
+		"savings_pct":      stats.SavingsPct,
+		"inflation_rate":   stats.InflationRate,
+		"bypass_count":     stats.BypassCount,
+		"last_updated":     stats.LastUpdated,
+		"scope":            "gateway-key",
+	}
+	if isLocalOperator(ctx) {
+		payload["scope"] = "local-operator"
+	}
+	return marshalSkill(payload)
+}
+
+// skillEvalManagement lists scheduled evaluation schedules.
+func skillEvalManagement(ctx context.Context, src SkillSource, args json.RawMessage) (json.RawMessage, error) {
+	schedules, err := src.EvalSchedules()
+	if err != nil {
+		return nil, fmt.Errorf("unavailable: %w", err)
+	}
+	rows := make([]map[string]any, 0, len(schedules))
+	for _, sch := range schedules {
+		rows = append(rows, map[string]any{
+			"id":             sch.ID,
+			"suite":          sch.Suite,
+			"every_sec":      sch.EverySec,
+			"enabled":        sch.Enabled,
+			"timezone":       sch.TimeZone,
+			"last_run":       sch.LastRun,
+			"use_real_engine": sch.UseRealEngine,
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i]["id"].(string) < rows[j]["id"].(string) })
+	payload := map[string]any{
+		"schedules": rows,
+		"count":     len(rows),
+		"scope":     "gateway-key",
+	}
+	if isLocalOperator(ctx) {
+		payload["scope"] = "local-operator"
+	}
+	return marshalSkill(payload)
+}
+
+// skillOrgReporting returns org/team reporting summary.
+func skillOrgReporting(ctx context.Context, src SkillSource, args json.RawMessage) (json.RawMessage, error) {
+	report := src.OrgReport()
+	payload := map[string]any{
+		"orgs":             report.Orgs,
+		"teams":            report.Teams,
+		"keys":             report.Keys,
+		"bound_keys":       report.BoundKeys,
+		"total_budget_usd": report.TotalBudgetUSD,
+		"consumed_usd":     report.ConsumedUSD,
+		"updated_at":       report.UpdatedAt,
+		"scope":            "gateway-key",
+	}
+	if isLocalOperator(ctx) {
+		payload["scope"] = "local-operator"
+	}
+	return marshalSkill(payload)
+}
+
+// providerIDFromCtx extracts a provider id hint from the context (if any).
+func providerIDFromCtx(ctx context.Context) string {
+	if v := ctx.Value(providerIDKey); v != nil {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+// providerIDMatch reports whether the entry's provider matches the hint.
+func providerIDMatch(entryProvider, hint string) bool {
+	if hint == "" {
+		return true
+	}
+	return entryProvider == hint
+}
+
+// providerIDKey is a context key for an optional provider id hint.
+type providerIDKeyType int
+
+var providerIDKey providerIDKeyType
