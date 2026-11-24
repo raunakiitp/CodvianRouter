@@ -2257,18 +2257,29 @@ func (s *Server) requireScope(next http.HandlerFunc, scopes []string) http.Handl
 // time is the caller's own key metadata. Every auth wrapper in
 // this package funnels through here.
 func (s *Server) unauthorized(w http.ResponseWriter, r *http.Request) {
+	// AUD-API-001: the Anthropic surfaces answer with the Anthropic
+	// error envelope for EVERY error, auth failures included — an
+	// Anthropic SDK parses that shape and an OpenAI-shaped body is not
+	// a body its error model describes.
+	deny := func(status int, msg string) {
+		if isAnthropicEndpointPath(r.URL.Path) {
+			writeAnthropicError(w, status, msg)
+			return
+		}
+		writeError(w, status, msg)
+	}
 	if s.verifier != nil {
 		if key := requestKey(r); key != "" {
 			{
 				if ev, ok := s.verifier.(ExpiryVerifier); ok {
 					if exp, expired := ev.ExpiredKey(r.Context(), key); expired {
-						writeError(w, http.StatusUnauthorized, "gateway key expired on "+exp.UTC().Format(time.RFC3339))
+						deny(http.StatusUnauthorized, "gateway key expired on "+exp.UTC().Format(time.RFC3339))
 						return
 					}
 				}
 				if dv, ok := s.verifier.(DisabledKeyVerifier); ok {
 					if dv.DisabledKey(r.Context(), key) {
-						writeError(w, http.StatusUnauthorized, "gateway key disabled")
+						deny(http.StatusUnauthorized, "gateway key disabled")
 						return
 					}
 				}
@@ -2276,14 +2287,14 @@ func (s *Server) unauthorized(w http.ResponseWriter, r *http.Request) {
 				// like an expired gateway key does.
 				if iss, err := s.oauthIssuer(); err == nil && iss != nil {
 					if exp, expired := iss.TokenExpired(key); expired {
-						writeError(w, http.StatusUnauthorized, "oauth token expired on "+exp.UTC().Format(time.RFC3339))
+						deny(http.StatusUnauthorized, "oauth token expired on "+exp.UTC().Format(time.RFC3339))
 						return
 					}
 				}
 			}
 		}
 	}
-	writeError(w, http.StatusUnauthorized, "invalid gateway key")
+	deny(http.StatusUnauthorized, "invalid gateway key")
 }
 
 // callerKeyID returns the gateway-key ID the request arrived under,
@@ -7208,7 +7219,67 @@ func (s *Server) handleEngineError(w http.ResponseWriter, err error) {
 		writeServerError(w, http.StatusGatewayTimeout, "request timed out")
 		return
 	}
-	if cls := provider.ClassifyError(err, provider.EndpointChatCompletions); cls.Decision == provider.DecisionStop && cls.Status >= 400 && cls.Status < 500 {
+	// Upstream rate limit (AUD-REL-001): the provider answered 429.
+	// That is the upstream's own answer, not a gateway failure, and it
+	// used to collapse into the generic 502 with Retry-After dropped —
+	// so a client (or its SDK) could not back off and instead retried
+	// straight back into the same wall. Propagate the true status and
+	// the upstream's Retry-After, exactly as the images/embeddings
+	// paths already do. Not counted as an upstream failure: nothing in
+	// the gateway failed.
+	//
+	// This is the UPSTREAM's limit. Internal quota exhaustion (our own
+	// key/global budgets, per-key token windows) is refused earlier in
+	// this function with its own 402 / 429 + key_token_limit shape, so
+	// the two are never confused.
+	var rle *provider.RateLimitError
+	if errors.As(err, &rle) {
+		if rle.RetryAfterPresent {
+			seconds := int(rle.RetryAfter / time.Second)
+			if seconds < 1 {
+				seconds = 1
+			}
+			w.Header().Set("Retry-After", strconv.Itoa(seconds))
+		}
+		writeJSON(w, http.StatusTooManyRequests, errorBody{Error: errorDetail{
+			Message: "upstream provider rate limited the request",
+			Type:    "rate_limit_error",
+		}})
+		return
+	}
+	// Upstream quota exhaustion (AUD-REL-001): the provider answered
+	// its own quota status (402/429 per vendor). As above, the
+	// upstream's status is the truthful answer; a 502 would hide it.
+	// The upstream body is NOT echoed into the chat envelope (it can
+	// carry vendor account detail); the status and a stable type are.
+	var qe *provider.QuotaError
+	if errors.As(err, &qe) {
+		status := qe.StatusCode
+		if status < 400 || status > 599 {
+			status = http.StatusPaymentRequired
+		}
+		writeJSON(w, status, errorBody{Error: errorDetail{
+			Message: "upstream provider quota exhausted",
+			Type:    "quota_exceeded",
+		}})
+		return
+	}
+	// Any other upstream answer keeps the upstream's own status when it
+	// is a client error, and clamps to 502 otherwise (a malformed
+	// upstream 200 must never be relayed as success).
+	var ue *provider.UpstreamError
+	if errors.As(err, &ue) {
+		status := ue.StatusCode
+		if status < 400 || status > 599 {
+			status = http.StatusBadGateway
+		}
+		if s.recorder != nil {
+			s.recorder.IncUpstreamFailure()
+		}
+		writeUpstreamError(w, status, "upstream rejected the request")
+		return
+	}
+	if cls := provider.ClassifyError(err, provider.EndpointChatCompletions); cls.Status >= 400 && cls.Status < 500 {
 		if s.recorder != nil {
 			s.recorder.IncUpstreamFailure()
 		}

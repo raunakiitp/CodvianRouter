@@ -115,7 +115,13 @@ func (s *Server) statusForEngineError(err error) int {
 		errors.Is(err, context.DeadlineExceeded) {
 		return http.StatusGatewayTimeout
 	}
-	if cls := provider.ClassifyError(err, provider.EndpointChatCompletions); cls.Decision == provider.DecisionStop && cls.Status >= 400 && cls.Status < 500 {
+	// AUD-REL-001: a classified 4xx is the status the client actually
+	// received (the engine may have retried first — the decision says
+	// whether the CHAIN continued, not what the last upstream
+	// answered). Telemetry must agree with the wire, so any 4xx
+	// classification is returned, not only DecisionStop ones; a 0 or
+	// 5xx classification still falls through to 502.
+	if cls := provider.ClassifyError(err, provider.EndpointChatCompletions); cls.Status >= 400 && cls.Status < 500 {
 		return cls.Status
 	}
 	return http.StatusBadGateway

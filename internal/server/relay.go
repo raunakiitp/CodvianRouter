@@ -251,7 +251,7 @@ type messagesHeader struct {
 // dialect, gateway-key auth like /v1/chat/completions).
 func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		writeAnthropicError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	// Panic isolation (CHECKLIST 165-166): a panic anywhere on
@@ -285,7 +285,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	// spelling — the header form is rejected outright, never
 	// silently ignored.
 	if r.Header.Get("X-Codvian-Routing") != "" {
-		writeError(w, http.StatusBadRequest, "X-Codvian-Routing header is not supported; send the routing contract in the \"routing\" request-body field")
+		writeAnthropicError(w, http.StatusBadRequest, "X-Codvian-Routing header is not supported; send the routing contract in the \"routing\" request-body field")
 		return
 	}
 
@@ -305,9 +305,9 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			writeAnthropicError(w, http.StatusRequestEntityTooLarge, "request body too large")
 		} else {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			writeAnthropicError(w, http.StatusBadRequest, "invalid request body")
 		}
 		return
 	}
@@ -321,11 +321,11 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	var head messagesHeader
 	if err := json.Unmarshal(raw, &head); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeAnthropicError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if strings.TrimSpace(head.Model) == "" {
-		writeError(w, http.StatusBadRequest, "model is required")
+		writeAnthropicError(w, http.StatusBadRequest, "model is required")
 		return
 	}
 	// Intent tiers (CHECKLIST 277 (c), same rule as chat
@@ -450,14 +450,14 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		// would otherwise relay verbatim — before any provider
 		// is dialled and before any byte is forwarded.
 		if strings.Contains(err.Error(), "invalid routing") {
-			writeError(w, http.StatusBadRequest, err.Error())
+			writeAnthropicError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		var unrep *wire.UnrepresentableError
 		if errors.As(err, &unrep) {
-			writeError(w, http.StatusBadRequest, "request cannot be translated to the canonical form: "+unrep.Reason)
+			writeAnthropicError(w, http.StatusBadRequest, "request cannot be translated to the canonical form: "+unrep.Reason)
 		} else {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			writeAnthropicError(w, http.StatusBadRequest, "invalid request body")
 		}
 		return
 	}
@@ -829,7 +829,7 @@ func (s *Server) serveMessagesCache(ctx context.Context, w http.ResponseWriter, 
 	s.recordMetrics(ctx, req, resp, nil, start)
 	body, err := relay.ToAnthropicResponse(resp)
 	if err != nil {
-		writeServerError(w, http.StatusBadGateway, "upstream provider error")
+		writeAnthropicError(w, http.StatusBadGateway, "upstream provider error")
 		return
 	}
 	w.Header().Set("X-Codvian-Cache", layer)
@@ -1078,6 +1078,118 @@ func (c *cappedBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// isAnthropicEndpointPath reports whether a request path belongs to the
+// Anthropic dialect surface, which answers every error — auth included
+// — in the Anthropic envelope (AUD-API-001).
+func isAnthropicEndpointPath(path string) bool {
+	return path == "/v1/messages" || strings.HasPrefix(path, "/v1/messages/")
+}
+
+// anthropicErrorType maps an HTTP status onto the Anthropic error
+// vocabulary the SDK understands (AUD-API-001). Anything unrecognised
+// is an api_error, never an OpenAI type name.
+func anthropicErrorType(status int) string {
+	switch {
+	case status == http.StatusBadRequest, status == http.StatusNotFound,
+		status == http.StatusRequestEntityTooLarge, status == http.StatusUnprocessableEntity:
+		return "invalid_request_error"
+	case status == http.StatusUnauthorized:
+		return "authentication_error"
+	case status == http.StatusForbidden:
+		return "permission_error"
+	case status == http.StatusTooManyRequests:
+		return "rate_limit_error"
+	case status == http.StatusServiceUnavailable:
+		return "overloaded_error"
+	default:
+		return "api_error"
+	}
+}
+
+// writeAnthropicError answers a /v1/messages request with the Anthropic
+// error envelope: {"type":"error","error":{"type":...,"message":...}}.
+//
+// AUD-API-001: this endpoint used to answer errors with the OpenAI
+// shape ({"error":{"message","type","code"}}, OpenAI type names), so an
+// Anthropic SDK client could not parse a non-streaming error — the body
+// is not a shape its error model describes. Streaming errors already
+// used Anthropic events; this makes the non-streaming half agree. A 429
+// also carries Retry-After (AUD-REL-001), so the SDK backs off instead
+// of retrying straight into the wall.
+func writeAnthropicError(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, map[string]any{
+		"type": "error",
+		"error": map[string]any{
+			"type":    anthropicErrorType(status),
+			"message": message,
+		},
+	})
+}
+
+// handleMessagesEngineError is the Anthropic-shaped counterpart of
+// handleEngineError: the same status decisions (content refusal 403,
+// contract 4xx, per-key token limit 429 + Retry-After, budget 402,
+// no-fit 400, timeouts 504, otherwise the upstream's status), rendered
+// in the Anthropic envelope so no OpenAI type name leaks through this
+// endpoint.
+func (s *Server) handleMessagesEngineError(w http.ResponseWriter, err error) {
+	var rle *provider.RateLimitError
+	if errors.As(err, &rle) {
+		if rle.RetryAfterPresent {
+			seconds := int(rle.RetryAfter / time.Second)
+			if seconds < 1 {
+				seconds = 1
+			}
+			w.Header().Set("Retry-After", strconv.Itoa(seconds))
+		}
+		writeAnthropicError(w, http.StatusTooManyRequests, "upstream provider rate limited the request")
+		return
+	}
+	var qe *provider.QuotaError
+	if errors.As(err, &qe) {
+		status := qe.StatusCode
+		if status < 400 || status > 599 {
+			status = http.StatusPaymentRequired
+		}
+		writeAnthropicError(w, status, "upstream provider quota exhausted")
+		return
+	}
+	// Internal refusals keep their own status, message and Retry-After,
+	// so an internal limit is never confusable with the upstream's own
+	// 429 (AUD-REL-001 requires the two to stay distinct).
+	var tb *router.TokenLimitBreach
+	if errors.As(err, &tb) {
+		seconds := int(time.Until(tb.NextReset) / time.Second)
+		if seconds < 1 {
+			seconds = 1
+		}
+		w.Header().Set("Retry-After", strconv.Itoa(seconds))
+		writeAnthropicError(w, http.StatusTooManyRequests, tb.Error())
+		return
+	}
+	var ib *router.InternalBudgetBreach
+	if errors.As(err, &ib) {
+		writeAnthropicError(w, http.StatusPaymentRequired, ib.Error())
+		return
+	}
+	var ce *router.ContractError
+	if errors.As(err, &ce) {
+		writeAnthropicError(w, ce.Status, ce.Msg)
+		return
+	}
+	status := s.statusForEngineError(err)
+	message := "upstream provider error"
+	switch status {
+	case http.StatusForbidden:
+		message = "upstream providers refused the content"
+	case http.StatusBadRequest, http.StatusPaymentRequired:
+		message = err.Error()
+	case http.StatusGatewayTimeout:
+		message = "request timed out"
+	}
+	writeAnthropicError(w, status, message)
+}
+
 // recordRelaySpend writes the ledger row for one relayed
 // /v1/messages request (AUD-SEC-002). The verbatim path bypasses the
 // engine, which is why its spend used to be invisible to per-key
@@ -1092,6 +1204,7 @@ func (c *cappedBuffer) Write(p []byte) (int, error) {
 //     attempt is visible but never counted as spend.
 //   - Exactly one row per relayed request: the relay path never runs
 //     the engine, so there is no second row to double-charge.
+//
 // Best-effort: a nil ledger, no model to attribute to, or a ledger
 // error never fails the request the client already received.
 func (s *Server) recordRelaySpend(ctx context.Context, keyID string, target *relayTarget, model string, u relay.AnthropicUsage, status int, start time.Time) {
@@ -1137,7 +1250,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 	if target.UpstreamModel != "" && target.UpstreamModel != head.Model {
 		rewritten, err := relay.RewriteModel(raw, target.UpstreamModel)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "request body has no top-level model to rewrite")
+			writeAnthropicError(w, http.StatusBadRequest, "request body has no top-level model to rewrite")
 			return
 		}
 		body = rewritten
@@ -1179,7 +1292,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 	}
 	upstream, err := http.NewRequestWithContext(upCtx, http.MethodPost, relay.MessagesURL(target.BaseURL), bytes.NewReader(body))
 	if err != nil {
-		writeServerError(w, http.StatusBadGateway, "upstream provider error")
+		writeAnthropicError(w, http.StatusBadGateway, "upstream provider error")
 		return
 	}
 	for k, v := range target.AuthHeaders {
@@ -1210,7 +1323,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 		// The upstream call itself failed before any byte was
 		// committed: record it server-side as a 502.
 		s.recordTelemetry(ctx, s.verbatimMeta(target, head, start), http.StatusBadGateway)
-		writeServerError(w, http.StatusBadGateway, "upstream provider error")
+		writeAnthropicError(w, http.StatusBadGateway, "upstream provider error")
 		return
 	}
 	defer resp.Body.Close()
@@ -1585,19 +1698,19 @@ func (s *Server) handleMessagesTranslated(w http.ResponseWriter, ctx context.Con
 		meta := s.responseMeta(ctx, req, resp, start)
 		s.writeResponseHeaders(w, ctx, meta)
 		s.recordTelemetry(ctx, meta, s.statusForEngineError(err))
-		s.handleEngineError(w, err)
+		s.handleMessagesEngineError(w, err)
 		return
 	}
 	if resp == nil {
 		meta := s.responseMeta(ctx, req, resp, start)
 		s.writeResponseHeaders(w, ctx, meta)
 		s.recordTelemetry(ctx, meta, http.StatusBadGateway)
-		writeServerError(w, http.StatusBadGateway, "upstream provider error")
+		writeAnthropicError(w, http.StatusBadGateway, "upstream provider error")
 		return
 	}
 	body, err := relay.ToAnthropicResponse(resp)
 	if err != nil {
-		writeServerError(w, http.StatusBadGateway, "upstream provider error")
+		writeAnthropicError(w, http.StatusBadGateway, "upstream provider error")
 		return
 	}
 	s.setStaleHeader(w)
@@ -1666,7 +1779,7 @@ func (s *Server) handleMessagesStream(w http.ResponseWriter, ctx context.Context
 	}
 	em, err := relay.NewAnthropicStreamEmitter(w, "", req.Model)
 	if err != nil {
-		writeServerError(w, http.StatusBadGateway, "upstream provider error")
+		writeAnthropicError(w, http.StatusBadGateway, "upstream provider error")
 		return err
 	}
 	h := w.Header()
