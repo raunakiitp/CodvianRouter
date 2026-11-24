@@ -41,6 +41,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/adaptive"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/routetrace"
+	"github.com/raunakiitp/codvian-router/internal/tokencount"
 )
 
 // NoCapableProviderError is returned when no target in the
@@ -57,6 +58,99 @@ type NoCapableProviderError struct {
 
 func (e *NoCapableProviderError) Error() string {
 	return fmt.Sprintf("router: no provider in the fallback chain supports %s for model %q", e.Endpoint, e.Model)
+}
+
+// EmbeddingContextTooLarge is the pre-call failure when the input to
+// an embeddings/rerank request exceeds every KNOWN context window in
+// the chain (P1.8). Embedding surfaces have no completion leg, so the
+// requirement is exactly the input tokens — no response reserve. A
+// model whose window is unknown is never used to refuse (unknown is
+// not proof the model is too small), matching the chat context-fit
+// rule. The server maps this to a 400; no provider was called.
+type EmbeddingContextTooLarge struct {
+	Model         string
+	PromptTokens  int
+	Endpoint      provider.EndpointKind
+	LargestWindow int
+}
+
+func (e *EmbeddingContextTooLarge) Error() string {
+	if e.LargestWindow > 0 {
+		return fmt.Sprintf("router: %s input needs ~%d tokens for model %q but the largest known context window is %d tokens — shorten the input or add a longer-context model; no provider was called",
+			e.Endpoint, e.PromptTokens, e.Model, e.LargestWindow)
+	}
+	return fmt.Sprintf("router: %s input needs ~%d tokens for model %q but no configured model reports a context window — add a model with a known context window; no provider was called",
+		e.Endpoint, e.PromptTokens, e.Model)
+}
+
+// filterEmbeddingFit drops chain attempts whose KNOWN context window is
+// smaller than the input (embeddings/rerank have no completion leg, so
+// there is no reserve). Attempts with an unknown window are kept —
+// unknown is not proof the model is too small, exactly as in the chat
+// context-fit gate. It returns the fitting attempts and the largest
+// KNOWN window among the evaluated attempts, and whether any window was
+// known at all. When no window is known, the whole chain is returned
+// unchanged (the check cannot refuse on unknown windows).
+func (e *Engine) filterEmbeddingFit(chain []Attempt, required int) (fits []Attempt, largest int, anyKnown bool) {
+	for _, att := range chain {
+		window, known := e.contextWindowOf(att)
+		if known && window > largest {
+			largest = window
+		}
+		if known {
+			anyKnown = true
+		}
+		if known && required > window {
+			continue // too small: drop
+		}
+		fits = append(fits, att)
+	}
+	return fits, largest, anyKnown
+}
+
+// embeddingInputTokens locally counts the concatenated input texts for
+// an embeddings/rerank request. A counting failure (unknown model /
+// encoder) returns an error and the caller skips the fit check, exactly
+// as the chat gate does — a counting problem never fails a request.
+func embeddingInputTokens(model string, texts []string) (int, error) {
+	total := 0
+	for _, text := range texts {
+		if text == "" {
+			continue
+		}
+		count, err := tokencount.Count(model, text)
+		if err != nil {
+			return 0, err
+		}
+		total += count.Tokens
+	}
+	return total, nil
+}
+
+// applyEmbeddingFit is the pre-dispatch context gate for the
+// embeddings/rerank surfaces. It counts the input locally and refuses
+// before any provider call when the input exceeds every KNOWN window.
+func (e *Engine) applyEmbeddingFit(chain []Attempt, model string, texts []string, endpoint provider.EndpointKind) ([]Attempt, error) {
+	required, err := embeddingInputTokens(model, texts)
+	if err != nil {
+		// Counting failure: skip the check, try the whole chain.
+		return chain, nil
+	}
+	fits, largest, anyKnown := e.filterEmbeddingFit(chain, required)
+	if len(fits) > 0 {
+		return fits, nil
+	}
+	if !anyKnown {
+		// No window was known anywhere: refuse nothing (unknown is not
+		// proof of too-small), exactly like the chat gate.
+		return chain, nil
+	}
+	return nil, &EmbeddingContextTooLarge{
+		Model:         model,
+		PromptTokens:  required,
+		Endpoint:      endpoint,
+		LargestWindow: largest,
+	}
 }
 
 // supportsEmbeddings reports whether client can serve an
@@ -424,6 +518,12 @@ func (e *Engine) Embed(ctx context.Context, req provider.EmbeddingRequest) (*pro
 	}
 	bookReq := bookkeepingRequest(req.Model, req.TextInputs(), provider.EndpointEmbeddings, req.CallerID, req.BudgetUSD, req.BudgetStrict)
 	chain := e.chainFor(req.Model)
+	// P1.8 context gate: refuse before any provider call when the input
+	// exceeds every known window (embeddings have no completion leg).
+	chain, fitErr := e.applyEmbeddingFit(chain, req.Model, req.TextInputs(), provider.EndpointEmbeddings)
+	if fitErr != nil {
+		return nil, fitErr
+	}
 	var emb *provider.EmbeddingResponse
 	_, _, err := e.singleAttempt(ctx, chain, provider.EndpointEmbeddings, bookReq, supportsEmbeddings,
 		func(ctx context.Context, att Attempt) attemptResult {
@@ -447,6 +547,12 @@ func (e *Engine) Rerank(ctx context.Context, req provider.RerankRequest) (*provi
 	texts := append([]string{req.Query}, req.TextDocuments()...)
 	bookReq := bookkeepingRequest(req.Model, texts, provider.EndpointRerank, req.CallerID, req.BudgetUSD, req.BudgetStrict)
 	chain := e.chainFor(req.Model)
+	// P1.8 context gate: refuse before any provider call when the input
+	// exceeds every known window.
+	chain, fitErr := e.applyEmbeddingFit(chain, req.Model, texts, provider.EndpointRerank)
+	if fitErr != nil {
+		return nil, fitErr
+	}
 	var rer *provider.RerankResponse
 	_, _, err := e.singleAttempt(ctx, chain, provider.EndpointRerank, bookReq, supportsRerank,
 		func(ctx context.Context, att Attempt) attemptResult {

@@ -449,6 +449,13 @@ func (s *Server) handleEmbedEngineError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, ncp.Error())
 		return
 	}
+	// Embeddings/rerank context no-fit (P1.8): input fits no configured
+	// model; refused before any provider call — a 400.
+	var embTooLarge *router.EmbeddingContextTooLarge
+	if errors.As(err, &embTooLarge) {
+		writeError(w, http.StatusBadRequest, embTooLarge.Error())
+		return
+	}
 	s.handleEngineError(w, err)
 }
 
