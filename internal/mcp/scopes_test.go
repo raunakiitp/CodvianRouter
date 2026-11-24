@@ -116,11 +116,11 @@ func TestToolScopeAssignment(t *testing.T) {
 
 func TestAllScopesKnown(t *testing.T) {
 	all := AllScopes()
-	// 11 scopes: the M9.1 nine plus mcp:read:routing and
-	// mcp:read:cost, added by M9.3 (option (b) — the manage
-	// scopes for routing/cost had no read counterparts).
-	if len(all) != 11 {
-		t.Fatalf("AllScopes() has %d scopes, want 11: %v", len(all), all)
+	// 21 scopes: the M9.1 eleven plus ten P1.2 ecosystem-expansion
+	// scopes (read: capabilities, quota, budget, cost_est,
+	// routing_plan, compression, eval, org; manage: eval, org).
+	if len(all) != 21 {
+		t.Fatalf("AllScopes() has %d scopes, want 21: %v", len(all), all)
 	}
 	seen := map[string]bool{}
 	for _, s := range all {
