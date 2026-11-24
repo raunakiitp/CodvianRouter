@@ -155,6 +155,77 @@ func (f *fakeSkillSource) CacheStats() mcp.CacheStats              { return f.ca
 func (f *fakeSkillSource) DBHealth() mcp.DBHealth                  { return f.db }
 func (f *fakeSkillSource) RoutingStrategy(string) mcp.StrategyInfo { return f.strategy }
 
+// P1.2 ecosystem expansion — fakeSkillSource stub implementations.
+
+func (f *fakeSkillSource) CapabilityEntries() []mcp.CapabilityEntry {
+	out := []mcp.CapabilityEntry{}
+	for _, p := range f.providers {
+		for _, m := range p.Models {
+			out = append(out, mcp.CapabilityEntry{
+				ProviderID: p.ID,
+				ModelID:    m,
+				Capability: "tool_calling",
+				Supported:  nil,
+				Native:     false,
+				Source:     "test_fake",
+				Confidence: 0.0,
+			})
+		}
+	}
+	return out
+}
+
+func (f *fakeSkillSource) QuotaIntelligence(filter string) ([]mcp.QuotaIntelEntry, error) {
+	out := []mcp.QuotaIntelEntry{}
+	if f.quota.KeyID != "" {
+		state := "healthy"
+		if f.quota.AtLimit {
+			state = "exhausted"
+		} else if f.quota.WarningReached {
+			state = "approaching_limit"
+		}
+		entry := mcp.QuotaIntelEntry{
+			Kind:        "key_budget",
+			ID:          f.quota.KeyID,
+			Name:        f.quota.KeyID,
+			Scope:       "key",
+			Target:      f.quota.KeyID,
+			BudgetUSD:   f.quota.LimitUSD,
+			Consumed:    f.quota.SpentUSD,
+			State:       state,
+			Source:      "test_fake",
+			Confidence:  0.95,
+			UpdatedAt:   "2026-01-01T00:00:00Z",
+			Filters:     map[string]string{"key_id": f.quota.KeyID},
+		}
+		if f.quota.LimitUSD > 0 {
+			entry.UsedPct = f.quota.SpentUSD / f.quota.LimitUSD * 100
+		}
+		out = append(out, entry)
+	}
+	return out, nil
+}
+
+func (f *fakeSkillSource) BudgetForecast(keyID string) (mcp.BudgetForecastEntry, error) {
+	return mcp.BudgetForecastEntry{
+		KeyID:          keyID,
+		InsufficientData: true,
+		UpdatedAt:        "2026-01-01T00:00:00Z",
+	}, nil
+}
+
+func (f *fakeSkillSource) CompressionStats() mcp.CompressionStatsEntry {
+	return mcp.CompressionStatsEntry{Layers: 0, LastUpdated: "2026-01-01T00:00:00Z"}
+}
+
+func (f *fakeSkillSource) EvalSchedules() ([]mcp.EvalScheduleEntry, error) {
+	return []mcp.EvalScheduleEntry{}, nil
+}
+
+func (f *fakeSkillSource) OrgReport() mcp.OrgReportEntry {
+	return mcp.OrgReportEntry{UpdatedAt: "2026-01-01T00:00:00Z"}
+}
+
 // fakeInvalidInputError stands in for mcp.ErrInvalidInput
 // wrapping: errors.Is(err, mcp.ErrInvalidInput) must hold, the
 // way the production source wraps it.
@@ -310,10 +381,12 @@ func operatorCtx() context.Context {
 // --- descriptors + dispatch -------------------------------------------------
 
 func TestSkillDescriptorsFixedOrder(t *testing.T) {
-	want := []string{"smart-routing", "quota-management", "provider-discovery", "cost-analysis", "health-report", "list-capabilities"}
+	want := []string{"smart-routing", "quota-management", "provider-discovery", "cost-analysis", "health-report", "list-capabilities",
+		// P1.2 ecosystem expansion skills.
+		"budget-forecasting", "cost-estimation", "route-preview", "compression-analytics", "eval-management", "org-reporting"}
 	got := SkillDescriptors()
 	if len(got) != len(want) {
-		t.Fatalf("SkillDescriptors() = %d skills, want %d", len(got), len(want))
+		t.Fatalf("SkillDescriptors() = %d skills, want %d: %v", len(got), len(want), got)
 	}
 	for i, id := range want {
 		if got[i].ID != id {
@@ -887,8 +960,8 @@ func TestListCapabilitiesLiveRegistries(t *testing.T) {
 		t.Errorf("global_strategy = %v, want priority (from the fake's RoutingStrategy)", global)
 	}
 	skills, ok := out["skills"].([]any)
-	if !ok || len(skills) != 6 {
-		t.Fatalf("skills = %v, want the 6 descriptors", out["skills"])
+	if !ok || len(skills) != 12 {
+		t.Fatalf("skills = %v, want 12 descriptors (6 baseline + 6 P1.2)", out["skills"])
 	}
 	first, _ := skills[0].(map[string]any)
 	if first["id"] != "smart-routing" {
@@ -1073,8 +1146,8 @@ func TestListCapabilitiesGatewayKeyNoRouterFacts(t *testing.T) {
 	// the strategies, and the MCP tool names (public code
 	// registries, no other key's data).
 	skills, ok := out["skills"].([]any)
-	if !ok || len(skills) != 6 {
-		t.Fatalf("skills = %v, want the 6 descriptors", out["skills"])
+	if !ok || len(skills) != 12 {
+		t.Fatalf("skills = %v, want 12 descriptors (6 baseline + 6 P1.2)", out["skills"])
 	}
 	strategies, ok := out["strategies"].([]any)
 	if !ok || len(strategies) != len(strategy.All) {
