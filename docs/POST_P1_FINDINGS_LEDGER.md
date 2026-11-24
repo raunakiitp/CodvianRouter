@@ -7,6 +7,14 @@
 
 Totals: **80 findings — 2 CRITICAL, 6 HIGH, 22 MEDIUM, 41 LOW, 9 INFO** (AUD-SEC-001 is now FIXED; AUD-SEC-010 was added during the hotfix). Statuses: 77 CONFIRMED, 2 NEEDS MANUAL VERIFICATION (AUD-REL-005, AUD-CFG-005); environment-blocked checks are recorded in the audit doc §17, not as findings.
 
+> **Review-blocker addendum (this branch, after the PR #76 code review).** Four of the resolutions below were found INSUFFICIENT or UNSAFE by review and were fixed again, on evidence, with the reviewer's defects reproduced by test:
+> - **AUD-REL-005** — the first recovery quarantined after ANY open error, so a busy/locked/permission/I-O/disk-full/unsupported-pragma/migration failure would have renamed a VALID ledger and silently started an empty one. Now: quarantine only on positively identified corruption (`PRAGMA quick_check` against a COPY, so the probe cannot mutate sidecars), operational failures leave the database and its sidecars untouched, no-verdict means no quarantine, and a file too large to probe bounded is never quarantined. 13 tests.
+> - **AUD-SEC-002** — the first fix recorded a zero-token, zero-cost row when the provider reported no usage, which left the exact budget bypass the review describes open (the gate reads accrued spend from the same ledger). Now: a conservative, rounded-UP local estimate is charged and PRICED, marked per `LocalEstimatePromptTokens`' documented contract as locally measured, and logged; streams are charged for the bytes actually delivered; one row per request means no double charge. Falsified against the pre-fix behaviour with real output. 6 tests.
+> - **AUD-SEC-010** — owner scoping leaked nothing, but records written before it deserialise with an empty owner and were silently STRANDED. Now: a versioned index (v2, v1 still loads), an admin-scoped forensic listing and reclaim endpoint (`GET /admin/files/legacy`, `POST /admin/files/reclaim`, both TierAlwaysProtected), a refused empty owner, and no cross-key reassignment. Tested against a hand-written pre-change v1 fixture. 7 tests.
+> - **AUD-PERF-001** — the O(1) counter stands; cancellation is now proven, not assumed: a client disconnect cancels the upstream call (the mock records the cancellation), and the relayed path has no retry loop to amplify a non-retryable failure. 2 tests.
+>
+> Status of the delegated remainder (**AUD-PERF-003**, **AUD-PERF-004**, **AUD-TEST-001**): in progress on this branch; the row statuses below are updated only from their verified results.
+
 ---
 
 ## CRITICAL
@@ -185,17 +193,17 @@ Recorded after the authorized remediation pass. Full narrative, falsification ev
 | --- | --- | --- | --- |
 | AUD-SEC-001 | CRITICAL | FIXED (PR #75, `e75a669`) | unchanged; regression tests re-verified |
 | AUD-SEC-009 | CRITICAL | **BLOCKED EXTERNAL** | token is in the local git remote config, not in the repo; owner-side rotation required |
-| AUD-SEC-010 | MEDIUM | **FIXED** | owner column + owner-scoped store/API/batch paths; 7 tests, falsified by neutering the visibility rule (`73c369d`) |
-| AUD-SEC-002 | HIGH | **FIXED** | verbatim relay records exactly one honest ledger row; 11 tests; 0 rows → 1 row with per-key spend (`83b0555`) |
+| AUD-SEC-010 | MEDIUM | **FIXED** | owner column + owner-scoped store/API/batch paths; 7 tests, falsified by neutering the visibility rule (`73c369d`) | → **EXTENDED** after review: legacy (pre-scoping) records needed an explicit, admin-gated migration, not just scoping.
+| AUD-SEC-002 | HIGH | **FIXED** | verbatim relay records exactly one honest ledger row; 11 tests; 0 rows → 1 row with per-key spend (`83b0555`) | → **RE-OPENED AND RE-FIXED** after review: the first row for an unreported usage was zero-token/zero-cost, which is the budget bypass. Now a conservative priced estimate.
 | AUD-SEC-003 | LOW | **FIXED** | 8 unbounded `json.NewDecoder(r.Body)` sites now use `maxAdminJSONBody`; falsified (`4fa1fc2`) |
 | AUD-SEC-004/005/006/007 | LOW/INFO | OPEN | not attempted this pass |
 | AUD-REL-001 | HIGH | **FIXED** | upstream 429/quota keep their status + `Retry-After`; internal limits stay distinct; 10 tests (`c218f63`) |
 | AUD-REL-002 | MEDIUM | OPEN | async ledger batch retry not attempted |
 | AUD-REL-003 | MEDIUM | **FIXED** (both halves) | eval + org stores write temp → fsync → rename → fsync dir (`05618c2`); the scheduler-start store failure is now logged loudly instead of a silent return (`internal/server/eval_schedules_api.go`) |
 | AUD-REL-004 | MEDIUM | **FIXED** | cache DSN gets `busy_timeout(5000)` + `journal_mode(WAL)` (`3596f39`) |
-| AUD-REL-005 | MEDIUM | **FIXED** | runtime repro confirmed the fatal startup; `OpenWithRecovery` quarantines the unusable file (`<path>.corrupt-<unix>`, preserved byte-for-byte, sidecars too), logs it and opens a fresh ledger; environmental failures stay fatal; 4 tests |
+| AUD-REL-005 | MEDIUM | **FIXED** | runtime repro confirmed the fatal startup; `OpenWithRecovery` quarantines the unusable file (`<path>.corrupt-<unix>`, preserved byte-for-byte, sidecars too), logs it and opens a fresh ledger; environmental failures stay fatal; 4 tests | → **RE-OPENED AND RE-FIXED** after review: the first recovery quarantined on ANY open error (a valid ledger could be renamed for a transient lock). Now positive corruption only.
 | AUD-REL-006 | MEDIUM | **FIXED** (both halves) | eval scheduler + webhook delivery goroutines recover and log (`05618c2`); the server-side scheduler loop goroutine does too (`internal/server/eval_schedules_api.go`) |
-| AUD-PERF-001 | HIGH | **FIXED** | O(1) stream counter; live retention 22.4 MB → 68 KiB for an 8 MiB stream (`14c42e6`) |
+| AUD-PERF-001 | HIGH | **FIXED** | O(1) stream counter; live retention 22.4 MB → 68 KiB for an 8 MiB stream (`14c42e6`) | → **EXTENDED**: cancellation (client disconnect) and no-retry-amplification are now proven by test.
 | AUD-PERF-002 | HIGH | **FIXED** | separate ledger reader pool (WAL + busy_timeout); `read_pool_test.go` proves `GetBudget`/`CheckBudgetOrError` return while a write transaction is open (they blocked >2s before). An A/B on this host found **no reproducible** single-thread latency regression (GetBudgetMiss a wash, GetKeyBudgetMiss faster with the pool, CheckBudgetOrErrorMiss inside the host's ±50% noise band) — an earlier 16,057→29,030 ns/op note was measured mid-rewrite and is withdrawn. Existing ledger files open in WAL |
 | AUD-API-001 | LOW | **FIXED** | Anthropic error envelope on every `/v1/messages*` error path incl. auth; 3 tests, falsified (`c218f63`) |
 | AUD-CODE-001 | LOW | **FIXED** | disable/enable/revoke roll back and answer 500 when the config write fails; 5 tests, falsified (`1996cb7`) |
