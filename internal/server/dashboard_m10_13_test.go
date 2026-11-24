@@ -69,7 +69,9 @@ func m10_13StatusGET(t *testing.T, srv *Server, key string) a2aStatusResponse {
 }
 
 var m10_13WantSkills = []string{"smart-routing", "quota-management", "provider-discovery",
-	"cost-analysis", "health-report", "list-capabilities"}
+	"cost-analysis", "health-report", "list-capabilities",
+	"budget-forecasting", "cost-estimation", "route-preview",
+	"compression-analytics", "eval-management", "org-reporting"}
 
 func TestDashboardM10_13A2ASectionRenders(t *testing.T) {
 	body := m10_0DashboardBody(t)
