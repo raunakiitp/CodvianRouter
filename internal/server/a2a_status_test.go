@@ -94,7 +94,9 @@ func TestA2AStatusDisabled(t *testing.T) {
 		t.Errorf("tasks_by_state = %v, want all-zero %v", out["tasks_by_state"], wantCounts)
 	}
 	wantSkills := []any{"smart-routing", "quota-management", "provider-discovery",
-		"cost-analysis", "health-report", "list-capabilities"}
+		"cost-analysis", "health-report", "list-capabilities",
+		"budget-forecasting", "cost-estimation", "route-preview",
+		"compression-analytics", "eval-management", "org-reporting"}
 	if !reflect.DeepEqual(out["skills"], wantSkills) {
 		t.Errorf("skills = %v, want %v", out["skills"], wantSkills)
 	}
@@ -256,7 +258,7 @@ func TestA2AStatusExactShape(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
 		t.Fatalf("response does not decode into a2aStatusResponse: %v", err)
 	}
-	if decoded.ProtocolVersion != "2025-03-26" || len(decoded.Skills) != 6 || len(decoded.TasksByState) != 5 {
+	if decoded.ProtocolVersion != "2025-03-26" || len(decoded.Skills) != 12 || len(decoded.TasksByState) != 5 {
 		t.Errorf("decoded shape mismatch: %+v", decoded)
 	}
 }
