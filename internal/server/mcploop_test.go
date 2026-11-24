@@ -235,8 +235,8 @@ func TestHandleMCPSelectorFeed(t *testing.T) {
 	if out.ToolCalls.ExecuteCalls != 1 || out.ToolCalls.ExecuteByTool["calc__echo"] != 1 {
 		t.Errorf("tool_calls = %+v, want 1 execute of calc__echo", out.ToolCalls)
 	}
-	if len(out.Tools) != 24 {
-		t.Errorf("stdio tools = %d, want 24", len(out.Tools))
+	if len(out.Tools) != 32 {
+		t.Errorf("stdio tools = %d, want 32", len(out.Tools))
 	}
 }
 
