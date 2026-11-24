@@ -48,6 +48,11 @@ type anthropicMock struct {
 	streamBody string
 	jsonBody   string
 	status     int
+	// hook, when set, takes over the response for the duration of one
+	// request: it returns true when it handled the request itself. It
+	// exists so a test can drive a stream by hand (a slow client, a
+	// mid-stream disconnect, an observed upstream cancellation).
+	hook func(w http.ResponseWriter, r *http.Request) bool
 }
 
 func (m *anthropicMock) handler(t *testing.T) http.HandlerFunc {
@@ -72,6 +77,9 @@ func (m *anthropicMock) handler(t *testing.T) http.HandlerFunc {
 		}
 		_ = json.Unmarshal(body, &probe)
 		stream = probe.Stream
+		if m.hook != nil && m.hook(w, r) {
+			return
+		}
 		if stream {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(status)
