@@ -7096,6 +7096,14 @@ func (s *Server) handleEngineError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, tooLarge.Error())
 		return
 	}
+	// Embeddings/rerank context no-fit (P1.8): the input fits no
+	// configured model, so the engine refused BEFORE any provider was
+	// called — a 400, no upstream-failure counter.
+	var embTooLarge *router.EmbeddingContextTooLarge
+	if errors.As(err, &embTooLarge) {
+		writeError(w, http.StatusBadRequest, embTooLarge.Error())
+		return
+	}
 	// Reasoning state no target could represent (CHECKLIST 163):
 	// every hop failed because the target wire cannot carry the
 	// restored reasoning state (e.g. Anthropic thinking without
