@@ -2398,19 +2398,19 @@ func (x *serverMCPSource) QuotaIntelligence(filter string) ([]mcp.QuotaIntelEntr
 				state = "approaching_limit"
 			}
 			out = append(out, mcp.QuotaIntelEntry{
-				Kind:        "key_budget",
-				ID:          b.KeyID,
-				Name:        b.KeyID,
-				Scope:       "key",
-				Target:      b.KeyID,
-				BudgetUSD:   st.LimitUSD,
-				Consumed:    st.SpentUSD,
-				UsedPct:     0,
-				State:       state,
-				Source:      "ledger_budget",
-				Confidence:  0.95,
-				UpdatedAt:   now,
-				Filters:     map[string]string{"key_id": b.KeyID},
+				Kind:       "key_budget",
+				ID:         b.KeyID,
+				Name:       b.KeyID,
+				Scope:      "key",
+				Target:     b.KeyID,
+				BudgetUSD:  st.LimitUSD,
+				Consumed:   st.SpentUSD,
+				UsedPct:    0,
+				State:      state,
+				Source:     "ledger_budget",
+				Confidence: 0.95,
+				UpdatedAt:  now,
+				Filters:    map[string]string{"key_id": b.KeyID},
 			})
 			if st.LimitUSD > 0 {
 				out[len(out)-1].UsedPct = st.SpentUSD / st.LimitUSD * 100
@@ -2431,10 +2431,10 @@ func (x *serverMCPSource) BudgetForecast(keyID string) (mcp.BudgetForecastEntry,
 		return mcp.BudgetForecastEntry{}, err
 	}
 	entry := mcp.BudgetForecastEntry{
-		KeyID:          keyID,
-		SpendUSD24h:    fc.PeriodSpendUSD,
-		LimitKnown:     fc.ActiveLimitUSD != nil,
-		UpdatedAt:      time.Now().Format(time.RFC3339),
+		KeyID:       keyID,
+		SpendUSD24h: fc.PeriodSpendUSD,
+		LimitKnown:  fc.ActiveLimitUSD != nil,
+		UpdatedAt:   time.Now().Format(time.RFC3339),
 	}
 	if fc.ActiveLimitUSD != nil {
 		entry.LimitUSD = *fc.ActiveLimitUSD
