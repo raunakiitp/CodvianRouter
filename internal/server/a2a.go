@@ -756,6 +756,14 @@ func (s *Server) a2aAdmit(ctx context.Context, r *http.Request, keyID string, ms
 		return fail(rec, "internal budgets", resID)
 	}
 	collect(rec)
+	// P1.6 org/team policy: the authenticated key's team allowlists
+	// (model, strategy) decide before dispatch — an A2A task is a
+	// model call like any other dialect, so it is not a bypass.
+	rec = httptest.NewRecorder()
+	if !s.enforceTeamPolicy(rec, r, model, routingStrategy(chatReq)) {
+		return fail(rec, "team policy", resID)
+	}
+	collect(rec)
 	// Team budget: the key's active team, refused when its
 	// shared budget is exceeded.
 	rec = httptest.NewRecorder()

@@ -1108,6 +1108,12 @@ func (s *Server) geminiGenerate(w http.ResponseWriter, r *http.Request, model st
 	if refused := s.checkInternalBudgets(w, r, model); refused {
 		return
 	}
+	// P1.6 org/team policy: the authenticated key's team allowlists
+	// (model, strategy) decide before dispatch, on this dialect too —
+	// no alternate API is a policy bypass.
+	if !s.enforceTeamPolicy(w, r, model, "") {
+		return
+	}
 	if !s.checkTeamBudget(w, r) {
 		return
 	}
