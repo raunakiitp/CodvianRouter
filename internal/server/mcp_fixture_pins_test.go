@@ -74,7 +74,7 @@ func (pinStubSource) MemoryClear(caller string) (int, error) { return 0, nil }
 
 // P1.2 ecosystem expansion — pinStubSource stub implementations.
 
-func (pinStubSource) CapabilityEntries() []mcp.CapabilityEntry        { return nil }
+func (pinStubSource) CapabilityEntries() []mcp.CapabilityEntry { return nil }
 func (pinStubSource) QuotaIntelligence(filter string) ([]mcp.QuotaIntelEntry, error) {
 	return nil, nil
 }
