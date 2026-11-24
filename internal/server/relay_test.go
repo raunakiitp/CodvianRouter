@@ -433,6 +433,26 @@ func TestReadinessGate503WithRetryAfter(t *testing.T) {
 	if rec.Code != http.StatusServiceUnavailable || rec.Header().Get("Retry-After") != "30" {
 		t.Errorf("not-ready messages: status = %d Retry-After = %q, want 503/30", rec.Code, rec.Header().Get("Retry-After"))
 	}
+	// AUD-API-001 residual: this gate runs BEFORE the handler-produced
+	// error sites, so it used to answer /v1/messages with the OpenAI shape
+	// even though every other error on that path is Anthropic-shaped. The
+	// envelope must be {"type":"error","error":{"type":…,"message":…}}.
+	var notReady struct {
+		Type  string `json:"type"`
+		Error struct {
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &notReady); err != nil {
+		t.Fatalf("not-ready /v1/messages body is not JSON: %v (%s)", err, rec.Body.String())
+	}
+	if notReady.Type != "error" || notReady.Error.Type == "" || notReady.Error.Message == "" {
+		t.Errorf("not-ready /v1/messages must use the Anthropic error envelope, got %s", rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), `"capability_not_ready"`) {
+		t.Errorf("not-ready /v1/messages leaked the OpenAI-shaped body: %s", rec.Body.String())
+	}
 	// The readiness feed reports the state live.
 	rec = doReq(t, srv, http.MethodGet, "/dashboard/readiness", "", "")
 	var feed struct {

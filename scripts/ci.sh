@@ -61,6 +61,11 @@ echo ""
 run_step "go build ./..." go build ./...
 run_step "go vet ./..." go vet ./...
 
+# --- otel build tag (AUD-TEST-002): the tagged sources only compile with
+# -tags otel, and nothing in CI ever built them.
+run_step "go build -tags otel ./..." go build -tags otel ./...
+run_step "go test -tags otel ./internal/observability/" go test -tags otel -count=1 ./internal/observability/
+
 # --- 5. docker go-version match (PKG-6). ---
 # The Dockerfiles build with golang:<ver>-bookworm; release.yml pins an
 # exact Go patch (go-version). Fail closed when the pin cannot be read.

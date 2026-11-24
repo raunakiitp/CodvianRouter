@@ -245,8 +245,17 @@ func (s *Server) checkLocalReadiness(w http.ResponseWriter, r *http.Request, mod
 		return true
 	}
 	w.Header().Set("Retry-After", strconv.Itoa(st.RetryAfterSeconds))
+	msg := fmt.Sprintf("local capability %s is not ready yet; its assets are still loading", target.ProviderID)
+	// AUD-API-001 residual: a not-ready local capability is reported on
+	// the Anthropic surface too, so /v1/messages never answers an
+	// OpenAI-shaped body (the earlier fix covered the handler-produced
+	// sites but not this gate, which runs before them).
+	if isAnthropicEndpointPath(r.URL.Path) {
+		writeAnthropicError(w, http.StatusServiceUnavailable, msg)
+		return false
+	}
 	writeJSON(w, http.StatusServiceUnavailable, errorBody{Error: errorDetail{
-		Message: fmt.Sprintf("local capability %s is not ready yet; its assets are still loading", target.ProviderID),
+		Message: msg,
 		Type:    "capability_not_ready",
 		Reason:  "capability_not_ready",
 	}})
