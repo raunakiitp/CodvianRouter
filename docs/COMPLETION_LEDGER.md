@@ -90,8 +90,16 @@ than assumed. Full per-block detail lives in the named document.
 
 Consolidated final verification campaign (gofmt / build / vet / full `go
 test -count=1` / race where supported / route-guard consistency / dashboard
-and browser smoke) runs ONCE after all nine blocks, per the directive; it
-has not run yet, so P1 is not declared complete.
+and browser smoke) ran ONCE after all nine blocks, on `main` @ `d2b699b`:
+
+- gofmt (committed LF content): PASS; `go build ./...`: PASS; `go vet ./...`: PASS.
+- `go test -count=1 ./...`: PASS — exit 0, 52 packages ok, 0 FAIL.
+- `scripts/check-route-guard.sh`: PASS.
+- BLOCKED / NOT RUN, never reported as PASS: `go test -race` (no C compiler on
+  the Windows host), `scripts/smoke-client-*.py` (CI-path-only script),
+  `npm test` (needs release artifacts), playwright browser smoke (browsers
+  not installed locally). All four run in the `ci` / `browser-smoke` workflows.
+- P2 was not started. Full per-block detail: `docs/P1_COMPLETION_REPORT.md`.
 
 Ledger last update: P1.3 delivery — client matrix + vendor credential headers (P1.1–P1.9 now all COMPLETED)
 before dispatch on chat, Messages, Responses, legacy completions, Gemini,
