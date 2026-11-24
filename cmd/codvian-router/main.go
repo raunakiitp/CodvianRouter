@@ -4221,26 +4221,26 @@ func openStack(opts options) (*stack, error) {
 	// same way — a neural vector (1536 dims) and a bag-of-words
 	// vector (256 dims) never match each other.
 	neuralEmbedder := func(ctx context.Context, text string) ([]float32, error) {
-			input, err := json.Marshal(text)
-			if err != nil {
-				return nil, err
-			}
-			resp, err := engine.EmbedInternal(ctx, provider.EmbeddingRequest{
-				Model: cache.DefaultNeuralEmbeddingModel,
-				Input: input,
-			})
-			if err != nil {
-				return nil, err
-			}
-			if len(resp.Data) == 0 {
-				return nil, fmt.Errorf("codvian-router: embeddings response has no data")
-			}
-			var vec []float32
-			if err := json.Unmarshal(resp.Data[0].Embedding, &vec); err != nil {
-				return nil, err
-			}
-			return vec, nil
+		input, err := json.Marshal(text)
+		if err != nil {
+			return nil, err
 		}
+		resp, err := engine.EmbedInternal(ctx, provider.EmbeddingRequest{
+			Model: cache.DefaultNeuralEmbeddingModel,
+			Input: input,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if len(resp.Data) == 0 {
+			return nil, fmt.Errorf("codvian-router: embeddings response has no data")
+		}
+		var vec []float32
+		if err := json.Unmarshal(resp.Data[0].Embedding, &vec); err != nil {
+			return nil, err
+		}
+		return vec, nil
+	}
 	// Semantic threshold (M6.7): the operator-configured floor
 	// from cache.semantic_threshold (default 0.85 when unset;
 	// validated to [0.85, 1.0] at load) seeds both the memory-only

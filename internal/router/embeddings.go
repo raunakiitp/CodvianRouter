@@ -393,42 +393,42 @@ func (e *Engine) singleAttempt(
 	mode := e.cooldownModeFor(bookReq.Model)
 	// Endpoint projection (Phase D, D4): the embeddings/rerank
 	// path orders through the same effective strategy, so a
-		// disallowed combo strategy fails closed here, before any
-		// ordering or dial — see projectStrategyForEndpoint
-		// (cascade.go).
-		if projErr := checkEndpointStrategy(strategy, endpoint); projErr != nil {
-			if publishTrace {
-				e.setLastTrace(trace)
-			}
-			return attemptResult{}, trace, projErr
+	// disallowed combo strategy fails closed here, before any
+	// ordering or dial — see projectStrategyForEndpoint
+	// (cascade.go).
+	if projErr := checkEndpointStrategy(strategy, endpoint); projErr != nil {
+		if publishTrace {
+			e.setLastTrace(trace)
 		}
+		return attemptResult{}, trace, projErr
+	}
 	e.recordRouting(strategy, bookReq.Model)
 	bctx, cancel := e.withDeadline(ctx)
 	defer cancel()
 	parentCtx := ctx
 	ctx = bctx
 	if len(chain) == 0 {
-			if publishTrace {
-				e.setLastTrace(trace)
-			}
-			return attemptResult{}, trace, errors.New("router: empty fallback chain")
+		if publishTrace {
+			e.setLastTrace(trace)
 		}
-		if err := ctx.Err(); err != nil {
-			if publishTrace {
-				e.setLastTrace(trace)
-			}
-			return attemptResult{}, trace, e.mapDeadlineErr(err, parentCtx)
+		return attemptResult{}, trace, errors.New("router: empty fallback chain")
+	}
+	if err := ctx.Err(); err != nil {
+		if publishTrace {
+			e.setLastTrace(trace)
 		}
+		return attemptResult{}, trace, e.mapDeadlineErr(err, parentCtx)
+	}
 	ordered, zeroSkipped := e.orderAttempts(chain, strategy, mode, false)
 	for _, att := range zeroSkipped {
 		addTraceAttempt(trace, att, 0, "skipped_zero_quota", nil)
 	}
 	if len(ordered) == 0 {
-			if publishTrace {
-				e.setLastTrace(trace)
-			}
-			return attemptResult{}, trace, ErrNoAvailableAttempt
+		if publishTrace {
+			e.setLastTrace(trace)
 		}
+		return attemptResult{}, trace, ErrNoAvailableAttempt
+	}
 	sawCapable := false
 	for _, att := range ordered {
 		if err := ctx.Err(); err != nil {
@@ -470,13 +470,13 @@ func (e *Engine) singleAttempt(
 		// The attempt is never dialled; the trace records the
 		// skip and the caller gets a typed 402 error.
 		if blocked, est := e.budgetGate(bookReq, att, 0); blocked {
-					be := e.budgetExceededError(bookReq, att, 0, est)
-					addTraceAttempt(trace, att, 0, "skipped_budget", be)
-					if publishTrace {
-						e.setLastTrace(trace)
-					}
-					return attemptResult{}, trace, be
-				}
+			be := e.budgetExceededError(bookReq, att, 0, est)
+			addTraceAttempt(trace, att, 0, "skipped_budget", be)
+			if publishTrace {
+				e.setLastTrace(trace)
+			}
+			return attemptResult{}, trace, be
+		}
 		res := call(ctx, att)
 		if errors.Is(res.err, adaptive.ErrLimited) {
 			// Shed by the limiter: the provider was never
@@ -507,24 +507,24 @@ func (e *Engine) singleAttempt(
 			_, _, _ = e.noteFailure(trace, res, &consecutive429, mode, bookReq.CallerID, "")
 		}
 		markExempt(trace, endpoint)
-				if publishTrace {
-					e.setLastTrace(trace)
-				}
-				return res, trace, res.err
-	}
-	// Nothing was called: every target was skipped before
-		// dialling. When no target could serve the endpoint at all,
-		// say so honestly (a 400, not a 502); when capable targets
-		// existed but were all skipped (breaker, cooldown, shed),
-		// the chain had nothing available.
 		if publishTrace {
 			e.setLastTrace(trace)
 		}
-		if !sawCapable {
-			return attemptResult{}, trace, &NoCapableProviderError{Endpoint: endpoint, Model: bookReq.Model}
-		}
-		return attemptResult{}, trace, ErrNoAvailableAttempt
+		return res, trace, res.err
 	}
+	// Nothing was called: every target was skipped before
+	// dialling. When no target could serve the endpoint at all,
+	// say so honestly (a 400, not a 502); when capable targets
+	// existed but were all skipped (breaker, cooldown, shed),
+	// the chain had nothing available.
+	if publishTrace {
+		e.setLastTrace(trace)
+	}
+	if !sawCapable {
+		return attemptResult{}, trace, &NoCapableProviderError{Endpoint: endpoint, Model: bookReq.Model}
+	}
+	return attemptResult{}, trace, ErrNoAvailableAttempt
+}
 
 // Embed routes one embeddings request: exactly one upstream
 // attempt (see the package doc). The chain is resolved for
