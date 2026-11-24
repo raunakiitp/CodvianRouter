@@ -763,7 +763,7 @@ func (s *Server) runBatchWorker(b *Batch) {
 		_ = s.batchesFail(b.ID, "internal_error", "files store unavailable: "+err.Error())
 		return
 	}
-	rc, _, err := fs.Open(b.InputFileID)
+	rc, _, err := fs.OpenFor(b.InputFileID, b.OwnerKeyID)
 	if err != nil {
 		_ = s.batchesFail(b.ID, "input_file_unreadable", "could not open input file "+b.InputFileID+": "+err.Error())
 		return
@@ -895,14 +895,14 @@ func (s *Server) runBatchWorker(b *Batch) {
 	})
 	var outID, errID *string
 	if counts.Completed > 0 {
-		if f, ferr := s.storeBatchResultFile(fs, outTmp.Name(), "batch-"+b.ID+"-output.jsonl", "batch_output"); ferr != nil {
+		if f, ferr := s.storeBatchResultFile(fs, outTmp.Name(), "batch-"+b.ID+"-output.jsonl", "batch_output", b.OwnerKeyID); ferr != nil {
 			s.logger.Printf("batch %s: output file store failed: %v", b.ID, ferr)
 		} else {
 			outID = &f.ID
 		}
 	}
 	if counts.Failed > 0 {
-		if f, ferr := s.storeBatchResultFile(fs, errTmp.Name(), "batch-"+b.ID+"-error.jsonl", "batch_error"); ferr != nil {
+		if f, ferr := s.storeBatchResultFile(fs, errTmp.Name(), "batch-"+b.ID+"-error.jsonl", "batch_error", b.OwnerKeyID); ferr != nil {
 			s.logger.Printf("batch %s: error file store failed: %v", b.ID, ferr)
 		} else {
 			errID = &f.ID
@@ -942,14 +942,14 @@ func (s *Server) finishBatchAsCancelled(st *batchStore, b *Batch, outPath, errPa
 	var outID, errID *string
 	if outPath != "" && counts.Completed > 0 {
 		if fs, err := s.filesStore(); err == nil {
-			if f, ferr := s.storeBatchResultFile(fs, outPath, "batch-"+b.ID+"-output.jsonl", "batch_output"); ferr == nil {
+			if f, ferr := s.storeBatchResultFile(fs, outPath, "batch-"+b.ID+"-output.jsonl", "batch_output", b.OwnerKeyID); ferr == nil {
 				outID = &f.ID
 			}
 		}
 	}
 	if errPath != "" && counts.Failed > 0 {
 		if fs, err := s.filesStore(); err == nil {
-			if f, ferr := s.storeBatchResultFile(fs, errPath, "batch-"+b.ID+"-error.jsonl", "batch_error"); ferr == nil {
+			if f, ferr := s.storeBatchResultFile(fs, errPath, "batch-"+b.ID+"-error.jsonl", "batch_error", b.OwnerKeyID); ferr == nil {
 				errID = &f.ID
 			}
 		}
@@ -996,13 +996,15 @@ func (s *Server) batchesFail(id, code, msg string) error {
 
 // storeBatchResultFile stores a finished temp .jsonl file in the
 // Files store under a server-generated purpose.
-func (s *Server) storeBatchResultFile(fs *files.Store, path, filename, purpose string) (*files.File, error) {
+func (s *Server) storeBatchResultFile(fs *files.Store, path, filename, purpose, owner string) (*files.File, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	return fs.CreateServerGenerated(filename, purpose, f)
+	// AUD-SEC-010: the batch's output/error file belongs to the batch
+	// owner, so only that key can download it.
+	return fs.CreateServerGeneratedOwned(filename, purpose, owner, f)
 }
 
 // writeBatchOutputLine appends one OpenAI-shaped output JSONL

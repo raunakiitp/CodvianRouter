@@ -2327,6 +2327,21 @@ func (s *Server) callerKeyID(r *http.Request) string {
 	return id
 }
 
+// callerForOwnership resolves the caller identity for owner-scoped
+// resources (files, batches) and FAILS CLOSED when a credential was
+// presented, the verifier can name identities, and none resolved
+// (AUD-SEC-001/AUD-SEC-010): an unresolvable credential must never fall
+// back to the shared "no identity" bucket, where unowned resources are
+// visible. An absent credential keeps auth-relaxed semantics.
+func (s *Server) callerForOwnership(w http.ResponseWriter, r *http.Request) (string, bool) {
+	keyID := s.callerKeyID(r)
+	if keyID == "" && credentialPresented(r) && s.identityResolvable() {
+		writeError(w, http.StatusForbidden, "credential could not be resolved to a gateway key identity")
+		return "", false
+	}
+	return keyID, true
+}
+
 // credentialPresented reports whether the request carried ANY credential
 // in a form this server accepts (the same surfaces as requestKey).
 func credentialPresented(r *http.Request) bool { return requestKey(r) != "" }

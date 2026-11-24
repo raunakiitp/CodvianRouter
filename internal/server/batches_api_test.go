@@ -91,6 +91,22 @@ func newBatchesServer(t *testing.T, eng Engine) *Server {
 
 // seedBatchInput stores content as a purpose=batch file and
 // returns it.
+// seedBatchInputOwned stores content as a purpose=batch file owned by
+// owner. AUD-SEC-010: a keyed caller can only use a file it owns, so a
+// keyed test must seed with the caller's key id.
+func seedBatchInputOwned(t *testing.T, srv *Server, owner, content string) *files.File {
+	t.Helper()
+	st, err := srv.filesStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := st.CreateOwned("input.jsonl", "batch", owner, strings.NewReader(content))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
 func seedBatchInput(t *testing.T, srv *Server, content string) *files.File {
 	t.Helper()
 	st, err := srv.filesStore()
@@ -650,7 +666,11 @@ func TestBatchesLiveSmoke(t *testing.T) {
 	defer httpSrv.Close()
 	client := httpSrv.Client()
 
-	in := seedBatchInput(t, srv, batchJSONL(t, "s1"))
+	// AUD-SEC-010: seed the input file owned by the authenticated key
+	// (a keyed caller may only reference its own files).
+	sv := NewStaticKeyVerifier("test-key-123")
+	staticOwner, _ := sv.KeyID(context.Background(), "test-key-123")
+	in := seedBatchInputOwned(t, srv, staticOwner, batchJSONL(t, "s1"))
 	payload, _ := json.Marshal(map[string]any{
 		"input_file_id": in.ID, "endpoint": "/v1/chat/completions", "completion_window": "24h",
 	})

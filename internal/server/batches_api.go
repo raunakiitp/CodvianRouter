@@ -122,12 +122,7 @@ type batchCreateRequest struct {
 // An absent credential keeps auth-relaxed semantics (no identity, no
 // per-key ownership), exactly as before.
 func (s *Server) batchCaller(w http.ResponseWriter, r *http.Request) (string, bool) {
-	keyID := s.callerKeyID(r)
-	if keyID == "" && credentialPresented(r) && s.identityResolvable() {
-		writeError(w, http.StatusForbidden, "credential could not be resolved to a gateway key identity")
-		return "", false
-	}
-	return keyID, true
+	return s.callerForOwnership(w, r)
 }
 
 // handleBatches is the dispatcher for the whole /v1/batches
@@ -227,10 +222,17 @@ func (s *Server) handleBatchesCreate(w http.ResponseWriter, r *http.Request) {
 		writeServerError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
+	// AUD-SEC-010: the caller must own the input file. Resolve the
+	// caller first so a key can never reference another key's file.
+	keyID, ok := s.batchCaller(w, r)
+	if !ok {
+		return
+	}
 	// The input file must resolve in the Files store. An
 	// invalid id shape and an unknown id both answer 404 — the
-	// difference is not observable to the caller.
-	f, err := fs.Get(req.InputFileID)
+	// difference is not observable to the caller, and a file owned
+	// by another key is reported the same way.
+	f, err := fs.GetFor(req.InputFileID, keyID)
 	if err != nil {
 		if errors.Is(err, files.ErrNotFound) || errors.Is(err, files.ErrInvalidID) {
 			writeError(w, http.StatusNotFound, "input file not found: "+req.InputFileID)
@@ -250,10 +252,6 @@ func (s *Server) handleBatchesCreate(w http.ResponseWriter, r *http.Request) {
 	// so it cannot refuse with a 403 — and a refused batch must
 	// create no row and start no engine call.
 	if refused := s.enforceBatchModelPolicy(w, r, fs, req.InputFileID); refused {
-		return
-	}
-	keyID, ok := s.batchCaller(w, r)
-	if !ok {
 		return
 	}
 	b, err := st.createBatch(req.InputFileID, req.Endpoint, window, metadata, keyID)
@@ -337,7 +335,7 @@ func (s *Server) enforceBatchModelPolicy(w http.ResponseWriter, r *http.Request,
 	if !ok {
 		return false
 	}
-	rc, _, err := fs.Open(inputFileID)
+	rc, _, err := fs.OpenFor(inputFileID, keyID)
 	if err != nil {
 		// G21 review Nit 5: the file may have been deleted
 		// between the caller's Get and this Open; fall through
