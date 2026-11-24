@@ -17,11 +17,7 @@
       "tools": [
         {
           "name": "router_status",
-          "description": "Live Codvian Router status: listen address, provider/model counts, gateway-key count, whether the auto-router is configured, and uptime when known.",
-          "inputSchema": {
-            "properties": {},
-            "type": "object"
-          }
+          "inputSchema": null
         }
       ]
     }
@@ -34,12 +30,12 @@
     ],
     "json_paths": {
       "jsonrpc": "2.0",
-      "result.tools.0.inputSchema": null,
-      "result.tools.0.name": "router_status"
+      "result.tools.0.name": "router_status",
+      "result.tools.0.inputSchema": null
     },
     "json_lengths": {
       "result.tools": 1
     }
   },
-  "notes": "tools/list when cache_stats is both allow-listed and denied: deny wins — only router_status is announced. The conflict resolves to invisible, never to visible. The json_lengths pin (result.tools = 1) fails if cache_stats leaks in."
+  "notes": "tools/list when cache_stats is both allow-listed and denied: deny wins \u2014 only router_status is announced. The conflict resolves to invisible, never to visible. The json_lengths pin (result.tools = 1) fails if cache_stats leaks in."
 }
