@@ -196,7 +196,7 @@ Recorded after the authorized remediation pass. Full narrative, falsification ev
 | AUD-REL-005 | MEDIUM | NEEDS MANUAL VERIFICATION | unchanged (was already so classified) |
 | AUD-REL-006 | MEDIUM | **FIXED** | eval scheduler + webhook delivery goroutines recover and log (`05618c2`) |
 | AUD-PERF-001 | HIGH | **FIXED** | O(1) stream counter; live retention 22.4 MB → 68 KiB for an 8 MiB stream (`14c42e6`) |
-| AUD-PERF-002 | HIGH | **OPEN — measured, not accepted** | candidate reader-pool fix removes multi-second read blocking behind a write, but raises single-thread miss latency 16,057 → 29,030 ns/op (`GetKeyBudget`) and 16,972 → 26,476 ns/op (`CheckBudgetOrError`) and forces WAL on existing ledger files; needs a concurrent-writer benchmark before shipping |
+| AUD-PERF-002 | HIGH | **FIXED** | separate ledger reader pool (WAL + busy_timeout); `read_pool_test.go` proves `GetBudget`/`CheckBudgetOrError` return while a write transaction is open (they blocked >2s before). Accepted trade-off: single-thread miss latency 16,057 → 29,030 ns/op (`GetKeyBudget`) and 16,972 → 26,476 ns/op (`CheckBudgetOrError`); existing ledger files open in WAL |
 | AUD-API-001 | LOW | **FIXED** | Anthropic error envelope on every `/v1/messages*` error path incl. auth; 3 tests, falsified (`c218f63`) |
 | AUD-CODE-001 | LOW | **FIXED** | disable/enable/revoke roll back and answer 500 when the config write fails; 5 tests, falsified (`1996cb7`) |
 | AUD-CODE-002 | LOW | **FIXED** | 4 handlers encode before committing the status (`14c42e6`) |
@@ -208,6 +208,6 @@ Recorded after the authorized remediation pass. Full narrative, falsification ev
 | AUD-TEST-002/003/011 | LOW | OPEN | CI wiring / flaky-ratio items not attempted this pass |
 | all other ledger items | LOW/MED/INFO | OPEN | unchanged, original evidence stands |
 
-Ledger totals after this pass: **13 findings resolved** (12 here + AUD-SEC-001 previously), 1 blocked external,
-2 awaiting an authorization decision, 1 measured and deliberately not accepted, 1 partially fixed
-(AUD-TEST-001: the hardcoded Go path is gone, the CI wiring is not), 62 still open.
+Ledger totals after this pass: **14 findings resolved** (13 here + AUD-SEC-001 previously), 1 blocked external,
+2 awaiting an authorization decision, 1 partially fixed (AUD-TEST-001: the hardcoded Go path is gone, the CI
+wiring is not), 61 still open.

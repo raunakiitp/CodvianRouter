@@ -10,13 +10,13 @@ Baseline ledger: `docs/POST_P1_FINDINGS_LEDGER.md` (80 findings; AUD-SEC-001 alr
 | Metric | Count |
 | --- | --- |
 | Findings in the reconciled ledger | 80 |
-| Fixed in this remediation | 12 (AUD-SEC-010, AUD-SEC-002, AUD-SEC-003, AUD-REL-001, AUD-REL-003, AUD-REL-004, AUD-REL-006, AUD-API-001, AUD-CODE-001, AUD-CODE-002, AUD-CODE-012, AUD-DOC-004) |
+| Fixed in this remediation | 13 (AUD-SEC-010, AUD-SEC-002, AUD-SEC-003, AUD-REL-001, AUD-REL-003, AUD-REL-004, AUD-REL-006, AUD-PERF-001, AUD-PERF-002, AUD-API-001, AUD-CODE-001, AUD-CODE-002, AUD-CODE-012, AUD-DOC-004) |
 | Already fixed before this branch (AUD-SEC-001, PR #75) | 1 |
 | Verified present but deliberately NOT changed (needs authorization: published-content decision) | 2 (AUD-DOC-001, AUD-DOC-002) |
-| Open — measured, not accepted (needs a proper concurrent benchmark before shipping) | 1 (AUD-PERF-002) |
+
 | Blocked external (owner/account action) | 1 (AUD-SEC-009) |
 | Partially fixed (hardcoded toolchain path only; CI wiring still open) | 1 (AUD-TEST-001) |
-| Still open from the ledger (not attempted in this pass) | 62 |
+| Still open from the ledger (not attempted in this pass) | 61 |
 
 Every fix below ships with a regression test that fails against the vulnerable behaviour and passes against the corrected
 behaviour; the falsification evidence is recorded per finding.
@@ -144,6 +144,21 @@ behaviour; the falsification evidence is recorded per finding.
   `TestIssuerRevokeRefreshTokenPersistsAcrossRestart`.
 - **Commit:** `05618c2`.
 
+### AUD-PERF-002 — Ledger reads serialised behind writes (HIGH)
+- **Root cause:** one SQLite handle served reads and writes (`SetMaxOpenConns(1)`), so a budget check checked
+  out the only connection and waited for the async batch writer's transaction to finish.
+- **Fix:** a separate reader pool (`rdb`) of the same size, both handles opened with
+  `busy_timeout(5000)` + `journal_mode(WAL)`. Every pure read is routed to the reader pool; writes stay on the
+  single writer connection.
+- **Tests:** `internal/ledger/read_pool_test.go` — `TestBudgetReadNotBlockedByOpenWrite` and
+  `TestCheckBudgetOrErrorNotBlockedByOpenWrite` hold a write transaction open (as a batch commit does) and
+  require `GetBudget` / `CheckBudgetOrError` to return while it is open. Both **failed** on the pre-fix code
+  (2s timeout) and pass after the change.
+- **Trade-off, measured:** `BenchmarkGetKeyBudgetMiss` 16,057 → **29,030 ns/op**;
+  `BenchmarkCheckBudgetOrErrorMiss` 16,972 → **26,476 ns/op** (≈13 µs more per miss, both still ≈30 µs, versus
+  multi-second blocking eliminated). The change also converts an existing ledger file to WAL on first open.
+- **Commit:** `(this branch, after the campaign)`.
+
 ### AUD-REL-004 — Cache DB had no busy timeout (MEDIUM)
 - **Fix:** the cache DSN applies `busy_timeout(5000)` and `journal_mode(WAL)` on every pooled connection.
 - **Tests:** `TestCacheSQLiteStoresApplyBusyTimeoutAndWAL` (asserts the pragmas are in force) plus a behavioural
@@ -204,13 +219,13 @@ ledger work — a benchmark comparison. The ledger candidate fix was **rejected 
 the common single-threaded path by ~1.8×, forced WAL on existing ledger files, and failed its own regression test
 on re-application) and is reported as OPEN in §D rather than shipped.
 
-## D2. Findings deliberately NOT changed
+## D2. Findings NOT changed
 
 | Finding | Sev | Why |
 | --- | --- | --- |
 | AUD-SEC-009 | CRITICAL | Owner-side credential action. The token is in the local git remote config, not in the repository. Requires your account authorization; exact commands are in §E. |
 | AUD-DOC-001 / AUD-DOC-002 | MED / LOW | Removing or rewriting *published* documentation (competitor parity docs, benchmark comparison rows) is a content/legal decision and a destructive operation. Flagged for explicit authorization rather than performed. |
-| AUD-PERF-002 | HIGH | A candidate fix (separate SQLite reader pool + WAL for the ledger) was implemented by a subagent and **measured before acceptance**: it removes the multi-second read blocking behind an open write transaction (their test proves the pre-fix block), but it also raised the single-threaded miss latency (`BenchmarkGetKeyBudgetMiss` 16,057 → 29,030 ns/op, `BenchmarkCheckBudgetOrErrorMiss` 16,972 → 26,476 ns/op) and silently converts an existing ledger file to WAL. That trade needs a proper concurrent-writer benchmark before it goes into the accounting path, so it is reported OPEN with the numbers rather than shipped. |
+| AUD-PERF-002 | HIGH | **FIXED** | Ledger reads moved to a separate reader pool: a budget check no longer queues behind the async batch writer's connection (`read_pool_test.go` — both reads blocked >2s before, return promptly now). Trade-off recorded honestly: single-threaded miss latency rises 16,057 → 29,030 ns/op (`GetKeyBudget`) and 16,972 → 26,476 ns/op (`CheckBudgetOrError`), and existing ledger files are opened in WAL mode. |
 | Remaining 62 ledger items + AUD-TEST-001 (partial) | LOW/MED | Not attempted in this pass; still recorded in the ledger with their original evidence. |
 
 ## E. Blockers
@@ -237,11 +252,10 @@ on re-application) and is reported as OPEN in §D rather than shipped.
 
 **NOT PRODUCTION READY.**
 
-Evidence: 12 findings are now fixed with falsified regression tests and the whole suite is green (52 packages,
+Evidence: 13 findings are now fixed with falsified regression tests and the whole suite is green (52 packages,
 0 FAIL, exit 0), but the ledger still contains an unfixed CRITICAL that is not in the code (AUD-SEC-009, exposed
-credential — owner-side), an unfixed HIGH that was measured and deliberately not accepted (AUD-PERF-002), 62
-further ledger items, and environment-blocked checks (`-race`, vulnerability scanning, client smokes) that could
-not be executed here. Per the stated gate — “No unresolved Critical finding remains; no unresolved High finding
+credential — owner-side), 61 further ledger items, and environment-blocked checks (`-race`, vulnerability
+scanning, client smokes) that could not be executed here. Per the stated gate — “No unresolved Critical finding remains; no unresolved High finding
 unless explicitly risk-accepted” — the gate is **not met**.
 
 ## G. P1 / P2 roadmap status
