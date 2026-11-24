@@ -157,21 +157,21 @@ type Source interface {
 // provenance: source, verification status, observation time,
 // confidence. Never guessed from a model name.
 type CapabilityEntry struct {
-	ProviderID    string            `json:"provider_id"`
-	ModelID       string            `json:"model_id,omitempty"`
-	Capability    string            `json:"capability"`   // e.g. "tool_calling", "vision", "audio", "reasoning"
-	Supported     *bool             `json:"supported,omitempty"` // nil = unknown
-	Native        bool              `json:"native"`        // true = native support, false = emulated
-	Source        string            `json:"source"`        // e.g. "catalog", "modelsync", "runtime-tested"
-	VerifiedAt    string            `json:"verified_at,omitempty"`
-	Confidence    float64           `json:"confidence"`
-	Documentation string            `json:"documentation,omitempty"`
+	ProviderID    string  `json:"provider_id"`
+	ModelID       string  `json:"model_id,omitempty"`
+	Capability    string  `json:"capability"`          // e.g. "tool_calling", "vision", "audio", "reasoning"
+	Supported     *bool   `json:"supported,omitempty"` // nil = unknown
+	Native        bool    `json:"native"`              // true = native support, false = emulated
+	Source        string  `json:"source"`              // e.g. "catalog", "modelsync", "runtime-tested"
+	VerifiedAt    string  `json:"verified_at,omitempty"`
+	Confidence    float64 `json:"confidence"`
+	Documentation string  `json:"documentation,omitempty"`
 }
 
 // QuotaIntelEntry is one quota/budget intelligence row, mirroring
 // the /api/quota/intelligence response but MCP-native.
 type QuotaIntelEntry struct {
-	Kind       string            `json:"kind"`       // pool, schedule, key_budget, internal_budget, free_tier
+	Kind       string            `json:"kind"` // pool, schedule, key_budget, internal_budget, free_tier
 	ID         string            `json:"id"`
 	Name       string            `json:"name"`
 	Scope      string            `json:"scope"`
@@ -181,8 +181,8 @@ type QuotaIntelEntry struct {
 	BudgetUSD  float64           `json:"budget_usd"`
 	Consumed   float64           `json:"consumed"`
 	UsedPct    float64           `json:"used_pct"`
-	State      string            `json:"state"`      // healthy, approaching_limit, exhausted, unavailable, unknown
-	Source     string            `json:"source"`     // ledger_pool, ledger_budget, catalog_free_tier, etc.
+	State      string            `json:"state"`  // healthy, approaching_limit, exhausted, unavailable, unknown
+	Source     string            `json:"source"` // ledger_pool, ledger_budget, catalog_free_tier, etc.
 	Confidence float64           `json:"confidence"`
 	UpdatedAt  string            `json:"updated_at,omitempty"`
 	Filters    map[string]string `json:"filters,omitempty"`
@@ -202,36 +202,36 @@ type BudgetForecastEntry struct {
 
 // CompressionStatsEntry is live compression analytics.
 type CompressionStatsEntry struct {
-	Layers          int     `json:"layers"`
-	OriginalTokens  int64   `json:"original_tokens"`
-	CompressedTokens int64  `json:"compressed_tokens"`
-	SavingsPct      float64 `json:"savings_pct"`
-	InflationRate   float64 `json:"inflation_rate"`
-	BypassCount     int     `json:"bypass_count"`
-	LastUpdated     string  `json:"last_updated,omitempty"`
+	Layers           int     `json:"layers"`
+	OriginalTokens   int64   `json:"original_tokens"`
+	CompressedTokens int64   `json:"compressed_tokens"`
+	SavingsPct       float64 `json:"savings_pct"`
+	InflationRate    float64 `json:"inflation_rate"`
+	BypassCount      int     `json:"bypass_count"`
+	LastUpdated      string  `json:"last_updated,omitempty"`
 }
 
 // EvalScheduleEntry is one scheduled evaluation schedule.
 type EvalScheduleEntry struct {
-	ID          string  `json:"id"`
-	Suite       string  `json:"suite"`
-	EverySec    int64   `json:"every_sec"`
-	Enabled     bool    `json:"enabled"`
-	TimeZone    string  `json:"timezone"`
-	LastRun     string  `json:"last_run,omitempty"`
-	NextRun     string  `json:"next_run,omitempty"`
-	UseRealEngine bool  `json:"use_real_engine"`
+	ID            string `json:"id"`
+	Suite         string `json:"suite"`
+	EverySec      int64  `json:"every_sec"`
+	Enabled       bool   `json:"enabled"`
+	TimeZone      string `json:"timezone"`
+	LastRun       string `json:"last_run,omitempty"`
+	NextRun       string `json:"next_run,omitempty"`
+	UseRealEngine bool   `json:"use_real_engine"`
 }
 
 // OrgReportEntry is org/team reporting summary.
 type OrgReportEntry struct {
-	Orgs     int `json:"orgs"`
-	Teams    int `json:"teams"`
-	Keys     int `json:"keys"`
-	BoundKeys int `json:"bound_keys"`
+	Orgs           int     `json:"orgs"`
+	Teams          int     `json:"teams"`
+	Keys           int     `json:"keys"`
+	BoundKeys      int     `json:"bound_keys"`
 	TotalBudgetUSD float64 `json:"total_budget_usd"`
-	ConsumedUSD   float64 `json:"consumed_usd"`
-	UpdatedAt   string `json:"updated_at,omitempty"`
+	ConsumedUSD    float64 `json:"consumed_usd"`
+	UpdatedAt      string  `json:"updated_at,omitempty"`
 }
 
 // mcpToolCallTimeout bounds one tools/call: the request context
