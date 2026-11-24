@@ -2126,18 +2126,18 @@ func (s *registryMCPSource) QuotaIntelligence(filter string) ([]mcp.QuotaIntelEn
 			state = "approaching_limit"
 		}
 		entry := mcp.QuotaIntelEntry{
-			Kind:        "key_budget",
-			ID:          b.KeyID,
-			Name:        b.KeyID,
-			Scope:       "key",
-			Target:      b.KeyID,
-			BudgetUSD:   st.LimitUSD,
-			Consumed:    st.SpentUSD,
-			State:       state,
-			Source:      "ledger_budget",
-			Confidence:  0.95,
-			UpdatedAt:   now.Format(time.RFC3339),
-			Filters:     map[string]string{"key_id": b.KeyID},
+			Kind:       "key_budget",
+			ID:         b.KeyID,
+			Name:       b.KeyID,
+			Scope:      "key",
+			Target:     b.KeyID,
+			BudgetUSD:  st.LimitUSD,
+			Consumed:   st.SpentUSD,
+			State:      state,
+			Source:     "ledger_budget",
+			Confidence: 0.95,
+			UpdatedAt:  now.Format(time.RFC3339),
+			Filters:    map[string]string{"key_id": b.KeyID},
 		}
 		if st.LimitUSD > 0 {
 			entry.UsedPct = st.SpentUSD / st.LimitUSD * 100
@@ -2156,10 +2156,10 @@ func (s *registryMCPSource) BudgetForecast(keyID string) (mcp.BudgetForecastEntr
 		return mcp.BudgetForecastEntry{}, err
 	}
 	entry := mcp.BudgetForecastEntry{
-		KeyID:          keyID,
-		LimitUSD:       st.LimitUSD,
-		LimitKnown:     st.LimitUSD > 0,
-		UpdatedAt:      time.Now().Format(time.RFC3339),
+		KeyID:            keyID,
+		LimitUSD:         st.LimitUSD,
+		LimitKnown:       st.LimitUSD > 0,
+		UpdatedAt:        time.Now().Format(time.RFC3339),
 		InsufficientData: true, // stdio mode has no recent spend windows
 	}
 	if st.LimitUSD > 0 && st.SpentUSD > 0 {
