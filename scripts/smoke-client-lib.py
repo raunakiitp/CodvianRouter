@@ -60,7 +60,11 @@ WORKTREE = os.environ.get(
     "CODVIA_ROUTER_WORKTREE",
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 )
-GO = os.environ.get("GO_BIN") or shutil.which("go") or "/home/hatch/go/bin/go"
+# No hardcoded interpreter path (AUD-TEST-001): GO_BIN, else `go` on
+# PATH, else a loud failure naming the requirement.
+GO = os.environ.get("GO_BIN") or shutil.which("go")
+if not GO:
+    raise SystemExit("FATAL: no Go toolchain found; set GO_BIN to the go binary")
 
 # The one canned reply every mock serves. Fixed on purpose: the
 # drivers assert it verbatim, so a wrong upstream or a dropped
@@ -190,17 +194,35 @@ class ClientHarness:
         self._router = None
         self._hits_file = os.path.join(self.home, "mock.hits")
         self._last_file = os.path.join(self.home, "mock.last.json")
-        self.env = dict(os.environ, HOME=self.home,
+        # The router is given its config path explicitly (--config) AND the
+        # environment is redirected into the isolated home. Both matter:
+        # HOME alone is not consulted on Windows, where the router resolves
+        # its config from %APPDATA%\codvian-router\config.json — which made
+        # this harness fail with "config already exists" for any developer
+        # or runner that had a real config, so the smoke gate was not
+        # hermetic (AUD-TEST-001).
+        self.cfg_path = os.path.join(self.home, "config.json")
+        self.env = dict(os.environ,
+                        HOME=self.home,
+                        USERPROFILE=self.home,
+                        APPDATA=os.path.join(self.home, "AppData", "Roaming"),
+                        LOCALAPPDATA=os.path.join(self.home, "AppData", "Local"),
+                        XDG_CONFIG_HOME=os.path.join(self.home, ".config"),
+                        XDG_DATA_HOME=os.path.join(self.home, ".local", "share"),
                         TMPDIR=os.path.expanduser("~/.tmp"),
                         GOCACHE=os.path.expanduser("~/.cache/go-build"),
                         GOPATH=os.path.expanduser("~/go"))
+        for d in (self.env["APPDATA"], self.env["LOCALAPPDATA"],
+                  self.env["XDG_CONFIG_HOME"], self.env["XDG_DATA_HOME"]):
+            os.makedirs(d, exist_ok=True)
 
     def __enter__(self):
         shutil.rmtree(self.home, ignore_errors=True)
         os.makedirs(self.home, exist_ok=True)
-        r = subprocess.run([GO, "build", "-o", self.bin, "./cmd/codvian-router"],
-                           cwd=WORKTREE, env=self.env,
-                           capture_output=True, text=True)
+        r = subprocess.run(
+            [GO, "build", "-buildvcs=false", "-o", self.bin, "./cmd/codvian-router"],
+            cwd=WORKTREE, env=self.env,
+            capture_output=True, text=True)
         if r.returncode != 0:
             raise RuntimeError("go build failed:\n" + r.stdout + r.stderr)
         mock_py = os.path.join(self.home, "mock.py")
@@ -212,8 +234,8 @@ class ClientHarness:
              self._hits_file, self._last_file],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self._procs.append(self._mock)
-        r = subprocess.run([self.bin, "init"], env=self.env,
-                           capture_output=True, text=True)
+        r = subprocess.run([self.bin, "--config", self.cfg_path, "init"],
+                           env=self.env, capture_output=True, text=True)
         if r.returncode != 0:
             raise RuntimeError("router init failed:\n" + r.stdout + r.stderr)
         for tok in r.stdout.replace('"', " ").split():
@@ -221,21 +243,20 @@ class ClientHarness:
                 self.key = tok
         if not self.key:
             raise RuntimeError("init did not print a key:\n" + r.stdout)
-        cfg_path = None
-        for root, _, files in os.walk(self.home):
-            if "config.json" in files:
-                cfg_path = os.path.join(root, "config.json")
-                break
-        if not cfg_path:
-            raise RuntimeError("config.json not found under " + self.home)
+        cfg_path = self.cfg_path
+        if not os.path.isfile(cfg_path):
+            raise RuntimeError("init did not write the config at " + cfg_path)
         cfg = json.load(open(cfg_path))
         cfg["prices"] = {"mock-model": {"input_usd_per_1m": 1,
                                         "output_usd_per_1m": 2}}
         json.dump(cfg, open(cfg_path, "w"), indent=2)
+        self._router_log = os.path.join(self.home, "router.log")
+        self._router_logf = open(self._router_log, "w")
         self._router = subprocess.Popen(
-            [self.bin, "serve", "--listen", f"127.0.0.1:{self.router_port}"],
-            env=self.env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True)
+            [self.bin, "--config", self.cfg_path, "serve",
+             "--listen", f"127.0.0.1:{self.router_port}"],
+            env=self.env, stdout=self._router_logf,
+            stderr=subprocess.STDOUT)
         self._procs.append(self._router)
         for _ in range(50):
             st, _, _ = self.req("GET", "/healthz")
@@ -260,10 +281,9 @@ class ClientHarness:
                 p.wait(timeout=5)
             except Exception:
                 p.kill()
-        if self._router is not None:
+        if getattr(self, "_router_logf", None) is not None:
             try:
-                out, _ = self._router.communicate(timeout=5)
-                open(os.path.join(self.home, "router.log"), "w").write(out or "")
+                self._router_logf.close()
             except Exception:
                 pass
         # Remove the isolated HOME (binary + config + logs, ~32 MB per
