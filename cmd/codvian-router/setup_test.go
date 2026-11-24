@@ -298,7 +298,7 @@ func TestSetupCodexFreshWrite(t *testing.T) {
 
 func TestSetupClineFreshWrite(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "settings.json")
+	cfgPath := filepath.Join(dir, "mcp.json")
 	var out, errOut bytes.Buffer
 	opts := options{configPath: cfgPath, model: "gpt-5", endpoint: "http://127.0.0.1:20128/v1", apiKey: "crk_test_key_123"}
 	exitCode := runSetupIO(opts, []string{"cline"}, &out, &errOut)
@@ -313,8 +313,30 @@ func TestSetupClineFreshWrite(t *testing.T) {
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if parsed["api_base_url"] != "http://127.0.0.1:20128/v1" || parsed["model"] != "gpt-5" || parsed["api_key"] != "crk_test_key_123" {
-		t.Errorf("cline config wrong: %v", parsed)
+	mcpServers, ok := parsed["mcpServers"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected mcpServers map, got %v", parsed["mcpServers"])
+	}
+	codvian, ok := mcpServers["codvian-router"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected codvian-router server, got %v", mcpServers)
+	}
+	if codvian["command"] != "codvian-router" {
+		t.Errorf("cline command = %v, want codvian-router", codvian["command"])
+	}
+	args, ok := codvian["args"].([]any)
+	if !ok || len(args) != 1 || args[0] != "mcp" {
+		t.Errorf("cline args = %v, want [mcp]", codvian["args"])
+	}
+	env, ok := codvian["env"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected env map, got %v", codvian["env"])
+	}
+	if env["CODVIAN_ROUTER_BASE_URL"] != "http://127.0.0.1:20128/v1" {
+		t.Errorf("cline base URL = %v, want http://127.0.0.1:20128/v1", env["CODVIAN_ROUTER_BASE_URL"])
+	}
+	if env["CODVIAN_ROUTER_API_KEY"] != "crk_test_key_123" {
+		t.Errorf("cline API key = %v, want crk_test_key_123", env["CODVIAN_ROUTER_API_KEY"])
 	}
 }
 
@@ -361,7 +383,7 @@ func TestSetupGeminiFreshWrite(t *testing.T) {
 
 func TestSetupQwenFreshWrite(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.json")
+	cfgPath := filepath.Join(dir, "settings.json")
 	var out, errOut bytes.Buffer
 	opts := options{configPath: cfgPath, model: "qwen3-coder", endpoint: "http://127.0.0.1:20128/v1"}
 	exitCode := runSetupIO(opts, []string{"qwen"}, &out, &errOut)
@@ -376,8 +398,15 @@ func TestSetupQwenFreshWrite(t *testing.T) {
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if parsed["base_url"] != "http://127.0.0.1:20128/v1" || parsed["model"] != "qwen3-coder" {
-		t.Errorf("qwen config wrong: %v", parsed)
+	modelMap, ok := parsed["model"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected model map, got %v", parsed["model"])
+	}
+	if modelMap["name"] != "qwen3-coder" {
+		t.Errorf("qwen model name = %v, want qwen3-coder", modelMap["name"])
+	}
+	if modelMap["baseUrl"] != "http://127.0.0.1:20128/v1" {
+		t.Errorf("qwen model baseUrl = %v, want http://127.0.0.1:20128/v1", modelMap["baseUrl"])
 	}
 }
 
@@ -395,14 +424,23 @@ func TestSetupGooseFreshWrite(t *testing.T) {
 		t.Fatalf("reading config: %v", err)
 	}
 	content := string(data)
-	if !strings.Contains(content, "gpt-5") || !strings.Contains(content, "http://127.0.0.1:20128/v1") {
-		t.Errorf("goose config missing fields: %s", content)
+	if !strings.Contains(content, "active_provider: codvian") {
+		t.Errorf("goose config missing active_provider: %s", content)
+	}
+	if !strings.Contains(content, "codvian:") {
+		t.Errorf("goose config missing codvian provider: %s", content)
+	}
+	if !strings.Contains(content, "gpt-5") {
+		t.Errorf("goose config missing model: %s", content)
+	}
+	if !strings.Contains(content, "api_key_env: CODVIAN_ROUTER_API_KEY") {
+		t.Errorf("goose config missing api_key_env: %s", content)
 	}
 }
 
 func TestSetupRooFreshWrite(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "settings.json")
+	cfgPath := filepath.Join(dir, "mcp_settings.json")
 	var out, errOut bytes.Buffer
 	opts := options{configPath: cfgPath, model: "gpt-5", endpoint: "http://127.0.0.1:20128/v1"}
 	exitCode := runSetupIO(opts, []string{"roo"}, &out, &errOut)
@@ -417,14 +455,33 @@ func TestSetupRooFreshWrite(t *testing.T) {
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if parsed["provider"] != "openai" || parsed["base_url"] != "http://127.0.0.1:20128/v1" {
-		t.Errorf("roo config wrong: %v", parsed)
+	mcpServers, ok := parsed["mcpServers"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected mcpServers map, got %v", parsed["mcpServers"])
+	}
+	codvian, ok := mcpServers["codvian-router"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected codvian-router server, got %v", mcpServers)
+	}
+	if codvian["command"] != "codvian-router" {
+		t.Errorf("roo command = %v, want codvian-router", codvian["command"])
+	}
+	args, ok := codvian["args"].([]any)
+	if !ok || len(args) != 1 || args[0] != "mcp" {
+		t.Errorf("roo args = %v, want [mcp]", codvian["args"])
+	}
+	env, ok := codvian["env"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected env map, got %v", codvian["env"])
+	}
+	if env["CODVIAN_ROUTER_BASE_URL"] != "http://127.0.0.1:20128/v1" {
+		t.Errorf("roo base URL = %v, want http://127.0.0.1:20128/v1", env["CODVIAN_ROUTER_BASE_URL"])
 	}
 }
 
 func TestSetupKiloFreshWrite(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.json")
+	cfgPath := filepath.Join(dir, "kilo.json")
 	var out, errOut bytes.Buffer
 	opts := options{configPath: cfgPath, model: "gpt-5", endpoint: "http://127.0.0.1:20128/v1"}
 	exitCode := runSetupIO(opts, []string{"kilo"}, &out, &errOut)
@@ -439,7 +496,62 @@ func TestSetupKiloFreshWrite(t *testing.T) {
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if parsed["base_url"] != "http://127.0.0.1:20128/v1" || parsed["model"] != "gpt-5" {
-		t.Errorf("kilo config wrong: %v", parsed)
+	providers, ok := parsed["providers"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected providers map, got %v", parsed["providers"])
+	}
+	openai, ok := providers["openai"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected openai provider, got %v", providers["openai"])
+	}
+	settings, ok := openai["settings"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected settings map, got %v", openai["settings"])
+	}
+	if settings["baseURL"] != "http://127.0.0.1:20128/v1" {
+		t.Errorf("kilo baseURL = %v, want http://127.0.0.1:20128/v1", settings["baseURL"])
+	}
+	if parsed["model"] != "gpt-5" {
+		t.Errorf("kilo model = %v, want gpt-5", parsed["model"])
+	}
+}
+
+func TestSetupOpenCodeFreshWrite(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "opencode.json")
+	var out, errOut bytes.Buffer
+	opts := options{configPath: cfgPath, model: "gpt-5", endpoint: "http://127.0.0.1:20128/v1", apiKey: "crk_test_key_123"}
+	exitCode := runSetupIO(opts, []string{"opencode"}, &out, &errOut)
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", exitCode, errOut.String())
+	}
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("reading config: %v", err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	providers, ok := parsed["providers"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected providers map, got %v", parsed["providers"])
+	}
+	openai, ok := providers["openai"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected openai provider, got %v", providers["openai"])
+	}
+	settings, ok := openai["settings"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected settings map, got %v", openai["settings"])
+	}
+	if settings["baseURL"] != "http://127.0.0.1:20128/v1" {
+		t.Errorf("opencode baseURL = %v, want http://127.0.0.1:20128/v1", settings["baseURL"])
+	}
+	if settings["apiKey"] != "crk_test_key_123" {
+		t.Errorf("opencode apiKey = %v, want crk_test_key_123", settings["apiKey"])
+	}
+	if parsed["model"] != "gpt-5" {
+		t.Errorf("opencode model = %v, want gpt-5", parsed["model"])
 	}
 }
