@@ -8,9 +8,9 @@ the per-route sections; regenerate instead:
 python3 scripts/gen-api-docs.py
 ```
 
-Coverage: **345 routes** (180 GET, 116 POST, 22 DELETE, 22 PATCH, 5 PUT) —
+Coverage: **346 routes** (180 GET, 117 POST, 22 DELETE, 22 PATCH, 5 PUT) —
 11 `LOCAL_ONLY`, 56 `ALWAYS_PROTECTED`,
-278 `MANAGEMENT`; 60 auth-exempt, 274 scope-gated, 11 key-only (gateway key, no scope).
+279 `MANAGEMENT`; 60 auth-exempt, 275 scope-gated, 11 key-only (gateway key, no scope).
 Enforced by `TestAPIReferenceCoversEveryRoute`
 (`internal/server/api_reference_test.go`): the test reads the guard
 table and this doc and FAILS if any route is missing. That test is
@@ -3812,12 +3812,28 @@ its key field; the key is kept only in page memory, never stored.
 - **Scope(s):** `admin` — scope `admin` implies every scope
 - **Auth:** Gateway key required (unless auth was explicitly relaxed)
 - **Spawn-capable:** no
-- **Description:** Estimate the cost of a chat completion request (prompt tokens × model prices). Gateway-key auth required.
+- **Description:** Pre-dispatch cost estimate (P1.7): local token count (wire-framed calibrated tiktoken when a wire is given, tools and multimodal parts included), provider- or model-level pricing with cached-input/cache-write rates, explicit unknown-price handling, requested-output-token estimation and an optional read-only budget check. Never calls a provider — an estimate is not an invoice. Gateway-key auth required.
 - **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
 - **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
 
   ```sh
   curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/api/cost/estimate
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `POST /api/cost/reconcile`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Reconcile an estimate against provider-reported usage (P1.7): actual cost from the price book including cached-input and cache-write legs, with status usage_missing / actual_unknown / estimate_unknown / reconciled and a variance only when both sides are known. Never calls a provider. Gateway-key auth required.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/api/cost/reconcile
   ```
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.

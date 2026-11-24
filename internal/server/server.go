@@ -2327,9 +2327,20 @@ type errorDetail struct {
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
+	// Encode BEFORE writing any header: a value that cannot be marshalled
+	// (NaN/Inf floats, a failing custom marshaller) must never turn into a
+	// silent empty 200 — the client would see success with no body. On an
+	// encoding failure answer a 500 with a generic message.
+	buf, err := json.Marshal(v)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":{"message":"response could not be encoded","type":"server_error"}}` + "\n"))
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	_, _ = w.Write(append(buf, '\n'))
 }
 
 // writeError writes an OpenAI-shaped client error.
@@ -7958,6 +7969,11 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lf := &logFields{}
 		r = r.WithContext(context.WithValue(r.Context(), ctxKeyLogFields{}, lf))
+		// Caller-key carrier (P1.7): a lazy holder so a handler (or a
+		// follow-up on a derived context) can recover the authenticated
+		// key ID without the request and without paying a verifier
+		// lookup unless it asks.
+		r = r.WithContext(context.WithValue(r.Context(), ctxKeyCallerKey{}, &callerKeyHolder{s: s, r: r}))
 		// Correlation id (M2.2): the sanitized inbound
 		// X-Request-Id when the client sent one, else a fresh
 		// id. It rides the request context (so every handler

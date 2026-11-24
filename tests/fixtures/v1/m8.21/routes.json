@@ -3990,7 +3990,19 @@
     "path": "/api/cost/estimate",
     "tier": "MANAGEMENT",
     "spawn_capable": false,
-    "description": "Estimate the cost of a chat completion request (prompt tokens \u00d7 model prices). Gateway-key auth required.",
+    "description": "Pre-dispatch cost estimate (P1.7): local token count (wire-framed calibrated tiktoken when a wire is given, tools and multimodal parts included), provider- or model-level pricing with cached-input/cache-write rates, explicit unknown-price handling, requested-output-token estimation and an optional read-only budget check. Never calls a provider \u2014 an estimate is not an invoice. Gateway-key auth required.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/api/cost/reconcile",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Reconcile an estimate against provider-reported usage (P1.7): actual cost from the price book including cached-input and cache-write legs, with status usage_missing / actual_unknown / estimate_unknown / reconciled and a variance only when both sides are known. Never calls a provider. Gateway-key auth required.",
     "auth_exempt": false,
     "scopes": [
       "admin"
