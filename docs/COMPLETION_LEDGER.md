@@ -80,7 +80,7 @@ than assumed. Full per-block detail lives in the named document.
 |-------|---------|--------|----------|
 | P1.1 | Free-tier budget intelligence & quota dashboard | COMPLETED (prior delivery) | `internal/server/quota_intelligence.go`, `GET /api/quota/intelligence`, dashboard + tests |
 | P1.2 | MCP/A2A ecosystem expansion | COMPLETED (prior delivery) | 8 expansion MCP tools + 6 A2A skills; mode/perp/latency tool order pinned by tests |
-| P1.3 | CLI integration expansion | NOT AUDITED IN THIS DELIVERY (later delivery) | — |
+| P1.3 | CLI integration expansion | COMPLETED (this delivery) | `docs/client-compatibility-matrix.md`; `codvian-router clients [--json]` evidence-based matrix, `x-api-key`/`x-goog-api-key` gateway-key auth (Anthropic/Gemini clients), anti-overclaim test |
 | P1.4 | Advanced compression & fidelity benchmark | COMPLETED | `docs/compression-fidelity-benchmark.md`; `internal/compress/evalharness` fidelity/long-context/thresholds + `cmd/codvian-bench compression` |
 | P1.5 | Provider capability metadata & discovery | COMPLETED | `docs/provider-capability-registry.md`; `internal/capability` registry + provenance, `/api/capabilities`, `routing.require_capabilities` gate on both streaming and non-streaming paths |
 | P1.6 | Organization/team request-path enforcement | COMPLETED (this delivery) | `docs/org-team-request-path-enforcement.md`; one policy gate on every model-addressed dialect before dispatch, denial auditing, org budget, negative tests per dialect |
@@ -93,7 +93,7 @@ test -count=1` / race where supported / route-guard consistency / dashboard
 and browser smoke) runs ONCE after all nine blocks, per the directive; it
 has not run yet, so P1 is not declared complete.
 
-Ledger last update: P1.9 delivery — pass-rate trends + failed-case detail on the preserved P3-B scheduler
+Ledger last update: P1.3 delivery — client matrix + vendor credential headers (P1.1–P1.9 now all COMPLETED)
 before dispatch on chat, Messages, Responses, legacy completions, Gemini,
 embeddings, images, audio, media surfaces, A2A tasks and batch items;
 denials audited and persisted; org budget enforced (400 org_budget).

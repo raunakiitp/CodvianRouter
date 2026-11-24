@@ -2139,36 +2139,53 @@ func (s *Server) authorized(r *http.Request) bool {
 	if s.verifier == nil {
 		return false
 	}
-	auth := r.Header.Get("Authorization")
-	if auth == "" {
+	key := requestKey(r)
+	if key == "" {
 		return false
 	}
-	parts := strings.SplitN(auth, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
-		return false
-	}
-	if s.verifier.VerifyKey(r.Context(), parts[1]) {
+	if s.verifier.VerifyKey(r.Context(), key) {
 		return true
 	}
 	// B3-07: a gateway JWT access token authenticates exactly
 	// like a gateway key — the same funnel, the same 401.
-	return s.oauthTokenValid(parts[1])
+	return s.oauthTokenValid(key)
 }
 
-// bearerKey extracts the raw Bearer token from a request, or ""
-// when there is none. Shared by the scope wrapper and the
-// disabled-key 401 path so the header is parsed one way.
-func bearerKey(r *http.Request) string {
-	auth := r.Header.Get("Authorization")
-	if auth == "" {
-		return ""
+// requestKey extracts the gateway credential from a request, or ""
+// when there is none. Three presentations carry the SAME gateway key
+// (P1.3 client compatibility):
+//
+//   - `Authorization: Bearer ***` — the canonical form, and the one
+//     `codvian-router keygen` prints. Wins when present.
+//   - `X-Api-Key: ***` — what Anthropic-style clients send (Cline in
+//     Anthropic mode, Zed, Claude Code) against an Anthropic dialect.
+//   - `X-Goog-Api-Key: ***` — what Google's Gemini SDKs send against
+//     the Gemini native surface.
+//
+// A non-Bearer Authorization scheme ("Basic ...") is NOT a credential
+// for us; the API-key headers are still consulted rather than treating
+// the scheme's payload as a key. Every caller funnels through here, so
+// auth, scope and the 401 diagnostics all read the credential one way.
+func requestKey(r *http.Request) string {
+	if auth := r.Header.Get("Authorization"); auth != "" {
+		if parts := strings.SplitN(auth, " ", 2); len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && parts[1] != "" {
+			return parts[1]
+		}
 	}
-	parts := strings.SplitN(auth, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
-		return ""
+	if k := strings.TrimSpace(r.Header.Get("X-Api-Key")); k != "" {
+		return k
 	}
-	return parts[1]
+	if k := strings.TrimSpace(r.Header.Get("X-Goog-Api-Key")); k != "" {
+		return k
+	}
+	return ""
 }
+
+// bearerKey is requestKey under its historical name: the scope
+// wrapper, the disabled-key 401 path and the caller-key accessor all
+// parse the credential the same way (P1.3 widened it to the
+// vendor-style API-key headers).
+func bearerKey(r *http.Request) string { return requestKey(r) }
 
 // requireScope enforces the guard table's scope list for one route
 // (M1.1): the caller's key must carry at least one listed scope,
@@ -2230,16 +2247,16 @@ func (s *Server) requireScope(next http.HandlerFunc, scopes []string) http.Handl
 // this package funnels through here.
 func (s *Server) unauthorized(w http.ResponseWriter, r *http.Request) {
 	if s.verifier != nil {
-		if auth := r.Header.Get("Authorization"); auth != "" {
-			if parts := strings.SplitN(auth, " ", 2); len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && parts[1] != "" {
+		if key := requestKey(r); key != "" {
+			{
 				if ev, ok := s.verifier.(ExpiryVerifier); ok {
-					if exp, expired := ev.ExpiredKey(r.Context(), parts[1]); expired {
+					if exp, expired := ev.ExpiredKey(r.Context(), key); expired {
 						writeError(w, http.StatusUnauthorized, "gateway key expired on "+exp.UTC().Format(time.RFC3339))
 						return
 					}
 				}
 				if dv, ok := s.verifier.(DisabledKeyVerifier); ok {
-					if dv.DisabledKey(r.Context(), parts[1]) {
+					if dv.DisabledKey(r.Context(), key) {
 						writeError(w, http.StatusUnauthorized, "gateway key disabled")
 						return
 					}
@@ -2247,7 +2264,7 @@ func (s *Server) unauthorized(w http.ResponseWriter, r *http.Request) {
 				// B3-07: an expired gateway JWT names its expiry,
 				// like an expired gateway key does.
 				if iss, err := s.oauthIssuer(); err == nil && iss != nil {
-					if exp, expired := iss.TokenExpired(parts[1]); expired {
+					if exp, expired := iss.TokenExpired(key); expired {
 						writeError(w, http.StatusUnauthorized, "oauth token expired on "+exp.UTC().Format(time.RFC3339))
 						return
 					}
