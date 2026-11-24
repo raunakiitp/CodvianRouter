@@ -167,6 +167,9 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 		"POST /api/cost/estimate",
 		// P1.1 Free-tier Budget Intelligence & Quota Dashboard.
 		"GET /api/quota/intelligence",
+		// P1.5 Provider Capability Metadata & Discovery.
+		"GET /api/capabilities", "POST /api/capabilities/refresh",
+		"GET /api/providers/{id}/capabilities",
 	}
 	if len(expected) != len(table) {
 		t.Errorf("route table has %d entries, expected %d (a route was added without updating the table, or vice versa)", len(table), len(expected))
@@ -227,8 +230,8 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 	for _, r := range table {
 		counts[r.Tier]++
 	}
-	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 56 || counts[TierManagement] != 275 {
-		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/56/275)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
+	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 56 || counts[TierManagement] != 278 {
+		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/56/278)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
 	}
 }
 
@@ -1056,8 +1059,8 @@ func TestExemptRoutesAreReadOnlyGet(t *testing.T) {
 	// guard.go:223 — plus POST /oauth/token and POST /oauth/revoke
 	// in B3-07: public by design, client auth is the code_verifier
 	// / client secret, not a gateway key).
-	if exempt != 58 {
-		t.Errorf("exempt routes = %d, want 58 (51 before M8 + GET /api/pricing in M8.15 + GET /api/mcp/audit and GET /api/mcp/status in M9.7 + GET /.well-known/agent.json in M9.9 + GET /api/telemetry/model-latency-stats in M10 + POST /oauth/token and POST /oauth/revoke in B3-07)", exempt)
+	if exempt != 60 {
+		t.Errorf("exempt routes = %d, want 60 (58 before P1.5 + GET /api/capabilities and GET /api/providers/{id}/capabilities in P1.5)", exempt)
 	}
 }
 

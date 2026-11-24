@@ -8,9 +8,9 @@ the per-route sections; regenerate instead:
 python3 scripts/gen-api-docs.py
 ```
 
-Coverage: **342 routes** (178 GET, 115 POST, 22 DELETE, 22 PATCH, 5 PUT) —
+Coverage: **345 routes** (180 GET, 116 POST, 22 DELETE, 22 PATCH, 5 PUT) —
 11 `LOCAL_ONLY`, 56 `ALWAYS_PROTECTED`,
-275 `MANAGEMENT`; 58 auth-exempt, 273 scope-gated, 11 key-only (gateway key, no scope).
+278 `MANAGEMENT`; 60 auth-exempt, 274 scope-gated, 11 key-only (gateway key, no scope).
 Enforced by `TestAPIReferenceCoversEveryRoute`
 (`internal/server/api_reference_test.go`): the test reads the guard
 table and this doc and FAILS if any route is missing. That test is
@@ -1612,6 +1612,54 @@ its key field; the key is kept only in page memory, never stored.
 
   ```sh
   curl -X GET http://127.0.0.1:8080/api/providers
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `GET /api/capabilities`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** any authenticated key (no scope listed)
+- **Auth:** None — auth-exempt (Tier 3, explicitly off)
+- **Spawn-capable:** no
+- **Description:** Capability matrix (P1.5): every known provider/model with each capability's support state and provenance. Read-only metadata — no keys, no base URLs.
+- **Request:** no body.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X GET http://127.0.0.1:8080/api/capabilities
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `POST /api/capabilities/refresh`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required (unless auth was explicitly relaxed)
+- **Spawn-capable:** no
+- **Description:** Rebuilds the in-process capability snapshot from registry + opt-in sync state (P1.5). No network I/O, no cost, cannot invent capabilities — it re-reads existing sources only. Authenticated like every other mutating management route (exempt routes are read-only GETs).
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/api/capabilities/refresh
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `GET /api/providers/{id}/capabilities`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** any authenticated key (no scope listed)
+- **Auth:** None — auth-exempt (Tier 3, explicitly off)
+- **Spawn-capable:** no
+- **Description:** One provider's models with capability support and provenance (P1.5). Read-only metadata.
+- **Request:** no body.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X GET http://127.0.0.1:8080/api/providers/{id}/capabilities
   ```
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.

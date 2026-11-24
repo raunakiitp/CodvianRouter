@@ -55,6 +55,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/adaptive"
 	"github.com/raunakiitp/codvian-router/internal/autorouter"
 	"github.com/raunakiitp/codvian-router/internal/cache"
+	"github.com/raunakiitp/codvian-router/internal/capability"
 	"github.com/raunakiitp/codvian-router/internal/catalog"
 	"github.com/raunakiitp/codvian-router/internal/config"
 	"github.com/raunakiitp/codvian-router/internal/crypto"
@@ -3421,11 +3422,16 @@ func openStack(opts options) (*stack, error) {
 		// B2-01): the cheapest priced model with a live
 		// client, called directly — see relaySummariser
 		// above. Never a stub, never a canned summary.
-		RelaySummariser:        relaySummariser,
-		VisionCapability:       router.VisionCapabilityFunc(reg),
-		VisionPool:             router.VisionPoolFunc(reg),
-		ModalityCapability:     router.ModalityCapabilityFunc(reg),
-		ModalityPool:           router.ModalityPoolFunc(reg),
+		RelaySummariser:    relaySummariser,
+		VisionCapability:   router.VisionCapabilityFunc(reg),
+		VisionPool:         router.VisionPoolFunc(reg),
+		ModalityCapability: router.ModalityCapabilityFunc(reg),
+		ModalityPool:       router.ModalityPoolFunc(reg),
+		// P1.5 capability gate: a live lookup (never a stale snapshot)
+		// plus the operator's verified-capability requirements from
+		// config. Empty requirements leave the chain untouched.
+		CapabilityLookup:       router.CapabilityLookupFromRegistry(reg),
+		RequireCapabilities:    requiredCapabilities(cfg),
 		StrategyHook:           strategy.HookFactory(signalsFn, customWeights),
 		StrategyHookForRequest: strategy.HookFactoryWithCacheAffinity(signalsFn, customWeights, warmthSnap.warmth),
 		// LKGP failure-clear (RT-2): a hard failure against
@@ -4441,6 +4447,25 @@ func openStack(opts options) (*stack, error) {
 	}, nil
 }
 
+// requiredCapabilities converts the operator's
+// routing.require_capabilities config into the router's capability
+// vocabulary (P1.5). Unknown names are already rejected by
+// config.Validate, so anything dropped here is unreachable — but the
+// function still drops rather than guesses, so a config edited after
+// validation can never inject an invented capability.
+func requiredCapabilities(cfg *config.Config) []capability.Capability {
+	if cfg == nil || cfg.Routing == nil || len(cfg.Routing.RequireCapabilities) == 0 {
+		return nil
+	}
+	out := make([]capability.Capability, 0, len(cfg.Routing.RequireCapabilities))
+	for _, name := range cfg.Routing.RequireCapabilities {
+		if c, ok := capability.ParseCapability(name); ok {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // savingsPricesFor returns the per-token USD price lookup the
 // savings recorder uses (M6.2b): model -> (prompt $/token,
 // completion $/token) from the model-level price book. Only the
@@ -4959,6 +4984,10 @@ func runServe(opts options) int {
 		server.WithHeadless(opts.headless),
 		server.WithConfig(st.cfg),
 		server.WithProviderRegistry(st.reg),
+		// P1.5 capability API: the same registry the routing gate
+		// reads (built from it on demand), so the two can never
+		// disagree about a model's recorded capabilities.
+		server.WithCapabilityRegistry(st.reg),
 		server.WithShortlist(st.cfg.Shortlist),
 		// Native relay + readiness (CHECKLIST 143-144): the
 		// readiness gate above; cache-serving on, with the gateway

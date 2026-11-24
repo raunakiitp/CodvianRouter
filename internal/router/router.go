@@ -50,6 +50,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/adaptive"
 	"github.com/raunakiitp/codvian-router/internal/autorouter"
 	"github.com/raunakiitp/codvian-router/internal/cache"
+	"github.com/raunakiitp/codvian-router/internal/capability"
 	"github.com/raunakiitp/codvian-router/internal/coalescing"
 	"github.com/raunakiitp/codvian-router/internal/compress"
 	"github.com/raunakiitp/codvian-router/internal/config"
@@ -588,6 +589,20 @@ type Config struct {
 	// candidate never wins an audio-blocked request. If nil,
 	// the bridge falls back to the vision-only pool.
 	ModalityPool func() []modality.Candidate
+	// CapabilityLookup reports one model's unified capability record
+	// (P1.5). ok is false when the provider/model pair is unknown,
+	// which the filter treats as "no capability is verified" — never
+	// as an empty set that passes. Set by CapabilityLookupFunc over
+	// a capability.Index. Consulted only when RequireCapabilities is
+	// non-empty, so it must stay cheap.
+	CapabilityLookup func(providerID, model string) (capability.ModelCapabilities, bool)
+	// RequireCapabilities lists capabilities an attempt must hold
+	// with verification (Support == supported && Verification ==
+	// verified) to be dialled. Empty means no filter — the default
+	// path is unchanged. Unknown and merely-declared capabilities
+	// never satisfy a requirement: absence of evidence is not
+	// evidence of support.
+	RequireCapabilities []capability.Capability
 	// EffortBudgetFor, if set, returns the operator-declared
 	// thinking-token budget for one (wire, effort) pair
 	// (CHECKLIST 285-286): the `reasoning.effort_budgets`
@@ -2769,6 +2784,64 @@ func ModalityPoolFunc(reg *provider.Registry) func() []modality.Candidate {
 	}
 }
 
+// CapabilityLookupFromRegistry adapts a provider registry to
+// Config.CapabilityLookup (P1.5), computing each model's capability set
+// on demand from the same sources the API reports. A live lookup means
+// the routing gate never consults a stale snapshot: a model added or
+// synced a second ago is already seen. A nil registry reports
+// ok=false for every pair.
+func CapabilityLookupFromRegistry(reg *provider.Registry) func(providerID, model string) (capability.ModelCapabilities, bool) {
+	b := capability.Builder{Registry: reg}
+	return func(providerID, model string) (capability.ModelCapabilities, bool) {
+		return b.Model(providerID, model)
+	}
+}
+
+// CapabilityLookupFunc adapts a capability.Index to
+// Config.CapabilityLookup (P1.5). A model missing from the index
+// reports ok=false — the router's capability gate treats that as
+// "nothing verified" and skips the attempt when a capability is
+// required. A nil index reports ok=false for every pair.
+func CapabilityLookupFunc(idx *capability.Index) func(providerID, model string) (capability.ModelCapabilities, bool) {
+	return func(providerID, model string) (capability.ModelCapabilities, bool) {
+		return idx.Lookup(providerID, model)
+	}
+}
+
+// filterByRequiredCapabilities drops the attempts that do not hold
+// every capability in cfg.RequireCapabilities with VERIFIED support
+// (P1.5). Unknown is not evidence of support and never qualifies, so a
+// model whose capability was never observed is filtered out exactly
+// like one confirmed incapable — unlike the CT-1 tool pre-check, which
+// fails open by design for plain chat traffic. No requirements (the
+// default) returns the chain untouched, so default routing behaviour is
+// unchanged. Applied before the dial on both the non-streaming and
+// streaming paths, so a filtered-out attempt never costs a provider
+// call.
+func (e *Engine) filterByRequiredCapabilities(chain []Attempt) (kept []Attempt, skipped []Attempt, reasons []string) {
+	if len(e.cfg.RequireCapabilities) == 0 || e.cfg.CapabilityLookup == nil {
+		return chain, nil, nil
+	}
+	kept = make([]Attempt, 0, len(chain))
+	for _, att := range chain {
+		mc, known := e.cfg.CapabilityLookup(att.ProviderID, att.Model)
+		missing := ""
+		for _, need := range e.cfg.RequireCapabilities {
+			if !known || !mc.HasVerified(need) {
+				missing = string(need)
+				break
+			}
+		}
+		if missing != "" {
+			skipped = append(skipped, att)
+			reasons = append(reasons, "skipped_capability_unverified:"+missing)
+			continue
+		}
+		kept = append(kept, att)
+	}
+	return kept, skipped, reasons
+}
+
 // filterZeroQuota splits a chain into the attempts that may serve
 // (quota hint > 0) and the zero-quota attempts, which are skipped
 // and reported on the trace. Shared by orderAttempts and the
@@ -4924,6 +4997,20 @@ func (e *Engine) chatWithChainStrategy(ctx context.Context, chain []Attempt, req
 	for _, att := range zeroSkipped {
 		addTraceAttempt(trace, att, 0, "skipped_zero_quota", nil)
 	}
+	// P1.5 capability filter: with operator-required capabilities
+	// (routing.require_capabilities), an attempt must hold every one
+	// of them with VERIFIED support — unknown and merely-declared
+	// never qualify — and the filter runs before any dial, so a
+	// dropped attempt costs no provider call. No requirements leaves
+	// the chain untouched.
+	ordered, capSkipped, capReasons := e.filterByRequiredCapabilities(ordered)
+	for i, att := range capSkipped {
+		reason := "skipped_capability_unverified"
+		if i < len(capReasons) {
+			reason = capReasons[i]
+		}
+		addTraceAttempt(trace, att, 0, reason, nil)
+	}
 	if len(ordered) == 0 {
 		return nil, trace, ErrNoAvailableAttempt
 	}
@@ -6324,6 +6411,18 @@ func (e *Engine) runStream(parentCtx, ctx context.Context, chain []Attempt, req 
 	ordered = pinFirst(ordered, req.PinProviderID)
 	for _, att := range zeroSkipped {
 		addTraceAttempt(trace, att, 0, "skipped_zero_quota", nil)
+	}
+	// P1.5 capability filter (streaming path): identical semantics to
+	// the non-streaming filter — required capabilities must be
+	// VERIFIED, unknown never qualifies, and the filter runs before
+	// any dial so a dropped attempt costs no provider call.
+	ordered, capSkipped, capReasons := e.filterByRequiredCapabilities(ordered)
+	for i, att := range capSkipped {
+		reason := "skipped_capability_unverified"
+		if i < len(capReasons) {
+			reason = capReasons[i]
+		}
+		addTraceAttempt(trace, att, 0, reason, nil)
 	}
 	if len(ordered) == 0 {
 		e.sendTerminal(out, ErrNoAvailableAttempt)
