@@ -29,7 +29,7 @@ func TestBlockB5MCPAndA2AGate(t *testing.T) {
 			t.Errorf("agent card name = %v, want 'Codvian Router'", card["name"])
 		}
 		skills, ok := card["skills"].([]any)
-		if !ok || len(skills) < 6 {
+		if !ok || len(skills) < 12 {
 			t.Errorf("agent card skills count = %d, want >= 6", len(skills))
 		}
 
@@ -100,8 +100,8 @@ func TestBlockB5MCPAndA2AGate(t *testing.T) {
 		env := decodeEnvelope(t, rec)
 		result, _ := env["result"].(map[string]any)
 		tools, _ := result["tools"].([]any)
-		if len(tools) != 24 {
-			t.Fatalf("tools/list count = %d, want 24", len(tools))
+		if len(tools) != 32 {
+			t.Fatalf("tools/list count = %d, want 32", len(tools))
 		}
 
 		// Allowed call under mcp:read:status: router_status should succeed.
