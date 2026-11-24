@@ -17,27 +17,15 @@
       "tools": [
         {
           "name": "router_status",
-          "description": "Live Codvian Router status: listen address, provider/model counts, gateway-key count, whether the auto-router is configured, and uptime when known.",
-          "inputSchema": {
-            "properties": {},
-            "type": "object"
-          }
+          "inputSchema": null
         },
         {
           "name": "provider_list",
-          "description": "List the providers configured in the router (id, name, wire format, enabled, models, catalog id, verification). Never includes base URLs or API keys.",
-          "inputSchema": {
-            "properties": {},
-            "type": "object"
-          }
+          "inputSchema": null
         },
         {
           "name": "model_list",
-          "description": "List every model offered by the configured providers (id, provider id, provider name). Virtual auto/* models are listed when the auto-router is configured.",
-          "inputSchema": {
-            "properties": {},
-            "type": "object"
-          }
+          "inputSchema": null
         }
       ]
     }
@@ -50,16 +38,16 @@
     ],
     "json_paths": {
       "jsonrpc": "2.0",
-      "result.tools.0.inputSchema": null,
       "result.tools.0.name": "router_status",
-      "result.tools.1.inputSchema": null,
+      "result.tools.0.inputSchema": null,
       "result.tools.1.name": "provider_list",
-      "result.tools.2.inputSchema": null,
-      "result.tools.2.name": "model_list"
+      "result.tools.1.inputSchema": null,
+      "result.tools.2.name": "model_list",
+      "result.tools.2.inputSchema": null
     },
     "json_lengths": {
       "result.tools": 3
     }
   },
-  "notes": "tools/list under an exclusive allow-list of the 3 built-ins: only router_status, provider_list, model_list are announced — the other 21 tools are invisible, not listed-then-denied. The json_lengths pin (result.tools = 3) fails if a 4th tool leaks in or one goes missing."
+  "notes": "tools/list under an exclusive allow-list of the 3 built-ins: only router_status, provider_list, model_list are announced \u2014 the other 21 tools are invisible, not listed-then-denied. The json_lengths pin (result.tools = 3) fails if a 4th tool leaks in or one goes missing."
 }
