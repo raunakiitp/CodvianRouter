@@ -66,6 +66,7 @@ import (
 
 	"github.com/raunakiitp/codvian-router/internal/cache"
 	"github.com/raunakiitp/codvian-router/internal/guardrails"
+	"github.com/raunakiitp/codvian-router/internal/ledger"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/readiness"
 	"github.com/raunakiitp/codvian-router/internal/relay"
@@ -539,7 +540,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		defer asyncRun.Finish()
 	}
 	if verbatim && target != nil {
-		s.forwardVerbatim(w, ctx, raw, head, target, reason, req, cacheable, start, asyncRun)
+		s.forwardVerbatim(w, ctx, raw, head, target, reason, req, cacheable, start, asyncRun, s.callerKeyID(r))
 		return
 	}
 	if target == nil {
@@ -1058,7 +1059,80 @@ func writeVerbatimHeaders(w http.ResponseWriter, resp *http.Response, reason str
 // async-block sentinel. The verbatim path keeps its standing rule
 // of recording no ledger row, cut or not — a relayed request's spend
 // is never recorded in the ledger.
-func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw []byte, head messagesHeader, target *relayTarget, reason string, req provider.ChatRequest, cacheable bool, start time.Time, asyncRun *guardrails.AsyncRun) {
+// cappedBuffer keeps at most max bytes of a copied response body so a
+// usage object can be priced without buffering the whole response and
+// without delaying the first byte to the client (AUD-SEC-002).
+type cappedBuffer struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (c *cappedBuffer) Write(p []byte) (int, error) {
+	if room := c.max - c.buf.Len(); room > 0 {
+		if len(p) <= room {
+			c.buf.Write(p)
+		} else {
+			c.buf.Write(p[:room])
+		}
+	}
+	return len(p), nil
+}
+
+// recordRelaySpend writes the ledger row for one relayed
+// /v1/messages request (AUD-SEC-002). The verbatim path bypasses the
+// engine, which is why its spend used to be invisible to per-key
+// budgets, quota windows and the cost dashboard.
+//
+// Honesty rules:
+//   - A 2xx response records OK=true with the provider-reported usage.
+//   - A 2xx response that reported NO usage records OK=true with zero
+//     tokens: the ledger's "0 means not reported" contract, never a
+//     fabricated count.
+//   - A non-2xx response records OK=false with zero tokens, so the
+//     attempt is visible but never counted as spend.
+//   - Exactly one row per relayed request: the relay path never runs
+//     the engine, so there is no second row to double-charge.
+// Best-effort: a nil ledger, no model to attribute to, or a ledger
+// error never fails the request the client already received.
+func (s *Server) recordRelaySpend(ctx context.Context, keyID string, target *relayTarget, model string, u relay.AnthropicUsage, status int, start time.Time) {
+	if s.ledger == nil {
+		return
+	}
+	if model == "" && target != nil {
+		model = target.UpstreamModel
+	}
+	if model == "" {
+		return
+	}
+	providerName := ""
+	if target != nil {
+		providerName = target.ProviderName
+	}
+	row := ledger.Usage{
+		GatewayKeyID: keyID,
+		Provider:     providerName,
+		Model:        model,
+		Endpoint:     "messages",
+		OK:           status >= 200 && status < 300,
+		LatencyMS:    time.Since(start).Milliseconds(),
+	}
+	if row.OK {
+		// SplitKnown is what makes the ledger store (and price) a
+		// provider-reported split; without it the counts are held
+		// back as "not reported" (ledger.Usage contract).
+		row.SplitKnown = u.Reported
+		row.PromptTokens = u.InputTokens
+		row.CompletionTokens = u.OutputTokens
+		row.TotalTokens = u.InputTokens + u.OutputTokens
+		row.CachedTokens = u.CacheReadTokens
+		row.CacheWriteTokens = u.CacheWriteTokens
+	}
+	if _, err := s.ledger.RecordUsage(ctx, row, s.getLedgerPrices()); err != nil {
+		s.logger.Printf("ledger: relay spend row not recorded (model=%s provider=%s): %v", model, providerName, err)
+	}
+}
+
+func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw []byte, head messagesHeader, target *relayTarget, reason string, req provider.ChatRequest, cacheable bool, start time.Time, asyncRun *guardrails.AsyncRun, keyID string) {
 	body := raw
 	if target.UpstreamModel != "" && target.UpstreamModel != head.Model {
 		rewritten, err := relay.RewriteModel(raw, target.UpstreamModel)
@@ -1164,6 +1238,10 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 		s.recordTelemetry(ctx, meta, resp.StatusCode)
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write(buf)
+		// AUD-SEC-002: the verbatim path bypasses the engine, so it
+		// records its own ledger row from the provider-reported usage
+		// in the bytes it just forwarded.
+		s.recordRelaySpend(ctx, keyID, target, head.Model, relay.ParseAnthropicUsage(buf), resp.StatusCode, start)
 		// M6.3: gate the store on the same cacheable condition as
 		// the normal (non-async) branch below — a tool-carrying
 		// request must not be stored just because an async
@@ -1193,9 +1271,24 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 	if !head.Stream && cacheable && (s.exactCache != nil || s.semanticCache != nil) {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, relayMaxStoreBody+1))
 		_, _ = w.Write(body)
+		// AUD-SEC-002: account the spend of the bytes just forwarded.
+		s.recordRelaySpend(ctx, keyID, target, head.Model, relay.ParseAnthropicUsage(body), resp.StatusCode, start)
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 && len(body) <= relayMaxStoreBody {
 			s.storeMessagesCache(ctx, req, body)
 		}
+		return
+	}
+	// AUD-SEC-002, non-streaming half: the body is not SSE, so it is
+	// copied through a tee that keeps at most relayMaxStoreBody bytes.
+	// The client still receives every byte immediately (no added
+	// latency, no buffering of the whole response) while the usage
+	// object can be priced from what was kept. An oversized body
+	// simply reports no usage — the ledger's "0 means not reported",
+	// never an invented count.
+	if !head.Stream {
+		cb := &cappedBuffer{max: relayMaxStoreBody}
+		_, _ = io.Copy(w, io.TeeReader(resp.Body, cb))
+		s.recordRelaySpend(ctx, keyID, target, head.Model, relay.ParseAnthropicUsage(cb.buf.Bytes()), resp.StatusCode, start)
 		return
 	}
 	// Stream redaction (B3-26 / :798): the verbatim relay copies
@@ -1220,6 +1313,15 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 	// handleChatStream — redactor first, then restorer, so a token
 	// split across chunks still restores.
 	vaultRestorer := guardrails.NewStreamRestorer(s.reversibleVault)
+	// AUD-SEC-002: recover the provider-reported usage from the bytes as they
+	// reach the client (the relay stays byte-for-byte verbatim) and record ONE
+	// ledger row for the relayed spend when the stream ends. Without this,
+	// /v1/messages traffic never landed in the ledger and per-key budgets
+	// could not see it.
+	sniff := relay.NewUsageSniffer(w)
+	defer func() {
+		s.recordRelaySpend(ctx, keyID, target, head.Model, sniff.Usage(), resp.StatusCode, start)
+	}()
 	if flusher, ok := w.(http.Flusher); ok {
 		// Copy in chunks and flush after each, so a streaming SSE
 		// response reaches the client event by event instead of
@@ -1242,7 +1344,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 					break
 				}
 				if safe != "" {
-					if _, werr := w.Write([]byte(safe)); werr != nil {
+					if _, werr := sniff.Write([]byte(safe)); werr != nil {
 						return
 					}
 					// The first byte is out — a BLOCK verdict landing
@@ -1284,7 +1386,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 		}
 		tail += vaultRestorer.Flush()
 		if tail != "" {
-			_, _ = w.Write([]byte(tail))
+			_, _ = sniff.Write([]byte(tail))
 			flusher.Flush()
 		}
 		// Async cut (CHECKLIST 203): the upstream call ended
@@ -1328,7 +1430,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 				break
 			}
 			if safe != "" {
-				if _, werr := w.Write([]byte(safe)); werr != nil {
+				if _, werr := sniff.Write([]byte(safe)); werr != nil {
 					return
 				}
 				asyncRun.MarkDelivered()
@@ -1353,7 +1455,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 	}
 	tail += vaultRestorer.Flush()
 	if tail != "" {
-		_, _ = w.Write([]byte(tail))
+		_, _ = sniff.Write([]byte(tail))
 	}
 	if res, blocked := asyncBlocked(asyncRun); blocked {
 		// No flusher (not a live SSE stream): the terminal frame
