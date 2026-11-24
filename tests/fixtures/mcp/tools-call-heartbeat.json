@@ -27,7 +27,7 @@
       "structuredContent": {
         "audit_log": "disabled",
         "protocol_version": "2025-03-26",
-        "tool_count": 24,
+        "tool_count": 32,
         "uptime_seconds": -1
       }
     }
@@ -43,9 +43,9 @@
       "jsonrpc": "2.0",
       "result.structuredContent.audit_log": "disabled",
       "result.structuredContent.protocol_version": "2025-03-26",
-      "result.structuredContent.tool_count": 24,
+      "result.structuredContent.tool_count": 32,
       "result.structuredContent.uptime_seconds": -1
     }
   },
-  "notes": "heartbeat: liveness snapshot — uptime -1 (no serving loop), 24 announced tools, protocol 2025-03-26, audit log disabled (not wired in the fixture server)."
+  "notes": "heartbeat: tool_count 32 (all tools announced)"
 }
