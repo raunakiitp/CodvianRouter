@@ -246,6 +246,13 @@ func TestAUD_SEC_010BatchInputFileOwnership(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("A using its own input file: status %d, want 200 (%s)", rec.Code, rec.Body.String())
 	}
+	var own struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&own); err == nil && own.ID != "" {
+		// Let the async worker finish before the temp dir is removed.
+		waitBatchStatus(t, srv, own.ID, "completed")
+	}
 }
 
 // TestAUD_SEC_010BatchOutputFileIsOwnerScoped: the batch's output file

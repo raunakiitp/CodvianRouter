@@ -53,8 +53,14 @@ import time
 import urllib.request
 import urllib.error
 
-WORKTREE = os.path.expanduser("~/workspace/codvian-router")
-GO = "/home/hatch/go/bin/go"
+# AUD-TEST-001: the Go toolchain path must be discovered, not hardcoded
+# to one developer's machine ("/home/hatch/go/bin/go"), so the drivers can
+# run anywhere (CI included). CODVIA_ROUTER_WORKTREE / GO_BIN override.
+WORKTREE = os.environ.get(
+    "CODVIA_ROUTER_WORKTREE",
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+)
+GO = os.environ.get("GO_BIN") or shutil.which("go") or "/home/hatch/go/bin/go"
 
 # The one canned reply every mock serves. Fixed on purpose: the
 # drivers assert it verbatim, so a wrong upstream or a dropped

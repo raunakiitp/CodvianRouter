@@ -198,6 +198,12 @@ func TestAUD_SEC_001_CrossKeyBatchIsolation(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("key A get own batch: status %d, want 200 (%s)", rec.Code, rec.Body.String())
 	}
+
+	// Let the async worker reach a terminal state before the test ends:
+	// otherwise it can still write into the temp dir while t.TempDir
+	// cleans up, which fails the test on Windows with "The directory is
+	// not empty." (a harness race, not a product defect).
+	waitBatchStatus(t, srv, created.ID, "completed")
 }
 
 // TestAUD_SEC_001_EmptyOwnerFailClosed: an empty owner is not a wildcard.

@@ -51,7 +51,9 @@ func g21BatchJSONL(t *testing.T, models ...string) string {
 // key and returns the recorder.
 func g21CreateBatchRec(t *testing.T, srv *Server, s *keyBudgetSetup, content string) *httptest.ResponseRecorder {
 	t.Helper()
-	in := seedBatchInput(t, srv, content)
+	// AUD-SEC-010: the batch input file must belong to the calling
+	// key, so the fixture seeds it with the key's own id.
+	in := seedBatchInputOwned(t, srv, s.id, content)
 	body, _ := json.Marshal(map[string]any{
 		"input_file_id": in.ID, "endpoint": "/v1/chat/completions",
 		"completion_window": "24h",

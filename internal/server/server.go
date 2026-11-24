@@ -7278,25 +7278,13 @@ func (s *Server) handleEngineError(w http.ResponseWriter, err error) {
 		}})
 		return
 	}
-	// Any other upstream answer keeps the upstream's own status when it
-	// is a CLIENT error (4xx) — that is truthful and actionable — and
-	// stays the gateway's own 502 for 5xx, 1xx/3xx and unparseable
-	// statuses. The chat surface's documented contract is that an
-	// exhausted chain reports the gateway's upstream-failure signature
-	// (-32603 / 502); relaying an upstream 500 would change that
-	// contract and the client-side failover semantics built on it.
-	var ue *provider.UpstreamError
-	if errors.As(err, &ue) {
-		status := ue.StatusCode
-		if status < 400 || status >= 500 {
-			status = http.StatusBadGateway
-		}
-		if s.recorder != nil {
-			s.recorder.IncUpstreamFailure()
-		}
-		writeUpstreamError(w, status, "upstream rejected the request")
-		return
-	}
+	// AUD-REL-001: a classified 4xx keeps the upstream's own status with
+	// the documented "upstream_error" shape (no JSON-RPC code — the
+	// status IS the code); everything else falls through to
+	// writeUpstreamFailure's 502 + -32603 + "server_error" signature.
+	// This is the pre-existing contract, only widened from
+	// DecisionStop-4xx to any 4xx, so a retryable classification (429)
+	// no longer collapses into 502.
 	if cls := provider.ClassifyError(err, provider.EndpointChatCompletions); cls.Status >= 400 && cls.Status < 500 {
 		if s.recorder != nil {
 			s.recorder.IncUpstreamFailure()
