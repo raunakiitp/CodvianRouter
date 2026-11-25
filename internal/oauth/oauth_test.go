@@ -432,3 +432,80 @@ func TestIssuerTokenExpired(t *testing.T) {
 		t.Error("TokenExpired(garbage): ok = true, want false")
 	}
 }
+
+// TestIssuerRevokeRefreshPersistFailureFailsClosed is the regression
+// for AUD-CODE-012: a refresh-token revocation that cannot be
+// persisted must fail closed — Revoke returns false, the error is
+// logged, and the in-memory state must NOT drop the token (otherwise
+// memory would claim a revocation that a restart silently undoes).
+func TestIssuerRevokeRefreshPersistFailureFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	iss, err := NewIssuer(dir)
+	if err != nil {
+		t.Fatalf("NewIssuer: %v", err)
+	}
+	c := registerPublicClient(t, iss)
+	code, verifier := authorizeFor(t, iss, c)
+	resp, err := iss.ExchangeCode(code, c.ID, c.RedirectURIs[0], verifier, "")
+	if err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+
+	// Capture and silence the persistence-failure log for this test.
+	orig := persistLogf
+	logged := false
+	persistLogf = func(string, ...any) { logged = true }
+	t.Cleanup(func() { persistLogf = orig })
+
+	// Force every subsequent saveLocked to FAIL deterministically:
+	// replace the state FILE with a directory, so the temp write
+	// succeeds but the rename onto the target cannot.
+	statePath := filepath.Join(dir, "oauth.json")
+	if err := os.Remove(statePath); err != nil {
+		t.Fatalf("remove state file: %v", err)
+	}
+	if err := os.Mkdir(statePath, 0o700); err != nil {
+		t.Fatalf("replace state file with a directory: %v", err)
+	}
+
+	if ok := iss.Revoke(resp.RefreshToken); ok {
+		t.Fatal("Revoke returned true although the revocation could not be persisted")
+	}
+	if !logged {
+		t.Fatal("persist failure was not logged")
+	}
+	// Fail closed: memory must NOT claim a revocation a restart would undo.
+	iss.mu.Lock()
+	_, stillPresent := iss.refresh[sha256Hex(resp.RefreshToken)]
+	iss.mu.Unlock()
+	if !stillPresent {
+		t.Fatal("refresh token dropped from memory although the revocation was not persisted")
+	}
+}
+
+// TestIssuerRevokeRefreshTokenPersistsAcrossRestart pins the happy-path
+// durability invariant around the same finding: once Revoke reports
+// success, the revocation survives a restart.
+func TestIssuerRevokeRefreshTokenPersistsAcrossRestart(t *testing.T) {
+	dir := t.TempDir()
+	iss, err := NewIssuer(dir)
+	if err != nil {
+		t.Fatalf("NewIssuer: %v", err)
+	}
+	c := registerPublicClient(t, iss)
+	code, verifier := authorizeFor(t, iss, c)
+	resp, err := iss.ExchangeCode(code, c.ID, c.RedirectURIs[0], verifier, "")
+	if err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+	if !iss.Revoke(resp.RefreshToken) {
+		t.Fatal("Revoke(refresh token): returned false, want true")
+	}
+	iss2, err := NewIssuer(dir)
+	if err != nil {
+		t.Fatalf("NewIssuer (reload): %v", err)
+	}
+	if _, err := iss2.RefreshToken(resp.RefreshToken, c.ID, ""); err == nil {
+		t.Fatal("revoked refresh token came back to life after a restart")
+	}
+}

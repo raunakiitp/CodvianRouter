@@ -1,6 +1,6 @@
 // Gateway-key self status, expiry, regeneration and per-key traffic
 // limits (CHECKLIST 195-196, competitor-sweep P2 gaps — the
-// operator surfaces the reference router/Portkey expose for their keys):
+// operator surfaces comparable gateways expose for their keys):
 //
 //   - GET /v1/me/status — the caller's own key, introspected: id,
 //     fingerprint, created/expiry, spend this period, budget

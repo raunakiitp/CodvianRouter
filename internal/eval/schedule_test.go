@@ -2,6 +2,7 @@ package eval
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -160,5 +161,100 @@ func TestSchedulerConcurrencyBoundAndNoDuplicateRun(t *testing.T) {
 		if r.Status == "" {
 			t.Fatalf("run missing status: %+v", r)
 		}
+	}
+}
+
+// TestStorePersistIsAtomicRename pins the persistence discipline: the
+// store must write a temp file and RENAME it over the target, never
+// rewrite the target in place. An in-place rewrite means a crash
+// mid-write can tear the snapshot and silently disable every schedule
+// on the next Open (AUD-REL-003). A hard link to the committed file is
+// the observable: an atomic rename replaces the directory entry (the
+// link keeps the OLD bytes), an in-place os.WriteFile rewrites the
+// shared inode (the link sees the NEW bytes).
+func TestStorePersistIsAtomicRename(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "eval.json")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Upsert(&Schedule{ID: "a", Every: time.Minute, Enabled: true}); err != nil {
+		t.Fatalf("Upsert 1: %v", err)
+	}
+	link := filepath.Join(dir, "eval.link")
+	if err := os.Link(path, link); err != nil {
+		t.Fatalf("hard-link the committed store: %v", err)
+	}
+	before, err := os.ReadFile(link)
+	if err != nil {
+		t.Fatalf("read link: %v", err)
+	}
+	if err := s.Upsert(&Schedule{ID: "a", Every: time.Minute, Enabled: false}); err != nil {
+		t.Fatalf("Upsert 2: %v", err)
+	}
+	after, err := os.ReadFile(link)
+	if err != nil {
+		t.Fatalf("read link after second persist: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Fatal("eval store persist rewrote the file in place; expected an atomic temp-file + rename (a crash mid-write would tear the snapshot)")
+	}
+	// No temp files may accumulate next to the store.
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.Name() != "eval.json" && e.Name() != "eval.link" {
+			t.Fatalf("unexpected leftover file after persist: %q", e.Name())
+		}
+	}
+	// The committed snapshot is still a complete, decodable store.
+	s2, err := Open(path)
+	if err != nil {
+		t.Fatalf("reopen after atomic persist: %v", err)
+	}
+	if _, ok := s2.Get("a"); !ok {
+		t.Fatal("schedule did not survive the atomic persist")
+	}
+}
+
+// TestSchedulerRecoversPanicInBackground proves a panic in a scheduled
+// run cannot kill the process (AUD-REL-006). NewEngine is invoked
+// OUTSIDE the harness's per-case recover, so a panic there escapes to
+// the run goroutine; without a top-level recover the whole test binary
+// (and, in production, the gateway) would die.
+func TestSchedulerRecoversPanicInBackground(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s := &Scheduler{Store: &Store{schedules: map[string]*Schedule{}}}
+	if err := s.Store.Upsert(&Schedule{ID: "boom", Every: time.Hour, Enabled: true, Suite: "permanent"}); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	recovered := false
+	s.Logf = func(string, ...any) { mu.Lock(); recovered = true; mu.Unlock() }
+	s.NewEngine = func() Engine { panic("engine construction exploded") }
+	s.tick(ctx) // spawns the background run, which panics
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		mu.Lock()
+		got := recovered
+		mu.Unlock()
+		if got {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("panic in background eval run was not recovered/logged")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	// The concurrency slot must have been released during the unwind.
+	s.mu.Lock()
+	inflight := s.inFlight["boom"]
+	s.mu.Unlock()
+	if inflight != 0 {
+		t.Fatalf("in-flight count for the panicked run = %d, want 0", inflight)
 	}
 }

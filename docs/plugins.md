@@ -2,7 +2,7 @@
 
 Codvian Router's plugin system: in-process Go plugins with three hook
 points — pre-request, post-response, provider adapter. Competitor
-context: LiteLLM / Portkey / Kong expose plugin hooks for guardrails,
+context: comparable LLM gateways expose plugin hooks for guardrails,
 transforms, and provider adapters (research-log entries 94, 137, 144);
 this is the same shape, minus the dynamic-loading footgun.
 

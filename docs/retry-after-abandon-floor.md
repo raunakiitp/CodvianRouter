@@ -1,7 +1,7 @@
 # Retry-After abandon rule + floor
 
-CHECKLIST 167–168 (competitor sweep gap; Portkey: Retry-After ≥ 60s
-ends retries for that target; CLIProxyAPI 10s floor, research-log
+CHECKLIST 167–168 (capability gap closed; Retry-After ≥ 60s
+ends retries for that target; 10s floor, research-log
 entry 146). Item 9 already honoured Retry-After — but a poisoned or
 huge value could park a request indefinitely. These two rules bound
 it.

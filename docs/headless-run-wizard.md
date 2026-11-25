@@ -1,6 +1,6 @@
 # Headless mode, `run <cli> --model`, and the first-run wizard
 
-CHECKLIST 197–198 (competitor-sweep P2 gaps — the reference router headless mode
+CHECKLIST 197–198 (capability gaps closed — headless mode
 + `run <cli> --model` onboarding).
 
 ## `serve --headless`

@@ -1,5 +1,5 @@
 // Panic isolation on the request/stream path, server side
-// (CHECKLIST 165-166, Bifrost v2.5.1 parity: a panic in a
+// (CHECKLIST 165-166, upstream-gateway behaviour: a panic in a
 // stream/chunk converter or a hook must never kill the gateway).
 //
 // The engine recovers provider/hook panics itself (see

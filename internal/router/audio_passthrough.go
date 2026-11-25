@@ -393,7 +393,7 @@ func (e *Engine) AudioPassthrough(ctx context.Context, req AudioRequest) (*Audio
 			var res attemptResult
 			aud, res = e.callAudio(ctx, att, req, endpoint)
 			return res
-		})
+		}, true)
 	if err != nil {
 		return nil, err
 	}

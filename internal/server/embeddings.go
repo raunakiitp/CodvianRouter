@@ -1,6 +1,6 @@
 // POST /v1/embeddings and POST /v1/rerank — OpenAI-compatible
 // passthrough (CHECKLIST 171-172; competitor-sweep P1 gap:
-// LiteLLM/Portkey route embeddings and rerank through the same
+// Other gateways route embeddings and rerank through the same
 // gateway, with the same budgets, guardrails and ledger).
 //
 // Design: both calls are routed through the SAME engine as POST

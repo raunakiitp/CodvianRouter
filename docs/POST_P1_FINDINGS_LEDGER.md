@@ -7,6 +7,21 @@
 
 Totals: **80 findings — 2 CRITICAL, 6 HIGH, 22 MEDIUM, 41 LOW, 9 INFO** (AUD-SEC-001 is now FIXED; AUD-SEC-010 was added during the hotfix). Statuses: 77 CONFIRMED, 2 NEEDS MANUAL VERIFICATION (AUD-REL-005, AUD-CFG-005); environment-blocked checks are recorded in the audit doc §17, not as findings.
 
+> **Review-blocker addendum (this branch, after the PR #76 code review).** Four of the resolutions below were found INSUFFICIENT or UNSAFE by review and were fixed again, on evidence, with the reviewer's defects reproduced by test:
+> - **AUD-REL-005** — the first recovery quarantined after ANY open error, so a busy/locked/permission/I-O/disk-full/unsupported-pragma/migration failure would have renamed a VALID ledger and silently started an empty one. Now: quarantine only on positively identified corruption (`PRAGMA quick_check` against a COPY, so the probe cannot mutate sidecars), operational failures leave the database and its sidecars untouched, no-verdict means no quarantine, and a file too large to probe bounded is never quarantined. 13 tests.
+> - **AUD-SEC-002** — the first fix recorded a zero-token, zero-cost row when the provider reported no usage, which left the exact budget bypass the review describes open (the gate reads accrued spend from the same ledger). Now: a conservative, rounded-UP local estimate is charged and PRICED, marked per `LocalEstimatePromptTokens`' documented contract as locally measured, and logged; streams are charged for the bytes actually delivered; one row per request means no double charge. Falsified against the pre-fix behaviour with real output. 6 tests.
+> - **AUD-SEC-010** — owner scoping leaked nothing, but records written before it deserialise with an empty owner and were silently STRANDED. Now: a versioned index (v2, v1 still loads), an admin-scoped forensic listing and reclaim endpoint (`GET /admin/files/legacy`, `POST /admin/files/reclaim`, both TierAlwaysProtected), a refused empty owner, and no cross-key reassignment. Tested against a hand-written pre-change v1 fixture. 7 tests.
+> - **AUD-PERF-001** — the O(1) counter stands; cancellation is now proven, not assumed: a client disconnect cancels the upstream call (the mock records the cancellation), and the relayed path has no retry loop to amplify a non-retryable failure. 2 tests.
+>
+> Status of the delegated remainder:
+> - **AUD-PERF-003 / AUD-PERF-004** — work landed in `3c70aa3` (pooled relay transport keyed by provider + credential fingerprint, reusable nadir transport, request-level token-count memo). Verified on this host: `go build ./...` exit 0, packages provider/tokencount/router `ok`, `TestRelayTargetCarriesPoolKeyFingerprint` and `TestDefaultNadirTransportReusesWarmConnections` pass, and `BenchmarkPoolTransportConcurrentDialReuse` measures **0.0765–0.1000 dials/op** (under one dial per op: connections genuinely reused). The workstream's own before/after narrative had not arrived when this was written and is not asserted.
+> - **AUD-TEST-001** — **PARTIAL, NOT VERIFIED; the failures are now CLASSIFIED as driver rot, not router defects.** Harness made hermetic in `0b31682`; when run by hand against a router built from a pristine `git archive HEAD` snapshot the drivers execute and each driver exits 1 on a small number of stale assertions. Cause, evidenced:
+>   1. `smoke-client-claude-code.py` K2 asserts that `x-api-key` alone returns 401, but P1.3 deliberately made vendor-header keys authenticate (documented in `docs/client-compatibility-matrix.md` and pinned by `TestP13GatewayKeyXApiKeyAuthenticates`), so K2 fails and K5 then observes 2 upstream hits where it expects 1.
+>   2. The trace-recorded checks (claude-code K4, cursor U3, aider A3 — the `attempts=[]` symptom seen here too) fail because `/dashboard/trace` records a success attempt ONLY for tool-call requests; plain chat, `/v1/messages` and streaming legitimately record none.
+>   3. The "unauthenticated → 401" checks (K8/X8/L8/A7) intermittently returned a socket error on Windows and are flagged NOT VERIFIED on Linux.
+>   One observation is still unexplained and is NOT attributed: in this session's runner invocation the upstream-down negative check returned 200 with a fresh response id (`stop_mock` terminates and reaps the child), which is consistent with a reply served from the router's own cache — reconcile that separately from the three causes above.
+>   The CI job that would surface all of this is **BLOCKED**: the workflow file cannot be pushed because the current token has no `workflow` scope (`gho_…`: `gist, read:org, repo`). Expected CI verdict once it can run: **RED** until the drivers are reconciled with current server behaviour — which is exactly the "drivers rot unseen" failure this finding predicted.
+
 ---
 
 ## CRITICAL
@@ -144,8 +159,8 @@ Totals: **80 findings — 2 CRITICAL, 6 HIGH, 22 MEDIUM, 41 LOW, 9 INFO** (AUD-S
 | AUD-TEST-015 | LOW | P3 | Dashboard JS regression tests skip silently when node is absent | `internal/server/dashboard_m10_12_test.go:569` + 3 siblings | `t.Skip("node not on PATH ...")` | fail (not skip) when node is a required prerequisite | no | CONFIRMED |
 | AUD-TEST-016 | INFO | P3 | **Positive:** testing architecture is broad and deep in the risky areas | repo-wide | tenant isolation (`cache/m6_11_property_test.go`, `degrade/m6_11_property_test.go`, `a2a_test.go:195`, `org_test.go:9`), per-dialect auth (`p13`, `p16`), persistence/restart, concurrency/race, 402 streaming name-matches | keep; the gap is CI execution, not coverage | no | CONFIRMED |
 | AUD-TEST-017 | INFO | P3 | The required-check set cannot be verified from the tree | `.github/workflows/*.yml` | branch-protection configuration is a GitHub repo setting, not committed | commit a documented required-check list | no | CONFIRMED |
-| AUD-DOC-001 | MED | P1 | Private competitor parity research is committed to the public repository | `docs/OMNIROUTE_PARITY_MATRIX.md`, `docs/PHASE2_OMNIROUTE_PARITY.md`, `docs/PHASE4_GAP_ROADMAP.md` (30 mentions), + `PHASE1_COMPLETION_LEDGER.md`, `PHASE2_LEDGER.md`, `PHASE3_IMPLEMENTATION_LEDGER.md`, `POST_PHASE2_AUDIT_SUMMARY.md`, `POST_PHASE2_FORENSIC_AUDIT.md` | `git grep -icE "omniroute" -- docs/` → 6, 2, 30, 2, 3, 1, 1, 8 | remove the parity documents from the public tree (or move them to a private location); keep engineering decisions that do not name the competitor | no | CONFIRMED |
-| AUD-DOC-002 | LOW | P2 | Published competitor benchmark comparison table | `docs/BENCHMARK.md:593-595` | `\| Bifrost \| 2.3.2 \| 1.2 ms \| 970 \| 180 MB \| 19 s \|` … `\| Portkey \| 1.15.2 \|` … `\| LiteLLM \| 1.106.2 \|` | keep own measurements; move third-party comparison numbers out of the public tree | no | CONFIRMED |
+| AUD-DOC-001 | MED | P1 | Private competitor parity research is committed to the public repository | 2 competitor-named parity documents, `docs/PHASE4_GAP_ROADMAP.md` (30 mentions), + `PHASE1_COMPLETION_LEDGER.md`, `PHASE2_LEDGER.md`, `PHASE3_IMPLEMENTATION_LEDGER.md`, `POST_PHASE2_AUDIT_SUMMARY.md`, `POST_PHASE2_FORENSIC_AUDIT.md` | case-insensitive `git grep` for the competitor name over `docs/` → 6, 2, 30, 2, 3, 1, 1, 8 | remove the parity documents from the public tree (or move them to a private location); keep engineering decisions that do not name the competitor | no | CONFIRMED |
+| AUD-DOC-002 | LOW | P2 | Published competitor benchmark comparison table | `docs/BENCHMARK.md:589-600` | a five-row third-party gateway table (version / added latency / RPS / idle memory / ready time) plus the paragraph placing Codvian Router against those numbers | keep own measurements; move third-party comparison numbers out of the public tree | no | CONFIRMED |
 | AUD-DOC-003 | LOW | P3 | CLI `usage()` understates `setup` agent support | `cmd/codvian-router/main.go:695+` vs `cmd/codvian-router/setup.go:665` | help lists `codevn; also claude, continue` while `getAgentManager` supports 13 agents | generate the list from the manager | no | CONFIRMED |
 | AUD-DOC-004 | LOW | P3 | Files-store doc says "no upload-size cap" while a 512 MiB cap exists | `internal/files/store.go:31-36` vs `internal/server/files_api.go:109` | `OPEN LIMIT (flagged, not invented): there is no upload-size cap.` | correct the comment (see also AUD-SEC-006) | no | CONFIRMED |
 
@@ -173,3 +188,109 @@ Totals: **80 findings — 2 CRITICAL, 6 HIGH, 22 MEDIUM, 41 LOW, 9 INFO** (AUD-S
 | INFO | 9 | SEC-006, SEC-007, PERF-014..016, CODE-014, TEST-008, TEST-016, TEST-017 |
 
 **P0:** SEC-001, SEC-009 · **P1:** SEC-002, REL-001, PERF-001, PERF-002, API-001, CODE-001, PERF-003, PERF-004, DOC-001 plus the P1-tagged TEST items · **P2/P3:** as tabulated.
+
+---
+
+## POST-P1 REMEDIATION STATUS (branch `post-p1-remediation`)
+
+Recorded after the authorized remediation pass. Full narrative, falsification evidence and the verification report:
+`docs/POST_P1_REMEDIATION_REPORT.md`.
+
+| ID | Sev | Status now | Fix / evidence |
+| --- | --- | --- | --- |
+| AUD-SEC-001 | CRITICAL | FIXED (PR #75, `e75a669`) | unchanged; regression tests re-verified |
+| AUD-SEC-009 | CRITICAL | **BLOCKED EXTERNAL** | token is in the local git remote config, not in the repo; owner-side rotation required |
+| AUD-SEC-010 | MEDIUM | **FIXED** | owner column + owner-scoped store/API/batch paths; 7 tests, falsified by neutering the visibility rule (`73c369d`) | → **EXTENDED** after review: legacy (pre-scoping) records needed an explicit, admin-gated migration, not just scoping.
+| AUD-SEC-002 | HIGH | **FIXED** | verbatim relay records exactly one honest ledger row; 11 tests; 0 rows → 1 row with per-key spend (`83b0555`) | → **RE-OPENED AND RE-FIXED** after review: the first row for an unreported usage was zero-token/zero-cost, which is the budget bypass. Now a conservative priced estimate.
+| AUD-SEC-003 | LOW | **FIXED** | 8 unbounded `json.NewDecoder(r.Body)` sites now use `maxAdminJSONBody`; falsified (`4fa1fc2`) |
+| AUD-SEC-004/005/006/007 | LOW/INFO | OPEN | not attempted this pass |
+| AUD-REL-001 | HIGH | **FIXED** | upstream 429/quota keep their status + `Retry-After`; internal limits stay distinct; 10 tests (`c218f63`) |
+| AUD-REL-002 | MEDIUM | OPEN | async ledger batch retry not attempted |
+| AUD-REL-003 | MEDIUM | **FIXED** (both halves) | eval + org stores write temp → fsync → rename → fsync dir (`05618c2`); the scheduler-start store failure is now logged loudly instead of a silent return (`internal/server/eval_schedules_api.go`) |
+| AUD-REL-004 | MEDIUM | **FIXED** | cache DSN gets `busy_timeout(5000)` + `journal_mode(WAL)` (`3596f39`) |
+| AUD-REL-005 | MEDIUM | **FIXED** | runtime repro confirmed the fatal startup; `OpenWithRecovery` quarantines the unusable file (`<path>.corrupt-<unix>`, preserved byte-for-byte, sidecars too), logs it and opens a fresh ledger; environmental failures stay fatal; 4 tests | → **RE-OPENED AND RE-FIXED** after review: the first recovery quarantined on ANY open error (a valid ledger could be renamed for a transient lock). Now positive corruption only.
+| AUD-REL-006 | MEDIUM | **FIXED** (both halves) | eval scheduler + webhook delivery goroutines recover and log (`05618c2`); the server-side scheduler loop goroutine does too (`internal/server/eval_schedules_api.go`) |
+| AUD-PERF-001 | HIGH | **FIXED** | O(1) stream counter; live retention 22.4 MB → 68 KiB for an 8 MiB stream (`14c42e6`) | → **EXTENDED**: cancellation (client disconnect) and no-retry-amplification are now proven by test.
+| AUD-PERF-002 | HIGH | **FIXED** | separate ledger reader pool (WAL + busy_timeout); `read_pool_test.go` proves `GetBudget`/`CheckBudgetOrError` return while a write transaction is open (they blocked >2s before). An A/B on this host found **no reproducible** single-thread latency regression (GetBudgetMiss a wash, GetKeyBudgetMiss faster with the pool, CheckBudgetOrErrorMiss inside the host's ±50% noise band) — an earlier 16,057→29,030 ns/op note was measured mid-rewrite and is withdrawn. Existing ledger files open in WAL |
+| AUD-API-001 | LOW | **FIXED** | Anthropic error envelope on every `/v1/messages*` error path incl. auth; 3 tests, falsified (`c218f63`) |
+| AUD-CODE-001 | LOW | **FIXED** | disable/enable/revoke roll back and answer 500 when the config write fails; 5 tests, falsified (`1996cb7`) |
+| AUD-CODE-002 | LOW | **FIXED** | 4 handlers encode before committing the status (`14c42e6`) |
+| AUD-CODE-012 | MEDIUM | **FIXED** (all sites) | `Revoke` fails closed (`05618c2`); `DeleteClient`, refresh rotation and expired-token removal now fail closed / log too; 5 tests. STILL OPEN in the same class: the JWT `jti` denylist is memory-only, so a revoked access token is accepted again after a restart until expiry |
+| AUD-DOC-001 | MEDIUM | **FIXED** | owner-authorized public-document hygiene: the 2 competitor-named parity documents deleted; the 126-row competitor feature-parity matrix, its classification scale and its totals removed from `docs/PHASE4_GAP_ROADMAP.md` (gap lists, Phase 4 roadmap, acceptance criteria, dependency graph and out-of-scope decisions kept); the competitor-named passages in `PHASE1_COMPLETION_LEDGER.md`, `PHASE2_LEDGER.md`, `PHASE3_IMPLEMENTATION_LEDGER.md`, `POST_PHASE2_AUDIT_SUMMARY.md` and `POST_PHASE2_FORENSIC_AUDIT.md` rewritten generically; no competitor name remains under `docs/` |
+| AUD-DOC-002 | LOW | **FIXED** | owner-authorized: the third-party gateway comparison table and the competitive placement paragraph were removed from `docs/BENCHMARK.md`; the Geekflare *targets* and our own measurements are kept |
+| AUD-DOC-004 | LOW | **FIXED** | stale “no upload-size cap” comment corrected to the real 512 MiB cap + the open quota gap (`4fa1fc2`) |
+| AUD-TEST-001 | LOW | **PARTIALLY FIXED** | the hardcoded `/home/hatch/go/bin/go` and `~/workspace/codvian-router` are replaced by discovery (`shutil.which("go")`, repo root, `GO_BIN`/`CODVIA_ROUTER_WORKTREE` overrides); the CI job that runs the drivers is still open (`4a9f397`) |
+| AUD-TEST-002/003/011 | LOW | OPEN | CI wiring / flaky-ratio items not attempted this pass |
+| all other ledger items | LOW/MED/INFO | OPEN | unchanged, original evidence stands |
+
+Ledger totals after this pass: **15 findings resolved** (14 here + AUD-SEC-001 previously), 1 blocked external,
+0 awaiting an authorization decision (AUD-DOC-001 and AUD-DOC-002 were authorized and fixed), 1 partially fixed (AUD-TEST-001: the hardcoded Go path is gone, the CI
+wiring is not), 1 new sub-item recorded open (OAuth jti denylist memory-only), 60 still open.
+
+### AUD-SEC-011 — Format-valid gateway keys published in benchmark evidence — **FIXED (values redacted); LIVENESS NEEDS OWNER VERIFICATION**
+- **Sev/Pri:** HIGH / P0 · **Category:** Security / secret in published material · **RT:** yes (scan)
+- **Location:** `docs/benchmark-2026-11-20-q1.json`, `docs/benchmark-2026-11-20-q2.json` (one distinct value per file, repeated 4x, different between the two files)
+- **Evidence:** each value matched the router's own issued-key shape exactly — `internal/config/gatewaykey.go:8` documents the format as `crk_` + 32 characters, and `GatewayKeyPrefix = "crk_"` (`:196`) with `raw := GatewayKeyPrefix + secret` (`:245`). Both bodies were 32 characters with high uniqueness (26 and 24 distinct characters of 32), i.e. issued-looking, not placeholder-looking, and the two files share no value — consistent with a key minted for each benchmark run. Found by scanning every tracked file for credential shapes (gh/OAuth/AWS/`sk-`/`crk_`/Slack/PEM); this was the only class outside `*_test.go` fixtures.
+- **Impact:** if either key was minted by a deployment that still has it registered, it is a usable credential for that instance, published in a public repository. The benchmark documents are evidence of measured performance, which is why the values were replaced rather than the files. TEST-*: a scan of tracked files for credential shapes is the regression test (the ledger's own hygiene check below).
+- **Resolution:** all 8 occurrences replaced with `crk_REDACTED-IN-PUBLIC-EVIDENCE`; both files re-validated as JSON with their measurements intact (`docs/PHASE4_BENCHMARK_REPORT.md` is the only referring document and cites the numbers, not the key). **Owner action:** if either value was issued by anything other than a throwaway local benchmark boot, revoke it in that instance's key list — this cannot be established from the repository.
+- **Left as-is, flagged for confirmation:** several `sk-`/AKIA-shaped strings inside `internal/guardrails/guardrails_test.go`, `internal/guardrails/token_shapes_test.go`, `internal/provider/client_test.go` and `internal/routetrace/routetrace_test.go`. Every one lives in a file whose purpose is credential-shape detection and redaction, and the shapes are fixtures (`EXAMPLE`/`FAKE` markers or repeated characters). They are NOT claimed to be safe: if any was ever a real provider key, it must be revoked. No value was printed.
+- **Status:** hygiene fix applied; liveness question is owner-side and open.
+
+**AUD-DOC-001/002 completion note (post-hygiene):** the two competitor-named parity documents are deleted and the
+competitor-named feature clusters and behaviour citations are neutralised across `docs/`, `CHECKLIST.md`, `ROADMAP.md`
+and code comments. Deliberately KEPT, and disclosed rather than silently left: (1) supply-chain incident citations
+(the 2026 gateway compromise and the published-CVE lesson) in `CHECKLIST.md`, `docs/RELEASE-*` and the release
+workflow — a security incident cannot be cited without naming the software, and the audit's own precision note treats
+these as legitimate engineering content; (2) `docs/GOAL.md`, which self-declares "never edited; copied verbatim from
+the master prompt"; (3) internal `parity tracker` references with no competitor name (generic private-tooling
+plumbing in ~100 source comments and `scripts/parity.sh`); (4) provider-catalog entries where the name is a real
+integrated upstream provider (`internal/catalog`, `internal/modelsync`, `internal/config`), not parity tracking.
+`git grep -inE "omniroute|cheaper-inference"` over the tree is empty.
+
+---
+
+# FINAL RECONCILIATION (authoritative — supersedes the status tables above)
+
+Reconciled line by line against the current source on `post-p1-remediation`, not against earlier prose. Where an
+earlier table disagrees with this section, **this section is correct**; the disagreements are listed at the end.
+
+**Totals: 81 findings** (the original 80 plus AUD-SEC-011, discovered during this campaign) — 2 CRITICAL, **7 HIGH**
+(AUD-SEC-011 added), 22 MEDIUM, 41 LOW, 9 INFO.
+
+## P0 / P1 status, with the evidence that was actually checked
+
+| Finding | Sev | Status | Evidence checked in the current source |
+|---|---|---|---|
+| AUD-SEC-001 | CRIT | **FIXED** | `callerKeyID` resolves via `requestKey` (Bearer/X-Api-Key/X-Goog-Api-Key); `keyPolicyAllows` fails closed; `batchVisible` matches owner exactly; six batch routes route through `batchCaller`. 4 tests pass. |
+| AUD-SEC-002 | HIGH | **FIXED** | one relayed-spend row per request; missing usage charged a conservative priced estimate (`LocalEstimatePromptTokens`); 402/429 once the cap is passed. 6 + 11 tests + falsification. |
+| AUD-SEC-009 | CRIT | **PARTIAL — owner-side only** | `remote.origin.url` is now `https://github.com/raunakiitp/CodvianRouter.git` with no userinfo; pushes authenticate via `gh auth git-credential`. Remaining: revoke the exposed token at GitHub — not verifiable from the repo. |
+| AUD-SEC-010 | MED | **FIXED** | owner-scoped store + versioned index + admin-gated `LegacyUnowned`/`ReclaimLegacy`; empty owner refused; no cross-key reassignment. 7 tests on a real v1 fixture. |
+| AUD-SEC-011 | HIGH | **FIXED (hygiene); liveness owner-side** | issued-format gateway keys redacted from two published benchmark documents; both re-validated as JSON. |
+| AUD-REL-001 | HIGH | **FIXED** | 429 + upstream `Retry-After` (zero clamps to 1s), quota clamped to 402, upstream 4xx keeps its status. 7 tests. |
+| AUD-REL-005 | MED | **FIXED** | quarantine only on positively identified corruption, probed on a copy; operational failures leave DB and sidecars untouched. 13 tests. |
+| AUD-PERF-001 | HIGH | **FIXED** | O(1) stream counter + proven client-disconnect cancellation + single-attempt no-retry. 5 tests + benchmark. |
+| AUD-PERF-002 | HIGH | **FIXED** | separate reader pool (`l.rdb`) with the single writer on `l.db`; reader-not-blocked tests. Latency-regression claim withdrawn earlier. |
+| AUD-PERF-003 | MED | **FIXED** (previously under-recorded as OPEN) | `Registry.PooledTransport` + `RelayTarget.KeyFingerprint`; relay and Nadir reuse the warm pool; benchmark under one dial/op; connection-count tests. |
+| AUD-PERF-004 | MED | **FIXED** (previously under-recorded as OPEN) | per-request `RequestMemo`; compute-count tests (1 across 5 calls, 0 on hit); 11013 → 46.87 ns/op. |
+| AUD-API-001 | **HIGH** (was mislabelled LOW in two tables) | **FIXED** | all handler error sites use `writeAnthropicError`, and the readiness gate — the residual found in this reconciliation — now does too; envelope asserted for `/v1/messages`. |
+| AUD-CODE-001 | **HIGH** (was mislabelled LOW in two tables) | **FIXED** | persist-before-success with in-memory rollback and 500 on failure. 5 tests. |
+| AUD-DOC-001/002 | MED | **FIXED** (with documented exceptions) | parity documents deleted; competitor-named clusters and citations neutralised across docs, CHECKLIST, ROADMAP and code comments; `git grep` for the competitor names is empty. Kept and disclosed: supply-chain incident citations, `docs/GOAL.md`, competitor-free parity tooling, real provider-catalog entries. |
+| AUD-TEST-001 | MED/P1 | **PARTIAL** | drivers run hermetically and execute; the vendor-header auth and trace expectations are corrected and the trace-pollution defect is fixed. **Not closed:** `A7` still returns `status=0 [WinError 10054]` on this host despite bounded retries, and the CI workflow is unpushed (no `workflow` scope). Not claimed green. | A hand-run router (built from this branch, isolated config, `init --key-file`) answers an unauthenticated `POST /v1/chat/completions` with **401** and `{"error":{"message":"invalid gateway key",...}}`; a bogus key gives 401 and a valid key 502 (no upstream configured) - so the A7 `status=0` is a Windows socket artefact in the harness, not a router defect. The harness now sends `Connection: close`; the CI run on Linux is the arbiter.
+| AUD-TEST-002 | MED/P1 | **FIXED** | `scripts/ci.sh` now builds and tests `-tags otel`; verified locally (build 0, package ok). |
+| AUD-TEST-003 | MED/P1 | **OPEN — BLOCKED on workflow scope** | `.github/workflows/supply-chain.yml:28` still runs `govulncheck … || true` (a gate that can never fail) and installs `@latest` unpinned. The fix is written but cannot be pushed without the `workflow` scope; suppressing it was not an option under the project rules. |
+
+## Earlier tables that this section corrects
+
+- AUD-API-001 and AUD-CODE-001 are **HIGH**; two tables labelled them LOW.
+- AUD-SEC-010 is **MEDIUM** and must not be counted among the HIGH fixes.
+- AUD-PERF-003 and AUD-PERF-004 were listed OPEN by a catch-all row while the code and tests were already in place.
+- AUD-SEC-009 is **PARTIAL**, not wholly external: the local remote-URL half is fixed in this branch.
+- AUD-SEC-001's "seven batch routes" is six (`server.go:1917-1922`).
+
+### AUD-SEC-012 — A reachable vulnerable dependency was invisible because the vulnerability gate could never fail — **FIXED**
+- **Sev/Pri:** HIGH / P0 · **Category:** Security / supply chain · **RT:** yes (the gate itself, now enforced)
+- **Location:** `github.com/gorilla/websocket@v1.5.3` (`go.mod`), reachable at `internal/server/server.go:5848` (`handleWebSocketChat` → `websocket.Upgrader.Upgrade`), `:5853` (`websocket.Conn.Close`), `:6005` (`runWSChatStream` → `websocket.Conn.WriteMessage`).
+- **Evidence:** `govulncheck ./...` reported **GO-2026-6278** ("Gorilla WebSocket Uses Cryptographically Weak PRNG for WebSocket Mask Key"), *"Your code is affected by 1 vulnerability from 1 module"*, with four reachability traces through the WebSocket chat path. It surfaced only after AUD-TEST-003 removed `|| true`: the old step exited 0 on a report full of reachable findings, so this had never been seen. `Fixed in: github.com/gorilla/websocket@v1.5.4-0.20240701034025-d67f41855da4`.
+- **Impact:** the WebSocket mask key is generated with a weak PRNG; masking is what prevents a proxy from predicting frame contents, so a predictable mask weakens the confidentiality of the WebSocket chat surface.
+- **Resolution:** the module is upgraded to the fixed version (`go mod tidy` moves it out of the indirect block, so the direct dependency is now explicit). `go build ./...` exit 0 and the WebSocket/chat tests in `internal/server` pass. The upstream fix is a pseudo-version because no tagged release carries it yet.
+- **Status:** FIXED, verified by re-running the pinned scanner (`govulncheck@v1.10.0`) after the upgrade.

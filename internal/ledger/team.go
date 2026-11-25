@@ -199,7 +199,7 @@ func (l *Ledger) SetTeam(ctx context.Context, team Team) error {
 
 // GetTeam returns the team by id, or (nil, nil) when it does not exist.
 func (l *Ledger) GetTeam(ctx context.Context, id string) (*Team, error) {
-	t, err := scanTeamRow(l.db.QueryRowContext(ctx, `
+	t, err := scanTeamRow(l.rdb.QueryRowContext(ctx, `
 		SELECT id, name, description, status, max_budget_usd, budget_duration,
 		       budget_reset_at_ms, created_at_ms, updated_at_ms, archived_at_ms
 		FROM teams WHERE id = ?`, id))
@@ -214,7 +214,7 @@ func (l *Ledger) GetTeam(ctx context.Context, id string) (*Team, error) {
 
 // ListTeams returns all teams in name order.
 func (l *Ledger) ListTeams(ctx context.Context) ([]Team, error) {
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT id, name, description, status, max_budget_usd, budget_duration,
 		       budget_reset_at_ms, created_at_ms, updated_at_ms, archived_at_ms
 		FROM teams ORDER BY name`)
@@ -327,7 +327,7 @@ func (l *Ledger) UnassignKeyFromTeam(ctx context.Context, keyID string, now time
 // ActiveTeamForKey returns the key's currently active team, or
 // (nil, nil) when the key belongs to no team.
 func (l *Ledger) ActiveTeamForKey(ctx context.Context, keyID string) (*Team, error) {
-	t, err := scanTeamRow(l.db.QueryRowContext(ctx, `
+	t, err := scanTeamRow(l.rdb.QueryRowContext(ctx, `
 		SELECT t.id, t.name, t.description, t.status, t.max_budget_usd, t.budget_duration,
 		       t.budget_reset_at_ms, t.created_at_ms, t.updated_at_ms, t.archived_at_ms
 		FROM key_team_bindings b JOIN teams t ON t.id = b.team_id
@@ -347,7 +347,7 @@ func (l *Ledger) ActiveTeamForKey(ctx context.Context, keyID string) (*Team, err
 // attributes historical usage to the right team after a reassignment.
 func (l *Ledger) TeamIDForKeyAt(ctx context.Context, keyID string, at time.Time) (string, error) {
 	var teamID sql.NullString
-	err := l.db.QueryRowContext(ctx, `
+	err := l.rdb.QueryRowContext(ctx, `
 		SELECT team_id FROM key_team_bindings
 		WHERE gateway_key_id = ? AND valid_from_ms <= ? AND (valid_to_ms IS NULL OR valid_to_ms > ?)
 		ORDER BY valid_from_ms DESC LIMIT 1`,
@@ -364,7 +364,7 @@ func (l *Ledger) TeamIDForKeyAt(ctx context.Context, keyID string, at time.Time)
 // TeamMembers returns the keys currently assigned to a team, in key
 // id order.
 func (l *Ledger) TeamMembers(ctx context.Context, teamID string) ([]TeamMember, error) {
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT gateway_key_id, valid_from_ms FROM key_team_bindings
 		WHERE team_id = ? AND valid_to_ms IS NULL ORDER BY gateway_key_id`, teamID)
 	if err != nil {
@@ -434,7 +434,7 @@ func TeamWindow(team Team) (start, end time.Time) {
 // usage rows in a window: successful, unshared rows the team owned
 // when they were spent.
 func (l *Ledger) UsageSlicesForTeam(ctx context.Context, teamID string, start, end time.Time) ([]ModelUsageSlice, error) {
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT provider, model, COUNT(*),
 		       COALESCE(SUM(prompt_tokens), 0),
 		       COALESCE(SUM(completion_tokens), 0),
@@ -481,7 +481,7 @@ type TeamMemberUsageSlice struct {
 // TeamMemberSlices returns the per-key usage breakdown for a team's
 // window, in key id order.
 func (l *Ledger) TeamMemberSlices(ctx context.Context, teamID string, start, end time.Time) ([]TeamMemberUsageSlice, error) {
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT gateway_key_id, provider, model, COUNT(*),
 		       COALESCE(SUM(prompt_tokens), 0),
 		       COALESCE(SUM(completion_tokens), 0),

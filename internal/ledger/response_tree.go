@@ -74,7 +74,7 @@ func (l *Ledger) ResponseTreeNode(id string) (ResponseTreeNode, bool, error) {
 		return n, false, fmt.Errorf("ledger: no database")
 	}
 	var stream int
-	err := l.db.QueryRow(`SELECT id, parent_id, model, provider, status,
+	err := l.rdb.QueryRow(`SELECT id, parent_id, model, provider, status,
 		created_at, stream FROM response_tree WHERE id = ?`, id).
 		Scan(&n.ID, &n.ParentID, &n.Model, &n.Provider, &n.Status, &n.CreatedAt, &stream)
 	if err == sql.ErrNoRows {
@@ -100,7 +100,7 @@ func (l *Ledger) ResponseTreeChildren(parentID string) ([]ResponseTreeNode, erro
 	if l == nil || l.db == nil {
 		return nil, fmt.Errorf("ledger: no database")
 	}
-	rows, err := l.db.Query(`SELECT id, parent_id, model, provider, status,
+	rows, err := l.rdb.Query(`SELECT id, parent_id, model, provider, status,
 		created_at, stream FROM response_tree WHERE parent_id = ?
 		ORDER BY created_at ASC, rowid ASC`, parentID)
 	if err != nil {
@@ -121,7 +121,7 @@ func (l *Ledger) ResponseTreeAll(limit int) ([]ResponseTreeNode, error) {
 	if limit <= 0 {
 		limit = 500
 	}
-	rows, err := l.db.Query(`SELECT id, parent_id, model, provider, status,
+	rows, err := l.rdb.Query(`SELECT id, parent_id, model, provider, status,
 		created_at, stream FROM response_tree
 		ORDER BY created_at ASC, rowid ASC LIMIT ?`, limit)
 	if err != nil {

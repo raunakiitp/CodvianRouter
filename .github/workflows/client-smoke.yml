@@ -1,0 +1,50 @@
+# Codvian Router — client-protocol smoke gate (AUD-TEST-001).
+#
+# Runs scripts/run-client-smokes.sh, which runs the five M8.1
+# agentic-client protocol drivers
+# (scripts/smoke-client-{claude-code,codex,cursor,cline,aider}.py)
+# against a router each driver boots itself. Scripted protocol smokes
+# ONLY: no vendor CLI is launched, and no network or provider credential
+# is used — every upstream is a localhost mock. A green run proves each
+# client's dialect (Anthropic Messages, OpenAI Responses, OpenAI chat
+# with tool calls) round-trips through Codvian.
+#
+# Before this workflow existed the drivers ran nowhere (see
+# docs/POST_P1_FINDINGS_LEDGER.md, AUD-TEST-001); the P1 report's claim
+# that they "run in CI" was unsupported by the repo. This workflow is
+# read-only and needs no secrets.
+#
+# PINNING POLICY (mirrors ci.yml / release.yml): every `uses:` entry is
+# pinned to the full 40-char commit SHA of a tagged release (with the
+# human-readable version in a comment); the runner (ubuntu-24.04) and the
+# Go patch (1.27.4) match ci.yml. To bump a pin, resolve the new tag's
+# commit SHA with
+#   git ls-remote https://github.com/<owner>/<repo>.git refs/tags/<tag>
+# (annotated tags need the `^{}` dereference) and update the SHA + the
+# version comment together.
+
+name: client-smoke
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  client-smoke:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.27.4"
+          cache: true
+
+      - name: Run the five client-protocol smoke drivers
+        run: bash scripts/run-client-smokes.sh

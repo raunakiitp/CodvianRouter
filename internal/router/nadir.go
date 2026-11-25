@@ -56,6 +56,7 @@ import (
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/autorouter"
+	"github.com/raunakiitp/codvian-router/internal/provider"
 )
 
 // Nadir decision-call constants (the reference router's documented values,
@@ -94,13 +95,42 @@ func nadirCooldownKey(baseURL string) string {
 // bounds the call. It returns the HTTP status and response body.
 type NadirTransport func(ctx context.Context, url string, body []byte, apiKey string, timeout time.Duration) (statusCode int, respBody []byte, err error)
 
+// nadirHTTPTransport is the process-wide transport the default Nadir
+// decision POST shares, so bursty decision calls to one operator
+// endpoint reuse warm connections instead of re-dialing TCP+TLS once
+// http.DefaultTransport's MaxIdleConnsPerHost=2 is exceeded
+// (AUD-PERF-003). The Nadir endpoint is an operator-configured URL, not
+// a catalog provider, so it cannot address the provider pool manager
+// (Registry.PooledTransport); it is sized by the SAME Little's Law
+// defaults the pools use — provider.PoolSizeForRate over the provider
+// pool's expected λ × W — so the reuse behaviour matches a provider
+// pool of the same shape.
+var nadirHTTPTransport = func() *http.Transport {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	size := provider.PoolSizeForRate(
+		provider.DefaultPoolExpectedRPS,
+		time.Duration(provider.DefaultPoolExpectedLatencyMs)*time.Millisecond,
+		provider.DefaultPoolMinConns,
+		provider.DefaultPoolMaxConns,
+	)
+	tr.MaxIdleConnsPerHost = size
+	tr.MaxIdleConns = size * 4
+	if tr.MaxIdleConns < 100 {
+		tr.MaxIdleConns = 100
+	}
+	tr.IdleConnTimeout = 90 * time.Second
+	return tr
+}()
+
 // defaultNadirTransport is the production NadirTransport: one
 // POST with a client timeout, Content-Type application/json, and
 // X-API-Key only when a key is configured. The response body is
 // capped at 1 MiB — a decision response is small, and an
-// unbounded read would let a hostile endpoint exhaust memory.
+// unbounded read would let a hostile endpoint exhaust memory. The
+// client uses the shared warm transport (nadirHTTPTransport) so a
+// burst of decisions reuses connections (AUD-PERF-003).
 func defaultNadirTransport(ctx context.Context, url string, body []byte, apiKey string, timeout time.Duration) (int, []byte, error) {
-	client := &http.Client{Timeout: timeout}
+	client := &http.Client{Timeout: timeout, Transport: nadirHTTPTransport}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return 0, nil, err

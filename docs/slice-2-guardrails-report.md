@@ -21,7 +21,7 @@ server wiring or the dashboard.
   ignore/disregard/forget previous instructions, "you are now", reveal/print
   system prompt, override/bypass safety, jailbreak, DAN mode,
   "new instructions:".
-- **Defaults (the Portkey entry-150 / LiteLLM entry-152 fix)**: `Redact()`
+- **Defaults (research-log entries 150 / 152 fix)**: `Redact()`
   always redacts, whatever the toggles say — log redaction is the default,
   not an env var or a setting the operator has to discover. Blocking is
   OPT-IN per guardrail (`BlockPII` / `BlockSecrets` / `BlockInjection`, all
@@ -191,7 +191,7 @@ no Slice-2 change is needed for those failures.
 
 | # | Feature | Built | Verified |
 |---|---|---|---|
-| 71 | Guardrails (backend): plugin-style guardrail stage `internal/guardrails` (PII redaction, secrets redaction, prompt-injection detection) wired into the request path (checked before any provider is dialled; blocked → 400, never reaches engine/ledger/fallback), into every server log line, and into the spend ledger (`RecordUsage` redacts stored identifiers); log + spend-log redaction ALWAYS ON by default (Portkey entry 150 / LiteLLM entry 152 fix), blocking opt-in per guardrail; `guardrails` config block seeds blocking at startup; counters on `/metrics` | ✅ | ✅ |
+| 71 | Guardrails (backend): plugin-style guardrail stage `internal/guardrails` (PII redaction, secrets redaction, prompt-injection detection) wired into the request path (checked before any provider is dialled; blocked → 400, never reaches engine/ledger/fallback), into every server log line, and into the spend ledger (`RecordUsage` redacts stored identifiers); log + spend-log redaction ALWAYS ON by default (research-log entries 150 / 152 fix), blocking opt-in per guardrail; `guardrails` config block seeds blocking at startup; counters on `/metrics` | ✅ | ✅ |
 | 72 | Guardrails (dashboard, same slice): Guardrails section in the approved design system (dark pure black / light pure white, borderless 26–28px cards, dark-lime palette, no Playground) — KPI tiles (checked / redactions / blocked), three blocking toggles wired to real endpoints `GET`/`POST /dashboard/guardrails`, redactions-by-kind + redaction-events view (redacted previews only) with honest empty state; refreshed on open + every 5 s + Refresh button; `node --check` on the dashboard JS clean | ✅ | ✅ |
 
 ## Honest limits

@@ -1,6 +1,6 @@
 // Log redaction, default-on (research-log entries 150/152).
 //
-// Portkey 1.15.2 leaked prompts AND provider keys to an open log
+// a 1.15.2 gateway release leaked prompts AND provider keys to an open log
 // stream unless NODE_ENV=production; LiteLLM's spend-log token
 // redaction is OFF by default. Codvian Router must never have this
 // class of bug, so redaction here does not depend on any call site

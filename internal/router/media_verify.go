@@ -176,7 +176,7 @@ func (e *Engine) MediaPassthrough(ctx context.Context, req provider.MediaPassthr
 			var res attemptResult
 			out, res = e.callMedia(ctx, att, req)
 			return res
-		})
+		}, true)
 	if err != nil {
 		return nil, err
 	}

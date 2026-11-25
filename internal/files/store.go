@@ -23,15 +23,14 @@
 // (assistants_output, batch_output, fine-tune-results) are
 // server-generated only and are NOT accepted on upload.
 //
-// OPEN LIMIT (flagged, not invented): there is no upload-size cap.
-// No generic file-upload size limit exists anywhere in this
-// codebase (the only upload cap, dbImportMaxBytes 10 MiB in
-// internal/server/dbimport.go, is specific to DB export files and
-// was not copied here — copying it would invent a files limit).
-// Uploads stream to a temp file on disk rather than memory, so an
-// upload is bounded by disk space, not RAM; a real cap (e.g. the
-// 200 MiB OpenAI Batch limit, or a per-purpose limit) is a
-// coordinator decision for M8.8 or later.
+// UPLOAD CAP (corrected — AUD-DOC-004): an upload IS capped, at
+// filesMaxUploadBytes = 512 MiB per file, enforced by the HTTP layer
+// before the body reaches this store (internal/server/files_api.go).
+// The previous text here claimed ""there is no upload-size cap""; that
+// was stale and wrong. Uploads stream to a temp file on disk rather
+// than memory, so within the cap the cost is disk, not RAM. Still
+// open: there is no AGGREGATE or per-key disk quota (AUD-SEC-006), so
+// one key can fill the disk with many individually-legal uploads.
 package files
 
 import (
@@ -79,6 +78,25 @@ type File struct {
 	Filename  string `json:"filename"`
 	Purpose   string `json:"purpose"`
 	Status    string `json:"status"`
+	// OwnerKeyID is the gateway key that uploaded the file
+	// (AUD-SEC-010). "" means the file is unowned — uploaded while
+	// the deployment had no key identity (auth-relaxed), or created
+	// by a server-generated path before ownership was recorded. An
+	// unowned file is visible ONLY to an unowned caller, exactly like
+	// a batch record: an empty owner is never a wildcard.
+	OwnerKeyID string `json:"owner_key_id,omitempty"`
+}
+
+// visibleTo reports whether a file may be exposed to callerID.
+//
+// An IDENTIFIED caller sees only the files it owns; an UNIDENTIFIED
+// caller sees only unowned files. Neither direction is a wildcard
+// (AUD-SEC-010, mirroring batchVisible after AUD-SEC-001).
+func visibleTo(f File, callerID string) bool {
+	if callerID == "" {
+		return f.OwnerKeyID == ""
+	}
+	return f.OwnerKeyID == callerID
 }
 
 var (
@@ -146,6 +164,11 @@ func SanitizeFilename(name string) (string, error) {
 type Store struct {
 	root string
 	mu   sync.Mutex
+	// legacyIndex records that the index last read was in the
+	// pre-ownership v1 format (a bare array). The caller logs it once so
+	// unowned legacy records are never invisible to the OPERATOR, only
+	// to unauthenticated callers (AUD-SEC-010).
+	legacyIndex bool
 }
 
 // New returns a store rooted at dir. The directory (0700, like the
@@ -237,6 +260,19 @@ func (s *Store) contentPath(id string) string {
 	return filepath.Join(s.root, id)
 }
 
+// indexEnvelope is the persisted index format from v2 on. The v1 format
+// was a bare JSON array of File, which had no room for a format marker
+// and (before AUD-SEC-010) no owner field at all. Loading accepts BOTH;
+// saving always writes v2. The marker is what lets an operator (and a
+// test) tell a pre-ownership index from a current one.
+type indexEnvelope struct {
+	Version int    `json:"version"`
+	Files   []File `json:"files"`
+}
+
+// indexVersion is the format saveIndexLocked writes.
+const indexVersion = 2
+
 // loadIndexLocked reads the index; a missing index is an empty
 // store, not an error. A corrupt index is an error — silently
 // dropping metadata would orphan content files.
@@ -248,21 +284,118 @@ func (s *Store) loadIndexLocked() ([]File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("files: read index: %w", err)
 	}
-	var idx []File
-	if err := json.Unmarshal(raw, &idx); err != nil {
+	var env indexEnvelope
+	if err := json.Unmarshal(raw, &env); err == nil && env.Version > 0 {
+		s.legacyIndex = env.Version < indexVersion
+		return env.Files, nil
+	}
+	// Either the v1 bare array, or something genuinely unreadable.
+	var legacy []File
+	if err := json.Unmarshal(raw, &legacy); err != nil {
 		return nil, fmt.Errorf("files: corrupt index %s: %w", s.indexPath(), err)
 	}
-	return idx, nil
+	s.legacyIndex = true
+	return legacy, nil
+}
+
+// legacyIndexLoaded reports whether the index on disk predates ownership
+// scoping (a v1 bare array) — the caller logs it once, so an operator
+// learns that unowned records exist instead of wondering where their
+// older uploads went.
+func (s *Store) legacyIndexLoaded() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.loadIndexLocked()
+	return err == nil && s.legacyIndex
+}
+
+// LegacyUnowned lists records that have no owner: they predate owner
+// scoping, or were written by a path that could not identify its caller.
+// They are NOT visible to any authenticated key (see visibleTo — an
+// empty caller id matches only these, and a real key id never does), so
+// this listing is the forensic view an administrator needs before
+// reclaiming them with ReclaimLegacy. It never mutates anything.
+func (s *Store) LegacyUnowned() ([]File, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx, err := s.loadIndexLocked()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]File, 0)
+	for _, f := range idx {
+		if f.OwnerKeyID == "" {
+			out = append(out, f)
+		}
+	}
+	return out, nil
+}
+
+// ReclaimLegacy assigns ownership of unowned records to ownerKeyID —
+// the supported migration for files that predate owner scoping. An
+// empty owner is refused: that is exactly the state being repaired, and
+// accepting it would let the wildcard state back in. With no ids, every
+// unowned record is reclaimed; with ids, only those (and only if they
+// are in fact unowned — a record owned by another key is never
+// reassigned here, so this cannot be used to steal a file). Returns how
+// many were reclaimed and how many unowned records remain.
+func (s *Store) ReclaimLegacy(ownerKeyID string, ids []string) (int, int, error) {
+	if strings.TrimSpace(ownerKeyID) == "" {
+		return 0, 0, errors.New("files: reclaim requires a non-empty owner key id")
+	}
+	want := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if !ValidID(id) {
+			return 0, 0, fmt.Errorf("files: reclaim: invalid file id %q", id)
+		}
+		want[id] = true
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx, err := s.loadIndexLocked()
+	if err != nil {
+		return 0, 0, err
+	}
+	reclaimed := 0
+	for i := range idx {
+		if idx[i].OwnerKeyID != "" {
+			continue
+		}
+		if len(want) > 0 && !want[idx[i].ID] {
+			continue
+		}
+		idx[i].OwnerKeyID = ownerKeyID
+		reclaimed++
+	}
+	if reclaimed > 0 {
+		if err := s.saveIndexLocked(idx); err != nil {
+			return 0, 0, err
+		}
+	}
+	remaining := 0
+	for _, f := range idx {
+		if f.OwnerKeyID == "" {
+			remaining++
+		}
+	}
+	return reclaimed, remaining, nil
 }
 
 // saveIndexLocked writes the index atomically (temp file in the
 // same directory + rename) and fsyncs both the file and the
 // directory, so a recorded file is durable, not merely buffered.
 func (s *Store) saveIndexLocked(idx []File) error {
-	raw, err := json.Marshal(idx)
+	raw, err := json.Marshal(indexEnvelope{Version: indexVersion, Files: idx})
 	if err != nil {
 		return fmt.Errorf("files: encode index: %w", err)
 	}
+	if idx == nil {
+		raw, err = json.Marshal(indexEnvelope{Version: indexVersion, Files: []File{}})
+		if err != nil {
+			return fmt.Errorf("files: encode index: %w", err)
+		}
+	}
+	s.legacyIndex = false
 	tmp, err := os.CreateTemp(s.root, "index-*.tmp")
 	if err != nil {
 		return fmt.Errorf("files: write index: %w", err)
@@ -314,7 +447,15 @@ func fsyncDir(dir string) error {
 // renamed into place BEFORE the index records it, so the index
 // never points at missing content; if the index write then fails,
 // the content file is removed again.
+// Create stores a file with no owner. Prefer CreateOwned: an unowned
+// file is only visible to unowned callers (AUD-SEC-010).
 func (s *Store) Create(filename, purpose string, src io.Reader) (*File, error) {
+	return s.CreateOwned(filename, purpose, "", src)
+}
+
+// CreateOwned stores a file owned by owner (the uploading key's id, or
+// "" for a genuinely unowned upload).
+func (s *Store) CreateOwned(filename, purpose, owner string, src io.Reader) (*File, error) {
 	if !ValidPurpose(purpose) {
 		return nil, fmt.Errorf("%w: %q (valid: %s)", ErrInvalidPurpose, purpose, strings.Join(ValidPurposes, ", "))
 	}
@@ -358,13 +499,14 @@ func (s *Store) Create(filename, purpose string, src io.Reader) (*File, error) {
 	}
 
 	f := File{
-		ID:        id,
-		Object:    "file",
-		Bytes:     n,
-		CreatedAt: time.Now().Unix(),
-		Filename:  clean,
-		Purpose:   purpose,
-		Status:    "processed",
+		ID:         id,
+		Object:     "file",
+		Bytes:      n,
+		CreatedAt:  time.Now().Unix(),
+		Filename:   clean,
+		Purpose:    purpose,
+		Status:     "processed",
+		OwnerKeyID: owner,
 	}
 	idx, err := s.loadIndexLocked()
 	if err != nil {
@@ -405,7 +547,15 @@ func ValidServerGeneratedPurpose(purpose string) bool {
 // Callers are server internals (the Batch worker writing its
 // output/error .jsonl files); it is never reachable from an
 // upload endpoint.
+// CreateServerGenerated stores a server-generated file with no owner.
+// Prefer CreateServerGeneratedOwned (AUD-SEC-010).
 func (s *Store) CreateServerGenerated(filename, purpose string, src io.Reader) (*File, error) {
+	return s.CreateServerGeneratedOwned(filename, purpose, "", src)
+}
+
+// CreateServerGeneratedOwned stores a server-generated file owned by
+// owner — the batch owner for a batch output/error file.
+func (s *Store) CreateServerGeneratedOwned(filename, purpose, owner string, src io.Reader) (*File, error) {
 	if !ValidServerGeneratedPurpose(purpose) {
 		return nil, fmt.Errorf("%w: %q (server-generated purposes: %s)", ErrInvalidPurpose, purpose, strings.Join(ServerGeneratedPurposes, ", "))
 	}
@@ -449,13 +599,14 @@ func (s *Store) CreateServerGenerated(filename, purpose string, src io.Reader) (
 	}
 
 	f := File{
-		ID:        id,
-		Object:    "file",
-		Bytes:     n,
-		CreatedAt: time.Now().Unix(),
-		Filename:  clean,
-		Purpose:   purpose,
-		Status:    "processed",
+		ID:         id,
+		Object:     "file",
+		Bytes:      n,
+		CreatedAt:  time.Now().Unix(),
+		Filename:   clean,
+		Purpose:    purpose,
+		Status:     "processed",
+		OwnerKeyID: owner,
 	}
 	idx, err := s.loadIndexLocked()
 	if err != nil {
@@ -473,7 +624,14 @@ func (s *Store) CreateServerGenerated(filename, purpose string, src io.Reader) (
 // Get returns the metadata for id, or ErrNotFound. An id that is
 // not a store-issued shape is ErrInvalidID — it never reaches a
 // path lookup.
-func (s *Store) Get(id string) (*File, error) {
+// Get returns a file's metadata, unowned-caller scoped.
+// Prefer GetFor for request paths (AUD-SEC-010).
+func (s *Store) Get(id string) (*File, error) { return s.GetFor(id, "") }
+
+// GetFor returns a file's metadata when callerID may see it. A file
+// owned by another key is reported exactly like a missing one, so the
+// response never confirms that a foreign file exists.
+func (s *Store) GetFor(id, callerID string) (*File, error) {
 	if !ValidID(id) {
 		return nil, fmt.Errorf("%w: %q", ErrInvalidID, id)
 	}
@@ -484,7 +642,7 @@ func (s *Store) Get(id string) (*File, error) {
 		return nil, err
 	}
 	for i := range idx {
-		if idx[i].ID == id {
+		if idx[i].ID == id && visibleTo(idx[i], callerID) {
 			f := idx[i]
 			return &f, nil
 		}
@@ -492,15 +650,27 @@ func (s *Store) Get(id string) (*File, error) {
 	return nil, fmt.Errorf("%w: %q", ErrNotFound, id)
 }
 
-// List returns all files, newest first (created_at desc, id desc
-// as a stable tie-break), matching the OpenAI list ordering.
-func (s *Store) List() ([]File, error) {
+// List returns the unowned caller's files. Prefer ListFor for request
+// paths (AUD-SEC-010).
+func (s *Store) List() ([]File, error) { return s.ListFor("") }
+
+// ListFor returns the files callerID may see, newest first
+// (created_at desc, id desc as a stable tie-break), matching the
+// OpenAI list ordering.
+func (s *Store) ListFor(callerID string) ([]File, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	idx, err := s.loadIndexLocked()
 	if err != nil {
 		return nil, err
 	}
+	kept := make([]File, 0, len(idx))
+	for _, f := range idx {
+		if visibleTo(f, callerID) {
+			kept = append(kept, f)
+		}
+	}
+	idx = kept
 	if idx == nil {
 		idx = []File{}
 	}
@@ -517,7 +687,14 @@ func (s *Store) List() ([]File, error) {
 // anything was deleted; deleting an unknown id is not an error
 // here (the HTTP layer answers 404 — see internal/server) but
 // returns false.
-func (s *Store) Delete(id string) (bool, error) {
+// Delete removes an unowned file. Prefer DeleteFor on request paths
+// (AUD-SEC-010).
+func (s *Store) Delete(id string) (bool, error) { return s.DeleteFor(id, "") }
+
+// DeleteFor removes a file the caller owns. A foreign id reports
+// "nothing deleted" (the HTTP layer answers 404), so a key can neither
+// delete another key's file nor learn that it exists.
+func (s *Store) DeleteFor(id, callerID string) (bool, error) {
 	if !ValidID(id) {
 		return false, fmt.Errorf("%w: %q", ErrInvalidID, id)
 	}
@@ -531,6 +708,13 @@ func (s *Store) Delete(id string) (bool, error) {
 	found := false
 	for _, f := range idx {
 		if f.ID == id {
+			if !visibleTo(f, callerID) {
+				// Keep a foreign file in the index: we are not
+				// entitled to remove it, and reporting "not found"
+				// must not have side effects.
+				kept = append(kept, f)
+				continue
+			}
 			found = true
 			continue
 		}
@@ -555,8 +739,15 @@ func (s *Store) Delete(id string) (bool, error) {
 // Open returns a reader for the file's content plus its metadata.
 // The content path is built from the validated id only — the
 // caller can never steer it with a user-supplied path.
-func (s *Store) Open(id string) (io.ReadCloser, *File, error) {
-	f, err := s.Get(id)
+// Open returns a reader for an unowned file. Prefer OpenFor on request
+// paths (AUD-SEC-010).
+func (s *Store) Open(id string) (io.ReadCloser, *File, error) { return s.OpenFor(id, "") }
+
+// OpenFor returns a reader for a file the caller may see, plus its
+// metadata. The content path is built from the validated id only — the
+// caller can never steer it with a user-supplied path.
+func (s *Store) OpenFor(id, callerID string) (io.ReadCloser, *File, error) {
+	f, err := s.GetFor(id, callerID)
 	if err != nil {
 		return nil, nil, err
 	}

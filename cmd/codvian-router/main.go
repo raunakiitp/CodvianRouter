@@ -2233,9 +2233,18 @@ func openStack(opts options) (*stack, error) {
 	}
 
 	// Ledger: SQLite in the data dir.
-	led, err := ledger.Open(filepath.Join(cfg.DataDir, "ledger.db"))
+	//
+	// AUD-REL-005: a corrupt ledger.db used to abort startup outright,
+	// with no quarantine and no operator signal beyond a wrapped error.
+	// OpenWithRecovery preserves the unusable file (never deletes or
+	// overwrites it) and starts on a fresh ledger, reporting the move.
+	ledger.Logf = log.Printf
+	led, quarantined, err := ledger.OpenWithRecovery(filepath.Join(cfg.DataDir, "ledger.db"))
 	if err != nil {
 		return nil, err
+	}
+	if quarantined != "" {
+		log.Printf("ledger: the previous ledger was unusable and has been preserved at %s; a fresh ledger is in use", quarantined)
 	}
 	led.FailClosed = cfg.FailClosed
 	// Flat-rate opt-in (B4-13, Stage 1): the config file's
@@ -4216,7 +4225,7 @@ func openStack(opts options) (*stack, error) {
 		if err != nil {
 			return nil, err
 		}
-		resp, err := engine.Embed(ctx, provider.EmbeddingRequest{
+		resp, err := engine.EmbedInternal(ctx, provider.EmbeddingRequest{
 			Model: cache.DefaultNeuralEmbeddingModel,
 			Input: input,
 		})

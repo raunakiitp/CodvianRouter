@@ -97,6 +97,13 @@ const DefaultTimeout = 120 * time.Second
 // maxRequestBody caps a single chat-completions request body (10 MiB).
 const maxRequestBody = 10 << 20
 
+// maxAdminJSONBody bounds a small JSON control payload (org/team, eval
+// schedule, batch job, fallback chain, MCP call, ...). These handlers
+// used to decode r.Body with no limit at all (AUD-SEC-003), so a client
+// could stream an unbounded body into memory. 1 MiB is far above any
+// legitimate payload of this shape and far below a memory risk.
+const maxAdminJSONBody = 1 << 20
+
 // ---------------------------------------------------------------------------
 // Engine contract (router to implement; see package doc).
 // ---------------------------------------------------------------------------
@@ -1903,6 +1910,8 @@ func New(engine Engine, opts ...Option) *Server {
 	s.register(mux, "GET", "/v1/files", s.handleFiles)
 	s.register(mux, "GET", "/v1/files/{id}", s.handleFiles)
 	s.register(mux, "DELETE", "/v1/files/{id}", s.handleFiles)
+	s.register(mux, "GET", "/admin/files/legacy", s.handleFilesLegacyList)
+	s.register(mux, "POST", "/admin/files/reclaim", s.handleFilesReclaim)
 	s.register(mux, "GET", "/v1/files/{id}/content", s.handleFiles)
 	// M8.8 batches (single dispatcher; 405 for wrong methods).
 	s.register(mux, "POST", "/v1/batches", s.handleBatches)
@@ -2257,18 +2266,29 @@ func (s *Server) requireScope(next http.HandlerFunc, scopes []string) http.Handl
 // time is the caller's own key metadata. Every auth wrapper in
 // this package funnels through here.
 func (s *Server) unauthorized(w http.ResponseWriter, r *http.Request) {
+	// AUD-API-001: the Anthropic surfaces answer with the Anthropic
+	// error envelope for EVERY error, auth failures included — an
+	// Anthropic SDK parses that shape and an OpenAI-shaped body is not
+	// a body its error model describes.
+	deny := func(status int, msg string) {
+		if isAnthropicEndpointPath(r.URL.Path) {
+			writeAnthropicError(w, status, msg)
+			return
+		}
+		writeError(w, status, msg)
+	}
 	if s.verifier != nil {
 		if key := requestKey(r); key != "" {
 			{
 				if ev, ok := s.verifier.(ExpiryVerifier); ok {
 					if exp, expired := ev.ExpiredKey(r.Context(), key); expired {
-						writeError(w, http.StatusUnauthorized, "gateway key expired on "+exp.UTC().Format(time.RFC3339))
+						deny(http.StatusUnauthorized, "gateway key expired on "+exp.UTC().Format(time.RFC3339))
 						return
 					}
 				}
 				if dv, ok := s.verifier.(DisabledKeyVerifier); ok {
 					if dv.DisabledKey(r.Context(), key) {
-						writeError(w, http.StatusUnauthorized, "gateway key disabled")
+						deny(http.StatusUnauthorized, "gateway key disabled")
 						return
 					}
 				}
@@ -2276,14 +2296,14 @@ func (s *Server) unauthorized(w http.ResponseWriter, r *http.Request) {
 				// like an expired gateway key does.
 				if iss, err := s.oauthIssuer(); err == nil && iss != nil {
 					if exp, expired := iss.TokenExpired(key); expired {
-						writeError(w, http.StatusUnauthorized, "oauth token expired on "+exp.UTC().Format(time.RFC3339))
+						deny(http.StatusUnauthorized, "oauth token expired on "+exp.UTC().Format(time.RFC3339))
 						return
 					}
 				}
 			}
 		}
 	}
-	writeError(w, http.StatusUnauthorized, "invalid gateway key")
+	deny(http.StatusUnauthorized, "invalid gateway key")
 }
 
 // callerKeyID returns the gateway-key ID the request arrived under,
@@ -2325,6 +2345,21 @@ func (s *Server) callerKeyID(r *http.Request) string {
 		return ""
 	}
 	return id
+}
+
+// callerForOwnership resolves the caller identity for owner-scoped
+// resources (files, batches) and FAILS CLOSED when a credential was
+// presented, the verifier can name identities, and none resolved
+// (AUD-SEC-001/AUD-SEC-010): an unresolvable credential must never fall
+// back to the shared "no identity" bucket, where unowned resources are
+// visible. An absent credential keeps auth-relaxed semantics.
+func (s *Server) callerForOwnership(w http.ResponseWriter, r *http.Request) (string, bool) {
+	keyID := s.callerKeyID(r)
+	if keyID == "" && credentialPresented(r) && s.identityResolvable() {
+		writeError(w, http.StatusForbidden, "credential could not be resolved to a gateway key identity")
+		return "", false
+	}
+	return keyID, true
 }
 
 // credentialPresented reports whether the request carried ANY credential
@@ -3886,9 +3921,16 @@ func (s *Server) handleAutoRoute(w http.ResponseWriter, r *http.Request) {
 		// No concrete model configured for the picked tier: the
 		// decision itself is the honest answer — report it with a
 		// 502 so the dashboard shows why instead of a bare error.
+		// AUD-CODE-002: encode before committing the 502, so an
+		// unmarshalable decision cannot answer with an empty body.
 		w.Header().Set("Content-Type", "application/json")
+		buf, err := json.Marshal(s.enrichDecision(r, dec))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "decision could not be encoded")
+			return
+		}
 		w.WriteHeader(http.StatusBadGateway)
-		_ = json.NewEncoder(w).Encode(s.enrichDecision(r, dec))
+		_, _ = w.Write(buf)
 		return
 	}
 	writeJSON(w, http.StatusOK, s.enrichDecision(r, dec))
@@ -6008,7 +6050,7 @@ func rewriteRequestWithVault(req *provider.ChatRequest, v *guardrails.Vault) int
 // blocked flag and match count only, NEVER any prompt text: the
 // redacted preview used to be logged here, but redaction only
 // strips PII/secret/injection patterns, so the rest of the prompt
-// reached the log stream verbatim (the Portkey entry-150 class of
+// reached the log stream verbatim (the entry-150 class of
 // bug: an open log stream showing prompts). The log proves
 // redaction happened without containing the prompt or a key, and
 // the response carries X-Codvian-Guardrail: flagged|blocked.
@@ -7193,7 +7235,59 @@ func (s *Server) handleEngineError(w http.ResponseWriter, err error) {
 		writeServerError(w, http.StatusGatewayTimeout, "request timed out")
 		return
 	}
-	if cls := provider.ClassifyError(err, provider.EndpointChatCompletions); cls.Decision == provider.DecisionStop && cls.Status >= 400 && cls.Status < 500 {
+	// Upstream rate limit (AUD-REL-001): the provider answered 429.
+	// That is the upstream's own answer, not a gateway failure, and it
+	// used to collapse into the generic 502 with Retry-After dropped —
+	// so a client (or its SDK) could not back off and instead retried
+	// straight back into the same wall. Propagate the true status and
+	// the upstream's Retry-After, exactly as the images/embeddings
+	// paths already do. Not counted as an upstream failure: nothing in
+	// the gateway failed.
+	//
+	// This is the UPSTREAM's limit. Internal quota exhaustion (our own
+	// key/global budgets, per-key token windows) is refused earlier in
+	// this function with its own 402 / 429 + key_token_limit shape, so
+	// the two are never confused.
+	var rle *provider.RateLimitError
+	if errors.As(err, &rle) {
+		if rle.RetryAfterPresent {
+			seconds := int(rle.RetryAfter / time.Second)
+			if seconds < 1 {
+				seconds = 1
+			}
+			w.Header().Set("Retry-After", strconv.Itoa(seconds))
+		}
+		writeJSON(w, http.StatusTooManyRequests, errorBody{Error: errorDetail{
+			Message: "upstream provider rate limited the request",
+			Type:    "rate_limit_error",
+		}})
+		return
+	}
+	// Upstream quota exhaustion (AUD-REL-001): the provider answered
+	// its own quota status (402/429 per vendor). As above, the
+	// upstream's status is the truthful answer; a 502 would hide it.
+	// The upstream body is NOT echoed into the chat envelope (it can
+	// carry vendor account detail); the status and a stable type are.
+	var qe *provider.QuotaError
+	if errors.As(err, &qe) {
+		status := qe.StatusCode
+		if status < 400 || status > 599 {
+			status = http.StatusPaymentRequired
+		}
+		writeJSON(w, status, errorBody{Error: errorDetail{
+			Message: "upstream provider quota exhausted",
+			Type:    "quota_exceeded",
+		}})
+		return
+	}
+	// AUD-REL-001: a classified 4xx keeps the upstream's own status with
+	// the documented "upstream_error" shape (no JSON-RPC code — the
+	// status IS the code); everything else falls through to
+	// writeUpstreamFailure's 502 + -32603 + "server_error" signature.
+	// This is the pre-existing contract, only widened from
+	// DecisionStop-4xx to any 4xx, so a retryable classification (429)
+	// no longer collapses into 502.
+	if cls := provider.ClassifyError(err, provider.EndpointChatCompletions); cls.Status >= 400 && cls.Status < 500 {
 		if s.recorder != nil {
 			s.recorder.IncUpstreamFailure()
 		}
@@ -7391,7 +7485,13 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 	// cost/tokens/fallback ride the final trailer instead.
 	s.writeStreamStartHeaders(w, ctx, req.Model)
 
-	var sent strings.Builder // full content already sent to the client
+	// AUD-PERF-001: the full text already sent was retained in a
+	// strings.Builder that was only ever read for its length, so every
+	// in-flight stream held its entire completion in memory to compute a
+	// boolean — memory grew with concurrency x response size, uncapped.
+	// A byte counter carries exactly the same information (whether any
+	// content has been delivered) at O(1) memory.
+	var sentBytes int // bytes of content already sent to the client
 	headersSent := false
 	flusher, _ := w.(http.Flusher)
 
@@ -7577,7 +7677,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 		if err := writeChunk(d, nil); err != nil {
 			return err
 		}
-		sent.WriteString(checked.Body)
+		sentBytes += len(checked.Body)
 		return nil
 	}
 	// flushToolCalls emits every accumulated tool call, in
@@ -7621,7 +7721,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 		if err := writeChunk(d, nil); err != nil {
 			return
 		}
-		sent.WriteString(tail)
+		sentBytes += len(tail)
 	}
 	onChunk := func(chunk provider.StreamChunk) error {
 		if err := ctx.Err(); err != nil {
@@ -7707,7 +7807,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 		if err := writeChunk(d, fr); err != nil {
 			return err
 		}
-		sent.WriteString(content)
+		sentBytes += len(content)
 		return nil
 	}
 	onDelta := func(delta string) error {
@@ -7794,7 +7894,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 	// blocked_after_delivery — too late to act, and said so.
 	if err != nil && asyncRun != nil {
 		if res, blocked := asyncRun.BlockVerdict(); blocked {
-			if sent.Len() == 0 && !headersSent {
+			if sentBytes == 0 && !headersSent {
 				writePolicyRefusal(w, res.Kind, "request")
 			} else {
 				payload, _ := json.Marshal(errorBody{Error: errorDetail{Message: "guardrail blocked stream: " + res.Kind, Type: "policy_refusal", Code: guardrails.PolicyRefusalCode, Reason: res.Kind}})
@@ -7828,7 +7928,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 		} else if f := respRedactor.Findings(); len(f) > 0 {
 			kind = f[0].Kind
 		}
-		if sent.Len() == 0 && !headersSent {
+		if sentBytes == 0 && !headersSent {
 			writePolicyRefusal(w, kind, "response")
 		} else {
 			payload, _ := json.Marshal(errorBody{Error: errorDetail{Message: "guardrail blocked stream: " + kind, Type: "policy_refusal", Code: guardrails.PolicyRefusalCode, Reason: kind}})
@@ -7905,7 +8005,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 	// The engine failed. If nothing was sent yet, headers have not gone
 	// out (they are written lazily on the first chunk), so a plain JSON
 	// error with a 502/504 status is still possible.
-	if sent.Len() == 0 && !headersSent {
+	if sentBytes == 0 && !headersSent {
 		// Strict per-request budget stop (CHECKLIST 155):
 		// record the mid-chain refusal for the dashboard feed
 		// before mapping the typed error to 402.
@@ -7946,7 +8046,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, ctx context.Context, re
 	if errors.Is(err, router.ErrStreamLifetimeExceeded) {
 		errDetail = errorDetail{Message: err.Error(), Type: "server_error", Deployment: errDetail.Deployment}
 	}
-	s.logger.Printf("stream failed after %d bytes sent: deployment=%s %v", sent.Len(), errDetail.Deployment, logSafeError(err))
+	s.logger.Printf("stream failed after %d bytes sent: deployment=%s %v", sentBytes, errDetail.Deployment, logSafeError(err))
 	payload, _ := json.Marshal(errorBody{Error: errDetail})
 	_ = writeSSENow("data: " + string(payload) + "\n\n")
 	// Always-terminal (CHECKLIST 153): a committed stream ends
@@ -8078,7 +8178,7 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 		// Never log keys or message content — route, model, status,
 		// latency only. The model name is redacted first as a safety
 		// net, so a model string carrying key-shaped material can
-		// never reach the log verbatim (Portkey entry 150). The
+		// never reach the log verbatim (research-log entry 150). The
 		// correlation id rides the row (M2.2), so the access log
 		// joins to the response headers and the stream trailer.
 		s.logger.Printf("method=%s path=%s model=%s status=%d latency_ms=%d request_id=%s",

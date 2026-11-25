@@ -1,4 +1,4 @@
-// Slice 197-198 (competitor-sweep P2 gaps): serve --headless, the
+// Slice 197-198 (capability gaps closed): serve --headless, the
 // `run <cli> --model` launcher, and the first-run wizard.
 //
 //   - serve --headless: the gateway as a pure API process — no

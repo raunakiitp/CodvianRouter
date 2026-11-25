@@ -219,9 +219,17 @@ func (s *Server) handleDBExport(w http.ResponseWriter, r *http.Request) {
 	filename := fmt.Sprintf("codvian-router-db-export-%s.json", now.Format("20060102-150405"))
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	// AUD-CODE-002: marshal before committing the status. The export can
+	// be large, so it is encoded into a buffer rather than streamed after
+	// a committed 200 — a failure then answers a clean 500 instead of a
+	// half-written download.
+	buf, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "export could not be encoded")
+		return
+	}
+	buf = append(buf, '\n')
 	w.WriteHeader(http.StatusOK)
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	_ = enc.Encode(payload)
+	_, _ = w.Write(buf)
 	s.logger.Printf("db export: exported config (%d provider(s), %d gateway key(s)) + %d usage event(s)", len(providers), len(cfg.GatewayKeys), usage.EventsIncluded)
 }

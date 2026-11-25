@@ -8,9 +8,9 @@ the per-route sections; regenerate instead:
 python3 scripts/gen-api-docs.py
 ```
 
-Coverage: **347 routes** (181 GET, 117 POST, 22 DELETE, 22 PATCH, 5 PUT) —
-11 `LOCAL_ONLY`, 56 `ALWAYS_PROTECTED`,
-280 `MANAGEMENT`; 60 auth-exempt, 276 scope-gated, 11 key-only (gateway key, no scope).
+Coverage: **349 routes** (182 GET, 118 POST, 22 DELETE, 22 PATCH, 5 PUT) —
+11 `LOCAL_ONLY`, 58 `ALWAYS_PROTECTED`,
+280 `MANAGEMENT`; 60 auth-exempt, 278 scope-gated, 11 key-only (gateway key, no scope).
 Enforced by `TestAPIReferenceCoversEveryRoute`
 (`internal/server/api_reference_test.go`): the test reads the guard
 table and this doc and FAILS if any route is missing. That test is
@@ -5309,6 +5309,38 @@ its key field; the key is kept only in page memory, never stored.
 
   ```sh
   curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{"confirm": "EXPORT"}' http://127.0.0.1:8080/admin/db/export
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `GET /admin/files/legacy`
+
+- **Tier:** `ALWAYS_PROTECTED`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
+- **Spawn-capable:** no
+- **Description:** Lists file records that have no owner (they predate ownership scoping) so an operator can see what exists before migrating them. Read-only; no content is exposed. Requires the admin scope, because such a record belongs to no key and listing it must not become a way to enumerate other keys' stranded uploads.
+- **Request:** no body.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X GET -H "Authorization: Bearer $CODVIAN_KEY" http://127.0.0.1:8080/admin/files/legacy
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `POST /admin/files/reclaim`
+
+- **Tier:** `ALWAYS_PROTECTED`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
+- **Spawn-capable:** no
+- **Description:** Assigns ownership of previously unowned file records to a gateway key (AUD-SEC-010 migration). An empty owner is refused — that is the state being repaired — and a record owned by another key is never reassigned, so this cannot transfer a file between keys. Requires the admin scope.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/admin/files/reclaim
   ```
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.

@@ -48,6 +48,11 @@ type anthropicMock struct {
 	streamBody string
 	jsonBody   string
 	status     int
+	// hook, when set, takes over the response for the duration of one
+	// request: it returns true when it handled the request itself. It
+	// exists so a test can drive a stream by hand (a slow client, a
+	// mid-stream disconnect, an observed upstream cancellation).
+	hook func(w http.ResponseWriter, r *http.Request) bool
 }
 
 func (m *anthropicMock) handler(t *testing.T) http.HandlerFunc {
@@ -72,6 +77,9 @@ func (m *anthropicMock) handler(t *testing.T) http.HandlerFunc {
 		}
 		_ = json.Unmarshal(body, &probe)
 		stream = probe.Stream
+		if m.hook != nil && m.hook(w, r) {
+			return
+		}
 		if stream {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(status)
@@ -424,6 +432,26 @@ func TestReadinessGate503WithRetryAfter(t *testing.T) {
 	rec = doReq(t, srv, http.MethodPost, "/v1/messages", `{"model":"local-model","max_tokens":8,"messages":[{"role":"user","content":"Hi"}]}`, "test-key-123")
 	if rec.Code != http.StatusServiceUnavailable || rec.Header().Get("Retry-After") != "30" {
 		t.Errorf("not-ready messages: status = %d Retry-After = %q, want 503/30", rec.Code, rec.Header().Get("Retry-After"))
+	}
+	// AUD-API-001 residual: this gate runs BEFORE the handler-produced
+	// error sites, so it used to answer /v1/messages with the OpenAI shape
+	// even though every other error on that path is Anthropic-shaped. The
+	// envelope must be {"type":"error","error":{"type":…,"message":…}}.
+	var notReady struct {
+		Type  string `json:"type"`
+		Error struct {
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &notReady); err != nil {
+		t.Fatalf("not-ready /v1/messages body is not JSON: %v (%s)", err, rec.Body.String())
+	}
+	if notReady.Type != "error" || notReady.Error.Type == "" || notReady.Error.Message == "" {
+		t.Errorf("not-ready /v1/messages must use the Anthropic error envelope, got %s", rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), `"capability_not_ready"`) {
+		t.Errorf("not-ready /v1/messages leaked the OpenAI-shaped body: %s", rec.Body.String())
 	}
 	// The readiness feed reports the state live.
 	rec = doReq(t, srv, http.MethodGet, "/dashboard/readiness", "", "")

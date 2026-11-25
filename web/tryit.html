@@ -2718,6 +2718,30 @@ const ROUTES = [
     "bootstrap": false
   },
   {
+    "method": "GET",
+    "path": "/admin/files/legacy",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Lists file records that have no owner (they predate ownership scoping) so an operator can see what exists before migrating them. Read-only; no content is exposed. Requires the admin scope, because such a record belongs to no key and listing it must not become a way to enumerate other keys' stranded uploads.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/files/reclaim",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Assigns ownership of previously unowned file records to a gateway key (AUD-SEC-010 migration). An empty owner is refused \u2014 that is the state being repaired \u2014 and a record owned by another key is never reassigned, so this cannot transfer a file between keys. Requires the admin scope.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
     "method": "POST",
     "path": "/admin/db/wipe/arm",
     "tier": "ALWAYS_PROTECTED",

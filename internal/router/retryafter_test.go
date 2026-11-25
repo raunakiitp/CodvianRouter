@@ -9,8 +9,8 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/routetrace"
 )
 
-// Retry-After abandon rule + floor (CHECKLIST 167-168; Portkey:
-// Retry-After >= 60s ends retries for that target; CLIProxyAPI 10s
+// Retry-After abandon rule + floor (CHECKLIST 167-168; Retry-After >= 60s ends retries:
+// Retry-After >= 60s ends retries for that target; 10s floor, research-log entry 146).
 // floor, research-log entry 146). These tests use fake clients (no
 // network) and the real Engine.
 

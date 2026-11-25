@@ -2,7 +2,7 @@
 
 An operator names a pool of providers once in the config file and
 addresses it as one routing target — the same idea as OpenRouter's
-provider ordering and Portkey's named provider configs: one name
+provider ordering and comparable-gateway named provider configs: one name
 for a pool, usable wherever a routing target is named.
 
 ## Config

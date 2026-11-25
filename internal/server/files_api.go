@@ -160,6 +160,15 @@ func (s *Server) filesStore() (*files.Store, error) {
 	actual, loaded := filesStores.LoadOrStore(dir, files.New(dir))
 	st := actual.(*files.Store)
 	if !loaded {
+		if unowned, err := st.LegacyUnowned(); err != nil {
+			s.logger.Printf("files: could not read %s while checking for pre-ownership records: %v", dir, err)
+		} else if len(unowned) > 0 {
+			// Operational and forensic visibility: these records are
+			// private (no key can see them) but they must not be
+			// invisible to the operator, or legitimate older uploads
+			// would look lost (AUD-SEC-010).
+			s.logger.Printf("files: %d file record(s) under %s predate ownership scoping and have NO owner; they are not visible to any gateway key. List them with GET /admin/files/legacy and assign them with POST /admin/files/reclaim", len(unowned), dir)
+		}
 		if n, err := st.SweepStaleUploadTemps(files.StaleUploadTempAge); err != nil {
 			s.logger.Printf("files: orphan staging sweep failed: %v (removed %d stale upload temp(s) before error)", err, n)
 		} else if n > 0 {
@@ -309,6 +318,11 @@ func (s *Server) handleFilesUpload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	// AUD-SEC-010: the upload is owned by the authenticated key.
+	owner, ok := s.callerForOwnership(w, r)
+	if !ok {
+		return
+	}
 	st, err := s.filesStore()
 	if err != nil {
 		writeServerError(w, http.StatusServiceUnavailable, err.Error())
@@ -383,7 +397,7 @@ func (s *Server) handleFilesUpload(w http.ResponseWriter, r *http.Request) {
 				// Purpose first (the usual order): stream the
 				// part straight into the store — no spool, no
 				// temp, no whole-file buffering.
-				f, err := st.Create(part.FileName(), purpose, part)
+				f, err := st.CreateOwned(part.FileName(), purpose, owner, part)
 				if err != nil {
 					s.filesUploadStoreError(w, body, err)
 					return
@@ -452,7 +466,7 @@ func (s *Server) handleFilesUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer src.Close()
-	f, err := st.Create(spoolName, purpose, src)
+	f, err := st.CreateOwned(spoolName, purpose, owner, src)
 	if err != nil {
 		s.filesUploadStoreError(w, body, err)
 		return
@@ -471,12 +485,16 @@ func (s *Server) handleFilesList(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	owner, ok := s.callerForOwnership(w, r)
+	if !ok {
+		return
+	}
 	st, err := s.filesStore()
 	if err != nil {
 		writeServerError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	list, err := st.List()
+	list, err := st.ListFor(owner)
 	if err != nil {
 		s.logger.Printf("files list: %v", err)
 		writeServerError(w, http.StatusInternalServerError, "could not list stored files")
@@ -492,12 +510,16 @@ func (s *Server) handleFilesGet(w http.ResponseWriter, r *http.Request, id strin
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	owner, ok := s.callerForOwnership(w, r)
+	if !ok {
+		return
+	}
 	st, err := s.filesStore()
 	if err != nil {
 		writeServerError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	f, err := s.filesGet(w, st, id)
+	f, err := s.filesGet(w, st, id, owner)
 	if err != nil {
 		return // s.filesGet already wrote the error
 	}
@@ -511,6 +533,10 @@ func (s *Server) handleFilesDelete(w http.ResponseWriter, r *http.Request, id st
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	owner, ok := s.callerForOwnership(w, r)
+	if !ok {
+		return
+	}
 	st, err := s.filesStore()
 	if err != nil {
 		writeServerError(w, http.StatusServiceUnavailable, err.Error())
@@ -520,7 +546,7 @@ func (s *Server) handleFilesDelete(w http.ResponseWriter, r *http.Request, id st
 		writeError(w, http.StatusNotFound, "file not found: "+id)
 		return
 	}
-	deleted, err := st.Delete(id)
+	deleted, err := st.DeleteFor(id, owner)
 	if err != nil {
 		s.logger.Printf("files delete: %v", err)
 		writeServerError(w, http.StatusInternalServerError, "could not delete the stored file")
@@ -540,12 +566,16 @@ func (s *Server) handleFilesContent(w http.ResponseWriter, r *http.Request, id s
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	owner, ok := s.callerForOwnership(w, r)
+	if !ok {
+		return
+	}
 	st, err := s.filesStore()
 	if err != nil {
 		writeServerError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	rc, f, err := st.Open(id)
+	rc, f, err := st.OpenFor(id, owner)
 	if err != nil {
 		if errors.Is(err, files.ErrNotFound) || errors.Is(err, files.ErrInvalidID) {
 			writeError(w, http.StatusNotFound, "file not found: "+id)
@@ -568,8 +598,8 @@ func (s *Server) handleFilesContent(w http.ResponseWriter, r *http.Request, id s
 // filesGet is the shared id lookup for handleFilesGet: an invalid
 // or unknown id writes the 404 and returns (nil, error) so the
 // caller just returns.
-func (s *Server) filesGet(w http.ResponseWriter, st *files.Store, id string) (*files.File, error) {
-	f, err := st.Get(id)
+func (s *Server) filesGet(w http.ResponseWriter, st *files.Store, id, owner string) (*files.File, error) {
+	f, err := st.GetFor(id, owner)
 	if err != nil {
 		if errors.Is(err, files.ErrNotFound) || errors.Is(err, files.ErrInvalidID) {
 			writeError(w, http.StatusNotFound, "file not found: "+id)

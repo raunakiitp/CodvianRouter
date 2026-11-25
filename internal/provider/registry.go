@@ -1848,6 +1848,20 @@ func (r *Registry) PoolConfig() PoolConfig {
 	return r.pools.Config()
 }
 
+// PooledTransport returns the warm-pool transport for a relay target's
+// (providerID, keyFingerprint) pair — the SAME pool the engine clients
+// share for that provider+key, so a relayed request reuses idle
+// connections instead of re-dialing TCP+TLS after the two connections
+// http.DefaultTransport keeps idle (AUD-PERF-003). keyFP is a
+// KeyFingerprint value, never key material. Returns nil for an empty
+// provider ID (no pool to address); callers then keep their own client.
+func (r *Registry) PooledTransport(providerID, keyFP string) http.RoundTripper {
+	if providerID == "" {
+		return nil
+	}
+	return r.pools.TransportForFingerprint(providerID, keyFP)
+}
+
 // WarmPools warms every enabled provider's pool with one real
 // request (TestKey = GET /v1/models) through the pooled transport,
 // so the first user request never pays a cold dial. It is
@@ -1895,6 +1909,15 @@ type RelayTarget struct {
 	UpstreamModel string
 	Attempts      int
 	IsLocal       bool
+	// KeyFingerprint is the warm-pool key fingerprint for this
+	// target's primary key (provider.KeyFingerprint: 12 hex chars of
+	// SHA-256(key), never key material — the same value GET
+	// /dashboard/pools serves). The native relay uses it to fetch the
+	// identical warm transport the engine clients use
+	// (Registry.PooledTransport), so a verbatim relay reuses idle
+	// connections instead of falling back to
+	// http.DefaultTransport's MaxIdleConnsPerHost=2 (AUD-PERF-003).
+	KeyFingerprint string
 }
 
 // RelayTargetForModel resolves the relay target for one model ID:
@@ -1959,6 +1982,10 @@ func (r *Registry) RelayTargetForModel(model string) (*RelayTarget, error) {
 		UpstreamModel: model,
 		Attempts:      attempts,
 		IsLocal:       isLocal,
+		// The decrypted key is fingerprinted here and the plaintext
+		// dropped: the transport pool is keyed by the fingerprint
+		// (see PoolManager.TransportForFingerprint), never the key.
+		KeyFingerprint: KeyFingerprint(key),
 	}, nil
 }
 

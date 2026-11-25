@@ -13,8 +13,8 @@ import (
 )
 
 // Slice 5 (CHECKLIST 101-102; research-log entries 150/152):
-// redaction default-on. Portkey 1.15.2 leaked prompts AND provider
-// keys to an open log stream unless NODE_ENV=production; LiteLLM's
+// redaction default-on. a 1.15.2 gateway release leaked prompts AND provider
+// keys to an open log stream unless NODE_ENV=production; the gateway's spend-log token
 // spend-log redaction is OFF by default. These tests prove the
 // opposite for Codvian Router in default mode: a real-shaped key
 // and a real prompt never appear in log output, in error responses,

@@ -366,6 +366,7 @@ func (e *Engine) singleAttempt(
 	bookReq provider.ChatRequest,
 	supports func(provider.Client) bool,
 	call func(context.Context, Attempt) attemptResult,
+	publishTrace bool,
 ) (res attemptResult, trace *routetrace.RouteTrace, err error) {
 	trace = &routetrace.RouteTrace{Endpoint: string(endpoint)}
 	// Panic isolation (CHECKLIST 165): a panic in a hook (a
@@ -383,7 +384,9 @@ func (e *Engine) singleAttempt(
 			if trace == nil {
 				trace = &routetrace.RouteTrace{Endpoint: string(endpoint)}
 			}
-			e.setLastTrace(trace)
+			if publishTrace {
+				e.setLastTrace(trace)
+			}
 		}
 	}()
 	strategy := e.effectiveStrategy("", bookReq.Model)
@@ -394,7 +397,9 @@ func (e *Engine) singleAttempt(
 	// ordering or dial — see projectStrategyForEndpoint
 	// (cascade.go).
 	if projErr := checkEndpointStrategy(strategy, endpoint); projErr != nil {
-		e.setLastTrace(trace)
+		if publishTrace {
+			e.setLastTrace(trace)
+		}
 		return attemptResult{}, trace, projErr
 	}
 	e.recordRouting(strategy, bookReq.Model)
@@ -403,11 +408,15 @@ func (e *Engine) singleAttempt(
 	parentCtx := ctx
 	ctx = bctx
 	if len(chain) == 0 {
-		e.setLastTrace(trace)
+		if publishTrace {
+			e.setLastTrace(trace)
+		}
 		return attemptResult{}, trace, errors.New("router: empty fallback chain")
 	}
 	if err := ctx.Err(); err != nil {
-		e.setLastTrace(trace)
+		if publishTrace {
+			e.setLastTrace(trace)
+		}
 		return attemptResult{}, trace, e.mapDeadlineErr(err, parentCtx)
 	}
 	ordered, zeroSkipped := e.orderAttempts(chain, strategy, mode, false)
@@ -415,7 +424,9 @@ func (e *Engine) singleAttempt(
 		addTraceAttempt(trace, att, 0, "skipped_zero_quota", nil)
 	}
 	if len(ordered) == 0 {
-		e.setLastTrace(trace)
+		if publishTrace {
+			e.setLastTrace(trace)
+		}
 		return attemptResult{}, trace, ErrNoAvailableAttempt
 	}
 	sawCapable := false
@@ -461,7 +472,9 @@ func (e *Engine) singleAttempt(
 		if blocked, est := e.budgetGate(bookReq, att, 0); blocked {
 			be := e.budgetExceededError(bookReq, att, 0, est)
 			addTraceAttempt(trace, att, 0, "skipped_budget", be)
-			e.setLastTrace(trace)
+			if publishTrace {
+				e.setLastTrace(trace)
+			}
 			return attemptResult{}, trace, be
 		}
 		res := call(ctx, att)
@@ -494,7 +507,9 @@ func (e *Engine) singleAttempt(
 			_, _, _ = e.noteFailure(trace, res, &consecutive429, mode, bookReq.CallerID, "")
 		}
 		markExempt(trace, endpoint)
-		e.setLastTrace(trace)
+		if publishTrace {
+			e.setLastTrace(trace)
+		}
 		return res, trace, res.err
 	}
 	// Nothing was called: every target was skipped before
@@ -502,7 +517,9 @@ func (e *Engine) singleAttempt(
 	// say so honestly (a 400, not a 502); when capable targets
 	// existed but were all skipped (breaker, cooldown, shed),
 	// the chain had nothing available.
-	e.setLastTrace(trace)
+	if publishTrace {
+		e.setLastTrace(trace)
+	}
 	if !sawCapable {
 		return attemptResult{}, trace, &NoCapableProviderError{Endpoint: endpoint, Model: bookReq.Model}
 	}
@@ -530,7 +547,36 @@ func (e *Engine) Embed(ctx context.Context, req provider.EmbeddingRequest) (*pro
 			var res attemptResult
 			emb, res = e.callEmbed(ctx, att, req)
 			return res
-		})
+		}, true)
+	if err != nil {
+		return nil, err
+	}
+	return emb, nil
+}
+
+// EmbedInternal routes one embeddings request without publishing
+// the attempt trace to the engine's global LastTrace slot. Used by
+// internal callers (e.g., semantic cache neural embedder) that must
+// not clobber the client-visible route trace.
+func (e *Engine) EmbedInternal(ctx context.Context, req provider.EmbeddingRequest) (*provider.EmbeddingResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	bookReq := bookkeepingRequest(req.Model, req.TextInputs(), provider.EndpointEmbeddings, req.CallerID, req.BudgetUSD, req.BudgetStrict)
+	chain := e.chainFor(req.Model)
+	// P1.8 context gate: refuse before any provider call when the input
+	// exceeds every known window (embeddings have no completion leg).
+	chain, fitErr := e.applyEmbeddingFit(chain, req.Model, req.TextInputs(), provider.EndpointEmbeddings)
+	if fitErr != nil {
+		return nil, fitErr
+	}
+	var emb *provider.EmbeddingResponse
+	_, _, err := e.singleAttempt(ctx, chain, provider.EndpointEmbeddings, bookReq, supportsEmbeddings,
+		func(ctx context.Context, att Attempt) attemptResult {
+			var res attemptResult
+			emb, res = e.callEmbed(ctx, att, req)
+			return res
+		}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -559,7 +605,7 @@ func (e *Engine) Rerank(ctx context.Context, req provider.RerankRequest) (*provi
 			var res attemptResult
 			rer, res = e.callRerank(ctx, att, req)
 			return res
-		})
+		}, true)
 	if err != nil {
 		return nil, err
 	}

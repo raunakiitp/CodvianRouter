@@ -60,7 +60,9 @@ ClientHarness, Checklist = _lib.ClientHarness, _lib.Checklist
 
 MODEL = "mock-model"
 PROMPT_1 = "cline smoke probe one: read main.py and say hi"
-PROMPT_NEG = "cline smoke probe negative: read main.py"
+# Unique negative prompt with ZERO word overlap with any prior prompt
+# to avoid semantic-cache (token-overlap threshold 0.85) false hits.
+PROMPT_NEG = "NEGATIVE CHECK: UNIQUE PROBE XYZ-98765 NO OVERLAP"
 
 TOOLS = [{"type": "function",
           "function": {"name": "read_file",
@@ -72,13 +74,22 @@ TOOLS = [{"type": "function",
                                       "required": ["path"]}}}]
 
 
+def req_401_robust(h, path, body, headers=None, retries=5, delay=0.8):
+    """Assert 401, retrying on transport errors (status=0)."""
+    for i in range(retries):
+        st, _, body = h.req("POST", path, body, headers=headers)
+        if st == 401:
+            return True, st, body
+        if st == 0:
+            time.sleep(delay)
+            continue
+        return False, st, body
+    return False, st, body
+
+
 def main():
     c = Checklist()
-    try:
-        h = ClientHarness("cline", router_port=21631)
-    except Exception as e:
-        print(f"SETUP FAILED: {e}")
-        return 1
+    h = ClientHarness("cline", router_port=21731)
     with h:
         c.check("L0 harness ready (binary builds, router ready, provider added)",
                 h.key is not None and h.hits() == 0)
@@ -150,21 +161,26 @@ def main():
         c.check("L7 tool-call response carried X-Codvian-Request-Id",
                 bool(rid), f"request_id={rid}")
 
-        st, _, body = h.req("POST", "/v1/chat/completions",
-                            {"model": MODEL,
-                             "messages": [{"role": "user", "content": "no key probe"}],
-                             "tools": TOOLS})
-        c.check("L8 unauthenticated chat -> 401", st == 401, f"status={st}")
+        # Robust unauthenticated check: retry on transport errors (status=0)
+        ok, st, body = req_401_robust(h, "/v1/chat/completions",
+                                      {"model": MODEL,
+                                       "messages": [{"role": "user", "content": "no key probe"}],
+                                       "tools": TOOLS})
+        c.check("L8 unauthenticated chat -> 401 (robust)", ok,
+                f"status={st} {body[:120]}")
 
         # NEGATIVE: upstream down must fail fast, not hang or succeed.
+        # Use a unique prompt with zero overlap + cache bypass header to force
+        # a genuine upstream call (which will fail since mock is stopped).
         h.stop_mock()
+        time.sleep(1.0)  # allow OS to fully reap mock process
         t0 = time.time()
         st, _, body = h.req(
             "POST", "/v1/chat/completions",
             {"model": MODEL,
              "messages": [{"role": "user", "content": PROMPT_NEG}],
              "tools": TOOLS, "tool_choice": "auto"},
-            key=h.key, timeout=30)
+            key=h.key, headers={"X-Codvian-No-Cache": "true"}, timeout=30)
         elapsed = time.time() - t0
         c.check("L9 NEGATIVE: mock stopped -> fresh tool request fails fast "
                 "(non-200), never hangs or reports success",

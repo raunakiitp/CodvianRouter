@@ -9,7 +9,7 @@ Full report: [`docs/POST_PHASE2_FORENSIC_AUDIT.md`](./POST_PHASE2_FORENSIC_AUDIT
 ## What is genuinely solid
 - 314 routes; dashboard **0 UI-without-backend** findings (`audit-fake.sh` PASS).
 - 4,672 test functions; `go vet ./...` clean; Phase 2 regression cases green on the tree; CI runs `go test -race`.
-- 35 strategies in `internal/strategy.All` — a **superset** of OmniRoute's documented 20–21 strategies.
+- 35 strategies in `internal/strategy.All`, each conformance-tested (every strategy is a deterministic permutation of the candidate chain).
 - Tenant-scoped cache, reported-vs-priced ledger reconciliation, webhook/HMAC security, distroless nonroot image.
 - Genuine Phase 2 bugs found & fixed: `ImportEvents` dropped reported-cost/cancelled; `/metrics` lacked usage/cost; webhook event coverage gap.
 

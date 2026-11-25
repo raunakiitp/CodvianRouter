@@ -1,5 +1,5 @@
 // Content-policy refusal chain (CHECKLIST 161-162; competitor
-// sweep gap — LiteLLM + Portkey: guardrail denials leak into
+// sweep gap — guardrail denials leak into
 // fallback chains and burn retries).
 //
 // An upstream content-policy / safety refusal is a verdict about

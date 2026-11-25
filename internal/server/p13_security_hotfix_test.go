@@ -135,11 +135,12 @@ func TestAUD_SEC_001_PerKeyPolicyEnforcedViaVendorHeader(t *testing.T) {
 func TestAUD_SEC_001_CrossKeyBatchIsolation(t *testing.T) {
 	cfg := config.DefaultConfig(t.TempDir())
 	srv := p13Server(t, cfg, okBatchEngine())
-	_, rawA := p13VendorKey(t, cfg, "key-a", []string{"chat"}, nil)
+	keyIDA, rawA := p13VendorKey(t, cfg, "key-a", []string{"chat"}, nil)
 	_, rawB := p13VendorKey(t, cfg, "key-b", []string{"chat"}, nil)
 
-	// Key A seeds an input file and creates a batch.
-	in := seedBatchInput(t, srv, batchJSONL(t, "req-a"))
+	// Key A seeds an input file OWNED by key A (AUD-SEC-010: a key may
+	// only reference a file it owns) and creates a batch.
+	in := seedBatchInputOwned(t, srv, keyIDA, batchJSONL(t, "req-a"))
 	createBody, _ := json.Marshal(map[string]any{
 		"input_file_id": in.ID, "endpoint": "/v1/chat/completions", "completion_window": "24h",
 	})
@@ -197,6 +198,12 @@ func TestAUD_SEC_001_CrossKeyBatchIsolation(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("key A get own batch: status %d, want 200 (%s)", rec.Code, rec.Body.String())
 	}
+
+	// Let the async worker reach a terminal state before the test ends:
+	// otherwise it can still write into the temp dir while t.TempDir
+	// cleans up, which fails the test on Windows with "The directory is
+	// not empty." (a harness race, not a product defect).
+	waitBatchStatus(t, srv, created.ID, "completed")
 }
 
 // TestAUD_SEC_001_EmptyOwnerFailClosed: an empty owner is not a wildcard.

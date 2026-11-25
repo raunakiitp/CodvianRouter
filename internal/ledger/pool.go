@@ -175,7 +175,7 @@ func (l *Ledger) poolDimensionUsed(ctx context.Context, pool QuotaPool, dim Quot
 		query += ` AND gateway_key_id IN (` + strings.Join(placeholders, ",") + `)`
 	}
 	var used float64
-	if err := l.db.QueryRowContext(ctx, query, args...).Scan(&used); err != nil {
+	if err := l.rdb.QueryRowContext(ctx, query, args...).Scan(&used); err != nil {
 		return 0, fmt.Errorf("ledger: pool dimension usage: %w", err)
 	}
 	return used, nil
@@ -363,7 +363,7 @@ func (l *Ledger) SetQuotaPool(ctx context.Context, pool QuotaPool) error {
 // sql.ErrNoRows when the pool does not exist.
 func (l *Ledger) GetQuotaPool(ctx context.Context, id string) (QuotaPool, error) {
 	var pool QuotaPool
-	err := l.db.QueryRowContext(ctx,
+	err := l.rdb.QueryRowContext(ctx,
 		`SELECT id, name, saturation_threshold, account_count FROM quota_pools WHERE id = ?`, id).
 		Scan(&pool.ID, &pool.Name, &pool.SaturationThreshold, &pool.AccountCount)
 	if err != nil {
@@ -378,7 +378,7 @@ func (l *Ledger) GetQuotaPool(ctx context.Context, id string) (QuotaPool, error)
 // ListQuotaPools reads every pool with dimensions and allocations,
 // ordered by id.
 func (l *Ledger) ListQuotaPools(ctx context.Context) ([]QuotaPool, error) {
-	rows, err := l.db.QueryContext(ctx,
+	rows, err := l.rdb.QueryContext(ctx,
 		`SELECT id, name, saturation_threshold, account_count FROM quota_pools ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("ledger: list quota pools: %w", err)
@@ -405,7 +405,7 @@ func (l *Ledger) ListQuotaPools(ctx context.Context) ([]QuotaPool, error) {
 
 // PoolsForKey lists the pools in which keyID holds an allocation.
 func (l *Ledger) PoolsForKey(ctx context.Context, keyID string) ([]QuotaPool, error) {
-	rows, err := l.db.QueryContext(ctx,
+	rows, err := l.rdb.QueryContext(ctx,
 		`SELECT DISTINCT p.id, p.name, p.saturation_threshold, p.account_count FROM quota_pools p
 		 JOIN quota_pool_allocations a ON a.pool_id = p.id
 		 WHERE a.key_id = ? ORDER BY p.id`, keyID)
@@ -456,7 +456,7 @@ func (l *Ledger) DeleteQuotaPool(ctx context.Context, id string) error {
 
 // loadPoolChildren fills a pool's dimensions and allocations.
 func (l *Ledger) loadPoolChildren(ctx context.Context, pool *QuotaPool) error {
-	drows, err := l.db.QueryContext(ctx,
+	drows, err := l.rdb.QueryContext(ctx,
 		`SELECT unit, window, limit_value FROM quota_pool_dimensions WHERE pool_id = ? ORDER BY unit, window`, pool.ID)
 	if err != nil {
 		return fmt.Errorf("ledger: pool dimensions: %w", err)
@@ -474,7 +474,7 @@ func (l *Ledger) loadPoolChildren(ctx context.Context, pool *QuotaPool) error {
 	if err := drows.Err(); err != nil {
 		return fmt.Errorf("ledger: pool dimensions: %w", err)
 	}
-	arows, err := l.db.QueryContext(ctx,
+	arows, err := l.rdb.QueryContext(ctx,
 		`SELECT key_id, weight, cap_value, cap_unit, policy FROM quota_pool_allocations WHERE pool_id = ? ORDER BY key_id`, pool.ID)
 	if err != nil {
 		return fmt.Errorf("ledger: pool allocations: %w", err)

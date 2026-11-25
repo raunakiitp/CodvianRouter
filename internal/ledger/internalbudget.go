@@ -168,7 +168,7 @@ func (l *Ledger) internalBudgetUsed(ctx context.Context, b InternalBudget, now t
 		return 0, fmt.Errorf("ledger: unknown internal budget scope %q", b.Scope)
 	}
 	var used float64
-	if err := l.db.QueryRowContext(ctx, query, args...).Scan(&used); err != nil {
+	if err := l.rdb.QueryRowContext(ctx, query, args...).Scan(&used); err != nil {
 		return 0, fmt.Errorf("ledger: internal budget usage: %w", err)
 	}
 	return used, nil
@@ -329,7 +329,7 @@ func (l *Ledger) SetInternalBudget(ctx context.Context, b InternalBudget) error 
 
 // GetInternalBudget returns one internal budget by id.
 func (l *Ledger) GetInternalBudget(ctx context.Context, id string) (InternalBudget, error) {
-	row := l.db.QueryRowContext(ctx, `
+	row := l.rdb.QueryRowContext(ctx, `
 		SELECT id, scope, provider_id, model_id, pool_id, period, limit_type, limit_value, warning_threshold, enabled
 		FROM internal_budgets WHERE id = ?`, id)
 	return scanInternalBudgetRow(row)
@@ -337,7 +337,7 @@ func (l *Ledger) GetInternalBudget(ctx context.Context, id string) (InternalBudg
 
 // ListInternalBudgets returns all internal budgets, id order.
 func (l *Ledger) ListInternalBudgets(ctx context.Context) ([]InternalBudget, error) {
-	rows, err := l.db.QueryContext(ctx, `
+	rows, err := l.rdb.QueryContext(ctx, `
 		SELECT id, scope, provider_id, model_id, pool_id, period, limit_type, limit_value, warning_threshold, enabled
 		FROM internal_budgets ORDER BY id`)
 	if err != nil {

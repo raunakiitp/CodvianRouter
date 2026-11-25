@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -194,7 +195,58 @@ func (s *Store) persist() error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(s.path, b, 0o600)
+	return atomicWriteFile(s.path, b)
+}
+
+// atomicWriteFile writes data to path atomically: a temp file in the
+// same directory, fsync'd, then renamed over path. A crash mid-write
+// therefore leaves either the previous snapshot or the complete new
+// one — never a torn file. A truncated schedule snapshot fails to
+// decode on the next Open, which would silently disable every
+// scheduled evaluation, so this is the durability the store needs.
+// It mirrors internal/files/store.go's index write.
+func atomicWriteFile(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	return fsyncDir(dir)
+}
+
+// fsyncDir flushes the directory entry to disk after the rename: the
+// rename is the atomicity guarantee, the fsync is the durability one.
+// Best effort — skipped on Windows, where Go cannot open a directory
+// for syncing (see internal/files/store.go).
+func fsyncDir(dir string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
 }
 
 // Upsert adds or replaces a schedule (by ID), then persists.
@@ -370,7 +422,11 @@ type Scheduler struct {
 	NewEngine func() Engine
 	// Notify is an optional callback for events (completed/failed/
 	// regression). No-op when nil.
-	Notify   func(event string, scheduleID, runID string)
+	Notify func(event string, scheduleID, runID string)
+	// Logf, when set, receives background-failure diagnostics — in
+	// particular a panic recovered from a scheduled run goroutine.
+	// No-op when nil.
+	Logf     func(format string, args ...any)
 	mu       sync.Mutex
 	inFlight map[string]int
 }
@@ -427,8 +483,24 @@ func (s *Scheduler) tick(ctx context.Context) {
 		}
 		s.inFlight[sch.ID] = inflight + 1
 		s.mu.Unlock()
-		go s.execute(ctx, sch)
+		go s.runScheduled(ctx, sch)
 	}
+}
+
+// runScheduled runs one scheduled evaluation in its own goroutine and
+// recovers any panic, so a single bad run (a misbehaving engine, a
+// nil dereference while recording history) cannot take the whole
+// gateway process down. execute's own deferred in-flight decrement
+// still runs during the unwind, so the concurrency slot is released.
+func (s *Scheduler) runScheduled(ctx context.Context, sch *Schedule) {
+	defer func() {
+		if r := recover(); r != nil {
+			if s.Logf != nil {
+				s.Logf("eval: scheduled run for %q panicked: %v", sch.ID, r)
+			}
+		}
+	}()
+	s.execute(ctx, sch)
 }
 
 // execute runs one evaluation and records its history + regression.

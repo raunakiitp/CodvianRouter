@@ -153,8 +153,23 @@ func (d *Dispatcher) Notify(event string, payload map[string]any) {
 			continue
 		}
 		ep := ep
-		go d.deliver(ep, event, body)
+		go d.safeDeliver(ep, event, body)
 	}
+}
+
+// safeDeliver runs one endpoint delivery in its own goroutine and
+// recovers any panic (a panicking transport, client or signature
+// path) so webhook delivery can never take the gateway process
+// down. The delivery itself is best-effort and already drops
+// failures; this only adds the last-resort guard the request path
+// has and the background path lacked.
+func (d *Dispatcher) safeDeliver(ep Endpoint, event string, body []byte) {
+	defer func() {
+		if r := recover(); r != nil {
+			d.logf("webhook %s: delivery panicked: %v", ep.ID, r)
+		}
+	}()
+	d.deliver(ep, event, body)
 }
 
 func (e Endpoint) subscribed(event string) bool {

@@ -504,6 +504,12 @@ var (
 	// Load; the audit test snapshots deltas around a workload.
 	memoHits   atomic.Int64
 	memoMisses atomic.Int64
+	// promptWireComputes counts CountPromptWire calls that actually
+	// recomputed from scratch (a per-request memo miss; AUD-PERF-004).
+	// A memo hit never increments it — the reuse regression test
+	// snapshots deltas around a workload to prove the per-hop gate
+	// counts a request once.
+	promptWireComputes atomic.Int64
 )
 
 // memoLookup returns the cached count for (encoding, fallback, sum).
@@ -562,6 +568,17 @@ func memoStore(encoding string, fallback bool, sum [32]byte, count TokenCount) {
 // reference (pre-send budget gates, which run before routing)
 // use CountPromptFull.
 func CountPromptWire(model, wire string, req provider.ChatRequest) (TokenCount, error) {
+	// Per-request memo (AUD-PERF-004): the same request is counted by
+	// several gates and again per hop; after the first count for a
+	// (model, wire) the result is reused. A request with no memo
+	// attached computes exactly as before.
+	memo, _ := req.TokenCountMemo().(*RequestMemo)
+	if memo != nil {
+		if hit, ok := memo.lookup(model, wire, len(req.Messages), len(req.Tools)); ok {
+			return hit, nil
+		}
+	}
+	promptWireComputes.Add(1)
 	base, err := CountPrompt(model, req.Messages)
 	if err != nil {
 		return TokenCount{}, err
@@ -590,7 +607,11 @@ func CountPromptWire(model, wire string, req provider.ChatRequest) (TokenCount, 
 		// Native wires: one role-label token per message.
 		total += n
 	}
-	return TokenCount{Tokens: total, Encoding: base.Encoding, Fallback: base.Fallback, Estimated: estimated}, nil
+	got := TokenCount{Tokens: total, Encoding: base.Encoding, Fallback: base.Fallback, Estimated: estimated}
+	if memo != nil {
+		memo.store(model, wire, len(req.Messages), len(req.Tools), got)
+	}
+	return got, nil
 }
 
 // CountPromptFull is the wire-agnostic reference count: the

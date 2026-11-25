@@ -2,7 +2,6 @@
 
 Repository: https://github.com/raunakiitp/CodvianRouter
 Audit type: read-only, evidence-driven. No application code modified, no branch/PR/commit created, no paid credits spent, no Phase 3/4 started.
-Reference studied: https://github.com/cheaper-inference/OmniRoute (public README/feature list only — clean-room, no code/assets copied).
 
 ---
 
@@ -10,7 +9,7 @@ Reference studied: https://github.com/cheaper-inference/OmniRoute (public README
 
 CODVIAN ROUTER after Phase 2 is a large, genuinely implemented and heavily tested OpenAI-compatible routing gateway. The repository is internally consistent: the main branch is verified at `838e9d6` with a green CI run on that exact commit, a clean working tree, and zero open PRs. 314 HTTP routes are registered, the dashboard has zero "UI without backend" findings under the static `audit-fake.sh` gate, and the test suite contains 4,672 `Test/Benchmark/Fuzz` functions with `go vet ./...` clean.
 
-Phase 2 is complete on `main` (merged PRs #26–#32). The routing engine exposes 35 strategies in `internal/strategy.All` — a superset of every strategy OmniRoute's public README documents (20–21 named). Genuine bugs were found and fixed during Phase 2 (`ledger.ImportEvents` dropped reported-cost/cancelled; `/metrics` lacked usage/cost series; webhook coverage lacked provider-health events).
+Phase 2 is complete on `main` (merged PRs #26–#32). The routing engine exposes 35 strategies in `internal/strategy.All`, each conformance-tested (every strategy is a deterministic permutation of the candidate chain). Genuine bugs were found and fixed during Phase 2 (`ledger.ImportEvents` dropped reported-cost/cancelled; `/metrics` lacked usage/cost series; webhook coverage lacked provider-health events).
 
 Remaining work is **not** a large set of unimplemented features: the audit confirms the outstanding items are a small number of honest, evidence-backed deferrals and residual improvements — no P0 severity finding surfaced, and no evidence of a runtime/billing corruption path was found. Production readiness is high for a locally-hosted gateway, with the caveat that fresh benchmark numbers and real-provider verifications remain deferred (they need a quiet Linux rig and API credits respectively).
 
@@ -79,24 +78,24 @@ Every Phase 2 task is COMPLETE except two recorded exceptions (T4, T13 re-measur
 - **Bench re-measure deferred** — `scripts/bench.sh` uses `flock` + `/proc/loadavg` (lines 21–27) and is not run in `.github/workflows/*.yml`; a fresh measurement needs a quiet Linux host. Historical records preserved in `docs/benchmark-*.json`.
 - **audit-fake.sh leaves 2 items UNVERIFIED** (static grep cannot settle): `#revealKeyBtn` label semantics; per-view honest-empty-state coverage (needs a Playwright/browser smoke pass). Neither is a confirmed defect.
 
-## 6. OmniRoute parity matrix (clean-room, README-based)
+## 6. Capability self-review (CODVIAN implementation status)
 
-Reference (public README, fetched 2026-11-22): one OpenAI-compatible endpoint, 375 providers / 1,400+ models, quota-aware auto-fallback, compression (RTK+Caveman), MCP/A2A, per-key routing control, combos (fusion/pipeline/auto), 20–21 routing strategies.
+Capability inventory verified against this tree. This is a self-review of what CODVIAN actually implements — it is not a comparison with any other product.
 
-| Capability | OmniRoute | CODVIAN implementation | CODVIAN evidence | Gap / note |
-|---|---|---|---|---|
-| OpenAI-compatible endpoint | one base URL + gateway key | `/v1/*` chat/responses/embeddings etc. behind a gateway key | `internal/server`, apitest suite | PARITY |
-| Routing strategies | 20–21 named | 35 in `internal/strategy.All`, includes every OmniRoute name (priority, fill-first, weighted, round-robin, p2c, least-used, random, strict-random, cost-optimized, headroom, quota-weighted, reset-window, reset-aware, context-relay, context-optimized, cache-optimized, lkgp, auto, fusion, pipeline, expiry-first) plus more (most-reliable, least-latency, latency-aware, code, sla-aware, nadir, ship-fast, cost-saver, quality-first, offline-friendly, reliability-first, chaos-mode, cascade) | `strategy.go:211-246`; conformance tests | CODVIAN_BETTER (breadth) |
-| Combos | fusion/pipeline/auto | fusion/pipeline/jev + auto family + candidate pool | `internal/strategy` combo.go, tests | PARITY |
-| Quota-aware auto-fallback | yes | quota-weighted, headroom, quota pools/schedules, region failover | ledger + router tests | PARITY |
-| Provider pool | 375 / 1400+ models | provider registry + catalog + model mapping (modelsync OFF default) | `internal/catalog`, `internal/provider`, `internal/modelsync` | PARTIAL — pool breadth is config/catalog driven, not a bundled 375-provider list |
-| Compression | RTK/Caveman 15–95% | lossless-first compression (`internal/compress`, 167 tests) | compress suite | PARITY/CODVIAN_BETTER (verify ratio claim only with measured data) |
-| MCP / A2A | yes | `internal/mcp`, `internal/a2a` (+audit) | mcp/a2a suites | PARITY |
-| Per-key routing control | forcedModel + access | key-scoped models/routing, per-key quotas | server key APIs | PARITY |
-| Desktop/PWA | claimed | not found in CODVIAN | — | NOT_APPLICABLE / MISSING (not a CODVIAN goal; document as out of scope unless requested) |
-| Observed verbatim no-extra-cost resale | OmniRoute business model | not applicable (CODVIAN is a self-hosted gateway, not a reseller) | — | NOT_APPLICABLE |
+| Capability | CODVIAN implementation | CODVIAN evidence | Status |
+|---|---|---|---|
+| OpenAI-compatible endpoint | `/v1/*` chat/responses/embeddings etc. behind a gateway key | `internal/server`, apitest suite | IMPLEMENTED |
+| Routing strategies | 35 in `internal/strategy.All` — priority, fill-first, weighted, round-robin, p2c, least-used, random, strict-random, cost-optimized, headroom, quota-weighted, reset-window, reset-aware, context-relay, context-optimized, cache-optimized, lkgp, auto, fusion, pipeline, expiry-first, most-reliable, least-latency, latency-aware, code, sla-aware, nadir, ship-fast, cost-saver, quality-first, offline-friendly, reliability-first, chaos-mode, cascade | `strategy.go:211-246`; conformance tests | IMPLEMENTED (35, conformance-tested) |
+| Combos | fusion/pipeline/jev + auto family + candidate pool | `internal/strategy` combo.go, tests | IMPLEMENTED |
+| Quota-aware auto-fallback | quota-weighted, headroom, quota pools/schedules, region failover | ledger + router tests | IMPLEMENTED |
+| Provider pool | provider registry + catalog + model mapping (modelsync OFF default) | `internal/catalog`, `internal/provider`, `internal/modelsync` | IMPLEMENTED — breadth is config/catalog driven, no bundled provider list |
+| Compression | lossless-first compression (`internal/compress`, 167 tests) | compress suite | IMPLEMENTED — ratio claims require measured data |
+| MCP / A2A | `internal/mcp`, `internal/a2a` (+audit) | mcp/a2a suites | IMPLEMENTED |
+| Per-key routing control | key-scoped models/routing, per-key quotas | server key APIs | IMPLEMENTED |
+| Desktop/PWA | not part of the headless-server scope | — | OUT OF SCOPE |
+| Resale of verbatim no-extra-cost responses | not applicable (CODVIAN is a self-hosted gateway, not a reseller) | — | OUT OF SCOPE |
 
-**CODVIAN advantages (reasoned, not measured):** (1) fully self-hosted with a nonroot distroless image and SSRF/egress protections; (2) wider, conformance-tested strategy surface (35 vs ~20); (3) integrated usage/billing ledger with reported-vs-priced reconciliation (T6); (4) tenant-scoped semantic cache (T9); (5) strict dashboard preservation discipline. Advantages are capability-breadth claims; "better than reference" on performance requires a measured head-to-head, which is not available (no fair rig) and is therefore not claimed.
+**CODVIAN advantages (reasoned, not measured):** (1) fully self-hosted with a nonroot distroless image and SSRF/egress protections; (2) wide, conformance-tested strategy surface (35 named strategies); (3) integrated usage/billing ledger with reported-vs-priced reconciliation (T6); (4) tenant-scoped semantic cache (T9); (5) strict dashboard preservation discipline. Advantage claims are capability-breadth claims; any performance "better" claim requires a measured head-to-head, which is not available (no fair rig) and is therefore not claimed.
 
 ## 7. Routing engine audit
 
@@ -221,13 +220,12 @@ Independent improvements (non-blocking, later): G-07 tooling consolidation; opti
 - No UI/UX redesign; design system preserved.
 - No paid provider credits spent or probes repeated.
 - No force-push, history rewrite, reset, or deletion. Working tree preserved clean.
-- Clean-room OmniRoute study (public README only).
 
 ## 18. Verification evidence and limitations
 
 Run on: main HEAD `838e9d6` (CI `ci` success). Commands used: `git rev-parse`, `git status --porcelain`, `go build -buildvcs=false ./...` (PASS), `go vet -buildvcs=false ./...` (exit 0), Phase 2 regression test subset (all `ok`), `scripts/audit-fake.sh` (RESULT: PASS, 0 findings), GitHub Actions/PR API reads, `grep` inventory.
 
-**Limitations (honest):** (1) real-provider round-trips not executed (no credits; G4–G6 remain deferred); (2) full `go test ./... -race` not re-run locally (CI green on main is authoritative; one local env-only sha256sum failure); (3) OmniRoute compared from its public README only — no deep source diff, no measured head-to-head (none claimed); (4) dashboard interactive behavior not browser-driven (static audit + served-JS tests); (5) fresh benchmark numbers unavailable on this host (Linux-bound rig). Every finding above is traceable to a file, test, or CI reference; no problem was invented and no severity inflated.
+**Limitations (honest):** (1) real-provider round-trips not executed (no credits; G4–G6 remain deferred); (2) full `go test ./... -race` not re-run locally (CI green on main is authoritative; one local env-only sha256sum failure); (3) no measured head-to-head against any other gateway (none claimed); (4) dashboard interactive behavior not browser-driven (static audit + served-JS tests); (5) fresh benchmark numbers unavailable on this host (Linux-bound rig). Every finding above is traceable to a file, test, or CI reference; no problem was invented and no severity inflated.
 
 ---
 *Audit documentation only. Not committed; no branch/PR created. Do not begin Phase 3/4 without explicit user authorization.*

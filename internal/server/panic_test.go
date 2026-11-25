@@ -1,5 +1,5 @@
 // Panic isolation on the request/stream path (CHECKLIST 165-166,
-// Bifrost v2.5.1 parity): a panic in a provider client, a chunk
+// upstream-gateway behaviour): a panic in a provider client, a chunk
 // converter, a hook, or the engine itself must never kill the
 // gateway process. These tests drive the real HTTP handlers with
 // deliberately panicking clients/engines and prove the server

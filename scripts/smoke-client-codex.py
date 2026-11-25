@@ -61,7 +61,9 @@ ClientHarness, Checklist = _lib.ClientHarness, _lib.Checklist
 MODEL = "mock-model"
 PROMPT_1 = "codex smoke probe one: say hi"
 PROMPT_STREAM = "codex smoke probe stream: say hi"
-PROMPT_NEG = "codex smoke probe negative: say hi"
+# Unique negative prompt with ZERO word overlap with any prior prompt
+# to avoid semantic-cache (token-overlap threshold 0.85) false hits.
+PROMPT_NEG = "NEGATIVE CHECK: UNIQUE PROBE XYZ-98765 NO OVERLAP"
 
 
 def responses_body(prompt, stream=False):
@@ -72,10 +74,23 @@ def responses_body(prompt, stream=False):
             "stream": stream}
 
 
+def req_401_robust(h, path, body, headers=None, retries=3, delay=0.5):
+    """Assert 401, retrying on transport errors (status=0)."""
+    for i in range(retries):
+        st, _, body = h.req("POST", path, body, headers=headers)
+        if st == 401:
+            return True, st, body
+        if st == 0:
+            time.sleep(delay)
+            continue
+        return False, st, body
+    return False, st, body
+
+
 def main():
     c = Checklist()
     try:
-        h = ClientHarness("codex", router_port=21611)
+        h = ClientHarness("codex", router_port=21711)
     except Exception as e:
         print(f"SETUP FAILED: {e}")
         return 1
@@ -142,16 +157,20 @@ def main():
         c.check("X7 retrieve response carried X-Codvian-Request-Id",
                 bool(rid_hdr), f"request_id={rid_hdr}")
 
-        st, _, body = h.req("POST", "/v1/responses",
-                            responses_body("no key probe"))
-        c.check("X8 unauthenticated -> 401", st == 401, f"status={st}")
+        # Robust unauthenticated check: retry on transport errors (status=0)
+        ok, st, body = req_401_robust(h, "/v1/responses",
+                                      responses_body("no key probe"))
+        c.check("X8 unauthenticated -> 401 (robust)", ok,
+                f"status={st} {body[:120]}")
 
         # NEGATIVE: upstream down must fail fast, not hang or succeed.
+        # Use a unique prompt with zero overlap + cache bypass header to force
+        # a genuine upstream call (which will fail since mock is stopped).
         h.stop_mock()
         t0 = time.time()
         st, _, body = h.req("POST", "/v1/responses",
                             responses_body(PROMPT_NEG),
-                            key=h.key, timeout=30)
+                            key=h.key, headers={"X-Codvian-No-Cache": "true"}, timeout=30)
         elapsed = time.time() - t0
         c.check("X9 NEGATIVE: mock stopped -> fresh request fails fast "
                 "(non-200), never hangs or reports success",

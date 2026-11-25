@@ -116,6 +116,8 @@ func (s *Server) handleOrgCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in orgCreateInput
+	// AUD-SEC-003: bound the body before decoding, like every other handler.
+	r.Body = http.MaxBytesReader(w, r.Body, maxAdminJSONBody)
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
 		return
@@ -145,6 +147,8 @@ func (s *Server) handleOrgTeamCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in orgTeamInput
+	// AUD-SEC-003: bound the body before decoding, like every other handler.
+	r.Body = http.MaxBytesReader(w, r.Body, maxAdminJSONBody)
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
 		return
@@ -197,6 +201,8 @@ func (s *Server) handleOrgTeamBind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in orgBindInput
+	// AUD-SEC-003: bound the body before decoding, like every other handler.
+	r.Body = http.MaxBytesReader(w, r.Body, maxAdminJSONBody)
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
 		return

@@ -66,10 +66,12 @@ import (
 
 	"github.com/raunakiitp/codvian-router/internal/cache"
 	"github.com/raunakiitp/codvian-router/internal/guardrails"
+	"github.com/raunakiitp/codvian-router/internal/ledger"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/readiness"
 	"github.com/raunakiitp/codvian-router/internal/relay"
 	"github.com/raunakiitp/codvian-router/internal/router"
+	"github.com/raunakiitp/codvian-router/internal/tokencount"
 	"github.com/raunakiitp/codvian-router/internal/wire"
 )
 
@@ -85,6 +87,15 @@ type relayTarget struct {
 	UpstreamModel string
 	Attempts      int
 	IsLocal       bool
+	// Transport is the warm pooled transport for the target's
+	// (provider, key) pair, resolved from the provider registry
+	// (Registry.PooledTransport, keyed by the key fingerprint — never
+	// the key). The verbatim relay uses it so a bursty relay to one
+	// provider shares the engine's idle connections instead of
+	// re-dialing through http.DefaultTransport's 2-idle-conn limit
+	// (AUD-PERF-003). nil for a fake resolver or an unknown provider;
+	// the relay then keeps its own default transport.
+	Transport http.RoundTripper
 }
 
 // relayResolver resolves the relay target for one model ID. The
@@ -108,6 +119,10 @@ func (a providerRegistryAdapter) ResolveRelayTarget(ctx context.Context, model s
 		WireFormat: t.WireFormat, BaseURL: t.BaseURL,
 		AuthHeaders: t.AuthHeaders, UpstreamModel: t.UpstreamModel,
 		Attempts: t.Attempts, IsLocal: t.IsLocal,
+		// AUD-PERF-003: reuse the engine's warm pool for this
+		// (provider, key) pair so the verbatim relay does not
+		// re-dial after http.DefaultTransport's 2 idle conns.
+		Transport: a.reg.PooledTransport(t.ProviderID, t.KeyFingerprint),
 	}, nil
 }
 
@@ -230,8 +245,17 @@ func (s *Server) checkLocalReadiness(w http.ResponseWriter, r *http.Request, mod
 		return true
 	}
 	w.Header().Set("Retry-After", strconv.Itoa(st.RetryAfterSeconds))
+	msg := fmt.Sprintf("local capability %s is not ready yet; its assets are still loading", target.ProviderID)
+	// AUD-API-001 residual: a not-ready local capability is reported on
+	// the Anthropic surface too, so /v1/messages never answers an
+	// OpenAI-shaped body (the earlier fix covered the handler-produced
+	// sites but not this gate, which runs before them).
+	if isAnthropicEndpointPath(r.URL.Path) {
+		writeAnthropicError(w, http.StatusServiceUnavailable, msg)
+		return false
+	}
 	writeJSON(w, http.StatusServiceUnavailable, errorBody{Error: errorDetail{
-		Message: fmt.Sprintf("local capability %s is not ready yet; its assets are still loading", target.ProviderID),
+		Message: msg,
 		Type:    "capability_not_ready",
 		Reason:  "capability_not_ready",
 	}})
@@ -250,7 +274,7 @@ type messagesHeader struct {
 // dialect, gateway-key auth like /v1/chat/completions).
 func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		writeAnthropicError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	// Panic isolation (CHECKLIST 165-166): a panic anywhere on
@@ -284,7 +308,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	// spelling — the header form is rejected outright, never
 	// silently ignored.
 	if r.Header.Get("X-Codvian-Routing") != "" {
-		writeError(w, http.StatusBadRequest, "X-Codvian-Routing header is not supported; send the routing contract in the \"routing\" request-body field")
+		writeAnthropicError(w, http.StatusBadRequest, "X-Codvian-Routing header is not supported; send the routing contract in the \"routing\" request-body field")
 		return
 	}
 
@@ -304,9 +328,9 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			writeAnthropicError(w, http.StatusRequestEntityTooLarge, "request body too large")
 		} else {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			writeAnthropicError(w, http.StatusBadRequest, "invalid request body")
 		}
 		return
 	}
@@ -320,11 +344,11 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	var head messagesHeader
 	if err := json.Unmarshal(raw, &head); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeAnthropicError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if strings.TrimSpace(head.Model) == "" {
-		writeError(w, http.StatusBadRequest, "model is required")
+		writeAnthropicError(w, http.StatusBadRequest, "model is required")
 		return
 	}
 	// Intent tiers (CHECKLIST 277 (c), same rule as chat
@@ -449,14 +473,14 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		// would otherwise relay verbatim — before any provider
 		// is dialled and before any byte is forwarded.
 		if strings.Contains(err.Error(), "invalid routing") {
-			writeError(w, http.StatusBadRequest, err.Error())
+			writeAnthropicError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		var unrep *wire.UnrepresentableError
 		if errors.As(err, &unrep) {
-			writeError(w, http.StatusBadRequest, "request cannot be translated to the canonical form: "+unrep.Reason)
+			writeAnthropicError(w, http.StatusBadRequest, "request cannot be translated to the canonical form: "+unrep.Reason)
 		} else {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			writeAnthropicError(w, http.StatusBadRequest, "invalid request body")
 		}
 		return
 	}
@@ -539,7 +563,7 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		defer asyncRun.Finish()
 	}
 	if verbatim && target != nil {
-		s.forwardVerbatim(w, ctx, raw, head, target, reason, req, cacheable, start, asyncRun)
+		s.forwardVerbatim(w, ctx, raw, head, target, reason, req, cacheable, start, asyncRun, s.callerKeyID(r))
 		return
 	}
 	if target == nil {
@@ -828,7 +852,7 @@ func (s *Server) serveMessagesCache(ctx context.Context, w http.ResponseWriter, 
 	s.recordMetrics(ctx, req, resp, nil, start)
 	body, err := relay.ToAnthropicResponse(resp)
 	if err != nil {
-		writeServerError(w, http.StatusBadGateway, "upstream provider error")
+		writeAnthropicError(w, http.StatusBadGateway, "upstream provider error")
 		return
 	}
 	w.Header().Set("X-Codvian-Cache", layer)
@@ -1058,12 +1082,263 @@ func writeVerbatimHeaders(w http.ResponseWriter, resp *http.Response, reason str
 // async-block sentinel. The verbatim path keeps its standing rule
 // of recording no ledger row, cut or not — a relayed request's spend
 // is never recorded in the ledger.
-func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw []byte, head messagesHeader, target *relayTarget, reason string, req provider.ChatRequest, cacheable bool, start time.Time, asyncRun *guardrails.AsyncRun) {
+// cappedBuffer keeps at most max bytes of a copied response body so a
+// usage object can be priced without buffering the whole response and
+// without delaying the first byte to the client (AUD-SEC-002).
+type cappedBuffer struct {
+	buf bytes.Buffer
+	max int
+	// total counts every byte the copy saw, including the part beyond
+	// the kept prefix, so a missing-usage estimate reflects the whole
+	// response (AUD-SEC-002).
+	total int
+}
+
+func (c *cappedBuffer) Write(p []byte) (int, error) {
+	c.total += len(p)
+	if room := c.max - c.buf.Len(); room > 0 {
+		if len(p) <= room {
+			c.buf.Write(p)
+		} else {
+			c.buf.Write(p[:room])
+		}
+	}
+	return len(p), nil
+}
+
+// isAnthropicEndpointPath reports whether a request path belongs to the
+// Anthropic dialect surface, which answers every error — auth included
+// — in the Anthropic envelope (AUD-API-001).
+func isAnthropicEndpointPath(path string) bool {
+	return path == "/v1/messages" || strings.HasPrefix(path, "/v1/messages/")
+}
+
+// anthropicErrorType maps an HTTP status onto the Anthropic error
+// vocabulary the SDK understands (AUD-API-001). Anything unrecognised
+// is an api_error, never an OpenAI type name.
+func anthropicErrorType(status int) string {
+	switch {
+	case status == http.StatusBadRequest, status == http.StatusNotFound,
+		status == http.StatusRequestEntityTooLarge, status == http.StatusUnprocessableEntity:
+		return "invalid_request_error"
+	case status == http.StatusUnauthorized:
+		return "authentication_error"
+	case status == http.StatusForbidden:
+		return "permission_error"
+	case status == http.StatusTooManyRequests:
+		return "rate_limit_error"
+	case status == http.StatusServiceUnavailable:
+		return "overloaded_error"
+	default:
+		return "api_error"
+	}
+}
+
+// writeAnthropicError answers a /v1/messages request with the Anthropic
+// error envelope: {"type":"error","error":{"type":...,"message":...}}.
+//
+// AUD-API-001: this endpoint used to answer errors with the OpenAI
+// shape ({"error":{"message","type","code"}}, OpenAI type names), so an
+// Anthropic SDK client could not parse a non-streaming error — the body
+// is not a shape its error model describes. Streaming errors already
+// used Anthropic events; this makes the non-streaming half agree. A 429
+// also carries Retry-After (AUD-REL-001), so the SDK backs off instead
+// of retrying straight into the wall.
+func writeAnthropicError(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, map[string]any{
+		"type": "error",
+		"error": map[string]any{
+			"type":    anthropicErrorType(status),
+			"message": message,
+		},
+	})
+}
+
+// handleMessagesEngineError is the Anthropic-shaped counterpart of
+// handleEngineError: the same status decisions (content refusal 403,
+// contract 4xx, per-key token limit 429 + Retry-After, budget 402,
+// no-fit 400, timeouts 504, otherwise the upstream's status), rendered
+// in the Anthropic envelope so no OpenAI type name leaks through this
+// endpoint.
+func (s *Server) handleMessagesEngineError(w http.ResponseWriter, err error) {
+	var rle *provider.RateLimitError
+	if errors.As(err, &rle) {
+		if rle.RetryAfterPresent {
+			seconds := int(rle.RetryAfter / time.Second)
+			if seconds < 1 {
+				seconds = 1
+			}
+			w.Header().Set("Retry-After", strconv.Itoa(seconds))
+		}
+		writeAnthropicError(w, http.StatusTooManyRequests, "upstream provider rate limited the request")
+		return
+	}
+	var qe *provider.QuotaError
+	if errors.As(err, &qe) {
+		status := qe.StatusCode
+		if status < 400 || status > 599 {
+			status = http.StatusPaymentRequired
+		}
+		writeAnthropicError(w, status, "upstream provider quota exhausted")
+		return
+	}
+	// Internal refusals keep their own status, message and Retry-After,
+	// so an internal limit is never confusable with the upstream's own
+	// 429 (AUD-REL-001 requires the two to stay distinct).
+	var tb *router.TokenLimitBreach
+	if errors.As(err, &tb) {
+		seconds := int(time.Until(tb.NextReset) / time.Second)
+		if seconds < 1 {
+			seconds = 1
+		}
+		w.Header().Set("Retry-After", strconv.Itoa(seconds))
+		writeAnthropicError(w, http.StatusTooManyRequests, tb.Error())
+		return
+	}
+	var ib *router.InternalBudgetBreach
+	if errors.As(err, &ib) {
+		writeAnthropicError(w, http.StatusPaymentRequired, ib.Error())
+		return
+	}
+	var ce *router.ContractError
+	if errors.As(err, &ce) {
+		writeAnthropicError(w, ce.Status, ce.Msg)
+		return
+	}
+	status := s.statusForEngineError(err)
+	message := "upstream provider error"
+	switch status {
+	case http.StatusForbidden:
+		message = "upstream providers refused the content"
+	case http.StatusBadRequest, http.StatusPaymentRequired:
+		message = err.Error()
+	case http.StatusGatewayTimeout:
+		message = "request timed out"
+	}
+	writeAnthropicError(w, status, message)
+}
+
+// recordRelaySpend writes the ledger row for one relayed
+// /v1/messages request (AUD-SEC-002). The verbatim path bypasses the
+// engine, which is why its spend used to be invisible to per-key
+// budgets, quota windows and the cost dashboard.
+//
+// Honesty rules:
+//   - A 2xx response records OK=true with the provider-reported usage.
+//   - A 2xx response that reported NO usage records OK=true with zero
+//     tokens: the ledger's "0 means not reported" contract, never a
+//     fabricated count.
+//   - A non-2xx response records OK=false with zero tokens, so the
+//     attempt is visible but never counted as spend.
+//   - Exactly one row per relayed request: the relay path never runs
+//     the engine, so there is no second row to double-charge.
+//
+// Best-effort: a nil ledger, no model to attribute to, or a ledger
+// error never fails the request the client already received.
+func (s *Server) recordRelaySpend(ctx context.Context, keyID string, target *relayTarget, model string, u relay.AnthropicUsage, status int, start time.Time, est relayEstimate) {
+	if s.ledger == nil {
+		return
+	}
+	if model == "" && target != nil {
+		model = target.UpstreamModel
+	}
+	if model == "" {
+		return
+	}
+	providerName := ""
+	if target != nil {
+		providerName = target.ProviderName
+	}
+	row := ledger.Usage{
+		GatewayKeyID: keyID,
+		Provider:     providerName,
+		Model:        model,
+		Endpoint:     "messages",
+		OK:           status >= 200 && status < 300,
+		LatencyMS:    time.Since(start).Milliseconds(),
+	}
+	if row.OK {
+		if u.Reported {
+			// SplitKnown is what makes the ledger store (and price) a
+			// provider-reported split.
+			row.SplitKnown = true
+			row.PromptTokens = u.InputTokens
+			row.CompletionTokens = u.OutputTokens
+			row.TotalTokens = u.InputTokens + u.OutputTokens
+			row.CachedTokens = u.CacheReadTokens
+			row.CacheWriteTokens = u.CacheWriteTokens
+		} else {
+			// AUD-SEC-002 review blocker: a 2xx with NO reported usage
+			// used to be recorded as a zero-token / zero-cost row, so a
+			// budgeted key could keep spending through /v1/messages
+			// without its accrued spend ever moving — a budget bypass.
+			// Unknown usage is NOT zero usage. Charge a CONSERVATIVE
+			// local estimate instead, and mark the row as an estimate
+			// (ledger.LocalEstimate) so the dashboard and the drift
+			// column can tell it apart from a provider-reported row:
+			// the prompt estimate counts the request we actually sent,
+			// the completion estimate counts the bytes we actually
+			// delivered (chars/4 rounds up — never an under-count).
+			promptEst, completionEst := est.estimate(model)
+			row.SplitKnown = true
+			// The row is PRICED (so the budget gate sees it) but marked,
+			// per LocalEstimatePromptTokens' contract, as carrying a
+			// LOCALLY measured prompt rather than a provider-reported
+			// one: LocalEstimate stays false (this is not a bare
+			// estimate-only row), while a non-zero
+			// LocalEstimatePromptTokens is what tells an auditor "these
+			// numbers were not the provider's". A provider-reported row
+			// leaves it 0, so unknown and known stay distinguishable.
+			row.LocalEstimatePromptTokens = promptEst
+			row.PromptTokens = promptEst
+			row.CompletionTokens = completionEst
+			row.TotalTokens = promptEst + completionEst
+			s.logger.Printf("ledger: provider reported no usage for a relayed messages request (model=%s provider=%s); charging a conservative local estimate of %d prompt + %d completion tokens so budgets still see it",
+				model, providerName, promptEst, completionEst)
+		}
+	}
+	if _, err := s.ledger.RecordUsage(ctx, row, s.getLedgerPrices()); err != nil {
+		s.logger.Printf("ledger: relay spend row not recorded (model=%s provider=%s): %v", model, providerName, err)
+	}
+}
+
+// relayEstimate carries what a relayed request/response actually had, so
+// a MISSING usage report can be priced conservatively instead of being
+// charged at zero (AUD-SEC-002 review blocker).
+type relayEstimate struct {
+	// promptText is the request body AS SENT. The estimate tokenises the
+	// whole body, JSON syntax included, so it over-counts the prompt
+	// rather than under-counting it.
+	promptText string
+	// completionBytes is how many response bytes were delivered to the
+	// client (SSE framing included for a stream), used as a chars/4
+	// completion estimate.
+	completionBytes int
+}
+
+// estimate returns a conservative token estimate. Both sides round UP and
+// deliberately include framing/JSON overhead, so the result can only
+// over-charge: the safe direction for a budget, and never a claim that
+// unknown usage was free.
+func (e relayEstimate) estimate(model string) (prompt, completion int) {
+	if e.promptText != "" {
+		if tc, err := tokencount.Count(model, e.promptText); err == nil && tc.Tokens > 0 {
+			prompt = tc.Tokens
+		}
+	}
+	if prompt == 0 && e.promptText != "" {
+		prompt = (len(e.promptText) + 3) / 4
+	}
+	completion = (e.completionBytes + 3) / 4
+	return prompt, completion
+}
+
+func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw []byte, head messagesHeader, target *relayTarget, reason string, req provider.ChatRequest, cacheable bool, start time.Time, asyncRun *guardrails.AsyncRun, keyID string) {
 	body := raw
 	if target.UpstreamModel != "" && target.UpstreamModel != head.Model {
 		rewritten, err := relay.RewriteModel(raw, target.UpstreamModel)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "request body has no top-level model to rewrite")
+			writeAnthropicError(w, http.StatusBadRequest, "request body has no top-level model to rewrite")
 			return
 		}
 		body = rewritten
@@ -1105,7 +1380,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 	}
 	upstream, err := http.NewRequestWithContext(upCtx, http.MethodPost, relay.MessagesURL(target.BaseURL), bytes.NewReader(body))
 	if err != nil {
-		writeServerError(w, http.StatusBadGateway, "upstream provider error")
+		writeAnthropicError(w, http.StatusBadGateway, "upstream provider error")
 		return
 	}
 	for k, v := range target.AuthHeaders {
@@ -1118,6 +1393,16 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 		upstream.Header.Set("Accept", "application/json")
 	}
 	client := &http.Client{Timeout: s.timeout}
+	// AUD-PERF-003: reuse the target's warm pooled transport — the
+	// engine's own pool for this (provider, key) pair — so a bursty
+	// relay to one provider keeps its idle connections instead of
+	// re-dialing TCP+TLS once http.DefaultTransport's
+	// MaxIdleConnsPerHost=2 is exceeded. A nil transport (a fake
+	// resolver, or an unknown provider with no pool) keeps the
+	// previous default behaviour unchanged.
+	if target.Transport != nil {
+		client.Transport = target.Transport
+	}
 	resp, err := client.Do(upstream)
 	if err != nil {
 		// A BLOCK verdict that cancelled the upstream call is a
@@ -1136,7 +1421,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 		// The upstream call itself failed before any byte was
 		// committed: record it server-side as a 502.
 		s.recordTelemetry(ctx, s.verbatimMeta(target, head, start), http.StatusBadGateway)
-		writeServerError(w, http.StatusBadGateway, "upstream provider error")
+		writeAnthropicError(w, http.StatusBadGateway, "upstream provider error")
 		return
 	}
 	defer resp.Body.Close()
@@ -1164,6 +1449,10 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 		s.recordTelemetry(ctx, meta, resp.StatusCode)
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write(buf)
+		// AUD-SEC-002: the verbatim path bypasses the engine, so it
+		// records its own ledger row from the provider-reported usage
+		// in the bytes it just forwarded.
+		s.recordRelaySpend(ctx, keyID, target, head.Model, relay.ParseAnthropicUsage(buf), resp.StatusCode, start, relayEstimate{promptText: string(raw), completionBytes: len(buf)})
 		// M6.3: gate the store on the same cacheable condition as
 		// the normal (non-async) branch below — a tool-carrying
 		// request must not be stored just because an async
@@ -1193,9 +1482,24 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 	if !head.Stream && cacheable && (s.exactCache != nil || s.semanticCache != nil) {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, relayMaxStoreBody+1))
 		_, _ = w.Write(body)
+		// AUD-SEC-002: account the spend of the bytes just forwarded.
+		s.recordRelaySpend(ctx, keyID, target, head.Model, relay.ParseAnthropicUsage(body), resp.StatusCode, start, relayEstimate{promptText: string(raw), completionBytes: len(body)})
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 && len(body) <= relayMaxStoreBody {
 			s.storeMessagesCache(ctx, req, body)
 		}
+		return
+	}
+	// AUD-SEC-002, non-streaming half: the body is not SSE, so it is
+	// copied through a tee that keeps at most relayMaxStoreBody bytes.
+	// The client still receives every byte immediately (no added
+	// latency, no buffering of the whole response) while the usage
+	// object can be priced from what was kept. An oversized body
+	// simply reports no usage — the ledger's "0 means not reported",
+	// never an invented count.
+	if !head.Stream {
+		cb := &cappedBuffer{max: relayMaxStoreBody}
+		_, _ = io.Copy(w, io.TeeReader(resp.Body, cb))
+		s.recordRelaySpend(ctx, keyID, target, head.Model, relay.ParseAnthropicUsage(cb.buf.Bytes()), resp.StatusCode, start, relayEstimate{promptText: string(raw), completionBytes: cb.total})
 		return
 	}
 	// Stream redaction (B3-26 / :798): the verbatim relay copies
@@ -1220,6 +1524,15 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 	// handleChatStream — redactor first, then restorer, so a token
 	// split across chunks still restores.
 	vaultRestorer := guardrails.NewStreamRestorer(s.reversibleVault)
+	// AUD-SEC-002: recover the provider-reported usage from the bytes as they
+	// reach the client (the relay stays byte-for-byte verbatim) and record ONE
+	// ledger row for the relayed spend when the stream ends. Without this,
+	// /v1/messages traffic never landed in the ledger and per-key budgets
+	// could not see it.
+	sniff := relay.NewUsageSniffer(w)
+	defer func() {
+		s.recordRelaySpend(ctx, keyID, target, head.Model, sniff.Usage(), resp.StatusCode, start, relayEstimate{promptText: string(raw), completionBytes: sniff.EmittedBytes()})
+	}()
 	if flusher, ok := w.(http.Flusher); ok {
 		// Copy in chunks and flush after each, so a streaming SSE
 		// response reaches the client event by event instead of
@@ -1242,7 +1555,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 					break
 				}
 				if safe != "" {
-					if _, werr := w.Write([]byte(safe)); werr != nil {
+					if _, werr := sniff.Write([]byte(safe)); werr != nil {
 						return
 					}
 					// The first byte is out — a BLOCK verdict landing
@@ -1284,7 +1597,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 		}
 		tail += vaultRestorer.Flush()
 		if tail != "" {
-			_, _ = w.Write([]byte(tail))
+			_, _ = sniff.Write([]byte(tail))
 			flusher.Flush()
 		}
 		// Async cut (CHECKLIST 203): the upstream call ended
@@ -1328,7 +1641,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 				break
 			}
 			if safe != "" {
-				if _, werr := w.Write([]byte(safe)); werr != nil {
+				if _, werr := sniff.Write([]byte(safe)); werr != nil {
 					return
 				}
 				asyncRun.MarkDelivered()
@@ -1353,7 +1666,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 	}
 	tail += vaultRestorer.Flush()
 	if tail != "" {
-		_, _ = w.Write([]byte(tail))
+		_, _ = sniff.Write([]byte(tail))
 	}
 	if res, blocked := asyncBlocked(asyncRun); blocked {
 		// No flusher (not a live SSE stream): the terminal frame
@@ -1483,19 +1796,19 @@ func (s *Server) handleMessagesTranslated(w http.ResponseWriter, ctx context.Con
 		meta := s.responseMeta(ctx, req, resp, start)
 		s.writeResponseHeaders(w, ctx, meta)
 		s.recordTelemetry(ctx, meta, s.statusForEngineError(err))
-		s.handleEngineError(w, err)
+		s.handleMessagesEngineError(w, err)
 		return
 	}
 	if resp == nil {
 		meta := s.responseMeta(ctx, req, resp, start)
 		s.writeResponseHeaders(w, ctx, meta)
 		s.recordTelemetry(ctx, meta, http.StatusBadGateway)
-		writeServerError(w, http.StatusBadGateway, "upstream provider error")
+		writeAnthropicError(w, http.StatusBadGateway, "upstream provider error")
 		return
 	}
 	body, err := relay.ToAnthropicResponse(resp)
 	if err != nil {
-		writeServerError(w, http.StatusBadGateway, "upstream provider error")
+		writeAnthropicError(w, http.StatusBadGateway, "upstream provider error")
 		return
 	}
 	s.setStaleHeader(w)
@@ -1564,7 +1877,7 @@ func (s *Server) handleMessagesStream(w http.ResponseWriter, ctx context.Context
 	}
 	em, err := relay.NewAnthropicStreamEmitter(w, "", req.Model)
 	if err != nil {
-		writeServerError(w, http.StatusBadGateway, "upstream provider error")
+		writeAnthropicError(w, http.StatusBadGateway, "upstream provider error")
 		return err
 	}
 	h := w.Header()

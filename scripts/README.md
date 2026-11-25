@@ -33,6 +33,11 @@ given per script. Run anything from the repo root.
 - `scripts/smoke-*.py` - end-to-end smoke scripts (client, failover,
   budgets, responses, security cluster, ...). They exercise the real
   binary; see each file's header for its provider/credential needs.
+- `scripts/run-client-smokes.sh` - runs the five M8.1 client-protocol
+  drivers (`smoke-client-{claude-code,codex,cursor,cline,aider}.py`)
+  sequentially against a router each driver boots itself; every upstream
+  is a localhost mock (no network, no credential). Runs in
+  `.github/workflows/client-smoke.yml`.
 
 ## Notes / maintenance
 - Never `rm` a script another workflow or doc references without grepping

@@ -170,7 +170,7 @@ func (l *Ledger) reservedSpendLocked(ctx context.Context, keyID string, now time
 		return 0, fmt.Errorf("ledger: prune expired reservations: %w", err)
 	}
 	var total float64
-	if err := l.db.QueryRowContext(ctx, `
+	if err := l.rdb.QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(estimated_cost_usd), 0) FROM spend_reservations
 		WHERE gateway_key_id = ? AND expires_ms > ?`,
 		keyID, now.UnixMilli()).Scan(&total); err != nil {

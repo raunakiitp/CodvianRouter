@@ -24,7 +24,7 @@
 - Hourly research into LLM routers worldwide: best features, latency
   reduction, and low-end local performance.
 - Hourly deep research into router GitHub repositories (reference routers,
-  LiteLLM, Portkey, CLIProxyAPI, 9router, and others): best features
+  comparable LLM gateways: best features
   extracted into a research log that builds draw from.
 - Planned technical direction from research so far:
   - Go core for low latency (reference: Go gateways reporting ~11 µs

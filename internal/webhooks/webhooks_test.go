@@ -255,3 +255,39 @@ func TestDispatcherRetriesTransportError(t *testing.T) {
 	d.Notify(QuotaExceededEvent, map[string]any{"reason": "budget"})
 	waitForAttempts(t, &mu, &attempts, 4)
 }
+
+// panicTransport panics inside RoundTrip, exercising the delivery
+// goroutine's recover: a panic there (a broken transport policy, a
+// client bug) must not take the process down (AUD-REL-006).
+type panicTransport struct{}
+
+func (panicTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	panic("round trip exploded")
+}
+
+func TestDispatcherRecoversPanicInDelivery(t *testing.T) {
+	recovered := make(chan struct{})
+	var once sync.Once
+	logger := log.New(logFuncWriter(func(p []byte) (int, error) {
+		if bytes.Contains(p, []byte("delivery panicked")) {
+			once.Do(func() { close(recovered) })
+		}
+		return len(p), nil
+	}), "", 0)
+	d := New([]Endpoint{{ID: "boom", URL: "http://127.0.0.1:1/hook", Events: []string{QuotaExceededEvent}}}, &http.Client{Transport: panicTransport{}}, logger)
+	done := make(chan struct{})
+	go func() {
+		d.Notify(QuotaExceededEvent, map[string]any{"reason": "budget"})
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Notify blocked")
+	}
+	select {
+	case <-recovered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("panic in webhook delivery was not recovered/logged")
+	}
+}

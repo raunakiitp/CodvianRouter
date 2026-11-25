@@ -2,6 +2,7 @@
 package org
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -97,5 +98,87 @@ func TestOrgStoreRestartRecovery(t *testing.T) {
 	}
 	if len(st2.Audit(0)) == 0 {
 		t.Fatal("audit did not survive reopen")
+	}
+}
+
+// TestOrgStorePersistIsAtomicRename pins the same write discipline as
+// the eval store: a temp file is RENAMED over the target, never written
+// in place. An in-place rewrite could tear the org/team snapshot on a
+// crash (AUD-REL-003, mirrored). A hard link to the committed file is
+// the observable: an atomic rename leaves the link's bytes unchanged,
+// an in-place os.WriteFile changes them.
+func TestOrgStorePersistIsAtomicRename(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "org.json")
+	st, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddOrg(&Organization{ID: "o1", Name: "One"}, RoleOwner); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "org.link")
+	if err := os.Link(path, link); err != nil {
+		t.Fatalf("hard-link the committed store: %v", err)
+	}
+	before, err := os.ReadFile(link)
+	if err != nil {
+		t.Fatalf("read link: %v", err)
+	}
+	if err := st.AddTeam(&Team{ID: "t1", OrgID: "o1", Name: "T"}, RoleOwner); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(link)
+	if err != nil {
+		t.Fatalf("read link after second persist: %v", err)
+	}
+	if string(before) != string(after) {
+		t.Fatal("org store persist rewrote the file in place; expected an atomic temp-file + rename")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.Name() != "org.json" && e.Name() != "org.link" {
+			t.Fatalf("unexpected leftover file after persist: %q", e.Name())
+		}
+	}
+	st2, err := Open(path)
+	if err != nil {
+		t.Fatalf("reopen after atomic persist: %v", err)
+	}
+	if len(st2.Teams()) != 1 {
+		t.Fatalf("teams = %d, want 1 after atomic persist", len(st2.Teams()))
+	}
+}
+
+// TestOrgRecordDenialLogsPersistFailure pins the no-silent-drop rule: a
+// denial whose audit record cannot be persisted must be surfaced, not
+// swallowed.
+func TestOrgRecordDenialLogsPersistFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "org.json")
+	st, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddOrg(&Organization{ID: "o1", Name: "One"}, RoleOwner); err != nil {
+		t.Fatal(err)
+	}
+	orig := orgLogf
+	logged := false
+	orgLogf = func(string, ...any) { logged = true }
+	t.Cleanup(func() { orgLogf = orig })
+	// Sabotage: replace the store file with a directory so persist fails.
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	st.RecordDenial("key-1", "t1", "model denied by team allowlist")
+	if !logged {
+		t.Fatal("RecordDenial swallowed a persist failure instead of logging it")
 	}
 }
