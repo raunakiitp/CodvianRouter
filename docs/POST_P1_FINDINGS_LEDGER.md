@@ -254,8 +254,8 @@ integrated upstream provider (`internal/catalog`, `internal/modelsync`, `interna
 Reconciled line by line against the current source on `post-p1-remediation`, not against earlier prose. Where an
 earlier table disagrees with this section, **this section is correct**; the disagreements are listed at the end.
 
-**Totals: 81 findings** (the original 80 plus AUD-SEC-011, discovered during this campaign) — 2 CRITICAL, **7 HIGH**
-(AUD-SEC-011 added), 22 MEDIUM, 41 LOW, 9 INFO.
+**Totals: 82 findings** (the original 80 plus AUD-SEC-011, found by a credential-shape scan, and AUD-SEC-012, found the moment the
+vulnerability gate was switched on) — 2 CRITICAL, **8 HIGH**, 22 MEDIUM, 41 LOW, 9 INFO.
 
 ## P0 / P1 status, with the evidence that was actually checked
 
