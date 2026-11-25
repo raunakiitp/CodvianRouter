@@ -211,7 +211,15 @@ class ClientHarness:
                         XDG_DATA_HOME=os.path.join(self.home, ".local", "share"),
                         TMPDIR=os.path.expanduser("~/.tmp"),
                         GOCACHE=os.path.expanduser("~/.cache/go-build"),
-                        GOPATH=os.path.expanduser("~/go"))
+                        GOPATH=os.path.expanduser("~/go"),
+                        # The provider this harness adds is a LOOPBACK mock
+                        # (the whole point of a scripted, offline smoke), and
+                        # the router's SSRF policy rejects loopback/private
+                        # base URLs by default — the secure default. The
+                        # harness opts in explicitly, exactly as an operator
+                        # running a local provider would; nothing about the
+                        # shipped default changes.
+                        CODVIAN_ROUTER_ALLOW_PRIVATE_ENDPOINTS="1")
         for d in (self.env["APPDATA"], self.env["LOCALAPPDATA"],
                   self.env["XDG_CONFIG_HOME"], self.env["XDG_DATA_HOME"]):
             os.makedirs(d, exist_ok=True)
