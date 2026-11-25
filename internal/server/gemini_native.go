@@ -78,6 +78,7 @@ import (
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/guardrails"
+	"github.com/raunakiitp/codvian-router/internal/ledger"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/reasoning"
 	"github.com/raunakiitp/codvian-router/internal/router"
@@ -1168,6 +1169,20 @@ func (s *Server) geminiGenerate(w http.ResponseWriter, r *http.Request, model st
 	if blocked := s.applyGuardrails(ctx, w, &req, s.keyGuardrailScope(r)); blocked {
 		return
 	}
+	// P2-MONEY-001: this surface used to rely on the advisory
+	// checkKeyBudgetForModel gate above, which only reads SETTLED spend —
+	// so N concurrent Gemini calls could each observe the same headroom and
+	// jointly exceed the key's cap. Every other spend surface (chat,
+	// Responses, relay, embeddings, images, audio) takes the atomic
+	// ledger.ReserveSpend; this one now does too, and settles it on return.
+	// The engine records the actual usage row; settleReservation releases
+	// the committed estimate, and every refusal/failure path below releases
+	// it through the same defer.
+	if resID, refused := s.reserveGeminiBudget(w, r, &req); refused {
+		return
+	} else {
+		defer s.settleReservation(resID)
+	}
 	if s.engine == nil {
 		writeGeminiClientError(w, http.StatusServiceUnavailable, "chat engine not configured")
 		return
@@ -1210,6 +1225,38 @@ func (s *Server) geminiGenerate(w http.ResponseWriter, r *http.Request, model st
 	s.recordTelemetry(ctx, meta, http.StatusOK)
 	s.setStrategyHeader(w)
 	writeJSON(w, http.StatusOK, gem)
+}
+
+// reserveGeminiBudget is reserveKeyBudget for the Gemini-native surface:
+// the same atomic ledger.ReserveSpend, but a refusal is rendered in the
+// Gemini error envelope rather than the OpenAI one, so a /v1beta caller
+// never receives a foreign protocol's error shape (P2-MONEY-001).
+func (s *Server) reserveGeminiBudget(w http.ResponseWriter, r *http.Request, req *provider.ChatRequest) (string, bool) {
+	if s.ledger == nil {
+		return "", false
+	}
+	keyID := s.callerKeyID(r)
+	if keyID == "" {
+		return "", false
+	}
+	estimate := s.estimatePromptCost(req)
+	id, err := s.ledger.ReserveSpend(r.Context(), keyID, s.budgetCheckModels(req), s.modelPriced, estimate, time.Now())
+	if err == nil {
+		return id, false
+	}
+	var be *ledger.BudgetExceededError
+	if errors.As(err, &be) {
+		writeGeminiClientError(w, http.StatusPaymentRequired, be.Error())
+		return "", true
+	}
+	var ue *ledger.UnpricedUsageError
+	if errors.As(err, &ue) {
+		writeGeminiClientError(w, http.StatusBadRequest, ue.Error())
+		return "", true
+	}
+	s.logger.Printf("key-budget: gemini reserve failed for caller: %v", guardrails.RedactLogLine(err.Error()))
+	writeGeminiClientError(w, http.StatusServiceUnavailable, "budget check unavailable")
+	return "", true
 }
 
 // geminiGenerateStream serves :streamGenerateContent as Gemini
