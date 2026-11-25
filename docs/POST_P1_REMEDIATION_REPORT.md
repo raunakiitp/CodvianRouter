@@ -3,6 +3,8 @@
 Branch: `post-p1-remediation` (from `main` @ `e75a669`)
 Baseline ledger: `docs/POST_P1_FINDINGS_LEDGER.md` (80 findings; AUD-SEC-001 already FIXED in PR #75)
 
+**P1 CLOSED — 2026-11-25 on merged `main`** (PR #79, merge commit `6e1e8650e70dbc5a297f0cca9127f143aabe3b3c`). Closure record and post-merge verification: `docs/POST_P1_FINDINGS_LEDGER.md`, section "P1 CLOSURE".
+
 ---
 
 ## A. Overall status

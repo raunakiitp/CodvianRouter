@@ -7,6 +7,71 @@
 
 Totals: **80 findings — 2 CRITICAL, 6 HIGH, 22 MEDIUM, 41 LOW, 9 INFO** (AUD-SEC-001 is now FIXED; AUD-SEC-010 was added during the hotfix). Statuses: 77 CONFIRMED, 2 NEEDS MANUAL VERIFICATION (AUD-REL-005, AUD-CFG-005); environment-blocked checks are recorded in the audit doc §17, not as findings.
 
+## P1 CLOSURE — 2026-11-25
+
+**Status: P1 COMPLETE.** Closed on merged `main`, not on a feature branch.
+
+| Item | Value |
+|---|---|
+| PR | #79 `pre-p2-remediation` → `main` |
+| Merged head SHA | `a7a671e97fd218d4242f4fa744fbc02b8557bdb9` |
+| Merge commit SHA (`main`) | `6e1e8650e70dbc5a297f0cca9127f143aabe3b3c` |
+| Merged by / at | `raunakiitp` — 2026-11-25T20:03:57Z |
+| Merge method | merge commit (no squash, no force, no check bypass) |
+
+### Branch protection on `main` at closure
+
+Read back from `GET /repos/raunakiitp/CodvianRouter/branches/main/protection` after the update — reported from the response, not from the request.
+
+| Setting | Value |
+|---|---|
+| Required status checks | `ci`, `client-smoke`, `bench-smoke`, `sbom-and-vuln`, `playwright` |
+| Strict (branch must be up to date) | true |
+| Required approving reviews | **0** (solo-maintainer repository; the owner is the only reviewer) |
+| Dismiss stale reviews | true |
+| Enforce admins | true |
+| Force pushes | false |
+| Branch deletions | false |
+| Required linear history / conversation resolution | false / false |
+
+### Post-merge verification, on the merged `main` commit
+
+| Command (local checkout of `main` at the merge commit) | Result |
+|---|---|
+| `go build ./...` | exit 0 |
+| `go vet ./...` | exit 0 |
+| `GOOS=linux go vet ./...` | exit 0 |
+| `go test ./... -count=1` | **53 packages ok, 0 FAIL** — exit 0 |
+| `bash scripts/check-naming.sh` | `PASS: No prohibited references found.` — exit 0 |
+| `git ls-files \| python3 scripts/check-naming.py` | `PASS: No prohibited references found.` — exit 0 |
+
+GitHub check-runs on the merge commit `6e1e865`: `ci`, `client-smoke`, `bench-smoke`, `sbom-and-vuln`, `playwright` — all **completed/success**. The `main` push workflows (`ci`, `client-smoke`, `bench-infra-smoke`, `browser-smoke`, `supply-chain`) are all **success** on the same commit.
+
+Targeted P1 regression/security evidence on the merged commit (filtered runs; 109 tests, 0 failures):
+
+| Area | Tests | Result |
+|---|---|---|
+| SSRF / outbound destination validation / DNS rebinding / redirects | 14 | pass |
+| Responses cross-tenant isolation and ownership propagation | 32 | pass |
+| Atomic budget reservation, settlement, refund, relay and batch accounting | 17 | pass |
+| WebSocket authentication, origin and budget enforcement | 12 | pass |
+| Streaming and cancellation paths | 23 | pass |
+| Ledger drift, reconciliation and error handling | 11 | pass |
+
+### P1 blocker status at closure
+
+- **Relay atomicity** — `/v1/messages` takes the same atomic budget reservation as the other paths and settles/refunds it on every exit (served, upstream failure, cancellation, partial stream, guardrail block). Concurrent requests cannot exceed the cap; falsified against the pre-fix behaviour (5 concurrent requests admitted all 5 before the fix, exactly 2 after).
+- **Responses ownership** — the internal chain walks pass the caller's owner id, so session listing, session detail and input-token resolution work against production-shaped records, and another tenant's session stays invisible.
+- **WebSocket** — the logging `statusRecorder` now implements `http.Hijacker`, so `/v1/ws` upgrades instead of answering 500.
+- **SSRF policy** — provider base URLs are validated against the egress guard, with an explicit, default-off operator opt-in (`CODVIAN_ROUTER_ALLOW_PRIVATE_ENDPOINTS`); no production path hardcodes the bypass, and tests opt in explicitly.
+- **AUD-SEC-009 — REMEDIATED.** Local half verified on this host: `remote.origin.url` carries no credential, there is no `url.*.insteadOf` rewrite and no `http.*.extraheader`; credentials come from the credential helper chain. Owner-confirmed: the previously exposed token was revoked and replaced. No token value appears in this file or any other tracked file (a token-shape scan of all tracked files finds only `x-access-token:` scheme text and one synthetic test fixture).
+- **Catalog identity restored.** `internal/catalog/providers_reference.go` and the generated catalog-audit artifacts keep the real provider data with coherent `ID`/`Name`/`Alias`/`Website`. This matches the recorded AUD-DOC-001/002 exception ("Kept and disclosed: ... real provider-catalog entries") and the naming gate's own exemption list; the naming gate must not be satisfied by renaming real catalog data.
+- **Naming gate self-match fixed.** Both scanners previously failed against an otherwise clean tree because their own comments and the assembled parity regex contained the literals they search for. The patterns are now assembled from fragments, and the assembled regex was verified byte-identical to the original, so matching behaviour and reach are unchanged and every tracked file is still scanned.
+- **Open P1 remediation blockers: none.** Remaining ledger rows are P2/P3 engineering work.
+- **P2 implementation has NOT started.**
+
+---
+
 > **Review-blocker addendum (this branch, after the PR #76 code review).** Four of the resolutions below were found INSUFFICIENT or UNSAFE by review and were fixed again, on evidence, with the reviewer's defects reproduced by test:
 > - **AUD-REL-005** — the first recovery quarantined after ANY open error, so a busy/locked/permission/I-O/disk-full/unsupported-pragma/migration failure would have renamed a VALID ledger and silently started an empty one. Now: quarantine only on positively identified corruption (`PRAGMA quick_check` against a COPY, so the probe cannot mutate sidecars), operational failures leave the database and its sidecars untouched, no-verdict means no quarantine, and a file too large to probe bounded is never quarantined. 13 tests.
 > - **AUD-SEC-002** — the first fix recorded a zero-token, zero-cost row when the provider reported no usage, which left the exact budget bypass the review describes open (the gate reads accrued spend from the same ledger). Now: a conservative, rounded-UP local estimate is charged and PRICED, marked per `LocalEstimatePromptTokens`' documented contract as locally measured, and logged; streams are charged for the bytes actually delivered; one row per request means no double charge. Falsified against the pre-fix behaviour with real output. 6 tests.
@@ -20,7 +85,7 @@ Totals: **80 findings — 2 CRITICAL, 6 HIGH, 22 MEDIUM, 41 LOW, 9 INFO** (AUD-S
 >   2. The trace-recorded checks (claude-code K4, cursor U3, aider A3 — the `attempts=[]` symptom seen here too) fail because `/dashboard/trace` records a success attempt ONLY for tool-call requests; plain chat, `/v1/messages` and streaming legitimately record none.
 >   3. The "unauthenticated → 401" checks (K8/X8/L8/A7) intermittently returned a socket error on Windows and are flagged NOT VERIFIED on Linux.
 >   One observation is still unexplained and is NOT attributed: in this session's runner invocation the upstream-down negative check returned 200 with a fresh response id (`stop_mock` terminates and reaps the child), which is consistent with a reply served from the router's own cache — reconcile that separately from the three causes above.
->   The CI job that would surface all of this is **BLOCKED**: the workflow file cannot be pushed because the current token has no `workflow` scope (`gho_…`: `gist, read:org, repo`). Expected CI verdict once it can run: **RED** until the drivers are reconciled with current server behaviour — which is exactly the "drivers rot unseen" failure this finding predicted.
+>   **Superseded at P1 closure (2026-11-25).** This was written while the CI job could not run: the token then lacked the `workflow` scope, so the workflow file could not be pushed. The credential now carries `workflow`, the workflow landed, and the drivers were reconciled with current server behaviour — `client-smoke` is **SUCCESS** in CI on `main` at the closure merge commit `6e1e865`, and AUD-TEST-001 is FIXED (see the final table). The "expected RED" verdict below is the historical prediction, not the current state.
 
 ---
 
@@ -284,7 +349,7 @@ vulnerability gate was switched on) — 2 CRITICAL, **8 HIGH**, 22 MEDIUM, 41 LO
 - AUD-API-001 and AUD-CODE-001 are **HIGH**; two tables labelled them LOW.
 - AUD-SEC-010 is **MEDIUM** and must not be counted among the HIGH fixes.
 - AUD-PERF-003 and AUD-PERF-004 were listed OPEN by a catch-all row while the code and tests were already in place.
-- AUD-SEC-009 is **PARTIAL**, not wholly external: the local remote-URL half is fixed in this branch.
+- AUD-SEC-009 is **REMEDIATED**: the local remote-URL half is fixed and verified on merged `main`, and the owner has revoked and replaced the previously exposed token (owner-confirmed).
 - AUD-SEC-001's "seven batch routes" is six (`server.go:1917-1922`).
 
 ### AUD-SEC-012 — A reachable vulnerable dependency was invisible because the vulnerability gate could never fail — **FIXED**
