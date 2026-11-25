@@ -73,7 +73,7 @@ func mustGeminiClient(t *testing.T, srv *httptest.Server) Client {
 	t.Helper()
 	c, err := NewClient(srv.URL, "gem-key-test", WithAuthHeaders(map[string]string{
 		"x-goog-api-key": "gem-key-test",
-	}), WithWireFormat(WireFormatGemini))
+	}), WithWireFormat(WireFormatGemini), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient gemini: %v", err)
 	}

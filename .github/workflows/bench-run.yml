@@ -30,7 +30,7 @@ jobs:
           cat docs/benchmark-phase3-ci.json 2>/dev/null || true
       - name: Upload raw benchmark JSON
         if: always()
-        uses: actions/upload-artifact@5d5d22a31266e3d07fbf8d1f8f6f6f6f6f6f6f6f # v4.8.3
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.8.3
         with:
           name: benchmark-phase3-ci
           path: docs/benchmark-phase3-ci.json

@@ -323,7 +323,7 @@ func TestHistoryEmptyDataDirDisablesPersistence(t *testing.T) {
 
 func TestHistoryPersistsUnderConcurrentChecks(t *testing.T) {
 	dir := t.TempDir()
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	id := addProvider(t, reg, "sk-conc")
 	c := NewWithDataDir(reg, fakeFactory(map[string]*fakeClient{"sk-conc": {}}), dir)
 	// Two concurrent CheckAll rounds: every probe must land in
@@ -545,7 +545,7 @@ func TestHistoryOrphansPrunedAtLoad(t *testing.T) {
 	if err := os.WriteFile(provPath, cfgs, 0o600); err != nil {
 		t.Fatalf("WriteFile providers: %v", err)
 	}
-	reg := provider.NewRegistry(provider.NewJSONFileStore(provPath))
+	reg := provider.NewRegistry(provider.NewJSONFileStore(provPath), provider.WithRegistryAllowPrivateDestinations(true))
 	if err := reg.Load(); err != nil {
 		t.Fatalf("registry Load: %v", err)
 	}

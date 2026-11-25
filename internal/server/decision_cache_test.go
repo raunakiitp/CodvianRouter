@@ -36,7 +36,7 @@ func TestDecisionHeaderAbsentOnCacheHit(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":"chatcmpl-x","object":"chat.completion","model":"dec-model","choices":[{"message":{"role":"assistant","content":"cached answer"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`))
 	}))
 	defer up.Close()
-	client, err := provider.NewClient(up.URL, "test-key", provider.WithTimeout(2*time.Second))
+	client, err := provider.NewClient(up.URL, "test-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

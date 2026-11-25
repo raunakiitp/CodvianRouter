@@ -348,7 +348,7 @@ func TestAudioEndToEndRealClient(t *testing.T) {
 		_, _ = w.Write([]byte(`{"text":"hello from the real upstream"}`))
 	}))
 	defer srv.Close()
-	client, err := provider.NewClient(srv.URL, "test-key")
+	client, err := provider.NewClient(srv.URL, "test-key", provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

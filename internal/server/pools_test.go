@@ -56,7 +56,7 @@ func getPools(t *testing.T, srv *Server) poolsFeed {
 func TestDashboardPools(t *testing.T) {
 	mock := httptest.NewServer(mockUpstream{}.handler())
 	defer mock.Close()
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	p, err := reg.Add(mock.URL, "pool-feed-key-123")
 	if err != nil {
 		t.Fatalf("Add: %v", err)
@@ -120,7 +120,7 @@ func TestDashboardPools(t *testing.T) {
 // with no providers answers an empty pool list with the default
 // sizing, never invented pools.
 func TestDashboardPoolsEmpty(t *testing.T) {
-	srv := newTestServer(t, &fakeEngine{}, WithProviderRegistry(provider.NewRegistry(nil)))
+	srv := newTestServer(t, &fakeEngine{}, WithProviderRegistry(provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))))
 	feed := getPools(t, srv)
 	if len(feed.Pools) != 0 {
 		t.Errorf("pools = %d rows, want 0 (no providers)", len(feed.Pools))
@@ -147,7 +147,7 @@ func TestDashboardPoolsNoRegistry(t *testing.T) {
 // carries the Connection pools section (nav, view, loader) and no
 // Playground anywhere.
 func TestDashboardPoolsServesSection(t *testing.T) {
-	srv := newTestServer(t, &fakeEngine{}, WithProviderRegistry(provider.NewRegistry(nil)))
+	srv := newTestServer(t, &fakeEngine{}, WithProviderRegistry(provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))))
 	rec := doReq(t, srv, http.MethodGet, "/dashboard", "", "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /dashboard: status = %d, want 200", rec.Code)

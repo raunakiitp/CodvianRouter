@@ -1683,7 +1683,7 @@ func TestEngineCrossWireFailoverGeminiToOpenAI(t *testing.T) {
 				defer geminiSrv.Close()
 				gemClient, err := provider.NewClient(geminiSrv.URL, "gem-key",
 					provider.WithAuthHeaders(map[string]string{"x-goog-api-key": "gem-key"}),
-					provider.WithWireFormat(provider.WireFormatGemini))
+					provider.WithWireFormat(provider.WireFormatGemini), provider.WithAllowPrivateDestinations(true))
 				if err != nil {
 					t.Fatalf("NewClient gemini: %v", err)
 				}
@@ -1697,7 +1697,7 @@ func TestEngineCrossWireFailoverGeminiToOpenAI(t *testing.T) {
 				defer geminiSrv.Close()
 				gemClient, err := provider.NewClient(geminiSrv.URL, "gem-key",
 					provider.WithAuthHeaders(map[string]string{"x-goog-api-key": "gem-key"}),
-					provider.WithWireFormat(provider.WireFormatGemini))
+					provider.WithWireFormat(provider.WireFormatGemini), provider.WithAllowPrivateDestinations(true))
 				if err != nil {
 					t.Fatalf("NewClient gemini: %v", err)
 				}
@@ -1751,7 +1751,7 @@ func TestEngineCrossWireFailoverCohereToOpenAI(t *testing.T) {
 				defer cohereSrv.Close()
 				coClient, err := provider.NewClient(cohereSrv.URL, "co-key",
 					provider.WithAuthHeaders(map[string]string{"Authorization": "Bearer co-key"}),
-					provider.WithWireFormat(provider.WireFormatCohere))
+					provider.WithWireFormat(provider.WireFormatCohere), provider.WithAllowPrivateDestinations(true))
 				if err != nil {
 					t.Fatalf("NewClient cohere: %v", err)
 				}
@@ -1765,7 +1765,7 @@ func TestEngineCrossWireFailoverCohereToOpenAI(t *testing.T) {
 				defer cohereSrv.Close()
 				coClient, err := provider.NewClient(cohereSrv.URL, "co-key",
 					provider.WithAuthHeaders(map[string]string{"Authorization": "Bearer co-key"}),
-					provider.WithWireFormat(provider.WireFormatCohere))
+					provider.WithWireFormat(provider.WireFormatCohere), provider.WithAllowPrivateDestinations(true))
 				if err != nil {
 					t.Fatalf("NewClient cohere: %v", err)
 				}
@@ -1818,7 +1818,7 @@ func TestEngineCrossWireFailoverBedrockToOpenAI(t *testing.T) {
 				}))
 				defer brkSrv.Close()
 				brkClient, err := provider.NewClient(brkSrv.URL, "AKIDEXAMPLE:SECRET",
-					provider.WithWireFormat(provider.WireFormatBedrock))
+					provider.WithWireFormat(provider.WireFormatBedrock), provider.WithAllowPrivateDestinations(true))
 				if err != nil {
 					t.Fatalf("NewClient bedrock: %v", err)
 				}
@@ -1831,7 +1831,7 @@ func TestEngineCrossWireFailoverBedrockToOpenAI(t *testing.T) {
 				}))
 				defer brkSrv.Close()
 				brkClient, err := provider.NewClient(brkSrv.URL, "AKIDEXAMPLE:SECRET",
-					provider.WithWireFormat(provider.WireFormatBedrock))
+					provider.WithWireFormat(provider.WireFormatBedrock), provider.WithAllowPrivateDestinations(true))
 				if err != nil {
 					t.Fatalf("NewClient bedrock: %v", err)
 				}

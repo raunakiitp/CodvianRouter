@@ -49,7 +49,7 @@ func mediaClient(t *testing.T, up *mediaUpstream) *openAIClient {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(up.handler))
 	t.Cleanup(srv.Close)
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -345,7 +345,7 @@ func TestMediaPassthroughIgnoresClientTimeout(t *testing.T) {
 	t.Cleanup(srv.Close)
 	// A 50 ms client timeout would kill this 200 ms upstream
 	// call if MediaPassthrough still used httpClient directly.
-	c, err := NewClient(srv.URL, "test-key", WithTimeout(50*time.Millisecond))
+	c, err := NewClient(srv.URL, "test-key", WithTimeout(50*time.Millisecond), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -389,7 +389,7 @@ func TestMediaPassthroughStillBoundByContext(t *testing.T) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	t.Cleanup(srv.Close)
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

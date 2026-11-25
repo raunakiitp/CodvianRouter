@@ -27,11 +27,11 @@ about which model is up, which is cheapest, or what to do when one goes down.
 |---|---|
 | Architecture | Local-first, zero external telemetry or cloud relay |
 | Tested toolchain | Go 1.27.4 (minimum `go 1.26.0`) |
-| Test suite | `go test ./...` passes on all 49 packages (Windows, 2026-11-21) |
-| API routes | **314** classified routes (11 Local-Only, 49 Always-Protected, 254 Management), of which **63** answer `501 feature_unavailable` on purpose |
-| Providers in catalog | **610** catalog entries; 370 have a base URL the router can call with your key |
-| Routing strategies | **35** strategies, nested combos, and auto-router variants |
-| Agent & MCP ecosystem | **24** MCP tools over HTTP (3 on stdio) + **CodeVN** setup |
+| Test suite | `go test ./...` passes on all 55 packages (Windows, 2026-11-21) |
+| API routes | **349** classified routes (11 Local-Only, 49 Always-Protected, 289 Management), of which **63** answer `501 feature_unavailable` on purpose |
+| Providers in catalog | **610** catalog entries; 379 have a base URL the router can call with your key, 231 have none (metadata only) |
+| Routing strategies | **41** strategies, nested combos, and auto-router variants |
+| Agent & MCP ecosystem | **32** MCP tools over HTTP/SSE/stdio + **CodeVN** setup |
 | Binary | Single Go binary, no runtime dependencies |
 
 ## Start here
@@ -87,10 +87,10 @@ Full install guide: [docs/INSTALL.md](docs/INSTALL.md).
 | Feature | In one line |
 |---|---|
 | OpenAI-compatible API | `/v1/chat/completions`, `/v1/models`, `/v1/responses` — point any OpenAI client at it |
-| 35 routing strategies | Cheapest, fastest, most reliable, latency-aware, priority, weighted, and more |
+| 41 routing strategies | Cheapest, fastest, most reliable, latency-aware, priority, weighted, and more |
 | Combos | Chain strategies — e.g. cheapest first, then fastest on failure |
 | Auto-router | Picks the model for you from cost, context, and capability |
-| Provider catalog | 610 entries; 370 have a base URL; add any custom OpenAI-compatible provider |
+| Provider catalog | 610 entries; 379 have a callable base URL; add any custom OpenAI-compatible provider |
 
 ### Stay up
 
@@ -117,7 +117,7 @@ Full install guide: [docs/INSTALL.md](docs/INSTALL.md).
 | Local dashboard | Providers, models, usage, and health at `http://127.0.0.1:20128` |
 | Guardrails | PII detection and redaction, prompt-injection checks, content filtering |
 | Keys & auth | Gateway keys, OAuth/JWT clients for the gateway, per-key scopes and IP lists — every request authenticated. Provider account login: OpenRouter OAuth PKCE (`provider login openrouter`); Azure OpenAI via Microsoft Entra ID client credentials. Subscription/cookie sign-in remains unsupported |
-| MCP server | 24 tools, so coding agents can drive the router too |
+| MCP server | 32 tools, so coding agents can drive the router too |
 | CodeVN & Agent Setup | One-command setup: `codvian-router setup codevn` (also Claude, Continue) |
 | CLI | `serve`, `init`, `eval`, `setup`, `run`, `doctor`, `tray`, `catalog`, `release`, and more |
 
@@ -125,8 +125,7 @@ Full install guide: [docs/INSTALL.md](docs/INSTALL.md).
 
 The catalog has 610 entries (catalog audit 2026-11-21,
 [docs/catalog-audit-2026-11-21.md](docs/catalog-audit-2026-11-21.md)):
-370 have a callable base URL, 9 have a templated base URL you fill in,
-and 231 have none yet (metadata only). A catalog entry is a starting point,
+379 have a callable base URL, and 231 have none (metadata only). A catalog entry is a starting point,
 not a promise: an entry is routed only after you add it with your own key,
 and the router tests that key against the provider when you add it.
 Web-session-cookie providers are catalogued but refused as routing
@@ -161,16 +160,16 @@ happened; the dashboard shows it.
 
 ## Performance
 
-Measured 20 Nov 2026 on a shared VM (1.5 shared vCPU) — not a dedicated rig,
+Measured 2026-11-18 on a shared VM (1.5 shared vCPU) — not a dedicated rig,
 so treat these as a floor, not a boast. Full method and history:
 [docs/BENCHMARK.md](docs/BENCHMARK.md).
 
 | Metric | Measured | Target | Verdict |
 |---|---|---|---|
-| Added latency (p50) | 1.69 / 1.68 ms | < 0.5 ms | Not yet met |
-| Throughput (32 concurrent) | 580 / 525 req/s | 3,000 req/s | Not yet met |
-| Idle memory | 51 MiB | < 100 MiB | Met |
-| Ready to serve | ~1.0–1.1 s | < 2 s | Met |
+| Added latency (p50) | 0.851 / 0.777 ms | < 0.5 ms | Not yet met |
+| Throughput (32 concurrent) | 1,273 / 1,174 req/s | > 3,000 req/s | Not yet met |
+| Idle memory | 42.1 MiB | < 70 MiB | Met |
+| Ready to serve | ~435 / 565 ms | < 10 s | Met |
 
 The latency and throughput targets are the work ahead — they are printed
 here precisely because they are not met yet.

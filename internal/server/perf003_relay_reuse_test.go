@@ -63,7 +63,7 @@ func relayReuseRegistry(t *testing.T, baseURL string) *provider.Registry {
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	reg := provider.NewRegistry(provider.NewJSONFileStore(path), provider.WithCipher(cipher))
+	reg := provider.NewRegistry(provider.NewJSONFileStore(path), provider.WithCipher(cipher), provider.WithRegistryAllowPrivateDestinations(true))
 	if err := reg.Load(); err != nil {
 		t.Fatalf("load registry: %v", err)
 	}

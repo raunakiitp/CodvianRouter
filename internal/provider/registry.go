@@ -210,6 +210,11 @@ type Registry struct {
 	cipher     KeyCipher
 	newClient  ClientFactory
 	tfoEnabled bool // TCP Fast Open on clients built by the default factory (default true)
+	// allowPrivateDestinations allows the registry to accept loopback,
+	// private, link-local or cloud-metadata base URLs. This is an
+	// operator override for on-prem models or test mocks; the default
+	// (false) rejects such destinations to prevent SSRF (7A).
+	allowPrivateDestinations bool
 	// pools owns the warm HTTP/2 transports, one per (provider, key)
 	// (see pool.go). Every client ClientFor builds shares its pair's
 	// pool, so a provider's connections stay warm across requests,
@@ -302,6 +307,15 @@ func WithTFOEnabled(enabled bool) RegistryOption {
 	}
 }
 
+// WithRegistryAllowPrivateDestinations allows the registry to accept
+// loopback, private, link-local or cloud-metadata base URLs when
+// adding providers. This is an operator override for on-prem models
+// or test mocks; the default (false) rejects such destinations to
+// prevent SSRF (7A).
+func WithRegistryAllowPrivateDestinations(allow bool) RegistryOption {
+	return func(r *Registry) { r.allowPrivateDestinations = allow }
+}
+
 // WithPoolConfig sets the warm-pool sizing for the upstream clients
 // the registry builds (see PoolConfig in pool.go — Little's Law
 // sizing from expected_rps × expected_latency_ms, 0 fields mean
@@ -366,7 +380,7 @@ func NewRegistry(store Store, opts ...RegistryOption) *Registry {
 	// construction), so WithTFOEnabled applied after NewRegistry
 	// still affects clients built later.
 	r.newClient = func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (Client, error) {
-		return NewClient(baseURL, apiKey, WithAuthHeaders(authHeaders), WithWireFormat(wireFormat), WithTCPFastOpen(r.tfoEnabled))
+		return NewClient(baseURL, apiKey, WithAuthHeaders(authHeaders), WithWireFormat(wireFormat), WithTCPFastOpen(r.tfoEnabled), WithAllowPrivateDestinations(r.allowPrivateDestinations))
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -423,7 +437,7 @@ func (r *Registry) Load() error {
 			// fails loudly at startup, where the provider is
 			// skipped with a warning instead of taking the
 			// gateway down.
-			if err := resolveCatalogForLoad(p); err != nil {
+			if err := r.resolveCatalogForLoad(p); err != nil {
 				return err
 			}
 		} else if rem, ok := IsRemovedBaseURL(p.BaseURL); ok {
@@ -532,7 +546,7 @@ type addInput struct {
 // format "openai" (some gateways only expose chat completions). Any other
 // key-test failure (401, 429, 5xx, network error) rejects the add.
 func (r *Registry) addProvider(ctx context.Context, in addInput) (*Provider, error) {
-	normalized, err := ValidateBaseURL(in.baseURL)
+	normalized, err := ValidateBaseURL(in.baseURL, r.allowPrivateDestinations)
 	if err != nil {
 		return nil, err
 	}
@@ -927,7 +941,7 @@ func defaultCatalogEndpoint(entry catalog.Provider) string {
 // here, and the placeholder is never sent anywhere (no request is
 // made). An exchange surface still yields a usable BaseURL/Wire
 // alongside its error, which is tolerated here for that reason.
-func resolveCatalogForLoad(p *Provider) error {
+func (r *Registry) resolveCatalogForLoad(p *Provider) error {
 	// Removed-provider enforcement (G19 Area 1, CT-2): check
 	// BEFORE the catalog lookup, for the same reason as in
 	// AddCatalogWithOptions — a removed provider is not in the
@@ -971,7 +985,7 @@ func resolveCatalogForLoad(p *Provider) error {
 			return fmt.Errorf("provider %q: catalog provider %q has a templated base URL %q; set a concrete base_url in the config", p.ID, entry.ID, res.BaseURL)
 		}
 		p.BaseURL = NormalizeBaseURL(res.BaseURL)
-	} else if normalized, err := ValidateBaseURL(p.BaseURL); err != nil {
+	} else if normalized, err := ValidateBaseURL(p.BaseURL, r.allowPrivateDestinations); err != nil {
 		return fmt.Errorf("provider %q: %w", p.ID, err)
 	} else {
 		// A config-file override keeps its spelling only in the
@@ -1065,7 +1079,7 @@ func (r *Registry) Get(id string) (*Provider, bool) {
 // GetByBaseURL returns a copy of the provider with the given normalized
 // base URL, or false when absent.
 func (r *Registry) GetByBaseURL(baseURL string) (*Provider, bool) {
-	normalized, err := ValidateBaseURL(baseURL)
+	normalized, err := ValidateBaseURL(baseURL, r.allowPrivateDestinations)
 	if err != nil {
 		return nil, false
 	}

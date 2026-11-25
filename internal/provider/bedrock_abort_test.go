@@ -99,7 +99,7 @@ func newSlowBedrockMock(t *testing.T) (*httptest.Server, *slowBedrockMock) {
 
 func newBedrockStreamClient(t *testing.T, url string) *bedrockClient {
 	t.Helper()
-	c, err := NewClient(url, testAWSKey, WithWireFormat(WireFormatBedrock))
+	c, err := NewClient(url, testAWSKey, WithWireFormat(WireFormatBedrock), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient bedrock: %v", err)
 	}

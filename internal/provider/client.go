@@ -1381,6 +1381,17 @@ func WithTimeout(d time.Duration) ClientOption {
 	return func(c *openAIClient) { c.httpClient.Timeout = d }
 }
 
+// WithAllowPrivateDestinations allows the provider base URL to use
+// loopback, private, link-local or cloud-metadata addresses. This is
+// an operator override for on-prem models or test mocks; the default
+// (false) rejects such destinations to prevent SSRF (7A).
+func WithAllowPrivateDestinations(allow bool) ClientOption {
+	return func(c *openAIClient) {
+		c.allowPrivateDestinations = allow
+		c.bypassEgressGuard = allow
+	}
+}
+
 // WithAuthHeaders sets the exact auth headers sent on every upstream
 // request, as resolved by the catalog for one (provider, endpoint)
 // pair (see catalog.ResolveAuth). A nil map means "legacy": send
@@ -1472,7 +1483,9 @@ type openAIClient struct {
 	// customHTTP is true when WithHTTPClient supplied the client: its
 	// Transport is the caller's, and NewClient must not replace it
 	// with the TFO transport.
-	customHTTP bool
+	customHTTP               bool
+	allowPrivateDestinations bool
+	bypassEgressGuard        bool
 	// tfoEnabled is whether the default client's dialer attempts TCP
 	// Fast Open (default true; see WithTCPFastOpen). tfoSet records
 	// that the option was given, so the default stays enabled when
@@ -1524,12 +1537,8 @@ func (c *openAIClient) setHTTPAdapter(providerID string, fn HTTPAdapterFunc) {
 // service-account JSON key), everything else the OpenAI-compatible
 // client.
 func NewClient(baseURL, apiKey string, opts ...ClientOption) (Client, error) {
-	normalized, err := ValidateBaseURL(baseURL)
-	if err != nil {
-		return nil, err
-	}
 	c := &openAIClient{
-		baseURL:    normalized,
+		baseURL:    "",
 		apiKey:     apiKey,
 		httpClient: &http.Client{Timeout: 120 * time.Second},
 		tfoEnabled: true,
@@ -1539,13 +1548,18 @@ func NewClient(baseURL, apiKey string, opts ...ClientOption) (Client, error) {
 			opt(c)
 		}
 	}
+	normalized, err := ValidateBaseURL(baseURL, c.allowPrivateDestinations)
+	if err != nil {
+		return nil, err
+	}
+	c.baseURL = normalized
 	// The default client dials through the TFO transport: the
 	// Control hook attempts TCP_FASTOPEN_CONNECT (Linux) and falls
 	// back to a normal handshake when the platform or a middlebox
 	// refuses it — it never fails a dial. A caller-supplied client
 	// (WithHTTPClient) keeps its own Transport untouched.
 	if !c.customHTTP {
-		c.httpClient.Transport = tfoTransport(c.tfoEnabled)
+		c.httpClient.Transport = tfoTransport(c.tfoEnabled, c.bypassEgressGuard)
 	}
 	if c.wireFormat == WireFormatAnthropic {
 		return &anthropicClient{openAIClient: c}, nil

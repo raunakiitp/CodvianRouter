@@ -162,7 +162,7 @@ type compressionFixture struct {
 func newCompressionFixture(t *testing.T, serverCompression *config.CompressionConfig, engineLosslessModels []string) *compressionFixture {
 	t.Helper()
 	mock := newCompressionMock(t)
-	client, err := provider.NewClient(mock.srv.URL, "mock-key", provider.WithTimeout(2*time.Second))
+	client, err := provider.NewClient(mock.srv.URL, "mock-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

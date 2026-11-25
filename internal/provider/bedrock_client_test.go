@@ -121,7 +121,7 @@ func newBedrockMock(t *testing.T) (*httptest.Server, *bedrockMock) {
 
 func mustBedrockClient(t *testing.T, srv *httptest.Server) Client {
 	t.Helper()
-	c, err := NewClient(srv.URL, testAWSKey, WithWireFormat(WireFormatBedrock))
+	c, err := NewClient(srv.URL, testAWSKey, WithWireFormat(WireFormatBedrock), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient bedrock: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestBedrockClientBadCredentials(t *testing.T) {
 	// A plain API key is not AWS credential material: the client
 	// must refuse loudly with an exchange error, never sign with a
 	// garbage key.
-	c, err := NewClient(srv.URL, "not-aws-credentials", WithWireFormat(WireFormatBedrock))
+	c, err := NewClient(srv.URL, "not-aws-credentials", WithWireFormat(WireFormatBedrock), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

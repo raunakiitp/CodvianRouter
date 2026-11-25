@@ -531,11 +531,11 @@ func responsesMockStack(t *testing.T, deadStatus int, deadTimeout time.Duration)
 		_, _ = w.Write([]byte(`{"id":"chatcmpl-fallback","object":"chat.completion","model":"resp-model","choices":[{"message":{"role":"assistant","content":"fallback says hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":4,"total_tokens":7}}`))
 	}))
 	t.Cleanup(fallbackSrv.Close)
-	deadClient, err := provider.NewClient(deadSrv.URL, "dead-key", provider.WithTimeout(deadTimeout))
+	deadClient, err := provider.NewClient(deadSrv.URL, "dead-key", provider.WithTimeout(deadTimeout), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient dead: %v", err)
 	}
-	fallbackClient, err := provider.NewClient(fallbackSrv.URL, "fallback-key", provider.WithTimeout(2*time.Second))
+	fallbackClient, err := provider.NewClient(fallbackSrv.URL, "fallback-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient fallback: %v", err)
 	}
@@ -698,7 +698,7 @@ func TestResponsesConcurrentCreatesNeverShare(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":"chatcmpl-x","object":"chat.completion","model":"resp-model","choices":[{"message":{"role":"assistant","content":"same answer"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":4,"total_tokens":7}}`))
 	}))
 	t.Cleanup(mock.Close)
-	client, err := provider.NewClient(mock.URL, "k", provider.WithTimeout(5*time.Second))
+	client, err := provider.NewClient(mock.URL, "k", provider.WithTimeout(5*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

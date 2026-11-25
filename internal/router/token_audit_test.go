@@ -594,23 +594,23 @@ func TestTokenCountAudit(t *testing.T) {
 
 	wires := []auditWire{
 		{name: "openai", model: "gpt-4o-mini", newClient: func(url string) (provider.Client, error) {
-			return provider.NewClient(url, "audit-key")
+			return provider.NewClient(url, "audit-key", provider.WithAllowPrivateDestinations(true))
 		}},
 		{name: "anthropic", model: "claude-sonnet-4-5", newClient: func(url string) (provider.Client, error) {
-			return provider.NewClient(url, "audit-key", provider.WithWireFormat(provider.WireFormatAnthropic))
+			return provider.NewClient(url, "audit-key", provider.WithWireFormat(provider.WireFormatAnthropic), provider.WithAllowPrivateDestinations(true))
 		}},
 		{name: "gemini", model: "gemini-2.5-flash", newClient: func(url string) (provider.Client, error) {
 			return provider.NewClient(url, "audit-key",
 				provider.WithAuthHeaders(map[string]string{"x-goog-api-key": "audit-key"}),
-				provider.WithWireFormat(provider.WireFormatGemini))
+				provider.WithWireFormat(provider.WireFormatGemini), provider.WithAllowPrivateDestinations(true))
 		}},
 		{name: "cohere", model: "command-a-03-2025", newClient: func(url string) (provider.Client, error) {
 			return provider.NewClient(url, "audit-key",
 				provider.WithAuthHeaders(map[string]string{"Authorization": "Bearer audit-key"}),
-				provider.WithWireFormat(provider.WireFormatCohere))
+				provider.WithWireFormat(provider.WireFormatCohere), provider.WithAllowPrivateDestinations(true))
 		}},
 		{name: "bedrock", model: "anthropic.claude-sonnet-4-5-20250929-v1:0", newClient: func(url string) (provider.Client, error) {
-			return provider.NewClient(url, "AKIDEXAMPLE:SECRET", provider.WithWireFormat(provider.WireFormatBedrock))
+			return provider.NewClient(url, "AKIDEXAMPLE:SECRET", provider.WithWireFormat(provider.WireFormatBedrock), provider.WithAllowPrivateDestinations(true))
 		}},
 	}
 	mocks := map[string]func(t *testing.T) *httptest.Server{
@@ -758,8 +758,15 @@ func TestTokenCountAudit(t *testing.T) {
 		t.Fatalf("DriftSummary = %d rows, want 5 (one per wire model)", len(drift))
 	}
 	for _, d := range drift {
-		if d.Compared != 18 {
-			t.Errorf("drift row %s/%s: compared %d, want 18", d.Provider, d.Model, d.Compared)
+		// 7D: a row whose local estimate equals the recorded prompt
+		// count is estimate-backed (a conservative match) and is
+		// excluded from Compared — so Compared + EstimateBacked is
+		// the population that carried both sides of the comparison.
+		// Every one of the 6 classes x 3 samples per wire model must
+		// be accounted for in exactly one bucket.
+		if d.Compared+d.EstimateBacked != 18 {
+			t.Errorf("drift row %s/%s: compared %d + estimate_backed %d = %d, want 18 total samples",
+				d.Provider, d.Model, d.Compared, d.EstimateBacked, d.Compared+d.EstimateBacked)
 		}
 	}
 }

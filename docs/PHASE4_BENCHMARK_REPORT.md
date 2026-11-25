@@ -1,8 +1,8 @@
-# CODVIAN Router Phase 4 — Benchmark & Feature Parity Report (PR #60)
+# CODVIAN Router Phase 4 — Benchmark & Capability Report (PR #60)
 
 ## 1. Executive summary
 
-This report documents the Phase 4 benchmark and feature-parity evaluation for
+This report documents the Phase 4 benchmark and capability evaluation for
 CODVIAN Router. All measurements were produced using the repository's own
 benchmark harness (`scripts/bench-geekflare.sh`, `cmd/codvian-bench`) against a
 locally-built binary; no paid APIs, no cloud infrastructure, and no external
@@ -19,10 +19,18 @@ benchmarking services were used.
 | Idle RSS | — | ~38–52 MB | — |
 | Peak RSS under load | — | ~38 MB | — |
 
-**Feature parity:** 126 entries classified: 72 fully implemented, 31 partially
-implemented, 20 missing, 1 not verified, 2 N/A. PRs #49–#58 (all merged) cover
-P0–P2 features; remaining gaps are P2-3 Docker publishing (verified, CI pending),
-P2-4 benchmark report (this document), and P2-5 final release readiness.
+**Capability status:** 126 classified capability entries across 14 categories:
+
+| Classification | Count |
+|---|---|
+| FULLY IMPLEMENTED | 72 |
+| PARTIALLY IMPLEMENTED | 31 |
+| MISSING | 20 |
+| NOT VERIFIED | 1 |
+| N/A | 2 |
+| **TOTAL** | **126** |
+
+PRs #49–#58 (all merged) cover P0–P2 capabilities; remaining gaps are P2-3 Docker publishing (verified, CI pending), P2-4 benchmark report (this document), and P2-5 final release readiness.
 
 ## 2. Test environment
 
@@ -57,7 +65,7 @@ go build -trimpath -ldflags "-s -w" -o codvian-bench ./cmd/codvian-bench
 
 # Latency benchmark (direct upstream vs router)
 ./codvian-bench latency --base http://127.0.0.1:<direct-port> --model model-a --requests 1000 --warmup 25
-./codvian-bench latency --base http://127.0.0.1:<router-port> --key <gateway-key> --model model-a --requests 1000 --warmup 25
+./codvian-bench latency --base http://127.0.1:<router-port> --key <gateway-key> --model model-a --requests 1000 --warmup 25
 
 # RPS benchmark (concurrent, 20s)
 ./codvian-bench rps --base http://127.0.0.1:<direct-port> --model model-a --concurrency 32 --duration 20s --warmup 25
@@ -171,9 +179,9 @@ providers is exercised by routing-strategy unit tests (PR #54, merged).
 Error types observed: `http-502` only — no timeouts, no connection errors, no
 spurious failures.
 
-## 7. Feature parity report
+## 7. Capability status report
 
-The corrected parity inventory contains **126 classified feature entries**
+The capability inventory contains **126 classified capability entries**
 across 14 categories:
 
 | Classification | Count |
@@ -187,7 +195,7 @@ across 14 categories:
 
 **PRs #49–#58 (all merged into main)** implemented or verified:
 
-| PR | Feature | Status |
+| PR | Capability | Status |
 |---|---|---|
 | #49 | P0-1: Request-level compliance audit log | MERGED |
 | #50 | P0-2: Semantic cache wired into request path | Already on main |
@@ -203,10 +211,10 @@ across 14 categories:
 
 **Remaining work:**
 
-| PR | Feature | Status |
+| PR | Capability | Status |
 |---|---|---|
 | #59 | P2-3: Docker image publishing | Verified (infrastructure exists) |
-| #60 | P2-4: Benchmark parity report | This document |
+| #60 | P2-4: Benchmark capability report | This document |
 | #61 | P2-5: Final release readiness | Not started |
 
 All counts reconcile exactly: 72 + 31 + 20 + 1 + 2 = 126.

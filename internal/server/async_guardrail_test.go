@@ -136,11 +136,11 @@ func asyncStreamMocks(t *testing.T) (slowURL, fallbackURL string, slowHits, fall
 
 func asyncTestEngine(t *testing.T, slowURL, fallbackURL string, led *asyncGateLedger) *router.Engine {
 	t.Helper()
-	slowClient, err := provider.NewClient(slowURL, "slow-key", provider.WithTimeout(5*time.Second))
+	slowClient, err := provider.NewClient(slowURL, "slow-key", provider.WithTimeout(5*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient slow: %v", err)
 	}
-	fallbackClient, err := provider.NewClient(fallbackURL, "fallback-key", provider.WithTimeout(5*time.Second))
+	fallbackClient, err := provider.NewClient(fallbackURL, "fallback-key", provider.WithTimeout(5*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient fallback: %v", err)
 	}
@@ -325,7 +325,7 @@ func TestAsyncGuardrailCutBeforeCommit(t *testing.T) {
 		}
 	}))
 	defer slowSrv.Close()
-	client, err := provider.NewClient(slowSrv.URL, "slow-key", provider.WithTimeout(5*time.Second))
+	client, err := provider.NewClient(slowSrv.URL, "slow-key", provider.WithTimeout(5*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -422,7 +422,7 @@ func TestAsyncGuardrailWithholdsNonStreaming(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":"chatcmpl-x","object":"chat.completion","created":1,"model":"gate-model","choices":[{"index":0,"message":{"role":"assistant","content":"served"},"finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}`))
 	}))
 	defer slow.Close()
-	client, err := provider.NewClient(slow.URL, "slow-key", provider.WithTimeout(5*time.Second))
+	client, err := provider.NewClient(slow.URL, "slow-key", provider.WithTimeout(5*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -484,7 +484,7 @@ func TestAsyncGuardrailAllowPassesThrough(t *testing.T) {
 		_, _ = w.Write([]byte("data: [DONE]\n\n"))
 	}))
 	defer fast.Close()
-	client, err := provider.NewClient(fast.URL, "fast-key", provider.WithTimeout(5*time.Second))
+	client, err := provider.NewClient(fast.URL, "fast-key", provider.WithTimeout(5*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -556,7 +556,7 @@ func TestStreamCutBeforeEngineEntryPublishesTrace(t *testing.T) {
 		_, _ = w.Write([]byte("data: [DONE]\n\n"))
 	}))
 	defer fast.Close()
-	client, err := provider.NewClient(fast.URL, "fast-key", provider.WithTimeout(5*time.Second))
+	client, err := provider.NewClient(fast.URL, "fast-key", provider.WithTimeout(5*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -630,7 +630,7 @@ func TestStreamEmptyChainPublishesTrace(t *testing.T) {
 		_, _ = w.Write([]byte("data: [DONE]\n\n"))
 	}))
 	defer fast.Close()
-	client, err := provider.NewClient(fast.URL, "fast-key", provider.WithTimeout(5*time.Second))
+	client, err := provider.NewClient(fast.URL, "fast-key", provider.WithTimeout(5*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -695,7 +695,7 @@ func TestSyncExternalGuardrailBlocksPreCall(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":"x","object":"chat.completion","created":1,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`))
 	}))
 	defer upstream.Close()
-	client, err := provider.NewClient(upstream.URL, "k", provider.WithTimeout(5*time.Second))
+	client, err := provider.NewClient(upstream.URL, "k", provider.WithTimeout(5*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

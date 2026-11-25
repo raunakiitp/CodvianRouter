@@ -23,7 +23,7 @@ func TestMeSessions(t *testing.T) {
 		Status: responses.StatusCompleted, CreatedAt: now - 3600,
 		TurnInputTokens: 1_000_000, TurnOutputTokens: 1_000_000,
 		SessionInputTokens: 1_000_000, SessionOutputTokens: 1_000_000,
-		KeyID: s.id,
+		KeyID: s.id, Owner: s.id,
 	})
 	srv.responses.Put(responses.Record{
 		ID: "resp-child1", Model: "cheap-model", ProviderID: "prov-a",
@@ -31,7 +31,7 @@ func TestMeSessions(t *testing.T) {
 		PreviousID:      "resp-root1",
 		TurnInputTokens: 500, TurnOutputTokens: 500,
 		SessionInputTokens: 1_000_500, SessionOutputTokens: 1_000_500,
-		KeyID: s.id,
+		KeyID: s.id, Owner: s.id,
 	})
 	// Session 2 (newer root): a model with no catalog price.
 	srv.responses.Put(responses.Record{
@@ -39,14 +39,14 @@ func TestMeSessions(t *testing.T) {
 		Status: responses.StatusCompleted, CreatedAt: now - 60,
 		TurnInputTokens: 100, TurnOutputTokens: 100,
 		SessionInputTokens: 100, SessionOutputTokens: 100,
-		KeyID: s.id,
+		KeyID: s.id, Owner: s.id,
 	})
 	// Another key's session and a keyless (pre-M5.6) session:
 	// neither may ever appear for this caller.
 	srv.responses.Put(responses.Record{
 		ID: "resp-other", Model: "cheap-model",
 		Status: responses.StatusCompleted, CreatedAt: now - 30,
-		TurnInputTokens: 10, TurnOutputTokens: 10, KeyID: "other-key",
+		TurnInputTokens: 10, TurnOutputTokens: 10, KeyID: "other-key", Owner: "other-key",
 	})
 	srv.responses.Put(responses.Record{
 		ID: "resp-legacy", Model: "cheap-model",

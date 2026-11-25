@@ -943,7 +943,7 @@ func (s *Server) storeResponsesRecord(id string, req responsesRequest, transcrip
 	objJSON, _ := json.Marshal(obj)
 	sessionPrompt, sessionCompletion := turnPrompt, turnCompletion
 	if req.PreviousResponseID != "" {
-		if parent, ok := s.responses.Get(req.PreviousResponseID); ok {
+		if parent, ok := s.responses.Get(req.PreviousResponseID, keyID); ok {
 			sessionPrompt += parent.SessionInputTokens
 			sessionCompletion += parent.SessionOutputTokens
 		}
@@ -964,6 +964,7 @@ func (s *Server) storeResponsesRecord(id string, req responsesRequest, transcrip
 		SessionOutputTokens: sessionCompletion,
 		KeyID:               keyID,
 	}
+	rec.Owner = keyID
 	s.responses.Put(rec)
 	// The tree index (CHECKLIST 237): the same record, durably.
 	s.recordResponseTree(rec)
@@ -1080,7 +1081,7 @@ func (s *Server) handleResponses(w http.ResponseWriter, r *http.Request) {
 	var base []provider.Message
 	pin := ""
 	if req.PreviousResponseID != "" {
-		rec, ok := s.responses.Get(req.PreviousResponseID)
+		rec, ok := s.responses.Get(req.PreviousResponseID, s.callerKeyID(r))
 		if !ok {
 			writeError(w, http.StatusNotFound, "response not found: "+req.PreviousResponseID)
 			return
@@ -1289,7 +1290,7 @@ func (s *Server) handleGetResponse(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "response id is required")
 		return
 	}
-	rec, ok := s.responses.Get(id)
+	rec, ok := s.responses.Get(id, s.callerKeyID(r))
 	if !ok {
 		writeError(w, http.StatusNotFound, "response not found: "+id)
 		return
@@ -1367,7 +1368,7 @@ func (s *Server) handleListResponses(w http.ResponseWriter, r *http.Request) {
 		}
 		offset = idx + 1
 	}
-	page, total := s.responses.Page(offset, limit)
+	page, total := s.responses.Page(offset, limit, s.callerKeyID(r))
 	out := responsesList{Object: "list", Data: []json.RawMessage{}, HasMore: offset+len(page) < total}
 	for _, rec := range page {
 		out.Data = append(out.Data, rec.ResponseJSON)
@@ -1396,7 +1397,7 @@ func (s *Server) handleDeleteResponse(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "response id is required")
 		return
 	}
-	if s.responses == nil || !s.responses.Delete(id) {
+	if s.responses == nil || !s.responses.Delete(id, s.callerKeyID(r)) {
 		writeError(w, http.StatusNotFound, "response not found: "+id)
 		return
 	}
@@ -1519,6 +1520,7 @@ func (s *Server) handleResponsesStream(w http.ResponseWriter, ctx context.Contex
 			Stream:       true,
 			ResponseJSON: createdJSON,
 		}
+		rec.Owner = keyID
 		s.responses.Put(rec)
 		// The tree index (CHECKLIST 237): the placeholder is a
 		// node too — the terminal store re-records the same id

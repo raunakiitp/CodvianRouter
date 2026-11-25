@@ -48,7 +48,7 @@ func streamUsageReq() ChatRequest {
 func TestOpenAIStreamRequestsIncludeUsage(t *testing.T) {
 	sse := "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
 	srv, body := streamUsageMock(t, sse)
-	c, err := NewClient(srv.URL, "k")
+	c, err := NewClient(srv.URL, "k", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestOpenAIStreamUsageAggregation(t *testing.T) {
 		"data: {\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":6,\"total_tokens\":18,\"prompt_tokens_details\":{\"cached_tokens\":4},\"completion_tokens_details\":{\"reasoning_tokens\":2},\"cost\":0.00031}}\n\n" +
 		"data: [DONE]\n\n"
 	srv, _ := streamUsageMock(t, sse)
-	c, err := NewClient(srv.URL, "k")
+	c, err := NewClient(srv.URL, "k", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestOpenAIStreamUsageAggregation(t *testing.T) {
 func TestOpenAIStreamNoUsageStaysZero(t *testing.T) {
 	sse := "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
 	srv, _ := streamUsageMock(t, sse)
-	c, err := NewClient(srv.URL, "k")
+	c, err := NewClient(srv.URL, "k", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

@@ -38,7 +38,7 @@ func streamUsageUpstream(t *testing.T, sse string) (*httptest.Server, *[]byte) {
 
 func streamUsageServer(t *testing.T, upstreamURL string) *Server {
 	t.Helper()
-	client, err := provider.NewClient(upstreamURL, "upstream-key")
+	client, err := provider.NewClient(upstreamURL, "upstream-key", provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestStreamBudgetOverageRecorded(t *testing.T) {
 		"data: {\"id\":\"chatcmpl-x\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"model-a\",\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":6,\"total_tokens\":18}}\n\n" +
 		"data: [DONE]\n\n"
 	up, _ := streamUsageUpstream(t, sse)
-	client, err := provider.NewClient(up.URL, "upstream-key")
+	client, err := provider.NewClient(up.URL, "upstream-key", provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

@@ -121,7 +121,7 @@ func (s *Server) handleMeSessions(w http.ResponseWriter, r *http.Request) {
 			return roots[a].CreatedAt > roots[b].CreatedAt
 		})
 		for _, root := range roots {
-			out.Data = append(out.Data, s.meSessionRow(root, prices))
+			out.Data = append(out.Data, s.meSessionRow(root, prices, keyID))
 		}
 	}
 	// Ledger agent sessions (AK-3): the coding-agent rollup,
@@ -193,7 +193,7 @@ func meSessionRowFromLedger(s ledger.AgentSession) meSessionRow {
 // descendant reachable through Children (branches included).
 // Status is the newest record's status; the list price sums each
 // turn at the catalog's current prices.
-func (s *Server) meSessionRow(root responses.Record, prices map[string][2]float64) meSessionRow {
+func (s *Server) meSessionRow(root responses.Record, prices map[string][2]float64, owner string) meSessionRow {
 	row := meSessionRow{
 		ID:                root.ID,
 		CreatedAt:         time.Unix(root.CreatedAt, 0).UTC(),
@@ -219,7 +219,7 @@ func (s *Server) meSessionRow(root responses.Record, prices map[string][2]float6
 			continue
 		}
 		seen[id] = true
-		rec, ok := s.responses.Get(id)
+		rec, ok := s.responses.Get(id, owner)
 		if !ok {
 			continue
 		}

@@ -83,6 +83,16 @@ func (e *Engine) StreamLifetimeExceededCount() uint64 {
 	return e.streamLifetimeKilled.Load()
 }
 
+// LedgerRecordAttempts returns how many ledger RecordAttempt calls
+// have been made since this engine started. Safe on a nil engine
+// (0).
+func (e *Engine) LedgerRecordAttempts() uint64 {
+	if e == nil {
+		return 0
+	}
+	return e.ledgerRecordAttempts.Load()
+}
+
 // streamMaxLifetime resolves the effective cap: a configured
 // positive value wins; 0 means the 30-minute default; a negative
 // value disables the cap entirely (no bound — the operator asked

@@ -122,7 +122,7 @@ func TestRegistryRefreshModelsSuccessMerges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reload vault: %v", err)
 	}
-	reg2, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(NewVaultCipher(vault)))
+	reg2, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(NewVaultCipher(vault)), WithRegistryAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
@@ -309,7 +309,7 @@ func TestRegistryAddStampsModelsFetchedAt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reload vault: %v", err)
 	}
-	reg2, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(NewVaultCipher(vault)))
+	reg2, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(NewVaultCipher(vault)), WithRegistryAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}

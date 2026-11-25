@@ -62,7 +62,7 @@ func TestRegistryAddSuccess(t *testing.T) {
 		t.Fatalf("test vault: %v", err)
 	}
 	cipher := NewVaultCipher(vault)
-	reg, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(cipher))
+	reg, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(cipher), WithRegistryAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewFileRegistry: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestRegistryAddSuccess(t *testing.T) {
 	}
 
 	// Persisted: a fresh registry on the same file reloads the provider.
-	reg2, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(cipher))
+	reg2, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(cipher), WithRegistryAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestRegistryAddSuccess(t *testing.T) {
 }
 
 func TestRegistryAddInvalidURL(t *testing.T) {
-	reg := NewRegistry(nil)
+	reg := NewRegistry(nil, WithRegistryAllowPrivateDestinations(true))
 	for _, bad := range []string{"", "://bad", "ftp://example.com", "example.com", "http://"} {
 		if _, err := reg.Add(bad, "key"); err == nil {
 			t.Errorf("Add(%q) should fail", bad)
@@ -136,7 +136,7 @@ func TestRegistryAddBadKey(t *testing.T) {
 	srv := httptest.NewServer(m.handler(t))
 	defer srv.Close()
 
-	reg := NewRegistry(nil)
+	reg := NewRegistry(nil, WithRegistryAllowPrivateDestinations(true))
 	if _, err := reg.Add(srv.URL, "sk-wrong"); err == nil {
 		t.Fatal("Add with bad key should fail")
 	}
@@ -149,7 +149,7 @@ func TestRegistryAddDuplicate(t *testing.T) {
 	srv := openAIMock(t)
 	defer srv.Close()
 
-	reg := NewRegistry(nil)
+	reg := NewRegistry(nil, WithRegistryAllowPrivateDestinations(true))
 	if _, err := reg.Add(srv.URL, "k1"); err != nil {
 		t.Fatalf("first Add: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestRegistryAddModels404ChatExists(t *testing.T) {
 	srv := httptest.NewServer(m.handler(t))
 	defer srv.Close()
 
-	reg := NewRegistry(nil)
+	reg := NewRegistry(nil, WithRegistryAllowPrivateDestinations(true))
 	p, err := reg.Add(srv.URL, "k")
 	if err != nil {
 		t.Fatalf("Add: %v", err)
@@ -195,7 +195,7 @@ func TestRegistryAddModels404Chat404(t *testing.T) {
 	srv := httptest.NewServer(m.handler(t))
 	defer srv.Close()
 
-	reg := NewRegistry(nil)
+	reg := NewRegistry(nil, WithRegistryAllowPrivateDestinations(true))
 	if _, err := reg.Add(srv.URL, "k"); err == nil {
 		t.Fatal("Add should fail when neither endpoint exists")
 	}
@@ -205,7 +205,7 @@ func TestRegistryRemoveGetList(t *testing.T) {
 	srv := openAIMock(t)
 	defer srv.Close()
 
-	reg := NewRegistry(nil)
+	reg := NewRegistry(nil, WithRegistryAllowPrivateDestinations(true))
 	p1, err := reg.Add(srv.URL, "k1")
 	if err != nil {
 		t.Fatalf("Add: %v", err)
@@ -252,7 +252,7 @@ func TestRegistryRemoveGetList(t *testing.T) {
 func TestDetectWireFormat(t *testing.T) {
 	ctx := context.Background()
 	factory := func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (Client, error) {
-		return NewClient(baseURL, apiKey, WithAuthHeaders(authHeaders))
+		return NewClient(baseURL, apiKey, WithAuthHeaders(authHeaders), WithAllowPrivateDestinations(true))
 	}
 
 	// Models OK -> openai.
@@ -288,7 +288,7 @@ func TestCodvianPreset(t *testing.T) {
 	if CodvianPreset.BaseURL != "https://api.codvian.com/v1" {
 		t.Errorf("preset base URL = %q", CodvianPreset.BaseURL)
 	}
-	if _, err := ValidateBaseURL(CodvianPreset.BaseURL); err != nil {
+	if _, err := ValidateBaseURL(CodvianPreset.BaseURL, false); err != nil {
 		t.Errorf("preset base URL invalid: %v", err)
 	}
 }

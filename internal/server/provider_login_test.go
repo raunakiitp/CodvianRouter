@@ -464,7 +464,7 @@ func TestProviderLoginCallbackRealRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("vault: %v", err)
 	}
-	reg, err := provider.NewFileRegistry(filepath.Join(dir, "providers.json"), provider.WithCipher(provider.NewVaultCipher(vault)))
+	reg, err := provider.NewFileRegistry(filepath.Join(dir, "providers.json"), provider.WithRegistryAllowPrivateDestinations(true), provider.WithCipher(provider.NewVaultCipher(vault)))
 	if err != nil {
 		t.Fatalf("registry: %v", err)
 	}
@@ -519,7 +519,7 @@ func TestProviderLoginCallbackRealRegistry(t *testing.T) {
 	}
 	// Persistence: a fresh registry over the same file restores
 	// the pool (encrypted credentials survive restart).
-	reg2, err := provider.NewFileRegistry(filepath.Join(dir, "providers.json"), provider.WithCipher(provider.NewVaultCipher(vault)))
+	reg2, err := provider.NewFileRegistry(filepath.Join(dir, "providers.json"), provider.WithRegistryAllowPrivateDestinations(true), provider.WithCipher(provider.NewVaultCipher(vault)))
 	if err != nil {
 		t.Fatalf("reload registry: %v", err)
 	}

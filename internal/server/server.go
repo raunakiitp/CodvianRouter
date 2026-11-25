@@ -33,6 +33,7 @@
 package server
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -45,7 +46,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -953,6 +956,11 @@ type Server struct {
 	// a logged no-op, never a failed request).
 	auditMu    sync.Mutex
 	auditStore *auditStore
+	// wsAllowedOrigins lists the browser origins allowed to open a
+	// WebSocket connection, in addition to the same-origin default
+	// (see wsOriginAllowed). Set by WithWSAllowedOrigins; empty
+	// means same-origin only.
+	wsAllowedOrigins []string
 }
 
 // Option configures a Server.
@@ -5837,23 +5845,64 @@ func (s *Server) handleWebSocketChat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "expected WebSocket upgrade")
 		return
 	}
-	// Authenticate: Authorization header or api_key query param
-	authHeader := r.Header.Get("Authorization")
-	apiKey := r.URL.Query().Get("api_key")
-	if authHeader == "" && apiKey == "" {
+	// AUD-API-005: authenticate BEFORE the upgrade, through the SAME
+	// path the HTTP surface uses. The previous check only asked
+	// whether an Authorization header was PRESENT - it never
+	// validated the credential, so any non-empty string (or any
+	// api_key query value) opened the socket. The route guard
+	// (TierManagement) already authenticates the request, but the
+	// handler must stand on its own: the credential is read via
+	// requestKey (the same parser auth and scope use, so the
+	// vendor headers work too) and verified via the verifier.
+	key := requestKey(r)
+	if key == "" {
 		writeError(w, http.StatusUnauthorized, "missing authentication")
 		return
 	}
+	if !s.authorized(r) {
+		s.unauthorized(w, r)
+		return
+	}
+	// Origin policy (AUD-API-005): a browser WebSocket carries an
+	// Origin header, and accepting ANY origin lets a malicious page
+	// open an authenticated socket on the user's behalf (CSWSH).
+	// The default policy is same-origin (or no Origin at all, which
+	// is what a non-browser client sends); a cross-origin browser
+	// request is refused unless the operator explicitly allowed it.
+	if !s.wsOriginAllowed(r) {
+		writeError(w, http.StatusForbidden, "origin not allowed")
+		return
+	}
+	// Parse query parameters into ChatRequest BEFORE the budget
+	// reservation: the reservation prices the prompt, so the model
+	// and the messages must already be known.
+	req := parseWSChatRequest(r)
+	req.Stream = true
+	// AUD-API-005: caller attribution. The HTTP path sets
+	// req.CallerID to the verified caller's key id; without it the
+	// engine cannot attribute the attempt, the ledger row or the
+	// spend to the tenant that made the request.
+	req.CallerID = s.callerKeyID(r)
+	// AUD-API-005: budget parity with the HTTP surface. The HTTP
+	// path reserves the prompt cost before the provider call and
+	// settles it afterwards; the WebSocket path must do the same or
+	// a key over its cap can spend over WebSocket freely. The
+	// reservation is settled (released) on every exit path.
+	reservationID, refused := s.reserveKeyBudget(w, r, &req)
+	if refused {
+		return
+	}
+	if reservationID != "" {
+		defer s.settleReservation(reservationID)
+	}
 	// Upgrade connection
-	conn, err := upgrader.Upgrade(w, r, nil)
+	up := s.wsUpgrader()
+	conn, err := up.Upgrade(w, r, nil)
 	if err != nil {
 		s.logger.Printf("ws: upgrade failed: %v", err)
 		return
 	}
 	defer conn.Close()
-	// Parse query parameters into ChatRequest
-	req := parseWSChatRequest(r)
-	req.Stream = true
 	// Run the same pre-call gates and streaming as handleChatStream
 	ctx := r.Context()
 	start := time.Now()
@@ -5867,11 +5916,57 @@ func (s *Server) handleWebSocketChat(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// upgrader is the WebSocket upgrader with reasonable defaults.
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  4096,
-	WriteBufferSize: 4096,
-	CheckOrigin:     func(r *http.Request) bool { return true }, // auth is on the connection
+// wsUpgrader builds the WebSocket upgrader for this server. The
+// origin check is the server's explicit policy (see wsOriginAllowed),
+// never an unconditional "accept every origin".
+func (s *Server) wsUpgrader() websocket.Upgrader {
+	return websocket.Upgrader{
+		ReadBufferSize:  4096,
+		WriteBufferSize: 4096,
+		CheckOrigin:     s.wsOriginAllowed,
+	}
+}
+
+// wsOriginAllowed applies the WebSocket origin policy. The default
+// is same-origin: the request's Origin host must equal the Host the
+// client dialled. A request with NO Origin header (every
+// non-browser WebSocket client, including the Go and Python SDKs)
+// is allowed - a browser always sends one, so this cannot be used
+// to bypass the browser check. An operator who fronts the gateway
+// with a different public origin (a hosted dashboard, for example)
+// lists it explicitly with WithWSAllowedOrigins.
+func (s *Server) wsOriginAllowed(r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	for _, allowed := range s.wsAllowedOrigins {
+		if allowed == "*" || strings.EqualFold(allowed, origin) {
+			return true
+		}
+		if au, err := url.Parse(allowed); err == nil && au.Host != "" && strings.EqualFold(au.Host, u.Host) {
+			return true
+		}
+	}
+	// Same-origin: the Origin host equals the Host the client
+	// dialled (scheme is not compared - the gateway may terminate
+	// TLS in front of the process).
+	return strings.EqualFold(u.Host, r.Host)
+}
+
+// WithWSAllowedOrigins lists the browser origins allowed to open a
+// WebSocket connection, in addition to the same-origin default. An
+// empty list (the default) keeps the same-origin policy; "*" allows
+// any origin and is only appropriate behind an explicit,
+// operator-controlled front end.
+func WithWSAllowedOrigins(origins []string) Option {
+	return func(s *Server) {
+		s.wsAllowedOrigins = append([]string(nil), origins...)
+	}
 }
 
 // parseWSChatRequest builds a ChatRequest from WebSocket query
@@ -8119,6 +8214,26 @@ func (r *statusRecorder) Flush() {
 	if f, ok := r.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
+}
+
+// Hijack passes through so protocol upgrades (the WebSocket
+// endpoint, CONNECT-style tunnels) work behind the recorder. The
+// recorder embeds http.ResponseWriter, which does NOT carry the
+// Hijacker method, so without this the type assertion inside
+// gorilla/websocket's Upgrader fails and every /v1/ws handshake
+// answers a bare 500 ("response does not implement http.Hijacker").
+// On a successful hijack the response becomes a 101 Switching
+// Protocols, so the recorded status reflects what the client saw.
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := r.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("statusRecorder: underlying ResponseWriter does not implement http.Hijacker")
+	}
+	conn, rw, err := h.Hijack()
+	if err == nil {
+		r.status = http.StatusSwitchingProtocols
+	}
+	return conn, rw, err
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {

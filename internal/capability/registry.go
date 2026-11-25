@@ -263,7 +263,7 @@ func (b *Builder) buildModels(out map[string]ModelCapabilities, providerID strin
 		if cp != nil {
 			wireFormats = cp.WireFormats
 		}
-		if len(wireFormats) > 0 {
+		if len(wireFormats) > 0 && wireFormats[0] != catalog.WireUnknown {
 			streamProv := Provenance{
 				Source:       SourceCatalogWireFormat,
 				Verification: VerificationVerified,
@@ -277,6 +277,17 @@ func (b *Builder) buildModels(out map[string]ModelCapabilities, providerID strin
 				mc[CapAPIChat] = Entry{Capability: CapAPIChat, Support: SupportSupported, Provenance: streamProv}
 				mc[CapAPIResponses] = Entry{Capability: CapAPIResponses, Support: SupportSupported, Provenance: streamProv}
 			}
+		} else if len(wireFormats) > 0 && wireFormats[0] == catalog.WireUnknown {
+			// Wire format is explicitly unknown: record streaming as
+			// unknown with proper provenance, never as supported.
+			unknownProv := Provenance{
+				Source:       SourceCatalogWireFormat,
+				Verification: VerificationUnverified,
+				ObservedAt:   time.Now(),
+				Confidence:   "low",
+				Note:         "provider declares unknown wire format",
+			}
+			mc[CapStreaming] = Entry{Capability: CapStreaming, Support: SupportUnknown, Provenance: unknownProv}
 		}
 
 		out[providerID+"|"+model] = mc

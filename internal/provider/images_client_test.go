@@ -16,7 +16,7 @@ func mockImagesUpstream(t *testing.T, handler http.HandlerFunc) (*httptest.Serve
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	c, err := NewClient(srv.URL, "mock-key", WithHTTPClient(srv.Client()))
+	c, err := NewClient(srv.URL, "mock-key", WithHTTPClient(srv.Client()), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

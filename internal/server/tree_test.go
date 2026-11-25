@@ -40,7 +40,7 @@ func TestChatCompletionsStrategyTree(t *testing.T) {
 
 	clients := map[string]provider.Client{}
 	for id, srv := range map[string]*httptest.Server{"a": aSrv, "b": bSrv, "c": cSrv} {
-		cl, err := provider.NewClient(srv.URL, id+"-key", provider.WithTimeout(2*time.Second))
+		cl, err := provider.NewClient(srv.URL, id+"-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 		if err != nil {
 			t.Fatalf("NewClient %s: %v", id, err)
 		}

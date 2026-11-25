@@ -227,15 +227,15 @@ func TestProviderV1ChatPinnedFailoverFixture(t *testing.T) {
 	srvOther := httptest.NewServer(other.handler())
 	defer srvOther.Close()
 
-	c1, err := provider.NewClient(srv1.URL, "mock-key-1")
+	c1, err := provider.NewClient(srv1.URL, "mock-key-1", provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient key-1: %v", err)
 	}
-	c2, err := provider.NewClient(srv2.URL, "mock-key-2")
+	c2, err := provider.NewClient(srv2.URL, "mock-key-2", provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient key-2: %v", err)
 	}
-	cOther, err := provider.NewClient(srvOther.URL, "mock-key-other")
+	cOther, err := provider.NewClient(srvOther.URL, "mock-key-other", provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient other: %v", err)
 	}

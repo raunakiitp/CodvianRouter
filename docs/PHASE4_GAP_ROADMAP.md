@@ -1,8 +1,8 @@
-# Phase 4 Gap Analysis & Master Roadmap
+# Phase 4 Capability Gap Analysis & Master Roadmap
 
-**Source:** CODVIAN Router's own feature inventory and gap analysis, taken at main commit `632f574`. Every CODVIAN-side row is evidenced by a file path in this repository; no external material is required to read or reproduce it.
+**Source:** CODVIAN Router's own capability inventory and gap analysis, taken at main commit `632f574`. Every CODVIAN-side row is evidenced by a file path in this repository; no external material is required to read or reproduce it.
 
-**Methodology:** every feature classified from actual repository evidence — CODVIAN file paths + source read from the local working tree. A feature is only called implemented when the wiring exists and the behaviour was checked, never by name alone.
+**Methodology:** every capability classified from actual repository evidence — CODVIAN file paths + source read from the local working tree. A capability is only called implemented when the wiring exists and the behaviour was checked, never by name alone.
 
 ---
 
@@ -84,7 +84,7 @@ All 17 Dependabot alerts (CVE-2024-45337 through CVE-2026-46598) are `fixed` as 
 | P2-1 | Webhook integrations (Slack/Discord/Telegram) | `internal/webhooks/` exists | Payload templates per integration; delivery tests with mock webhooks; HMAC signing option |
 | P2-2 | More webhook event types | `quota.exceeded` exists | `request.completed`, `request.failed`, `provider.exhausted`, `test.ping` emitted |
 | P2-3 | Publish Docker images | `Dockerfile`, `docker-compose.yml` exist | Automated build on tags; image scans clean |
-| P2-4 | Benchmark report | `scripts/smoke-followups-277.py` | Report comparing failover/hedge/latency numbers across our own configurations |
+| P2-4 | Benchmark capability report | `scripts/smoke-followups-277.py` | Report comparing failover/hedge/latency numbers across our own configurations |
 
 ## Dependencies & Ordering
 
@@ -122,7 +122,7 @@ P2-4 (benchmark report) ───────────┤ depends on scripts/
 | #58 | P2-1: Webhook integrations (Slack/Discord/Telegram) | 1 wk |
 | #59 | P2-2: More webhook event types | 2 days |
 | #60 | P2-3: Publish Docker images (automated on tags) | 2 days |
-| #61 | P2-4: Benchmark parity report | 3 days |
+| #61 | P2-4: Benchmark capability report | 3 days |
 
 ---
 

@@ -79,7 +79,7 @@ func (m *pluginMockUpstream) handler() http.HandlerFunc {
 
 func newPluginEngine(t *testing.T, upstream *httptest.Server) *router.Engine {
 	t.Helper()
-	client, err := provider.NewClient(upstream.URL, "plugin-key", provider.WithTimeout(2*time.Second))
+	client, err := provider.NewClient(upstream.URL, "plugin-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -457,7 +457,7 @@ func costCapLookupFromBook(book *config.PriceBook) plugins.PriceLookup {
 // (200 + one hit) instead of failing on chain resolution.
 func newPluginEngineForModels(t *testing.T, upstream *httptest.Server) *router.Engine {
 	t.Helper()
-	client, err := provider.NewClient(upstream.URL, "plugin-key", provider.WithTimeout(2*time.Second))
+	client, err := provider.NewClient(upstream.URL, "plugin-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

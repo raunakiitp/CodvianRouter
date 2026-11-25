@@ -141,7 +141,7 @@ func (s *Server) checkSessionTokenAdmission(w http.ResponseWriter, r *http.Reque
 	if chat.PreviousResponseID == "" {
 		return false
 	}
-	parent, ok := s.responses.Get(chat.PreviousResponseID)
+	parent, ok := s.responses.Get(chat.PreviousResponseID, s.callerKeyID(r))
 	if !ok {
 		return false
 	}

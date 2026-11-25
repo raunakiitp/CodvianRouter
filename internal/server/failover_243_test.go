@@ -93,6 +93,7 @@ func TestResponsesContinuationStripsDanglingToolCall(t *testing.T) {
 	srv.responses.Put(responses.Record{
 		ID: "resp_parent", Model: "m", ProviderID: "prov-a",
 		Status: responses.StatusFailed, TranscriptJSON: raw,
+		Owner: staticKeyID("test-key-123"),
 	})
 	rec := doReq(t, srv, "POST", "/v1/responses",
 		`{"model":"m","previous_response_id":"resp_parent","input":"continue"}`, "test-key-123")
@@ -115,7 +116,7 @@ func TestResponsesContinuationStripsDanglingToolCall(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decode created response: %v", err)
 	}
-	stored, ok := srv.responses.Get(created.ID)
+	stored, ok := srv.responses.Get(created.ID, staticKeyID("test-key-123"))
 	if !ok {
 		t.Fatal("created response was not stored")
 	}
@@ -167,6 +168,7 @@ func TestResponsesSessionTokenAdmission(t *testing.T) {
 		ID: "resp_parent", Model: "m", ProviderID: "prov-a",
 		Status: responses.StatusCompleted, TranscriptJSON: raw,
 		SessionInputTokens: 900, SessionOutputTokens: 50, // 950 used
+		Owner: staticKeyID("test-key-123"),
 	})
 	before := eng.reqCount()
 	rec := doReq(t, srv, "POST", "/v1/responses",
@@ -183,7 +185,7 @@ func TestResponsesSessionTokenAdmission(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decode created response: %v", err)
 	}
-	stored, ok := srv.responses.Get(created.ID)
+	stored, ok := srv.responses.Get(created.ID, staticKeyID("test-key-123"))
 	if !ok {
 		t.Fatal("created response was not stored")
 	}
@@ -254,6 +256,7 @@ func TestResponsesSessionTokenCapOffCountsWithoutRefusing(t *testing.T) {
 		ID: "resp_parent", Model: "m", ProviderID: "prov-a",
 		Status: responses.StatusCompleted, TranscriptJSON: raw,
 		SessionInputTokens: 900000, SessionOutputTokens: 50000,
+		Owner: staticKeyID("test-key-123"),
 	})
 	rec := doReq(t, srv, "POST", "/v1/responses",
 		`{"model":"m","previous_response_id":"resp_parent","input":"ok"}`, "test-key-123")

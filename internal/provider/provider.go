@@ -16,9 +16,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/raunakiitp/codvian-router/internal/egress"
 )
 
 // WireFormatOpenAI is the default wire format: OpenAI-compatible
@@ -545,7 +548,7 @@ func NormalizeBaseURL(raw string) string {
 
 // ValidateBaseURL parses raw as a URL and requires an http(s) scheme and a
 // host. It returns the normalized base URL.
-func ValidateBaseURL(raw string) (string, error) {
+func ValidateBaseURL(raw string, allowPrivateDestinations bool) (string, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return "", fmt.Errorf("provider base URL is empty")
@@ -559,6 +562,23 @@ func ValidateBaseURL(raw string) (string, error) {
 	}
 	if u.Host == "" {
 		return "", fmt.Errorf("invalid provider base URL %q: missing host", raw)
+	}
+	// Embedded userinfo (https://user:pass@host) is refused: it
+	// leaks credentials into logs, is a classic URL-confusion
+	// vector, and has no legitimate use for a provider base URL.
+	if u.User != nil {
+		return "", fmt.Errorf("invalid provider base URL %q: embedded userinfo is not allowed", raw)
+	}
+	// A literal IP destination is decidable now: refuse the
+	// non-public ranges the egress policy blocks - unless the
+	// operator explicitly allowed private destinations (for on-prem
+	// or test mocks).
+	if !allowPrivateDestinations {
+		if ip, err := netip.ParseAddr(strings.Trim(u.Hostname(), "[]")); err == nil {
+			if !egress.AddrAllowed(ip.Unmap()) {
+				return "", fmt.Errorf("invalid provider base URL %q: %s is not a permitted public destination", raw, ip.Unmap())
+			}
+		}
 	}
 	return NormalizeBaseURL(trimmed), nil
 }

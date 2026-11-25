@@ -61,7 +61,7 @@ func modelsTestRegistry(t *testing.T) *provider.Registry {
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	reg := provider.NewRegistry(provider.NewJSONFileStore(path))
+	reg := provider.NewRegistry(provider.NewJSONFileStore(path), provider.WithRegistryAllowPrivateDestinations(true))
 	if err := reg.Load(); err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +434,7 @@ func newLiveRefreshRegistry(t *testing.T) (*provider.Registry, string) {
 	if err != nil {
 		t.Fatalf("test vault: %v", err)
 	}
-	reg, err := provider.NewFileRegistry(filepath.Join(dir, "providers.json"), provider.WithCipher(provider.NewVaultCipher(vault)))
+	reg, err := provider.NewFileRegistry(filepath.Join(dir, "providers.json"), provider.WithRegistryAllowPrivateDestinations(true), provider.WithCipher(provider.NewVaultCipher(vault)))
 	if err != nil {
 		t.Fatalf("NewFileRegistry: %v", err)
 	}
@@ -477,7 +477,7 @@ func modelsFetchedAtTestRegistry(t *testing.T) *provider.Registry {
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	reg := provider.NewRegistry(provider.NewJSONFileStore(path))
+	reg := provider.NewRegistry(provider.NewJSONFileStore(path), provider.WithRegistryAllowPrivateDestinations(true))
 	if err := reg.Load(); err != nil {
 		t.Fatal(err)
 	}

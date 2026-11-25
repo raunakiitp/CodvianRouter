@@ -73,7 +73,7 @@ func mustAnthropicClient(t *testing.T, srv *httptest.Server) Client {
 	c, err := NewClient(srv.URL, "sk-ant-test", WithAuthHeaders(map[string]string{
 		"Authorization":     "Bearer sk-ant-test",
 		"anthropic-version": "2026-10-21",
-	}), WithWireFormat(WireFormatAnthropic))
+	}), WithWireFormat(WireFormatAnthropic), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient anthropic: %v", err)
 	}
@@ -349,7 +349,7 @@ func TestNewClientWireFallback(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "k", WithWireFormat("ollama"))
+	c, err := NewClient(srv.URL, "k", WithWireFormat("ollama"), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient ollama: %v", err)
 	}

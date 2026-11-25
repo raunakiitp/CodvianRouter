@@ -167,6 +167,46 @@ func (g *Guard) DialContext(ctx context.Context, network, addr string) (net.Conn
 	return nil, lastErr
 }
 
+// DialContext returns a DialContext that applies the guard's policy to
+// every connection made through the given dialer. It is the
+// integration point for callers that already own a transport (the
+// provider client's transport, for example) and only need their
+// dial path checked: the host is resolved once, every answer is
+// validated, and only a validated IP literal is dialed. Because it
+// wraps the transport's ONLY dial path, it also covers every
+// redirect hop the client follows - there is no second, unchecked
+// way out.
+//
+// The wrapped dialer is used for the actual connection, so the
+// caller's own dial settings (timeouts, TCP_FASTOPEN, TCP_NODELAY)
+// are preserved; only the ADDRESS the connection targets is
+// constrained.
+func DialContext(dial func(ctx context.Context, network, addr string) (net.Conn, error)) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	g := Default()
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+		ips, err := g.Resolve(ctx, host)
+		if err != nil {
+			return nil, err
+		}
+		var lastErr error
+		for _, ip := range ips {
+			conn, err := dial(ctx, network, net.JoinHostPort(ip.String(), port))
+			if err == nil {
+				return conn, nil
+			}
+			lastErr = err
+		}
+		if lastErr == nil {
+			lastErr = fmt.Errorf("%w: no address to dial", ErrBlocked)
+		}
+		return nil, lastErr
+	}
+}
+
 // Client builds an SSRF-safe client. maxRedirects <= 0 disables
 // redirects: the 3xx response is returned to the caller as-is. A
 // followed redirect must be http(s), and its connection goes through

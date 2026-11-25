@@ -124,7 +124,7 @@ func TestServerStreamLifetimeSSECap(t *testing.T) {
 		<-r.Context().Done()
 	}))
 	defer mock.Close()
-	cli, err := provider.NewClient(mock.URL, "k", provider.WithTimeout(10*time.Second))
+	cli, err := provider.NewClient(mock.URL, "k", provider.WithTimeout(10*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestServerValidateReasoningEffort(t *testing.T) {
 // at different efforts is two entries, not one deduped row.
 func TestServerGroupsFeedEffort(t *testing.T) {
 	m := newContractMock(t, "a")
-	cli, err := provider.NewClient(m.server.URL, "a-key", provider.WithTimeout(2*time.Second))
+	cli, err := provider.NewClient(m.server.URL, "a-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

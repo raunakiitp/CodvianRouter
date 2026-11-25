@@ -57,11 +57,11 @@ func contextFitClients(t *testing.T, small, long *contextFitMock) (provider.Clie
 	smallSrv := httptest.NewServer(small.handler())
 	longSrv := httptest.NewServer(long.handler())
 	t.Cleanup(func() { smallSrv.Close(); longSrv.Close() })
-	smallClient, err := provider.NewClient(smallSrv.URL, "small-key", provider.WithTimeout(2*time.Second))
+	smallClient, err := provider.NewClient(smallSrv.URL, "small-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient small: %v", err)
 	}
-	longClient, err := provider.NewClient(longSrv.URL, "long-key", provider.WithTimeout(2*time.Second))
+	longClient, err := provider.NewClient(longSrv.URL, "long-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient long: %v", err)
 	}

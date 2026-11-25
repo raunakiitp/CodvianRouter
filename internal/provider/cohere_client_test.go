@@ -70,7 +70,7 @@ func mustCohereClient(t *testing.T, srv *httptest.Server) Client {
 	t.Helper()
 	c, err := NewClient(srv.URL, "co-key-test", WithAuthHeaders(map[string]string{
 		"Authorization": "Bearer co-key-test",
-	}), WithWireFormat(WireFormatCohere))
+	}), WithWireFormat(WireFormatCohere), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient cohere: %v", err)
 	}

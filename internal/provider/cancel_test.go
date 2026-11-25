@@ -194,7 +194,7 @@ func TestAnthropicStreamCancelStopsUpstreamReads(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	c, err := NewClient(srv.URL, "test-key", WithWireFormat(WireFormatAnthropic))
+	c, err := NewClient(srv.URL, "test-key", WithWireFormat(WireFormatAnthropic), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

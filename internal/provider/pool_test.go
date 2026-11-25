@@ -361,7 +361,7 @@ func TestWarmPoolAvoidsRedials(t *testing.T) {
 		pooled := mgr.TransportFor("mock", "key-one")
 		// Test-only: trust the httptest self-signed certificate.
 		pooled.Transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"h2", "http/1.1"}} // test-only: trust the httptest cert; NextProtos keeps the automatic HTTP/2 ALPN a nil TLS config would get
-		client, err := NewClient(mock.srv.URL, "key-one", WithHTTPClient(&http.Client{Transport: pooled}))
+		client, err := NewClient(mock.srv.URL, "key-one", WithHTTPClient(&http.Client{Transport: pooled}), WithAllowPrivateDestinations(true))
 		if err != nil {
 			t.Fatalf("NewClient: %v", err)
 		}
@@ -407,7 +407,7 @@ func TestWarmPoolAvoidsRedials(t *testing.T) {
 		pooled := mgr.TransportFor("mock", "key-one")
 		// Test-only: trust the httptest self-signed certificate.
 		pooled.Transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"h2", "http/1.1"}} // test-only: trust the httptest cert; NextProtos keeps the automatic HTTP/2 ALPN a nil TLS config would get
-		client, err := NewClient(mock.srv.URL, "key-one", WithHTTPClient(&http.Client{Transport: pooled}))
+		client, err := NewClient(mock.srv.URL, "key-one", WithHTTPClient(&http.Client{Transport: pooled}), WithAllowPrivateDestinations(true))
 		if err != nil {
 			t.Fatalf("NewClient: %v", err)
 		}
@@ -442,7 +442,7 @@ func TestWarmPoolSpeaksHTTP2(t *testing.T) {
 	pooled := mgr.TransportFor("mock", "key-one")
 	// Test-only: trust the httptest self-signed certificate.
 	pooled.Transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"h2", "http/1.1"}} // test-only: trust the httptest cert; NextProtos keeps the automatic HTTP/2 ALPN a nil TLS config would get
-	client, err := NewClient(mock.srv.URL, "key-one", WithHTTPClient(&http.Client{Transport: pooled}))
+	client, err := NewClient(mock.srv.URL, "key-one", WithHTTPClient(&http.Client{Transport: pooled}), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -475,7 +475,7 @@ func TestWarmPoolSpeaksHTTP2(t *testing.T) {
 // connection (dials stay at 1 for a sequential second request).
 func TestRegistryClientForSharesPool(t *testing.T) {
 	srv := newHTTPMock(t, 5*time.Millisecond)
-	reg := NewRegistry(nil, WithPoolConfig(PoolConfig{MaxIdlePerHost: 16}))
+	reg := NewRegistry(nil, WithPoolConfig(PoolConfig{MaxIdlePerHost: 16}), WithRegistryAllowPrivateDestinations(true))
 	p, err := reg.Add(srv.URL, "pool-test-key")
 	if err != nil {
 		t.Fatalf("Add: %v", err)
@@ -522,7 +522,7 @@ func TestRegistryClientForSharesPool(t *testing.T) {
 // answers).
 func TestWarmPools(t *testing.T) {
 	srv := newHTTPMock(t, 5*time.Millisecond)
-	reg := NewRegistry(nil)
+	reg := NewRegistry(nil, WithRegistryAllowPrivateDestinations(true))
 	if _, err := reg.Add(srv.URL, "warm-key"); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -558,7 +558,7 @@ func BenchmarkWarmPoolBurst(b *testing.B) {
 	pooled := mgr.TransportFor("mock", "key-one")
 	// Test-only: trust the httptest self-signed certificate.
 	pooled.Transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"h2", "http/1.1"}} // test-only: trust the httptest cert; NextProtos keeps the automatic HTTP/2 ALPN a nil TLS config would get
-	client, err := NewClient(mock.srv.URL, "key-one", WithHTTPClient(&http.Client{Transport: pooled}))
+	client, err := NewClient(mock.srv.URL, "key-one", WithHTTPClient(&http.Client{Transport: pooled}), WithAllowPrivateDestinations(true))
 	if err != nil {
 		b.Fatalf("NewClient: %v", err)
 	}

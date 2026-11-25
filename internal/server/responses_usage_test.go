@@ -44,7 +44,7 @@ func TestResponsesStreamUsageReachesClientAndLedger(t *testing.T) {
 	}))
 	t.Cleanup(up.Close)
 
-	client, err := provider.NewClient(up.URL, "upstream-key")
+	client, err := provider.NewClient(up.URL, "upstream-key", provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

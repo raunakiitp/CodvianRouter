@@ -234,7 +234,7 @@ func TestDashboardProvidersEmpty(t *testing.T) {
 }
 
 func TestDashboardProvidersMethodNotAllowed(t *testing.T) {
-	srv := newTestServer(t, &fakeEngine{}, WithDashboardProviders(fakeDashboardProviders{}), WithProviderRegistry(provider.NewRegistry(nil)))
+	srv := newTestServer(t, &fakeEngine{}, WithDashboardProviders(fakeDashboardProviders{}), WithProviderRegistry(provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))))
 	rec := doReq(t, srv, http.MethodPost, "/dashboard/providers", "", "")
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want 405", rec.Code)
@@ -464,7 +464,7 @@ func TestAPIProvidersMethodNotAllowed(t *testing.T) {
 	// endpoint, Tier 2): without a key it is 401, with a key and an
 	// empty body it is 400 — never a 405. The GET feed itself still
 	// answers only GET (see TestAPIProvidersEmpty).
-	srv := newTestServer(t, &fakeEngine{}, WithDashboardProviders(fakeDashboardProviders{}), WithProviderRegistry(provider.NewRegistry(nil)))
+	srv := newTestServer(t, &fakeEngine{}, WithDashboardProviders(fakeDashboardProviders{}), WithProviderRegistry(provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))))
 	if rec := doReq(t, srv, http.MethodPost, "/api/providers", "", ""); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("POST without key: status = %d, want 401", rec.Code)
 	}
@@ -524,7 +524,7 @@ func TestModelsUsesProviderRegistry(t *testing.T) {
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	reg := provider.NewRegistry(provider.NewJSONFileStore(path))
+	reg := provider.NewRegistry(provider.NewJSONFileStore(path), provider.WithRegistryAllowPrivateDestinations(true))
 	if err := reg.Load(); err != nil {
 		t.Fatal(err)
 	}
@@ -673,11 +673,11 @@ func TestChatCompletionsSameRequestFailoverDeadModel(t *testing.T) {
 			}))
 			defer fallbackSrv.Close()
 
-			deadClient, err := provider.NewClient(deadSrv.URL, "dead-key", provider.WithTimeout(tc.deadTimeout))
+			deadClient, err := provider.NewClient(deadSrv.URL, "dead-key", provider.WithTimeout(tc.deadTimeout), provider.WithAllowPrivateDestinations(true))
 			if err != nil {
 				t.Fatalf("NewClient dead: %v", err)
 			}
-			fallbackClient, err := provider.NewClient(fallbackSrv.URL, "fallback-key", provider.WithTimeout(2*time.Second))
+			fallbackClient, err := provider.NewClient(fallbackSrv.URL, "fallback-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 			if err != nil {
 				t.Fatalf("NewClient fallback: %v", err)
 			}
@@ -817,11 +817,11 @@ func TestChatCompletionsBreakerNeverTripsOn4xx(t *testing.T) {
 	}))
 	defer flakySrv.Close()
 
-	badKeyClient, err := provider.NewClient(badKeySrv.URL, "bad-key", provider.WithTimeout(2*time.Second))
+	badKeyClient, err := provider.NewClient(badKeySrv.URL, "bad-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient badkey: %v", err)
 	}
-	flakyClient, err := provider.NewClient(flakySrv.URL, "flaky-key", provider.WithTimeout(2*time.Second))
+	flakyClient, err := provider.NewClient(flakySrv.URL, "flaky-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient flaky: %v", err)
 	}
@@ -1040,11 +1040,11 @@ func TestChatCompletionsStreamingPrereadGate(t *testing.T) {
 			}))
 			defer fallback.Close()
 			led := &failoverGateLedger{}
-			deadClient, err := provider.NewClient(dead.URL, "dead-key", provider.WithTimeout(2*time.Second))
+			deadClient, err := provider.NewClient(dead.URL, "dead-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 			if err != nil {
 				t.Fatalf("NewClient dead: %v", err)
 			}
-			fallbackClient, err := provider.NewClient(fallback.URL, "fallback-key", provider.WithTimeout(2*time.Second))
+			fallbackClient, err := provider.NewClient(fallback.URL, "fallback-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 			if err != nil {
 				t.Fatalf("NewClient fallback: %v", err)
 			}
@@ -2036,11 +2036,11 @@ func TestChatCompletionsModelNotFoundFallback(t *testing.T) {
 			}))
 			defer fallbackSrv.Close()
 
-			deadClient, err := provider.NewClient(deadSrv.URL, "dead-key", provider.WithTimeout(2*time.Second))
+			deadClient, err := provider.NewClient(deadSrv.URL, "dead-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 			if err != nil {
 				t.Fatalf("NewClient dead: %v", err)
 			}
-			fallbackClient, err := provider.NewClient(fallbackSrv.URL, "fallback-key", provider.WithTimeout(2*time.Second))
+			fallbackClient, err := provider.NewClient(fallbackSrv.URL, "fallback-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 			if err != nil {
 				t.Fatalf("NewClient fallback: %v", err)
 			}
@@ -2216,11 +2216,11 @@ func TestChatCompletionsRetryAfterAbandonTrace(t *testing.T) {
 	}))
 	defer fallbackSrv.Close()
 
-	deadClient, err := provider.NewClient(deadSrv.URL, "dead-key", provider.WithTimeout(2*time.Second))
+	deadClient, err := provider.NewClient(deadSrv.URL, "dead-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient dead: %v", err)
 	}
-	fallbackClient, err := provider.NewClient(fallbackSrv.URL, "fallback-key", provider.WithTimeout(2*time.Second))
+	fallbackClient, err := provider.NewClient(fallbackSrv.URL, "fallback-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient fallback: %v", err)
 	}

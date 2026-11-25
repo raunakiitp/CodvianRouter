@@ -87,7 +87,7 @@ func seedQuotaSession(t *testing.T, srv *Server, keyID string) {
 		Status: responses.StatusCompleted, CreatedAt: now - 3600,
 		TurnInputTokens: 1_000_000, TurnOutputTokens: 1_000_000,
 		SessionInputTokens: 1_000_000, SessionOutputTokens: 1_000_000,
-		KeyID: keyID,
+		KeyID: keyID, Owner: keyID,
 	})
 	srv.responses.Put(responses.Record{
 		ID: "resp-child1", Model: "cheap-model", ProviderID: "prov-a",
@@ -95,12 +95,12 @@ func seedQuotaSession(t *testing.T, srv *Server, keyID string) {
 		PreviousID:      "resp-root1",
 		TurnInputTokens: 500, TurnOutputTokens: 500,
 		SessionInputTokens: 1_000_500, SessionOutputTokens: 1_000_500,
-		KeyID: keyID,
+		KeyID: keyID, Owner: keyID,
 	})
 	srv.responses.Put(responses.Record{
 		ID: "resp-other", Model: "cheap-model",
 		Status: responses.StatusCompleted, CreatedAt: now - 30,
-		TurnInputTokens: 10, TurnOutputTokens: 10, KeyID: "other-key",
+		TurnInputTokens: 10, TurnOutputTokens: 10, KeyID: "other-key", Owner: "other-key",
 	})
 	srv.responses.Put(responses.Record{
 		ID: "resp-legacy", Model: "cheap-model",

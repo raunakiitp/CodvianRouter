@@ -57,7 +57,11 @@ func TestProviderDialerSetsTCPNoDelay(t *testing.T) {
 		}
 	}()
 
-	tr := tfoTransport(true)
+	// bypassEgressGuard=true: this probe deliberately dials a loopback
+	// listener to read the socket option, so the SSRF egress guard
+	// (which correctly refuses loopback at connection time) is not
+	// what is under test here.
+	tr := tfoTransport(true, true)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	c, err := tr.DialContext(ctx, "tcp", ln.Addr().String())
@@ -97,7 +101,9 @@ func TestProviderDialerSetsTCPNoDelayWithoutTFO(t *testing.T) {
 		}
 	}()
 
-	tr := tfoTransport(false)
+	// bypassEgressGuard=true: same reason as above — the probe's target
+	// is a loopback listener.
+	tr := tfoTransport(false, true)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	c, err := tr.DialContext(ctx, "tcp", ln.Addr().String())

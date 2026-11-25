@@ -149,7 +149,7 @@ func TestStoreSnapshotOldestFirstFullRecords(t *testing.T) {
 	}
 	// Mutating a snapshot record never mutates the store.
 	snap[0].Model = "changed"
-	if got, _ := s.Get("resp_1"); got.Model != "gpt-4o" {
+	if got, _ := s.Get("resp_1", ""); got.Model != "gpt-4o" {
 		t.Fatalf("snapshot mutation leaked into the store: %q", got.Model)
 	}
 }
@@ -176,7 +176,7 @@ func TestStoreRestoreRoundTrip(t *testing.T) {
 	if n := dst.Restore(src.Snapshot()); n != 2 {
 		t.Fatalf("Restore = %d, want 2", n)
 	}
-	got, ok := dst.Get("resp_2")
+	got, ok := dst.Get("resp_2", "")
 	if !ok {
 		t.Fatal("restored resp_2 not found")
 	}
@@ -205,7 +205,7 @@ func TestStoreRestoreSkipsExpired(t *testing.T) {
 	if n := dst.Restore([]Record{old}); n != 0 {
 		t.Fatalf("Restore = %d, want 0 (expired)", n)
 	}
-	if _, ok := dst.Get("resp_old"); ok {
+	if _, ok := dst.Get("resp_old", ""); ok {
 		t.Fatal("expired record restored")
 	}
 	// A record created 1h ago restores, and its TTL keeps
@@ -231,10 +231,10 @@ func TestStoreRestoreRespectsCap(t *testing.T) {
 	if dst.Len() != 3 {
 		t.Fatalf("Len = %d, want 3 (cap)", dst.Len())
 	}
-	if _, ok := dst.Get("resp_a"); ok {
+	if _, ok := dst.Get("resp_a", ""); ok {
 		t.Fatal("oldest record survived the cap on restore")
 	}
-	if _, ok := dst.Get("resp_e"); !ok {
+	if _, ok := dst.Get("resp_e", ""); !ok {
 		t.Fatal("newest record evicted on restore")
 	}
 }
@@ -246,7 +246,7 @@ func TestStoreRestoreZeroCreatedAtCountsAsNow(t *testing.T) {
 	if n := dst.Restore([]Record{rec}); n != 1 {
 		t.Fatalf("Restore = %d, want 1", n)
 	}
-	if _, ok := dst.Get("resp_zero"); !ok {
+	if _, ok := dst.Get("resp_zero", ""); !ok {
 		t.Fatal("zero-CreatedAt record not restored")
 	}
 }

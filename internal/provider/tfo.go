@@ -36,6 +36,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/raunakiitp/codvian-router/internal/egress"
 )
 
 // TFOState is the measured TFO state for this platform. All fields
@@ -119,9 +121,22 @@ func tfoDialer(enabled bool) *net.Dialer {
 // (the previous behaviour) used DefaultTransport implicitly;
 // this makes the dialer explicit without changing any other
 // setting.
-func tfoTransport(enabled bool) *http.Transport {
+func tfoTransport(enabled bool, bypassEgressGuard bool) *http.Transport {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.DialContext = noDelayDialContext(tfoDialer(enabled).DialContext)
+	// 7A: enforce the egress SSRF policy at the CONNECTION point.
+	// Validation-time checks (see ValidateBaseURL) can only judge a
+	// literal IP; a hostname can still resolve to loopback, RFC1918
+	// space or the cloud metadata endpoint, and a redirect can point
+	// somewhere else entirely. The egress guard resolves the name
+	// exactly once, rejects the whole answer if ANY address is
+	// disallowed, and dials only a validated IP literal - so a
+	// rebinding server cannot swap in 127.0.0.1 after validation,
+	// and every redirect hop goes through the same check because the
+	// transport's dial path is the only way out.
+	if !bypassEgressGuard {
+		tr.DialContext = egress.DialContext(tr.DialContext)
+	}
 	return tr
 }
 

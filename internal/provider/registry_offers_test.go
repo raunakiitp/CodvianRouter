@@ -28,7 +28,7 @@ func TestRegistryOffersModel(t *testing.T) {
 	srv := openAIMock(t)
 	defer srv.Close()
 
-	reg := NewRegistry(nil)
+	reg := NewRegistry(nil, WithRegistryAllowPrivateDestinations(true))
 	p, err := reg.Add(srv.URL, "sk-test")
 	if err != nil {
 		t.Fatalf("Add: %v", err)

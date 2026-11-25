@@ -325,7 +325,7 @@ func TestModelsDeprecatedFiltering(t *testing.T) {
 			{ID: "gpt-4-0314"},
 			{ID: "gpt-3.5-turbo", Deprecated: true},
 		}},
-	}})
+	}}, provider.WithRegistryAllowPrivateDestinations(true))
 	if err := reg.Load(); err != nil {
 		t.Fatalf("load: %v", err)
 	}

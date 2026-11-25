@@ -55,7 +55,7 @@ func (m *embedPluginMockUpstream) handler() http.HandlerFunc {
 
 func newEmbedPluginEngine(t *testing.T, upstream *httptest.Server) *router.Engine {
 	t.Helper()
-	client, err := provider.NewClient(upstream.URL, "plugin-key", provider.WithTimeout(2*time.Second))
+	client, err := provider.NewClient(upstream.URL, "plugin-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
