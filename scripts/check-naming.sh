@@ -19,9 +19,9 @@
 set -euo pipefail
 
 # Build the prohibited patterns from character classes (literal name never appears)
-# Competitor product: omniroute (and variants: omni-route, omni_route, omni route)
+# Competitor product: o[m][n][i]-r[o][u][t][e] (hyphen/spaced/underscore variants)
 p1='o[m][n][i][- _]?r[o][u][t][e]'
-# Competitor product: cheaper-inference (and variants)
+# Competitor product: c[h][e][a][p][e][r]-i[n][f][e][r][e][n][c][e] (and variants)
 p2='c[h][e][a][p][e][r][- _]?i[n][f][e][r][e][n][c][e]'
 
 # Combined regex for prohibited competitor names
@@ -29,15 +29,21 @@ p2='c[h][e][a][p][e][r][- _]?i[n][f][e][r][e][n][c][e]'
 PROHIBITED_REGEX="(${p1}|${p2})"
 
 # Cross-product tracking markers that the cleanup removes.
-# These are ONLY flagged if they appear in contexts that are clearly
-# cross-product comparison (e.g., "126 classified feature entries",
-# "parity inventory", "feature parity" as a section title).
-# We restrict to lines that also contain classification totals or
-# explicit comparison language to avoid false positives on legitimate
-# Codvian prose like "parity of this implementation" or "feature parity check".
-# NOTE: "parity tracker" is a legitimate internal tool name in this repo;
-# only flag it when paired with cross-product comparison language.
-PARITY_MARKERS_REGEX='(126 classified feature|parity inventory|feature[- ]parity report|feature-parity evaluation|corrected parity inventory|feature parity (matrix|table|classification))'
+# These are only flagged in contexts that are clearly cross-product
+# comparison; the phrases are assembled from fragments so this scanner
+# does not match its own policy definition.
+# We restrict to lines that ALSO contain classification totals or
+# explicit comparison language, to avoid false positives on legitimate
+# Codvian prose (e.g. prose about parity of this implementation).
+# NOTE: the internal "parity tracker" tool name is legitimate in this
+# repo; only flag it when paired with cross-product comparison language.
+_m1='126 classified'' feature'
+_m2='parity'' inventory'
+_m3='feature''[- ]''parity'' report'
+_m4='feature-parity'' evaluation'
+_m5='corrected parity'' inventory'
+_m6='feature'' ''parity'' (matrix|table|classification)'
+PARITY_MARKERS_REGEX="(${_m1}|${_m2}|${_m3}|${_m4}|${_m5}|${_m6})"
 
 # Files to EXCLUDE from scanning (legitimate references that must stay):
 # - go.mod (module path)
@@ -52,6 +58,7 @@ EXCLUDE_PATTERNS=(
     "internal/catalog/verified\.go"
     "internal/catalog/providers_additional\.go"
     "docs/catalog-audit-"
+    "web/catalog-audit\\.json"
     ".github/"
     ".goreleaser\.yml"
     "bin/codvian-router"

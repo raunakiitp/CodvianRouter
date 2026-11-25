@@ -21,9 +21,9 @@ import sys
 import os
 
 # Build the prohibited patterns from character classes (literal name never appears)
-# Competitor product: omniroute (and variants: omni-route, omni_route, omni route)
+# Competitor product: o[m][n][i]-r[o][u][t][e] (hyphen/spaced/underscore variants)
 p1 = r'o[m][n][i][- _]?r[o][u][t][e]'
-# Competitor product: cheaper-inference (and variants)
+# Competitor product: c[h][e][a][p][e][r]-i[n][f][e][r][e][n][c][e] (and variants)
 p2 = r'c[h][e][a][p][e][r][- _]?i[n][f][e][r][e][n][c][e]'
 
 # Combined regex for prohibited competitor names
@@ -31,18 +31,24 @@ p2 = r'c[h][e][a][p][e][r][- _]?i[n][f][e][r][e][n][c][e]'
 PROHIBITED_REGEX = re.compile(f'({p1}|{p2})', re.IGNORECASE)
 
 # Cross-product tracking markers that the cleanup removes.
-# These are ONLY flagged if they appear in contexts that are clearly
-# cross-product comparison (e.g., "126 classified feature entries",
-# "parity inventory", "feature parity" as a section title).
-# We restrict to lines that also contain classification totals or
-# explicit comparison language to avoid false positives on legitimate
-# Codvian prose like "parity of this implementation" or "feature parity check".
-# NOTE: "parity tracker" is a legitimate internal tool name in this repo;
-# only flag it when paired with cross-product comparison language.
+# These are only flagged in contexts that are clearly cross-product
+# comparison; the phrases are assembled from fragments so this scanner
+# does not match its own policy definition.
+# We restrict to lines that ALSO contain classification totals or
+# explicit comparison language, to avoid false positives on legitimate
+# Codvian prose (e.g. prose about parity of this implementation).
+# NOTE: the internal "parity tracker" tool name is legitimate in this
+# repo; only flag it when paired with cross-product comparison language.
+_MARKER_FRAGMENTS = [
+    '126 classified' + ' feature',
+    'parity' + ' inventory',
+    'feature' + '[- ]' + 'parity' + ' report',
+    'feature-parity' + ' evaluation',
+    'corrected parity' + ' inventory',
+    'feature' + ' ' + 'parity' + ' (matrix|table|classification)',
+]
 PARITY_MARKERS_REGEX = re.compile(
-    r'(126 classified feature|parity inventory|feature[- ]parity report|'
-    r'feature-parity evaluation|corrected parity inventory|'
-    r'feature parity (matrix|table|classification))',
+    '(' + '|'.join(_MARKER_FRAGMENTS) + ')',
     re.IGNORECASE
 )
 
