@@ -58,6 +58,7 @@ type persistedRecord struct {
 	CreatedAt           int64           `json:"created_at"`
 	PreviousID          string          `json:"previous_response_id,omitempty"`
 	Stream              bool            `json:"stream"`
+	Owner               string          `json:"owner,omitempty"`
 	TranscriptJSON      json.RawMessage `json:"transcript,omitempty"`
 	ResponseJSON        json.RawMessage `json:"response,omitempty"`
 	TurnInputTokens     int             `json:"turn_input_tokens,omitempty"`
@@ -81,6 +82,7 @@ func toPersisted(rec Record) persistedRecord {
 		CreatedAt:           rec.CreatedAt,
 		PreviousID:          rec.PreviousID,
 		Stream:              rec.Stream,
+		Owner:               rec.Owner,
 		TranscriptJSON:      rec.TranscriptJSON,
 		ResponseJSON:        rec.ResponseJSON,
 		TurnInputTokens:     rec.TurnInputTokens,
@@ -99,6 +101,7 @@ func (p persistedRecord) toRecord() Record {
 		CreatedAt:           p.CreatedAt,
 		PreviousID:          p.PreviousID,
 		Stream:              p.Stream,
+		Owner:               p.Owner,
 		TranscriptJSON:      p.TranscriptJSON,
 		ResponseJSON:        p.ResponseJSON,
 		TurnInputTokens:     p.TurnInputTokens,

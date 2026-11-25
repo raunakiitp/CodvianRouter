@@ -210,12 +210,12 @@ func TestIsCapabilityMismatchErr(t *testing.T) {
 	}
 }
 
-// TestToolCapabilityFunc: the registry adapter reads the stored
+// TesttoolCapabilityFunc: the registry adapter reads the stored
 // tri-state flag — confirmed capable / confirmed incapable /
 // unknown — and fails open (unknown) for an unknown provider,
 // an unknown model, and a nil registry. Never a guess.
 func TestToolCapabilityFunc(t *testing.T) {
-	if capable, known := ToolCapabilityFunc(nil)("p1", "m1"); capable || known {
+	if capable, known := toolCapabilityFunc(nil)("p1", "m1"); capable || known {
 		t.Fatalf("nil registry: (%v, %v), want (false, false)", capable, known)
 	}
 	dir := t.TempDir()
@@ -231,7 +231,7 @@ func TestToolCapabilityFunc(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileRegistry: %v", err)
 	}
-	fn := ToolCapabilityFunc(reg)
+	fn := toolCapabilityFunc(reg)
 	cases := []struct {
 		providerID, model string
 		wantCapable       bool

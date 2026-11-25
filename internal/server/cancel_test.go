@@ -44,7 +44,7 @@ func gateEngine(t *testing.T, dead, fallback provider.Client) *router.Engine {
 
 func mustGateClient(t *testing.T, srv *httptest.Server, key string) provider.Client {
 	t.Helper()
-	c, err := provider.NewClient(srv.URL, key, provider.WithTimeout(2*time.Second))
+	c, err := provider.NewClient(srv.URL, key, provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

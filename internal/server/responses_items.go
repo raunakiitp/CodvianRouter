@@ -206,7 +206,7 @@ func (s *Server) handleListResponseInputItems(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadRequest, "response id is required")
 		return
 	}
-	rec, ok := s.responses.Get(id)
+	rec, ok := s.responses.Get(id, s.callerKeyID(r))
 	if !ok {
 		writeError(w, http.StatusNotFound, "response not found: "+id)
 		return

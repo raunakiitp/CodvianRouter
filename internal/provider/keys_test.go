@@ -25,7 +25,9 @@ func testKeyRegistry(t *testing.T) (*Registry, string) {
 	if err != nil {
 		t.Fatalf("test vault: %v", err)
 	}
-	reg, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(NewVaultCipher(vault)))
+	reg, err := NewFileRegistry(filepath.Join(dir, "providers.json"),
+		WithCipher(NewVaultCipher(vault)),
+		WithRegistryAllowPrivateDestinations(true)) // tests add local mock servers (SSRF bypass is test-only)
 	if err != nil {
 		t.Fatalf("NewFileRegistry: %v", err)
 	}

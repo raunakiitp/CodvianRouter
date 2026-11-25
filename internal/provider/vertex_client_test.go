@@ -154,7 +154,7 @@ func vertexTestServers(t *testing.T) (*httptest.Server, *vertexMock, *vertexToke
 	srv, mock := newVertexMock(t)
 	t.Cleanup(srv.Close)
 	base := srv.URL + "/v1/projects/proj-1/locations/us-central1"
-	c, err := NewClient(base, testServiceAccountJSON(t, tokSrv.URL), WithWireFormat(WireFormatVertex))
+	c, err := NewClient(base, testServiceAccountJSON(t, tokSrv.URL), WithWireFormat(WireFormatVertex), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient vertex: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestVertexTokenCacheSharedAcrossClients(t *testing.T) {
 	base := srv.URL + "/v1/projects/proj-1/locations/us-central1"
 	newClient := func(t *testing.T) *vertexClient {
 		t.Helper()
-		c, err := NewClient(base, saJSON, WithWireFormat(WireFormatVertex))
+		c, err := NewClient(base, saJSON, WithWireFormat(WireFormatVertex), WithAllowPrivateDestinations(true))
 		if err != nil {
 			t.Fatalf("NewClient vertex: %v", err)
 		}
@@ -254,7 +254,7 @@ func TestVertexTokenCacheSeparatePerKey(t *testing.T) {
 	base := srv.URL + "/v1/projects/proj-1/locations/us-central1"
 	req := ChatRequest{Model: "gemini-2.0-flash", Messages: []Message{{Role: "user", Content: "Hi"}}}
 	for i := 0; i < 2; i++ {
-		c, err := NewClient(base, testServiceAccountJSON(t, tokSrv.URL), WithWireFormat(WireFormatVertex))
+		c, err := NewClient(base, testServiceAccountJSON(t, tokSrv.URL), WithWireFormat(WireFormatVertex), WithAllowPrivateDestinations(true))
 		if err != nil {
 			t.Fatalf("NewClient %d: %v", i, err)
 		}
@@ -366,7 +366,7 @@ func TestVertexMissingCredentialsFailLoudly(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			c, err := NewClient(base, tc.key, WithWireFormat(WireFormatVertex))
+			c, err := NewClient(base, tc.key, WithWireFormat(WireFormatVertex), WithAllowPrivateDestinations(true))
 			if err != nil {
 				t.Fatalf("NewClient: %v", err)
 			}
@@ -394,7 +394,7 @@ func TestVertexTokenExchangeRejectionFailsLoudly(t *testing.T) {
 	srv, mock := newVertexMock(t)
 	defer srv.Close()
 	c, err := NewClient(srv.URL+"/v1/projects/proj-1/locations/us-central1",
-		testServiceAccountJSON(t, tokSrv.URL), WithWireFormat(WireFormatVertex))
+		testServiceAccountJSON(t, tokSrv.URL), WithWireFormat(WireFormatVertex), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -419,7 +419,7 @@ func TestVertexBaseURLWithoutProjectFailsLoudly(t *testing.T) {
 	// A bare host (or a /v1 root) names no project/location to
 	// bill — the client must fail naming the expected shape,
 	// never guess a project.
-	c, err := NewClient(srv.URL+"/v1", testServiceAccountJSON(t, tokSrv.URL), WithWireFormat(WireFormatVertex))
+	c, err := NewClient(srv.URL+"/v1", testServiceAccountJSON(t, tokSrv.URL), WithWireFormat(WireFormatVertex), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -443,7 +443,7 @@ func TestVertexRegistryAddCatalog(t *testing.T) {
 	defer tokSrv.Close()
 	srv, mock := newVertexMock(t)
 	defer srv.Close()
-	reg := NewRegistry(nil)
+	reg := NewRegistry(nil, WithRegistryAllowPrivateDestinations(true))
 	p, err := reg.AddCatalogWithOptions(context.Background(), "vertex",
 		testServiceAccountJSON(t, tokSrv.URL),
 		CatalogAddOptions{BaseURL: srv.URL + "/v1/projects/proj-1/locations/us-central1"})
@@ -509,7 +509,7 @@ func TestVertexTokenCacheEvictsExpiredEntries(t *testing.T) {
 	req := ChatRequest{Model: "gemini-2.0-flash", Messages: []Message{{Role: "user", Content: "Hi"}}}
 	newClient := func(t *testing.T, saJSON string) *vertexClient {
 		t.Helper()
-		c, err := NewClient(base, saJSON, WithWireFormat(WireFormatVertex))
+		c, err := NewClient(base, saJSON, WithWireFormat(WireFormatVertex), WithAllowPrivateDestinations(true))
 		if err != nil {
 			t.Fatalf("NewClient vertex: %v", err)
 		}

@@ -25,7 +25,7 @@ func testRelayRegistry(t *testing.T, cfgs []ProviderConfig) *Registry {
 	}
 	cipher := NewVaultCipher(vault)
 	store := &memRelayStore{}
-	reg := NewRegistry(store, WithCipher(cipher))
+	reg := NewRegistry(store, WithCipher(cipher), WithRegistryAllowPrivateDestinations(true))
 	// Seal each key through the registry's cipher, then reload from
 	// the store so the registry under test holds the sealed form.
 	sealed := make([]ProviderConfig, len(cfgs))
@@ -42,7 +42,7 @@ func testRelayRegistry(t *testing.T, cfgs []ProviderConfig) *Registry {
 	if err := store.Save(sealed); err != nil {
 		t.Fatalf("seed store: %v", err)
 	}
-	reg2 := NewRegistry(store, WithCipher(cipher))
+	reg2 := NewRegistry(store, WithCipher(cipher), WithRegistryAllowPrivateDestinations(true))
 	if err := reg2.Load(); err != nil {
 		t.Fatalf("load seeded registry: %v", err)
 	}

@@ -36,7 +36,7 @@ func TestMeSessionsLedgerRollup(t *testing.T) {
 		Status: responses.StatusCompleted, CreatedAt: now - 3600,
 		TurnInputTokens: 10, TurnOutputTokens: 10,
 		SessionInputTokens: 10, SessionOutputTokens: 10,
-		KeyID: s.id,
+		KeyID: s.id, Owner: s.id,
 	})
 	rec := doReq(t, srv, "GET", "/v1/me/sessions", "", s.raw)
 	if rec.Code != http.StatusOK {

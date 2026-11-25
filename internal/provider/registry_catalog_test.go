@@ -121,7 +121,7 @@ func newCatalogTestRegistry(t *testing.T) (*Registry, string) {
 	if err != nil {
 		t.Fatalf("test vault: %v", err)
 	}
-	reg, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(NewVaultCipher(vault)))
+	reg, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(NewVaultCipher(vault)), WithRegistryAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewFileRegistry: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestRegistryAddCatalogGroq(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reload vault: %v", err)
 	}
-	reg2, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(NewVaultCipher(vault)))
+	reg2, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(NewVaultCipher(vault)), WithRegistryAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
@@ -498,7 +498,7 @@ func TestCT3LoadRefusesRetiredID(t *testing.T) {
 		CatalogID: "blackbox",
 		Enabled:   true,
 	}})
-	if _, err := NewFileRegistry(path, WithCipher(cipher)); err == nil {
+	if _, err := NewFileRegistry(path, WithCipher(cipher), WithRegistryAllowPrivateDestinations(true)); err == nil {
 		t.Fatal("expected load error for retired catalog blackbox, got nil")
 	} else if !strings.Contains(err.Error(), "retired") {
 		t.Errorf("load error = %v, want it to say retired", err)
@@ -611,7 +611,7 @@ func TestRegistryLoadCatalogResolution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("test vault: %v", err)
 	}
-	reg, err := NewFileRegistry(path, WithCipher(NewVaultCipher(vault)))
+	reg, err := NewFileRegistry(path, WithCipher(NewVaultCipher(vault)), WithRegistryAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewFileRegistry: %v", err)
 	}
@@ -656,7 +656,7 @@ func TestRegistryLoadCatalogBadIDs(t *testing.T) {
 				CatalogID: tc.id,
 				Enabled:   true,
 			}})
-			if _, err := NewFileRegistry(path, WithCipher(cipher)); err == nil {
+			if _, err := NewFileRegistry(path, WithCipher(cipher), WithRegistryAllowPrivateDestinations(true)); err == nil {
 				t.Fatalf("expected load error for catalog %q, got nil", tc.id)
 			} else if !strings.Contains(err.Error(), tc.want) {
 				t.Errorf("error %q does not contain %q", err.Error(), tc.want)
@@ -743,7 +743,7 @@ func TestRegistryLoadRemovedProviders(t *testing.T) {
 		path := writeStoreFile(t, dir, []ProviderConfig{{
 			ID: "prov-oc", Name: "OpenCode", CatalogID: "opencode", Enabled: true,
 		}})
-		reg, err := NewFileRegistry(path, WithCipher(cipher))
+		reg, err := NewFileRegistry(path, WithCipher(cipher), WithRegistryAllowPrivateDestinations(true))
 		if err != nil {
 			t.Fatalf("load opencode = %v, want success (authenticated console entry is not the removed variant)", err)
 		}
@@ -760,7 +760,7 @@ func TestRegistryLoadRemovedProviders(t *testing.T) {
 			ID: "prov-x", Name: "X", CatalogID: "groq",
 			BaseURL: "https://notputer.com/v1", Enabled: true,
 		}})
-		if _, err := NewFileRegistry(path, WithCipher(cipher)); err != nil {
+		if _, err := NewFileRegistry(path, WithCipher(cipher), WithRegistryAllowPrivateDestinations(true)); err != nil {
 			t.Fatalf("load similar host = %v, want success", err)
 		}
 	})
@@ -788,7 +788,7 @@ func TestRegistryClientForCatalogExchangeError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("test vault: %v", err)
 	}
-	reg, err := NewFileRegistry(path, WithCipher(NewVaultCipher(vault)))
+	reg, err := NewFileRegistry(path, WithCipher(NewVaultCipher(vault)), WithRegistryAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewFileRegistry: %v", err)
 	}
@@ -819,7 +819,7 @@ func TestRegistryClientForAnthropicViaStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("test vault: %v", err)
 	}
-	reg, err := NewFileRegistry(path, WithCipher(NewVaultCipher(vault)))
+	reg, err := NewFileRegistry(path, WithCipher(NewVaultCipher(vault)), WithRegistryAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewFileRegistry: %v", err)
 	}
@@ -905,7 +905,7 @@ func TestRegistryClientForCohereNative(t *testing.T) {
 	if err != nil {
 		t.Fatalf("test vault: %v", err)
 	}
-	reg, err := NewFileRegistry(path, WithCipher(NewVaultCipher(vault)))
+	reg, err := NewFileRegistry(path, WithCipher(NewVaultCipher(vault)), WithRegistryAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewFileRegistry: %v", err)
 	}
@@ -950,9 +950,9 @@ func TestRegistryClientForBaseURLFallback(t *testing.T) {
 	var captured map[string]string
 	factory := func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (Client, error) {
 		captured = authHeaders
-		return NewClient(srv.URL, apiKey, WithAuthHeaders(authHeaders))
+		return NewClient(srv.URL, apiKey, WithAuthHeaders(authHeaders), WithAllowPrivateDestinations(true))
 	}
-	reg, err := NewFileRegistry(path, WithCipher(NewVaultCipher(vault)), WithClientFactory(factory))
+	reg, err := NewFileRegistry(path, WithCipher(NewVaultCipher(vault)), WithClientFactory(factory), WithRegistryAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewFileRegistry: %v", err)
 	}
@@ -991,7 +991,7 @@ func TestRegistryClientForBaseURLFallbackExchange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("test vault: %v", err)
 	}
-	reg, err := NewFileRegistry(path, WithCipher(NewVaultCipher(vault)))
+	reg, err := NewFileRegistry(path, WithCipher(NewVaultCipher(vault)), WithRegistryAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewFileRegistry: %v", err)
 	}
@@ -1106,7 +1106,7 @@ func TestRegistryClientForBedrockNative(t *testing.T) {
 	if err != nil {
 		t.Fatalf("test vault: %v", err)
 	}
-	reg, err := NewFileRegistry(path, WithCipher(NewVaultCipher(vault)))
+	reg, err := NewFileRegistry(path, WithCipher(NewVaultCipher(vault)), WithRegistryAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewFileRegistry: %v", err)
 	}

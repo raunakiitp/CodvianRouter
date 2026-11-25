@@ -83,7 +83,7 @@ func fakeFactory(byKey map[string]*fakeClient) provider.ClientFactory {
 }
 
 func TestCheckSuccessReportsStoredHint(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	id := addProvider(t, reg, "sk-ok")
 	// Operator-set hint must be reported as-is, not invented.
 	if err := reg.SetQuotaHint(id, 0.4); err != nil {
@@ -117,7 +117,7 @@ func TestCheckSuccessReportsStoredHint(t *testing.T) {
 }
 
 func TestCheckSuccessUnknownHintStaysUnknown(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	id := addProvider(t, reg, "sk-unknown")
 	c := New(reg, fakeFactory(map[string]*fakeClient{"sk-unknown": {}}))
 	st := c.Check(context.Background(), id)
@@ -130,7 +130,7 @@ func TestCheckSuccessUnknownHintStaysUnknown(t *testing.T) {
 }
 
 func TestCheckQuotaFailure(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	id := addProvider(t, reg, "sk-429")
 	if err := reg.SetQuotaHint(id, 0.5); err != nil {
 		t.Fatalf("SetQuotaHint: %v", err)
@@ -160,7 +160,7 @@ func TestCheckQuotaFailure(t *testing.T) {
 }
 
 func TestCheckGenericFailureDoesNotTouchHint(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	id := addProvider(t, reg, "sk-500")
 	if err := reg.SetQuotaHint(id, 0.5); err != nil {
 		t.Fatalf("SetQuotaHint: %v", err)
@@ -186,7 +186,7 @@ func TestCheckGenericFailureDoesNotTouchHint(t *testing.T) {
 }
 
 func TestCheckQuotaErrorTypeAlsoCounts(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	id := addProvider(t, reg, "sk-quota")
 	c := New(reg, fakeFactory(map[string]*fakeClient{
 		"sk-quota": {testKeyErr: &provider.QuotaError{Message: "insufficient_quota", StatusCode: 402}},
@@ -202,7 +202,7 @@ func TestCheckQuotaErrorTypeAlsoCounts(t *testing.T) {
 }
 
 func TestApplyHints(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	id429 := addProvider(t, reg, "sk-429b")
 	idOK := addProvider(t, reg, "sk-okb")
 	if err := reg.SetQuotaHint(idOK, 0.7); err != nil {
@@ -226,7 +226,7 @@ func TestApplyHints(t *testing.T) {
 }
 
 func TestApplyHintsWithNoChecksIsNoop(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	id := addProvider(t, reg, "sk-x")
 	if err := reg.SetQuotaHint(id, 0.3); err != nil {
 		t.Fatalf("SetQuotaHint: %v", err)
@@ -238,7 +238,7 @@ func TestApplyHintsWithNoChecksIsNoop(t *testing.T) {
 }
 
 func TestCheckUnknownProvider(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	c := New(reg, fakeFactory(nil))
 	st := c.Check(context.Background(), "prov_does_not_exist")
 	if st.OK {
@@ -253,7 +253,7 @@ func TestCheckUnknownProvider(t *testing.T) {
 }
 
 func TestCheckTimeout(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	id := addProvider(t, reg, "sk-slow")
 	c := New(reg, fakeFactory(map[string]*fakeClient{
 		// Blocks until the check context is cancelled.
@@ -280,7 +280,7 @@ func TestCheckTimeout(t *testing.T) {
 func TestCheckNilFactoryUsesRegistryClient(t *testing.T) {
 	// Nil factory -> reg.ClientFor -> real client against the mock server
 	// used by Add, so the key test succeeds.
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	id := addProvider(t, reg, "sk-real")
 	c := New(reg, nil)
 	st := c.Check(context.Background(), id)
@@ -290,7 +290,7 @@ func TestCheckNilFactoryUsesRegistryClient(t *testing.T) {
 }
 
 func TestCheckAllConcurrentAndOrdered(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	ids := []string{
 		addProvider(t, reg, "sk-a"),
 		addProvider(t, reg, "sk-b"),
@@ -324,7 +324,7 @@ func TestCheckAllConcurrentAndOrdered(t *testing.T) {
 }
 
 func TestCheckAllSkipsDisabled(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	idOn := addProvider(t, reg, "sk-on")
 	idOff := addProvider(t, reg, "sk-off")
 	if err := reg.SetEnabled(idOff, false); err != nil {
@@ -338,7 +338,7 @@ func TestCheckAllSkipsDisabled(t *testing.T) {
 }
 
 func TestLastTracksResults(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	id := addProvider(t, reg, "sk-last")
 	c := New(reg, fakeFactory(map[string]*fakeClient{"sk-last": {}}))
 	if got := c.Last(); len(got) != 0 {
@@ -357,7 +357,7 @@ func TestLastTracksResults(t *testing.T) {
 }
 
 func TestStartWatcher(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	id := addProvider(t, reg, "sk-watch")
 	c := New(reg, fakeFactory(map[string]*fakeClient{
 		"sk-watch": {testKeyErr: &provider.RateLimitError{}},
@@ -391,7 +391,7 @@ func TestStartWatcher(t *testing.T) {
 }
 
 func TestStartWatcherZeroIntervalIsNoop(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	c := New(reg, fakeFactory(nil))
 	done := make(chan struct{})
 	go func() {
@@ -411,7 +411,7 @@ func TestStartWatcherZeroIntervalIsNoop(t *testing.T) {
 func TestCheckDoesNotLeakKeyOnBuildFailure(t *testing.T) {
 	// Factory that fails with an error mentioning nothing sensitive, and
 	// a key that must never appear in any Status field.
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	id := addProvider(t, reg, "sk-topsecret-12345")
 	c := New(reg, func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (provider.Client, error) {
 		if apiKey != "sk-topsecret-12345" {
@@ -441,7 +441,7 @@ func seedHistory(c *Checker, id string, at time.Time, ok bool, latencyMs int64, 
 }
 
 func TestHistoryEmptyProviderReportsNoData(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	c := New(reg, fakeFactory(nil))
 	sum := c.History("no-such-provider")
 	if sum.Samples != 0 {
@@ -464,7 +464,7 @@ func TestHistoryEmptyProviderReportsNoData(t *testing.T) {
 }
 
 func TestHistoryRecordsDownPeriodAndUptimeDrops(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	id := addProvider(t, reg, "sk-hist")
 	c := New(reg, fakeFactory(map[string]*fakeClient{"sk-hist": {}}))
 	now := time.Now().UTC()
@@ -500,7 +500,7 @@ func TestHistoryRecordsDownPeriodAndUptimeDrops(t *testing.T) {
 }
 
 func TestHistoryWindowsWithNoProbesReportNoData(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	c := New(reg, fakeFactory(nil))
 	now := time.Now().UTC()
 	// Only old probes: 2 h ago, so the 1 h window is empty but the
@@ -516,7 +516,7 @@ func TestHistoryWindowsWithNoProbesReportNoData(t *testing.T) {
 }
 
 func TestHistoryLatencyPercentilesMove(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	c := New(reg, fakeFactory(nil))
 	now := time.Now().UTC()
 	// 100 successful probes with latencies 1..100 ms.
@@ -533,7 +533,7 @@ func TestHistoryLatencyPercentilesMove(t *testing.T) {
 }
 
 func TestHistoryRingIsBounded(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	c := New(reg, fakeFactory(nil))
 	now := time.Now().UTC()
 	// More probes than the cap, all within retention.
@@ -553,7 +553,7 @@ func TestHistoryRingIsBounded(t *testing.T) {
 }
 
 func TestCheckAppendsToHistory(t *testing.T) {
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	id := addProvider(t, reg, "sk-hist2")
 	c := New(reg, fakeFactory(map[string]*fakeClient{"sk-hist2": {}}))
 	if got := c.Check(context.Background(), id); !got.OK {

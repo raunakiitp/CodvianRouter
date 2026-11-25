@@ -75,7 +75,7 @@ func contractStack(t *testing.T) (*Server, map[string]*contractMock, *router.Eng
 	for _, id := range []string{"cheap", "mid", "pricey"} {
 		m := newContractMock(t, id)
 		mocks[id] = m
-		c, err := provider.NewClient(m.server.URL, id+"-key", provider.WithTimeout(2*time.Second))
+		c, err := provider.NewClient(m.server.URL, id+"-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 		if err != nil {
 			t.Fatalf("NewClient %s: %v", id, err)
 		}

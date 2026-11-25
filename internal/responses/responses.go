@@ -72,6 +72,7 @@ type Record struct {
 	Stream         bool            `json:"stream"`
 	TranscriptJSON json.RawMessage `json:"-"`
 	ResponseJSON   json.RawMessage `json:"-"`
+	Owner          string          `json:"-"`
 	// Session token accounting (CHECKLIST 243, LiteLLM #50730):
 	// per-turn admission for long-lived sessions counts a turn's
 	// tokens before the next turn is admitted. Turn* is this
@@ -133,6 +134,7 @@ func NewMsgID() string {
 type storeEntry struct {
 	rec     Record
 	created time.Time
+	owner   string
 }
 
 // Store is the in-memory response store. Safe for concurrent use.
@@ -183,7 +185,7 @@ func (s *Store) Put(rec Record) {
 // growing the store or counting a second creation.
 func (s *Store) putWithCreatedLocked(rec Record, created time.Time) {
 	if _, ok := s.entries[rec.ID]; !ok {
-		s.entries[rec.ID] = storeEntry{rec: rec, created: created}
+		s.entries[rec.ID] = storeEntry{rec: rec, created: created, owner: rec.Owner}
 		s.order = append(s.order, rec.ID)
 		s.created++
 		if rec.PreviousID != "" {
@@ -192,7 +194,19 @@ func (s *Store) putWithCreatedLocked(rec Record, created time.Time) {
 		s.evictLocked()
 		return
 	}
-	s.entries[rec.ID] = storeEntry{rec: rec, created: created}
+	// Replace in place. The owner MUST be carried onto the
+	// replacement: a stream stores an in_progress placeholder and
+	// then overwrites it with its terminal state (same id), and if
+	// the replace dropped the owner every streamed response would
+	// end up unowned — unfetchable by its own tenant and visible
+	// to the owner-less bucket. An empty owner on the replacement
+	// (a caller that did not set one) keeps the previous owner
+	// rather than silently orphaning the record.
+	owner := rec.Owner
+	if owner == "" {
+		owner = s.entries[rec.ID].owner
+	}
+	s.entries[rec.ID] = storeEntry{rec: rec, created: created, owner: owner}
 }
 
 // Snapshot returns the live records, oldest first, as full
@@ -270,7 +284,7 @@ func (s *Store) Restore(recs []Record) int {
 // Get returns the stored record for id, and whether it was found.
 // An expired entry counts as a miss and is deleted. The returned
 // record is a copy: mutating it never mutates the store.
-func (s *Store) Get(id string) (Record, bool) {
+func (s *Store) Get(id string, owner string) (Record, bool) {
 	if s == nil || id == "" {
 		return Record{}, false
 	}
@@ -278,6 +292,9 @@ func (s *Store) Get(id string) (Record, bool) {
 	defer s.mu.Unlock()
 	e, ok := s.entries[id]
 	if !ok {
+		return Record{}, false
+	}
+	if e.owner != owner {
 		return Record{}, false
 	}
 	if s.ttl > 0 && time.Since(e.created) > s.ttl {
@@ -294,13 +311,17 @@ func (s *Store) Get(id string) (Record, bool) {
 // silent success — the handler turns it into an honest 404. A
 // deleted transcript can never be continued afterwards: the next
 // create naming it as previous_response_id answers 404.
-func (s *Store) Delete(id string) bool {
+func (s *Store) Delete(id string, owner string) bool {
 	if s == nil || id == "" {
 		return false
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.entries[id]; !ok {
+	e, ok := s.entries[id]
+	if !ok {
+		return false
+	}
+	if e.owner != owner {
 		return false
 	}
 	delete(s.entries, id)
@@ -315,7 +336,7 @@ func (s *Store) Delete(id string) bool {
 // they are never counted in total and never served. Records carry
 // their stored response JSON (the list endpoint serves the full
 // objects); transcripts are never marshalled (json:"-").
-func (s *Store) Page(offset, limit int) ([]Record, int) {
+func (s *Store) Page(offset, limit int, owner string) ([]Record, int) {
 	if s == nil || limit <= 0 {
 		return nil, 0
 	}
@@ -337,6 +358,9 @@ func (s *Store) Page(offset, limit int) ([]Record, int) {
 		}
 		if s.ttl > 0 && time.Since(e.created) > s.ttl {
 			expired = append(expired, order[i])
+			continue
+		}
+		if e.owner != owner {
 			continue
 		}
 		live = append(live, e.rec)

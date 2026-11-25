@@ -53,7 +53,7 @@ func audioClient(t *testing.T, up *audioUpstream) *openAIClient {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(up.handler))
 	t.Cleanup(srv.Close)
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestPostAudioContentLengthOverCapFailsFast(t *testing.T) {
 		_, _ = w.Write([]byte("short"))
 	}))
 	defer srv.Close()
-	oc, err := NewClient(srv.URL, "test-key")
+	oc, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatal(err)
 	}

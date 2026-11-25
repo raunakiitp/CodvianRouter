@@ -55,7 +55,7 @@ func newKeyTestServer(t *testing.T) *keyTestServer {
 	t.Helper()
 	mock := httptest.NewServer(keyAwareUpstream{}.handler())
 	t.Cleanup(mock.Close)
-	reg := provider.NewRegistry(nil) // memory-only; ephemeral cipher is fine here
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true)) // memory-only; ephemeral cipher is fine here
 	ks := &keyTestServer{reg: reg}
 	srv := newTestServer(t, &fakeEngine{}, WithProviderRegistry(reg),
 		WithProviderKeyChangedHook(func(ctx context.Context, p *provider.Provider) error {
@@ -488,7 +488,7 @@ func TestRotateProviderKey(t *testing.T) {
 func TestProvidersFeedKeySpendAndCooling(t *testing.T) {
 	mock := httptest.NewServer(keyAwareUpstream{}.handler())
 	defer mock.Close()
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	led, err := ledger.Open(filepath.Join(t.TempDir(), "ledger.db"))
 	if err != nil {
 		t.Fatalf("ledger.Open: %v", err)

@@ -73,7 +73,7 @@ func measureColdDials(t *testing.T, srv *httptest.Server, tfo bool, n int) []tim
 	req := ChatRequest{Model: "m", Messages: []Message{{Role: "user", Content: "hi"}}}
 	out := make([]time.Duration, 0, n)
 	for i := 0; i < n; i++ {
-		c, err := NewClient(srv.URL, "k", WithTCPFastOpen(tfo))
+		c, err := NewClient(srv.URL, "k", WithTCPFastOpen(tfo), WithAllowPrivateDestinations(true))
 		if err != nil {
 			t.Fatalf("NewClient: %v", err)
 		}
@@ -138,7 +138,7 @@ func TestTFOColdDialLatencyMeasured(t *testing.T) {
 func TestTFOTransportIsDefault(t *testing.T) {
 	srv := mockChatServer(t)
 	defer srv.Close()
-	c, err := NewClient(srv.URL, "k")
+	c, err := NewClient(srv.URL, "k", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestTFOTransportIsDefault(t *testing.T) {
 	}
 	// A caller-supplied client keeps its own Transport untouched.
 	custom := &http.Client{Timeout: time.Second}
-	c2, err := NewClient(srv.URL, "k", WithHTTPClient(custom))
+	c2, err := NewClient(srv.URL, "k", WithHTTPClient(custom), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient custom: %v", err)
 	}

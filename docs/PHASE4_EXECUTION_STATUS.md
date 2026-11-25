@@ -14,7 +14,7 @@
 | P2-1: Webhook integrations (Slack/Discord/Telegram) | MERGED | #57 | IMPLEMENTED | TESTED | PASSED | MERGED |
 | P2-2: More webhook event types | MERGED | #58 | IMPLEMENTED | TESTED | PASSED | MERGED |
 | P2-3: Publish Docker images | VERIFIED | #59 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
-| P2-4: Benchmark parity report | VERIFIED | #60 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
+| P2-4: Benchmark capability report | VERIFIED | #60 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
 | P2-5: Final release readiness | IN PROGRESS | #61 | IMPLEMENTED | TESTED | CI PENDING | NOT STARTED |
 
 **Current main commit:** 1577e91 (PR #49-#58 all merged)

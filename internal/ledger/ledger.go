@@ -2543,12 +2543,21 @@ type UsageSummary struct {
 // MaxAbsErrPct are magnitude and worst case. A cell appears only
 // when at least one compared request exists in the window.
 type DriftRow struct {
-	Provider      string  `json:"provider"`
-	Model         string  `json:"model"`
-	Compared      int     `json:"compared"`
-	MeanErrPct    float64 `json:"mean_error_pct"`
-	MeanAbsErrPct float64 `json:"mean_abs_error_pct"`
-	MaxAbsErrPct  float64 `json:"max_abs_error_pct"`
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	Compared int    `json:"compared"`
+	// EstimateBacked counts the rows in the same window whose
+	// "reported" prompt count is only the conservative relay
+	// estimate echoed back (local estimate == recorded count).
+	// Such a row is NOT a measurement of estimator accuracy - it
+	// compares the estimator with itself and always yields 0%
+	// drift, which would dilute the real drift population to
+	// look perfect. They are counted and reported separately,
+	// never averaged into the drift figures.
+	EstimateBacked int     `json:"estimate_backed"`
+	MeanErrPct     float64 `json:"mean_error_pct"`
+	MeanAbsErrPct  float64 `json:"mean_abs_error_pct"`
+	MaxAbsErrPct   float64 `json:"max_abs_error_pct"`
 }
 
 // DriftSummary aggregates estimate-vs-reported prompt-token drift
@@ -2572,11 +2581,23 @@ func (l *Ledger) DriftSummary(ctx context.Context, since, until time.Time) ([]Dr
 		untilClause = " AND ts < ?"
 		args = append(args, untilMs)
 	}
+	// 7D: the drift population is the ACTUAL provider-reported
+	// usage only. A row whose recorded prompt count equals the
+	// local estimate is estimate-backed (the relay echoed the
+	// estimate instead of the provider's number): including it
+	// contributes a fake 0% error and dilutes the real drift
+	// population toward "perfect". Such rows are counted in
+	// EstimateBacked and excluded from every average/max.
 	rows, err := l.rdb.QueryContext(ctx, `
-		SELECT provider, model, COUNT(*),
-		       COALESCE(AVG(100.0 * (local_estimate_prompt_tokens - prompt_tokens) / prompt_tokens), 0),
-		       COALESCE(AVG(ABS(100.0 * (local_estimate_prompt_tokens - prompt_tokens) / prompt_tokens)), 0),
-		       COALESCE(MAX(ABS(100.0 * (local_estimate_prompt_tokens - prompt_tokens) / prompt_tokens)), 0)
+		SELECT provider, model,
+		       SUM(CASE WHEN local_estimate_prompt_tokens = prompt_tokens THEN 0 ELSE 1 END),
+		       SUM(CASE WHEN local_estimate_prompt_tokens = prompt_tokens THEN 1 ELSE 0 END),
+		       COALESCE(AVG(CASE WHEN local_estimate_prompt_tokens = prompt_tokens THEN NULL
+		           ELSE 100.0 * (local_estimate_prompt_tokens - prompt_tokens) / prompt_tokens END), 0),
+		       COALESCE(AVG(CASE WHEN local_estimate_prompt_tokens = prompt_tokens THEN NULL
+		           ELSE ABS(100.0 * (local_estimate_prompt_tokens - prompt_tokens) / prompt_tokens) END), 0),
+		       COALESCE(MAX(CASE WHEN local_estimate_prompt_tokens = prompt_tokens THEN NULL
+		           ELSE ABS(100.0 * (local_estimate_prompt_tokens - prompt_tokens) / prompt_tokens) END), 0)
 		FROM usage_events
 		WHERE ts >= ?`+untilClause+`
 		  AND tokens_split_known = 1
@@ -2590,7 +2611,7 @@ func (l *Ledger) DriftSummary(ctx context.Context, since, until time.Time) ([]Dr
 	defer rows.Close()
 	for rows.Next() {
 		var d DriftRow
-		if err := rows.Scan(&d.Provider, &d.Model, &d.Compared,
+		if err := rows.Scan(&d.Provider, &d.Model, &d.Compared, &d.EstimateBacked,
 			&d.MeanErrPct, &d.MeanAbsErrPct, &d.MaxAbsErrPct); err != nil {
 			return out, fmt.Errorf("ledger: drift summary: %w", err)
 		}

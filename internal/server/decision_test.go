@@ -110,7 +110,7 @@ func strconvQuote(s string) string {
 
 func newDecisionClient(t *testing.T, srv *httptest.Server) provider.Client {
 	t.Helper()
-	c, err := provider.NewClient(srv.URL, "test-key", provider.WithTimeout(2*time.Second))
+	c, err := provider.NewClient(srv.URL, "test-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

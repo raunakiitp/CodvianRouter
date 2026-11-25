@@ -10,9 +10,11 @@
 // only that key's entries; an empty body (or {}) flushes everything.
 // Response: {"flushed": N, "scope": "all"|"key", "key_id": "..."}.
 // Any non-POST method gets 405; malformed JSON gets 400.
+// Marshal failure returns 500; never 200 with truncated body.
 package cache
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -56,7 +58,15 @@ func NewFlushHandler(store FlushStore) http.Handler {
 		if body.KeyID != "" {
 			out["key_id"] = body.KeyID
 		}
+		buf := &bytes.Buffer{}
+		enc := json.NewEncoder(buf)
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(out); err != nil {
+			http.Error(w, "failed to encode response", http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(out)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(buf.Bytes())
 	})
 }

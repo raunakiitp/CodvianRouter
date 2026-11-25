@@ -144,7 +144,7 @@ type compressionCacheFixture struct {
 func newCompressionCacheFixture(t *testing.T) *compressionCacheFixture {
 	t.Helper()
 	mock := newCompressionCacheMock(t)
-	client, err := provider.NewClient(mock.srv.URL, "mock-key", provider.WithTimeout(2*time.Second))
+	client, err := provider.NewClient(mock.srv.URL, "mock-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

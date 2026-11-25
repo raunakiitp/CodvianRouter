@@ -351,7 +351,7 @@ func TestNonOpenAIEndpointGetsNoGeneratedKey(t *testing.T) {
 	// endpoint: the client talks to it directly, so its host is
 	// not api.openai.com and no key may be generated.
 	mock, bodies := recordMock(t, usage)
-	c, err := NewClient(mock.URL, "third-party-key", WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
+	c, err := NewClient(mock.URL, "third-party-key", WithHTTPClient(&http.Client{Timeout: 5 * time.Second}), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

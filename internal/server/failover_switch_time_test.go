@@ -44,11 +44,11 @@ func TestChatCompletionsFailoverSwitchTime(t *testing.T) {
 	}))
 	defer fallbackSrv.Close()
 
-	deadClient, err := provider.NewClient(deadSrv.URL, "dead-key", provider.WithTimeout(2*time.Second))
+	deadClient, err := provider.NewClient(deadSrv.URL, "dead-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient dead: %v", err)
 	}
-	fallbackClient, err := provider.NewClient(fallbackSrv.URL, "fallback-key", provider.WithTimeout(2*time.Second))
+	fallbackClient, err := provider.NewClient(fallbackSrv.URL, "fallback-key", provider.WithTimeout(2*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient fallback: %v", err)
 	}

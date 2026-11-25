@@ -21,7 +21,7 @@ func TestPluginHeadersAppliedToUpstream(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestHTTPAdapterAppliedAndFailClosed(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	reg := NewRegistry(nil)
+	reg := NewRegistry(nil, WithRegistryAllowPrivateDestinations(true))
 	if _, err := reg.Add(srv.URL, "k"); err != nil {
 		t.Fatalf("add: %v", err)
 	}

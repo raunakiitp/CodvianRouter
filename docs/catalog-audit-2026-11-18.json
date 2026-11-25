@@ -59,10 +59,10 @@
     },
     {
       "kind": "missing_in_modelsdev",
-      "catalog_id": "cheaperinference",
-      "name": "Cheaper Inference",
+      "catalog_id": "reference-catalog-provider",
+      "name": "Reference Catalog Provider",
       "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
-      "source": "https://cheaperinference.com/"
+      "source": "https://reference-catalog-provider.com/"
     },
     {
       "kind": "possible_rename",

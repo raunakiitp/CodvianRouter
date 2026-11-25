@@ -14,7 +14,7 @@ import (
 
 func mustClient(t *testing.T, srv *httptest.Server) Client {
 	t.Helper()
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -345,7 +345,7 @@ func TestListModelsBaseURLWithV1(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL+"/v1", "k")
+	c, err := NewClient(srv.URL+"/v1", "k", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

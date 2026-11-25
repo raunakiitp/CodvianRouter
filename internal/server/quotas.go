@@ -127,7 +127,7 @@ type meSessionDetailResponse struct {
 // false when the id is unknown, the chain breaks, or the walk
 // exceeds the cap / hits a cycle — all honest 404s, never a
 // partial session.
-func (s *Server) meSessionRoot(id string) (responses.Record, bool) {
+func (s *Server) meSessionRoot(id, owner string) (responses.Record, bool) {
 	if s.responses == nil {
 		return responses.Record{}, false
 	}
@@ -138,7 +138,7 @@ func (s *Server) meSessionRoot(id string) (responses.Record, bool) {
 			return responses.Record{}, false
 		}
 		seen[cur] = true
-		rec, ok := s.responses.Get(cur)
+		rec, ok := s.responses.Get(cur, owner)
 		if !ok {
 			return responses.Record{}, false
 		}
@@ -156,7 +156,7 @@ func (s *Server) meSessionRoot(id string) (responses.Record, bool) {
 // catalog's current list prices. truncated is true when the
 // detail list was capped at meSessionDetailMaxTurns; the totals
 // in meSessionRow are never capped.
-func (s *Server) meSessionTurns(root responses.Record, prices map[string][2]float64) ([]meSessionTurn, bool) {
+func (s *Server) meSessionTurns(root responses.Record, prices map[string][2]float64, owner string) ([]meSessionTurn, bool) {
 	seen := map[string]bool{}
 	stack := []string{root.ID}
 	var turns []meSessionTurn
@@ -167,7 +167,7 @@ func (s *Server) meSessionTurns(root responses.Record, prices map[string][2]floa
 			continue
 		}
 		seen[id] = true
-		rec, ok := s.responses.Get(id)
+		rec, ok := s.responses.Get(id, owner)
 		if !ok {
 			continue
 		}
@@ -236,7 +236,7 @@ func (s *Server) handleMeSessionDetail(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	root, ok := s.meSessionRoot(id)
+	root, ok := s.meSessionRoot(id, keyID)
 	if !ok {
 		writeError(w, http.StatusNotFound, "unknown session "+id)
 		return
@@ -251,8 +251,8 @@ func (s *Server) handleMeSessionDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	prices := s.catalogListPrices(r.Context())
-	row := s.meSessionRow(root, prices)
-	turns, truncated := s.meSessionTurns(root, prices)
+	row := s.meSessionRow(root, prices, keyID)
+	turns, truncated := s.meSessionTurns(root, prices, keyID)
 	out := meSessionDetailResponse{
 		meSessionRow:         row,
 		Object:               "session",

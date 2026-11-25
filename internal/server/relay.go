@@ -542,6 +542,21 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Atomic budget reservation (the /v1/messages half of M5.8):
+	// taken here — after the cache (a cache hit spends nothing and
+	// returned above), before either dispatch half (verbatim or
+	// translated) dials a provider — so concurrent relayed requests
+	// cannot all pass on the same headroom. The deferred settle
+	// releases it on EVERY exit: a served request settles after its
+	// usage row is recorded (recordRelaySpend / the engine's own
+	// row), and a failed, blocked or cancelled request refunds it.
+	resID, refused := s.reserveRelayBudget(w, r, &req)
+	if refused {
+		return
+	}
+	if resID != "" {
+		defer s.settleReservation(resID)
+	}
 	verbatim, reason := relay.Decide("anthropic", targetWire, features)
 	// Async guardrail mode (CHECKLIST 203): slow external
 	// guardrails run concurrently with the provider call, on this
@@ -1216,6 +1231,50 @@ func (s *Server) handleMessagesEngineError(w http.ResponseWriter, err error) {
 		message = "request timed out"
 	}
 	writeAnthropicError(w, status, message)
+}
+
+// reserveRelayBudget is the /v1/messages half of the M5.8 budget
+// reservation. The relay path used to rely on a pre-send check that
+// read ONLY settled spend plus a post-hoc usage row, so N concurrent
+// relayed requests could every one of them observe the same headroom
+// and jointly exceed the key's cap — the reservation closes that
+// window the same way it does on chat / Responses / embeddings: the
+// prompt's estimated cost is COMMITTED against the cap (atomically,
+// under the ledger's reserve lock) before the upstream is dialled, so
+// the gate counts committed + settled spend.
+//
+// It mirrors reserveKeyBudget but speaks the Anthropic error envelope
+// (this is the Anthropic dialect endpoint). Returns the reservation id
+// the caller MUST settle (defer s.settleReservation) once the request
+// is done — after the usage row is recorded — and whether the request
+// was refused. "" means no reservation exists (no ledger, no key, or
+// an uncapped key), which is never a refusal.
+func (s *Server) reserveRelayBudget(w http.ResponseWriter, r *http.Request, req *provider.ChatRequest) (string, bool) {
+	if s.ledger == nil {
+		return "", false
+	}
+	keyID := s.callerKeyID(r)
+	if keyID == "" {
+		return "", false
+	}
+	estimate := s.estimatePromptCost(req)
+	id, err := s.ledger.ReserveSpend(r.Context(), keyID, s.budgetCheckModels(req), s.modelPriced, estimate, time.Now())
+	if err == nil {
+		return id, false
+	}
+	var be *ledger.BudgetExceededError
+	if errors.As(err, &be) {
+		writeAnthropicError(w, http.StatusPaymentRequired, be.Error())
+		return "", true
+	}
+	var ue *ledger.UnpricedUsageError
+	if errors.As(err, &ue) {
+		writeAnthropicError(w, http.StatusBadRequest, ue.Error())
+		return "", true
+	}
+	s.logger.Printf("key-budget: relay reserve failed for caller: %v", guardrails.RedactLogLine(err.Error()))
+	writeAnthropicError(w, http.StatusServiceUnavailable, "budget check unavailable")
+	return "", true
 }
 
 // recordRelaySpend writes the ledger row for one relayed

@@ -40,7 +40,7 @@ func TestGatewayE2E(t *testing.T) {
 
 	// Create a provider client that points to the upstream mock.
 	// The client's baseURL is the upstream mock URL.
-	upstreamClient, err := provider.NewClient(upstreamSrv.URL, "test-gateway-key-e2e")
+	upstreamClient, err := provider.NewClient(upstreamSrv.URL, "test-gateway-key-e2e", provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient for upstream: %v", err)
 	}

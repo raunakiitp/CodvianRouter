@@ -15,6 +15,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -88,13 +89,22 @@ func (s *Server) handleLogExportJSON(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Disposition", `attachment; filename="codvian-logs.json"`)
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	resp := map[string]any{
 		"exported_at": time.Now(),
 		"count":       len(rows),
 		"entries":     rows,
-	})
+	}
+	buf := &bytes.Buffer{}
+	enc := json.NewEncoder(buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(resp); err != nil {
+		writeServerError(w, http.StatusInternalServerError, "failed to encode response")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", `attachment; filename="codvian-logs.json"`)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(buf.Bytes())
 }
 
 // ---------------------------------------------------------------------------

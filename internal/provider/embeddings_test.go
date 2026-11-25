@@ -20,7 +20,7 @@ import (
 // exposes Chat/ChatStream/ListModels/TestKey).
 func openAIEmbedClient(t *testing.T, srv *httptest.Server) *openAIClient {
 	t.Helper()
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

@@ -25,7 +25,7 @@ func TestMockUpstreamHTTP11(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestMockUpstreamHTTP2(t *testing.T) {
 		},
 	}
 
-	c, err := NewClient(srv.URL, "test-key", WithHTTPClient(customClient))
+	c, err := NewClient(srv.URL, "test-key", WithHTTPClient(customClient), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestMockUpstreamTimeout(t *testing.T) {
 
 	// Use a very short timeout - should get context deadline exceeded
 	customClient := &http.Client{Timeout: 1 * time.Second}
-	c2, err := NewClient(srv.URL, "test-key", WithHTTPClient(customClient))
+	c2, err := NewClient(srv.URL, "test-key", WithHTTPClient(customClient), WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestMockUpstreamRepeatedRequests(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestMockUpstreamServerError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestMockUpstreamChatStreamSimple(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestMockUpstreamConnectionReset(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -244,7 +244,7 @@ func TestMockUpstreamMalformedResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -271,7 +271,7 @@ func TestMockUpstream429Handling(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -303,7 +303,7 @@ func TestMockUpstreamClientCancellation(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -344,7 +344,7 @@ func TestMockUpstreamStreamInterrupted(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -374,7 +374,7 @@ func TestMockUpstreamPartialResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -401,7 +401,7 @@ func TestMockUpstreamEmptyResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -427,7 +427,7 @@ func TestMockUpstreamInvalidStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL, "test-key")
+	c, err := NewClient(srv.URL, "test-key", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

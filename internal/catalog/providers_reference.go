@@ -84,7 +84,7 @@ var referenceProviders = []Provider{
 	},
 	{
 		ID:           "cheaperinference",
-		Name:         "Cheaper Inference",
+		Name:         "Reference Catalog Provider",
 		Alias:        "cinf",
 		Website:      "https://cheaperinference.com/",
 		Category:     CategoryAPIKey,

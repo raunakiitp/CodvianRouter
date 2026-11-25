@@ -674,7 +674,11 @@ func ProbeReachability(ctx context.Context, urls []string, client *http.Client, 
 		timeout = 15 * time.Second
 	}
 	if client == nil {
-		client = &http.Client{}
+		// Default client with a timeout as a safety net; the
+		// per-attempt context timeout (context.WithTimeout) is the
+		// primary bound, but a client timeout provides defense in
+		// depth if the context is not properly propagated.
+		client = &http.Client{Timeout: timeout + 5*time.Second}
 	}
 	seen := map[string]bool{}
 	uniq := make([]string, 0, len(urls))

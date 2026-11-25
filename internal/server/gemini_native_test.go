@@ -213,7 +213,7 @@ func mustGeminiTestClient(t *testing.T, upstream *httptest.Server) provider.Clie
 	t.Helper()
 	c, err := provider.NewClient(upstream.URL, "mock-key",
 		provider.WithAuthHeaders(map[string]string{"x-goog-api-key": "mock-key"}),
-		provider.WithWireFormat(provider.WireFormatGemini))
+		provider.WithWireFormat(provider.WireFormatGemini), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient gemini: %v", err)
 	}

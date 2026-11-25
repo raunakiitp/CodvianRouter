@@ -363,8 +363,14 @@ func TestRunDBImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	// An export file with two events (hand-built in the exact
-	// export shape — the server route writes the same shape).
-	export := `{"format":"codvian-router-db-export/v1","exported_at":"2026-11-18T00:00:00Z","config":{"version":1},"usage":{"events":[{"ts":"2026-11-18T09:00:00Z","gateway_key_id":"k1","provider":"openai","model":"gpt-4o-mini","prompt_tokens":20,"completion_tokens":8,"total_tokens":28,"split_known":true,"cost_usd":0,"ok":true,"latency_ms":42},{"ts":"2026-11-18T09:01:00Z","gateway_key_id":"k1","provider":"anthropic","model":"claude-sonnet-4-5","prompt_tokens":30,"completion_tokens":12,"total_tokens":42,"split_known":true,"cost_usd":0,"ok":false,"latency_ms":55}],"events_total":2,"events_included":2,"truncated":false},"secrets":"redacted","note":"test"}`
+	// export shape — the server route writes the same shape). The
+	// timestamps are relative to now: the ledger prunes rows older
+	// than the 7-day retention window at Open, so a hard-coded past
+	// date makes this test rot as the calendar moves past it.
+	now := time.Now().UTC()
+	tsA := now.Add(-2 * time.Hour).Format(time.RFC3339)
+	tsB := now.Add(-1 * time.Hour).Format(time.RFC3339)
+	export := `{"format":"codvian-router-db-export/v1","exported_at":"` + now.Format(time.RFC3339) + `","config":{"version":1},"usage":{"events":[{"ts":"` + tsA + `","gateway_key_id":"k1","provider":"openai","model":"gpt-4o-mini","prompt_tokens":20,"completion_tokens":8,"total_tokens":28,"split_known":true,"cost_usd":0,"ok":true,"latency_ms":42},{"ts":"` + tsB + `","gateway_key_id":"k1","provider":"anthropic","model":"claude-sonnet-4-5","prompt_tokens":30,"completion_tokens":12,"total_tokens":42,"split_known":true,"cost_usd":0,"ok":false,"latency_ms":55}],"events_total":2,"events_included":2,"truncated":false},"secrets":"redacted","note":"test"}`
 	file := filepath.Join(t.TempDir(), "export.json")
 	if err := os.WriteFile(file, []byte(export), 0o600); err != nil {
 		t.Fatal(err)

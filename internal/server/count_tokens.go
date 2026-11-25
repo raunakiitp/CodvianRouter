@@ -349,7 +349,7 @@ func messagesCountMessageToChat(msg messagesCountMessage, index int) (provider.M
 // an honest 500, never a synthesised count.
 func (s *Server) handleMessagesCountTokens(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		writeAnthropicError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	defer func() {
@@ -362,33 +362,33 @@ func (s *Server) handleMessagesCountTokens(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			writeError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			writeAnthropicError(w, http.StatusRequestEntityTooLarge, "request body too large")
 		} else {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			writeAnthropicError(w, http.StatusBadRequest, "invalid request body")
 		}
 		return
 	}
 	var req messagesCountTokensRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeAnthropicError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if strings.TrimSpace(req.Model) == "" {
-		writeError(w, http.StatusBadRequest, "model is required")
+		writeAnthropicError(w, http.StatusBadRequest, "model is required")
 		return
 	}
 	if len(req.Messages) == 0 {
-		writeError(w, http.StatusBadRequest, "messages is required")
+		writeAnthropicError(w, http.StatusBadRequest, "messages is required")
 		return
 	}
 	chat, errMsg := messagesCountToChat(req)
 	if errMsg != "" {
-		writeError(w, http.StatusBadRequest, errMsg)
+		writeAnthropicError(w, http.StatusBadRequest, errMsg)
 		return
 	}
 	count, err := tokencount.CountPromptWire(req.Model, provider.WireFormatAnthropic, chat)
 	if err != nil {
-		writeServerError(w, http.StatusInternalServerError, "token counting failed")
+		writeAnthropicError(w, http.StatusInternalServerError, "token counting failed")
 		return
 	}
 	writeJSON(w, http.StatusOK, tokenCountResponse{
@@ -447,7 +447,7 @@ func (s *Server) handleResponsesInputTokens(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusNotFound, "response not found: "+id)
 		return
 	}
-	rec, ok := s.responses.Get(id)
+	rec, ok := s.responses.Get(id, s.callerKeyID(r))
 	if !ok {
 		writeError(w, http.StatusNotFound, "response not found: "+id)
 		return

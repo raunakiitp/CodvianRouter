@@ -112,7 +112,7 @@ func TestChatCompletionsAutoPromptCacheKeyEndToEnd(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":"chatcmpl-other","object":"chat.completion","model":"other-model","choices":[{"message":{"role":"assistant","content":"other says hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":100,"completion_tokens":5,"total_tokens":105,"prompt_tokens_details":{"cached_tokens":40}}}`))
 	}))
 	defer otherSrv.Close()
-	otherClient, err := provider.NewClient(otherSrv.URL, "other-key", provider.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
+	otherClient, err := provider.NewClient(otherSrv.URL, "other-key", provider.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient other: %v", err)
 	}

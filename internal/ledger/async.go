@@ -414,15 +414,25 @@ func (w *AsyncWriter) commitBatch(batch []Usage) {
 			}
 		}
 	}
+	// NEW-M-02: a budget UPDATE that fails must NOT leave the
+	// usage rows committed without the matching budget delta.
+	// The usage INSERTs and the cumulative spend update are one
+	// accounting fact: if the spend half cannot be applied, the
+	// usage half must not land either (otherwise the cap drifts
+	// below the real spend and the key can overspend). A failed
+	// key update therefore rolls the WHOLE batch back - every
+	// row in it is counted failed, and the batch can be retried
+	// safely because nothing landed. The failure is surfaced
+	// (stderr + failedRows), never swallowed.
 	for _, key := range keys {
 		ks := spend[key]
 		if _, err := update.ExecContext(ctx, ks.total, ks.key); err != nil {
-			fmt.Fprintf(os.Stderr, "ledger: async batch budget update failed: %v\n", err)
-			atomic.AddUint64(&w.failedRows, uint64(ks.rows))
-			continue
+			fmt.Fprintf(os.Stderr, "ledger: async batch budget update failed, rolling back %d rows: %v\n", len(batch), err)
+			atomic.AddUint64(&w.failedRows, uint64(len(batch)))
+			return
 		}
-		atomic.AddUint64(&w.committedRows, uint64(ks.rows))
 	}
+	atomic.AddUint64(&w.committedRows, uint64(len(batch)))
 	if err := tx.Commit(); err != nil {
 		fmt.Fprintf(os.Stderr, "ledger: async batch commit failed (%d rows may be lost): %v\n", len(batch), err)
 		atomic.AddUint64(&w.failedRows, uint64(len(batch)))

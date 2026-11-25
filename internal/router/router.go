@@ -1242,6 +1242,11 @@ type Engine struct {
 	// StreamLifetimeExceededCount.
 	streamLifetimeKilled atomic.Uint64
 
+	// ledgerRecordAttempts counts ledger RecordAttempt calls
+	// since this engine started. Useful for monitoring ledger
+	// health without depending on the ledger implementation.
+	ledgerRecordAttempts atomic.Uint64
+
 	mu       sync.Mutex
 	breakers map[string]*breakerState
 	// breakerStoreMu serialises whole breaker-store saves
@@ -2654,7 +2659,7 @@ func QuotaHintFunc(reg *provider.Registry) func(string) int {
 	}
 }
 
-// ToolCapabilityFunc adapts a provider registry to
+// toolCapabilityFunc adapts a provider registry to
 // Config.ToolCapability (CT-1), mirroring QuotaHintFunc: the
 // engine reads live tool flags on every request, so a probe /
 // sync / operator edit takes effect without restarting the
@@ -2662,7 +2667,7 @@ func QuotaHintFunc(reg *provider.Registry) func(string) int {
 // model, or a model whose Tools flag is nil reports unknown
 // (false, false) — never a guessed capability. A nil registry
 // reports unknown for every model.
-func ToolCapabilityFunc(reg *provider.Registry) func(providerID, model string) (capable, known bool) {
+func toolCapabilityFunc(reg *provider.Registry) func(providerID, model string) (capable, known bool) {
 	return func(providerID, model string) (capable, known bool) {
 		if reg == nil {
 			return false, false
@@ -4063,6 +4068,7 @@ func (e *Engine) recordAttempt(keyID string, att Attempt, ok bool, latencyMs int
 	if e.ledger == nil {
 		return
 	}
+	e.ledgerRecordAttempts.Add(1)
 	if pkl, isKeyed := e.ledger.(ProviderKeyLedger); isKeyed {
 		pkl.RecordAttemptWithProviderKey(keyID, att.ProviderID, att.KeyID, att.Model, ok, latencyMs, usage)
 		return
@@ -6620,6 +6626,20 @@ attemptLoop:
 			addTraceAttempt(trace, att, 0, "skipped_model_lockout", nil)
 			idx++
 			continue attemptLoop
+		}
+		// CT-1 direct-path tool-capability pre-check (streaming):
+		// a tool-bearing request never dials a CONFIRMED-incapable
+		// model — the target is skipped (trace: skipped, no
+		// attempt spent, no provider call) and the chain moves
+		// on. Unknown models fail open: a model never probed
+		// and never synced is tried, never assumed incapable.
+		// Non-tool requests skip this gate entirely.
+		if len(req.Tools) > 0 {
+			if capable, known := e.modelToolsCapable(att.ProviderID, att.Model); known && !capable {
+				addTraceAttempt(trace, att, 0, "skipped_no_tool_capability", nil)
+				idx++
+				continue attemptLoop
+			}
 		}
 		// Predictive TTFT breaker (M4.7a): same skip as the
 		// non-streaming loop — a predicted-slow target is

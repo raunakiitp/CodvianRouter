@@ -46,7 +46,7 @@ func (m mockUpstream) handler() http.HandlerFunc {
 
 func newAddTestServer(t *testing.T) (*Server, *provider.Registry) {
 	t.Helper()
-	reg := provider.NewRegistry(nil) // memory-only; ephemeral cipher is fine here
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true)) // memory-only; ephemeral cipher is fine here
 	return newTestServer(t, &fakeEngine{}, WithProviderRegistry(reg)), reg
 }
 
@@ -177,7 +177,7 @@ func TestAddProviderModelsFieldEmptyEntry400(t *testing.T) {
 func TestAddProviderHookRoutesLive(t *testing.T) {
 	mock := httptest.NewServer(mockUpstream{}.handler())
 	defer mock.Close()
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	var hooked *provider.Provider
 	srv := newTestServer(t, &fakeEngine{}, WithProviderRegistry(reg),
 		WithProviderAddedHook(func(_ context.Context, p *provider.Provider) error {
@@ -204,7 +204,7 @@ func TestAddProviderHookRoutesLive(t *testing.T) {
 func TestAddProviderHookFailureStill201(t *testing.T) {
 	mock := httptest.NewServer(mockUpstream{}.handler())
 	defer mock.Close()
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	srv := newTestServer(t, &fakeEngine{}, WithProviderRegistry(reg),
 		WithProviderAddedHook(func(_ context.Context, _ *provider.Provider) error {
 			return errors.New("engine unavailable")
@@ -249,7 +249,7 @@ func TestAddProviderRelaxedAuthStillRequiresKey(t *testing.T) {
 	// a key.
 	mock := httptest.NewServer(mockUpstream{}.handler())
 	defer mock.Close()
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	srv := newTestServer(t, &fakeEngine{}, WithProviderRegistry(reg), WithAuthRelaxed(true))
 
 	body := `{"catalog_id":"groq","api_key":"sk-groq-test","base_url":"` + mock.URL + `"}`
@@ -481,7 +481,7 @@ func TestAddProviderRegistersTierModels(t *testing.T) {
 
 	// Hook succeeds: routing_live=true, models registered.
 	router := newRouter()
-	reg := provider.NewRegistry(nil)
+	reg := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	srv := newTestServer(t, &fakeEngine{}, WithProviderRegistry(reg), WithAutoRouter(router),
 		WithProviderAddedHook(func(_ context.Context, _ *provider.Provider) error { return nil }))
 	rec := addCustom(srv)
@@ -508,7 +508,7 @@ func TestAddProviderRegistersTierModels(t *testing.T) {
 
 	// Hook fails: routing_live=false, nothing registered.
 	router2 := newRouter()
-	reg2 := provider.NewRegistry(nil)
+	reg2 := provider.NewRegistry(nil, provider.WithRegistryAllowPrivateDestinations(true))
 	srv2 := newTestServer(t, &fakeEngine{}, WithProviderRegistry(reg2), WithAutoRouter(router2),
 		WithProviderAddedHook(func(_ context.Context, _ *provider.Provider) error { return errors.New("engine unavailable") }))
 	rec2 := addCustom(srv2)

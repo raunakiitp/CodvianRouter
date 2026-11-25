@@ -366,13 +366,13 @@ func TestReasoningSurvivesProviderSwitch(t *testing.T) {
 	anthropicClient, err := provider.NewClient(anthropicSrv.URL, "sk-ant-test", provider.WithAuthHeaders(map[string]string{
 		"Authorization":     "Bearer sk-ant-test",
 		"anthropic-version": "2026-10-21",
-	}), provider.WithWireFormat(provider.WireFormatAnthropic))
+	}), provider.WithWireFormat(provider.WireFormatAnthropic), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("anthropic client: %v", err)
 	}
 	geminiClient, err := provider.NewClient(geminiSrv.URL, "gem-key-test", provider.WithAuthHeaders(map[string]string{
 		"x-goog-api-key": "gem-key-test",
-	}), provider.WithWireFormat(provider.WireFormatGemini))
+	}), provider.WithWireFormat(provider.WireFormatGemini), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("gemini client: %v", err)
 	}

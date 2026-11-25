@@ -35,7 +35,7 @@ func TestStorePutGetRoundTrip(t *testing.T) {
 		ResponseJSON:   json.RawMessage(`{"id":"resp_abc"}`),
 	}
 	s.Put(rec)
-	got, ok := s.Get("resp_abc")
+	got, ok := s.Get("resp_abc", "")
 	if !ok {
 		t.Fatal("Get after Put: not found")
 	}
@@ -45,7 +45,7 @@ func TestStorePutGetRoundTrip(t *testing.T) {
 	if string(got.TranscriptJSON) != `[{"role":"user","content":"hi"}]` {
 		t.Fatalf("transcript = %s, want the stored bytes", got.TranscriptJSON)
 	}
-	if _, ok := s.Get("resp_missing"); ok {
+	if _, ok := s.Get("resp_missing", ""); ok {
 		t.Fatal("Get of an unknown id found a record")
 	}
 	if st := s.Stats(); st.Stored != 1 || st.Created != 1 || st.Continuations != 0 {
@@ -63,7 +63,7 @@ func TestStorePutReplacesWithoutGrowing(t *testing.T) {
 	if st := s.Stats(); st.Created != 1 {
 		t.Fatalf("Created = %d, want 1", st.Created)
 	}
-	got, ok := s.Get("resp_1")
+	got, ok := s.Get("resp_1", "")
 	if !ok || got.Status != StatusCompleted {
 		t.Fatalf("Get = %+v ok=%v, want completed", got, ok)
 	}
@@ -82,7 +82,7 @@ func TestStoreExpiry(t *testing.T) {
 	s := NewStore(10*time.Millisecond, 10)
 	s.Put(Record{ID: "resp_1", Model: "m", Status: StatusCompleted})
 	time.Sleep(25 * time.Millisecond)
-	if _, ok := s.Get("resp_1"); ok {
+	if _, ok := s.Get("resp_1", ""); ok {
 		t.Fatal("expired record still returned")
 	}
 	if s.Len() != 0 {
@@ -98,10 +98,10 @@ func TestStoreCapEvictsOldest(t *testing.T) {
 	if s.Len() != 3 {
 		t.Fatalf("Len = %d, want 3 (cap)", s.Len())
 	}
-	if _, ok := s.Get("resp_1"); ok {
+	if _, ok := s.Get("resp_1", ""); ok {
 		t.Fatal("oldest record survived the cap")
 	}
-	if _, ok := s.Get("resp_4"); !ok {
+	if _, ok := s.Get("resp_4", ""); !ok {
 		t.Fatal("newest record evicted")
 	}
 	if st := s.Stats(); st.Evicted != 1 {
@@ -130,16 +130,16 @@ func TestStoreRecentMostRecentFirstNoContent(t *testing.T) {
 func TestStoreNilSafe(t *testing.T) {
 	var s *Store
 	s.Put(Record{ID: "resp_1"})
-	if _, ok := s.Get("resp_1"); ok {
+	if _, ok := s.Get("resp_1", ""); ok {
 		t.Fatal("nil store returned a record")
 	}
 	if len(s.Recent(5)) != 0 || s.Len() != 0 || s.Stats().Stored != 0 {
 		t.Fatal("nil store reported state")
 	}
-	if s.Delete("resp_1") {
+	if s.Delete("resp_1", "") {
 		t.Fatal("nil store deleted something")
 	}
-	if page, total := s.Page(0, 10); len(page) != 0 || total != 0 {
+	if page, total := s.Page(0, 10, ""); len(page) != 0 || total != 0 {
 		t.Fatalf("nil store Page = %d records / total %d, want 0/0", len(page), total)
 	}
 	if _, ok := s.IndexOf("resp_1"); ok {
@@ -155,25 +155,25 @@ func TestStoreDelete(t *testing.T) {
 	s := NewStore(time.Hour, 10)
 	s.Put(Record{ID: "resp_1", Model: "m", Status: StatusCompleted})
 	s.Put(Record{ID: "resp_2", Model: "m", Status: StatusCompleted})
-	if !s.Delete("resp_1") {
+	if !s.Delete("resp_1", "") {
 		t.Fatal("Delete(resp_1) = false, want true")
 	}
-	if _, ok := s.Get("resp_1"); ok {
+	if _, ok := s.Get("resp_1", ""); ok {
 		t.Fatal("deleted record still retrievable")
 	}
 	if s.Len() != 1 {
 		t.Fatalf("Len = %d, want 1 after the delete", s.Len())
 	}
-	if s.Delete("resp_1") {
+	if s.Delete("resp_1", "") {
 		t.Fatal("second Delete(resp_1) = true, want false (already gone)")
 	}
-	if s.Delete("resp_never") {
+	if s.Delete("resp_never", "") {
 		t.Fatal("Delete(never-existed) = true, want false")
 	}
-	if s.Delete("") {
+	if s.Delete("", "") {
 		t.Fatal("Delete(\"\") = true, want false")
 	}
-	if _, ok := s.Get("resp_2"); !ok {
+	if _, ok := s.Get("resp_2", ""); !ok {
 		t.Fatal("the surviving record is gone too")
 	}
 }
@@ -189,26 +189,26 @@ func TestStorePage(t *testing.T) {
 		s.Put(Record{ID: "resp_" + string(rune('0'+i)), Model: "m", Status: StatusCompleted,
 			ResponseJSON: json.RawMessage(`{"id":"resp_` + string(rune('0'+i)) + `"}`)})
 	}
-	page, total := s.Page(0, 2)
+	page, total := s.Page(0, 2, "")
 	if total != 3 || len(page) != 2 || page[0].ID != "resp_3" || page[1].ID != "resp_2" {
 		t.Fatalf("Page(0,2) = %+v / total %d, want resp_3,resp_2 / 3", page, total)
 	}
 	if string(page[0].ResponseJSON) != `{"id":"resp_3"}` {
 		t.Fatalf("page record lost its response JSON: %q", page[0].ResponseJSON)
 	}
-	page, total = s.Page(2, 2)
+	page, total = s.Page(2, 2, "")
 	if total != 3 || len(page) != 1 || page[0].ID != "resp_1" {
 		t.Fatalf("Page(2,2) = %+v / total %d, want resp_1 / 3", page, total)
 	}
-	page, total = s.Page(3, 2)
+	page, total = s.Page(3, 2, "")
 	if total != 3 || len(page) != 0 {
 		t.Fatalf("Page(3,2) = %+v / total %d, want empty / 3", page, total)
 	}
-	page, total = s.Page(-1, 2)
+	page, total = s.Page(-1, 2, "")
 	if len(page) != 2 || page[0].ID != "resp_3" {
 		t.Fatalf("Page(-1,2) = %+v, want the negative offset clamped to 0", page)
 	}
-	if page, total := s.Page(0, 0); len(page) != 0 || total != 0 {
+	if page, total := s.Page(0, 0, ""); len(page) != 0 || total != 0 {
 		t.Fatalf("Page(0,0) = %d / %d, want 0/0", len(page), total)
 	}
 	// Expired entries never count and never serve. The TTL is
@@ -220,11 +220,11 @@ func TestStorePage(t *testing.T) {
 	s2.Put(Record{ID: "resp_old", Model: "m", Status: StatusCompleted})
 	time.Sleep(150 * time.Millisecond)
 	s2.Put(Record{ID: "resp_new", Model: "m", Status: StatusCompleted})
-	page, total = s2.Page(0, 10)
+	page, total = s2.Page(0, 10, "")
 	if total != 1 || len(page) != 1 || page[0].ID != "resp_new" {
 		t.Fatalf("Page with an expired entry = %+v / total %d, want only resp_new / 1", page, total)
 	}
-	if _, ok := s2.Get("resp_old"); ok {
+	if _, ok := s2.Get("resp_old", ""); ok {
 		t.Fatal("expired entry still retrievable after the page pruned it")
 	}
 }

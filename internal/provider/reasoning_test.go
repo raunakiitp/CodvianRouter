@@ -62,7 +62,7 @@ func reasoningOpenAIMock(t *testing.T, body string) (*httptest.Server, *[]byte) 
 func TestOpenAIClientSendsReasoningContentForReplayModel(t *testing.T) {
 	srv, last := reasoningOpenAIMock(t, `{"id":"chatcmpl_1","model":"deepseek-reasoner","choices":[{"message":{"role":"assistant","content":"Sunny.","reasoning_content":"the forecast says so"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`)
 	defer srv.Close()
-	c, err := NewClient(srv.URL, "k")
+	c, err := NewClient(srv.URL, "k", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestOpenAIClientSendsReasoningContentForReplayModel(t *testing.T) {
 func TestOpenAIClientRejectsReasoningForNonReplayModel(t *testing.T) {
 	srv, _ := reasoningOpenAIMock(t, `{}`)
 	defer srv.Close()
-	c, err := NewClient(srv.URL, "k")
+	c, err := NewClient(srv.URL, "k", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestOpenAIClientStreamCapturesReasoningContent(t *testing.T) {
 		_, _ = w.Write([]byte("data: [DONE]\n\n"))
 	}))
 	defer srv.Close()
-	c, err := NewClient(srv.URL, "k")
+	c, err := NewClient(srv.URL, "k", WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

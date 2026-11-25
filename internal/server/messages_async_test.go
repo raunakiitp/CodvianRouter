@@ -332,7 +332,7 @@ func TestMessagesTranslatedAsyncWithholdsNonStreaming(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":"chatcmpl-x","object":"chat.completion","created":1,"model":"multi-model","choices":[{"index":0,"message":{"role":"assistant","content":"served"},"finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}`))
 	}))
 	defer slow.Close()
-	client, err := provider.NewClient(slow.URL, "slow-key", provider.WithTimeout(5*time.Second))
+	client, err := provider.NewClient(slow.URL, "slow-key", provider.WithTimeout(5*time.Second), provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

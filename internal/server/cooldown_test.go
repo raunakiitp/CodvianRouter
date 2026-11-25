@@ -171,11 +171,11 @@ func TestCooldownFeedLiveEngine(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":"x","object":"chat.completion","model":"m","choices":[{"message":{"role":"assistant","content":"good says hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`))
 	}))
 	defer goodSrv.Close()
-	deadClient, err := provider.NewClient(deadSrv.URL, "dead-key")
+	deadClient, err := provider.NewClient(deadSrv.URL, "dead-key", provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient dead: %v", err)
 	}
-	goodClient, err := provider.NewClient(goodSrv.URL, "good-key")
+	goodClient, err := provider.NewClient(goodSrv.URL, "good-key", provider.WithAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewClient good: %v", err)
 	}

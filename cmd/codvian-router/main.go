@@ -1916,6 +1916,24 @@ func loopbackHost(rawURL string) bool {
 	return false
 }
 
+// allowPrivateProviderEndpoints reports whether the operator has
+// explicitly opted into local / private provider endpoints — a
+// local Ollama, LM Studio or self-hosted gateway on loopback or a
+// private range. It is OFF by default: a stored provider base URL
+// is attacker-influenceable through the provider-management API,
+// and the secure default must not let one reach an internal
+// service (SSRF). An operator who genuinely runs a local provider
+// opts in with CODVIAN_ROUTER_ALLOW_PRIVATE_ENDPOINTS=1 (or
+// true/yes/on); anything else — including unset — keeps the
+// secure default.
+func allowPrivateProviderEndpoints() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("CODVIAN_ROUTER_ALLOW_PRIVATE_ENDPOINTS"))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
 // buildGuardrailStore seeds the guardrails store from the config
 // file (CHECKLIST 185): the three blocking toggles plus the
 // external entries, with one HTTP classifier registered per
@@ -2415,6 +2433,7 @@ func openStack(opts options) (*stack, error) {
 		provider.WithCipher(provider.NewVaultCipher(vault)),
 		provider.WithTFOEnabled(tfoEnabled),
 		provider.WithPoolConfig(poolCfg),
+		provider.WithRegistryAllowPrivateDestinations(allowPrivateProviderEndpoints()),
 	)
 	if err := reg.Load(); err != nil {
 		led.Close()
@@ -5925,6 +5944,7 @@ func openRegistry(opts options) (*provider.Registry, string, error) {
 	reg := provider.NewRegistry(
 		&configProviderStore{cfg: cfg, path: path},
 		provider.WithCipher(provider.NewVaultCipher(vault)),
+		provider.WithRegistryAllowPrivateDestinations(allowPrivateProviderEndpoints()),
 	)
 	if err := reg.Load(); err != nil {
 		return nil, "", err

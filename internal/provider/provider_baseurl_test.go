@@ -62,7 +62,7 @@ func TestNormalizeBaseURLDifferentPathNotCollapsed(t *testing.T) {
 }
 
 func TestValidateBaseURLMixedCase(t *testing.T) {
-	got, err := ValidateBaseURL("HTTPS://API.Example.COM/v1/")
+	got, err := ValidateBaseURL("HTTPS://API.Example.COM/v1/", false)
 	if err != nil {
 		t.Fatalf("ValidateBaseURL mixed case: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestRegistryAddNormalizesBaseURL(t *testing.T) {
 		t.Fatalf("test vault: %v", err)
 	}
 	cipher := NewVaultCipher(vault)
-	reg, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(cipher))
+	reg, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(cipher), WithRegistryAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewFileRegistry: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestRegistryAddNormalizesSchemeHostCase(t *testing.T) {
 		t.Fatalf("test vault: %v", err)
 	}
 	cipher := NewVaultCipher(vault)
-	reg, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(cipher))
+	reg, err := NewFileRegistry(filepath.Join(dir, "providers.json"), WithCipher(cipher), WithRegistryAllowPrivateDestinations(true))
 	if err != nil {
 		t.Fatalf("NewFileRegistry: %v", err)
 	}
