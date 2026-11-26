@@ -219,11 +219,20 @@ func (s *Server) usageBudgetForecast(ctx context.Context, keyID string, now time
 	if err != nil {
 		return nil, fmt.Errorf("forecast: spend 24h: %w", err)
 	}
-	sum1h, err := s.ledger.Summary(ctx, now.Add(-1*time.Hour), now)
+	// The requests summaries use SpendFor's EXACT window: since
+	// only, no upper bound. Summary's optional until bound is
+	// exclusive (ts < until), so passing `now` here would drop any
+	// row recorded in the same millisecond as this handler's now —
+	// while SpendFor still counts its spend, yielding the
+	// contradictory "spend > 0 but requests_1h == 0" forecast the
+	// boundary test pins. Zero until = unbounded, matching
+	// SpendFor; a row a few ms "in the future" of now is still a
+	// real request in the last hour and belongs in both numbers.
+	sum1h, err := s.ledger.Summary(ctx, now.Add(-1*time.Hour), time.Time{})
 	if err != nil {
 		return nil, fmt.Errorf("forecast: summary 1h: %w", err)
 	}
-	sum24h, err := s.ledger.Summary(ctx, now.Add(-24*time.Hour), now)
+	sum24h, err := s.ledger.Summary(ctx, now.Add(-24*time.Hour), time.Time{})
 	if err != nil {
 		return nil, fmt.Errorf("forecast: summary 24h: %w", err)
 	}
