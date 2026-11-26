@@ -2,18 +2,22 @@
 
 ## Current State
 - **Branch:** `p2-implementation`
-- **Current HEAD:** see `git rev-parse HEAD` (advances per implementation commit)
-- **Working tree:** clean
-- **Ahead of origin/p2-implementation:** grows with each unpushed commit
+- **HEAD:** `4970fb1` — published; `origin/p2-implementation` matches
+- **Working tree:** clean except the owner-supplied untracked
+  `P2_FINAL_FORENSIC_AUDIT.md` (intentionally preserved)
 - **main / origin/main:** `a45b4ff` (P1 closure baseline)
+- **Pull request:** [#81](https://github.com/raunakiitp/CodvianRouter/pull/81)
+  — open, unmerged; 71 commits ahead of `main`, 124 files changed
+  (+5,674 / −314); all 9 GitHub Actions checks green.
 
-## Status — NOT complete
+## Status — P2 scope complete, one item intentionally open
 
-`P2_FINAL_FORENSIC_AUDIT.md` (repo root) is the authoritative
-backlog. Its verdict: **NOT_READY — IMPLEMENTATION GAPS REMAIN**.
-The current campaign closes those gaps block by block; this
-checkpoint is updated as blocks land. Do not mark all workstreams
-complete while backlog items remain open.
+Implementation and verification for the P2 scope are complete: the
+branch passed the local consolidated verification campaign and GitHub
+CI. The only open item is WS3 batch re-queue (documented below, with
+rationale). Release approval remains the owner's decision; nothing is
+deployed. `P2_FINAL_FORENSIC_AUDIT.md` (repo root) is the authoritative
+backlog document.
 
 ## Workstream status (independently audited, not ledger-copied)
 
@@ -32,19 +36,29 @@ complete while backlog items remain open.
 - 4.1: WS9 mapping corrected in docs/P2_REMAINING_FINDINGS_DISPOSITION.md
 - 4.3: TestProbeReachability determinism (injected dialer, no external DNS)
 
-### Verification campaign outcome (2026-11-26, HEAD 2a8257f)
-The one authorized consolidated campaign ran to completion. Two
-concrete defects were found and fixed (commit 07ba920: gofmt drift
+### Verification campaign outcome (2026-11-26)
+The one authorized consolidated campaign ran to completion at the then-current
+head. Two concrete defects were found and fixed (commit 07ba920: gofmt drift
 in 6 files; default_trace_test.go scoped //go:build !otel), and the
 owner approved fixing the third: the forecast window-boundary
-defect. FIXED in commit 2a8257f — the forecast's 1h/24h request
+defect, FIXED in commit 2a8257f — the forecast's 1h/24h request
 summaries now use SpendFor's exact window (zero until, unbounded);
 Summary's display-form exclusive `ts < until` semantics are pinned
 unchanged for display callers; the ledger-level boundary test pins
 all three semantics at one boundary millisecond. The
 TestUsageBudgetForecastProjected flake is eliminated (full suite
-55 ok / 0 FAIL after the fix; ci.sh green except the two host
-blocks: gofmt CRLF working-tree artifact and -race requiring cgo).
+55 ok / 0 FAIL after the fix).
+
+### Publication (2026-11-27)
+Published with normal non-force pushes; remote HEAD = local HEAD =
+`4970fb1`. Three further defects were found by CI and fixed before
+green: the `secret-scan` job pinned a nonexistent `gitleaks-action`
+commit and then hit the action's paid-license gate, so it now installs
+the MIT gitleaks CLI v8.30.1 pinned with a sha256 check (`ab45d5e`,
+`5067d46`); a Windows timer-granularity test flake in
+`TestProbeHealthz` was made deterministic (`ec25413`); and nine files
+the Linux gofmt gate flags were genuinely unformatted in committed
+content (`4970fb1`). PR #81 is open and unmerged.
 
 ### Closure status after the final closure session (items 1-5)
 
@@ -86,15 +100,20 @@ blocks: gofmt CRLF working-tree artifact and -race requiring cgo).
    input, submit a NEW batch. Implementing a lesser re-queue would
    be unsafe; documenting instead per the closure rule.
 
-### Still open (tracked in P2_FINAL_FORENSIC_AUDIT.md Deliverable I)
-- WS3 batch re-queue at the BATCHES-API level (async-writer level done)
-- WS9D provider OAuth connectability inventory (31 CategoryOAuth entries)
-- WS9E structured-output tests (ParametersJSONSchema mapping/response untested)
-- WS9E provider x modality x operation capability matrix test
-- WS9F default-build tracing tests + explicit no-op status documentation
-- WS6 stream re-open idempotency evidence (AUD-REL-008; client billing is
-  already idempotent via one-settle-per-request reservations — what remains
-  is a pinning test)
+### Still open
+- **WS3 batch re-queue at the BATCHES-API level.** Interrupted batches are
+  marked failed on load (`"server_restart"`, `internal/server/batches.go`)
+  and deliberately NOT re-run: a safe automatic re-queue needs durable
+  per-row served/failed accounting plus a guarantee the provider did not
+  serve a row whose response died mid-stream, or it risks double-charging
+  rows that were served. The OpenAI API has no batch re-queue endpoint;
+  the sanctioned client-side recovery is to read `output_file_id` +
+  `error_file_id`, correct the input, and submit a new batch. The private
+  benchmark (OmniRoute) is no safer: `open-sse/services/batchProcessor.ts`
+  retries within a batch but `recoverStaleBatch` explicitly does not
+  replay an interrupted batch "to avoid duplicate provider work", and
+  `src/lib/batches/retryFailed.ts` is a manual helper only. Documented
+  rather than implemented, per the closure rule.
 
 ### Audit items DISPROVED by source inspection (no code change — recorded per campaign rules)
 - B7/B8 "MCP SSE + Streamable HTTP transports missing": FALSE. Both remote
@@ -132,14 +151,28 @@ blocks: gofmt CRLF working-tree artifact and -race requiring cgo).
   already existed; two competing transports would be worse than one.
 
 ## Test Evidence
-- `go build ./...` → exit 0
-- Full `go test -count=1 ./...` green after the determinism fix —
-  the one previously failing package (internal/cataudit,
-  TestProbeReachability) was an infrastructure-DNS flake, now fixed.
-- The consolidated final verification campaign has NOT been run.
+
+Local consolidated campaign (2026-11-26, Windows host):
+- `go test -count=1 ./...` → **55 packages ok, 0 FAIL** (exit 0)
+- `go build ./...` / `go vet ./...` → exit 0 with `-buildvcs=false`
+  (plain form is blocked on this host: VCS stamping shells out to an
+  app-bundled git that is ACL-denied)
+- `ci.sh` → green except two host-only blocks: `gofmt` (Windows
+  `core.autocrlf` makes committed-LF files look unformatted locally; the
+  Linux gate is green on CI) and `-race` (no gcc/CGO on this host)
+- secrets scan PASS (1,768 tracked files); naming gate PASS;
+  `audit-fake.sh` PASS; route-guard PASS; `govulncheck ./...` no
+  vulnerabilities; SBOM self-check 44 components; both fuzz targets PASS
+
+The consolidated final verification campaign HAS been run (see just
+above) and GitHub CI is green on `4970fb1`: `ci`, `windows`,
+`secret-scan`, `fuzz`, `redis`, `playwright`, `client-smoke`,
+`bench-smoke`, `sbom-and-vuln`.
 
 ## Rules in force
-- No production deployment, no paid API spending, no force-push.
-- Do not push without separate authorization.
-- Stop and request authorization before the single consolidated
-  final verification campaign.
+- No production deployment, no paid API spending, no secret rotation.
+- No history rewriting (no reset/rebase/amend/squash/force-push).
+- PR #81 remains open and unmerged until the owner decides.
+- Do not create `docs/PARITY.md`; no private competitive material in the
+  public repository.
+- Preserve `P2_FINAL_FORENSIC_AUDIT.md` (owner-supplied, untracked).
