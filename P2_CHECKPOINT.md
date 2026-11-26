@@ -38,9 +38,26 @@ complete while backlog items remain open.
 - WS9D provider OAuth connectability inventory (31 CategoryOAuth entries)
 - WS9E structured-output tests + provider x modality x operation matrix
 - WS9F default tracing decision + candidate-selection trace tests
-- WS9G dashboard load functions (keys/health/resilience/verifications/webhooks),
-  keyboard accessibility, route-disposition recount
 - WS6 stream re-open idempotency (AUD-REL-008)
+
+### Audit items disproved by source inspection (no code change — recorded per campaign rules)
+- B9 "five dead dashboard views": FALSE. All views have real load
+  dispatches wired to live endpoints — keys -> loadRouterKeys()
+  (GET /dashboard/keys), health -> m10_11LoadHealth() (GET
+  /dashboard/memstats), resilience -> m10_11LoadResilience()
+  (GET /api/resilience with admin-key handling), webhooks ->
+  m10_12LoadWebhooks() (GET /api/webhooks), verification (singular)
+  -> loadVerification() (GET /dashboard/verification). The audit's
+  name-pattern grep (load<View>) missed the actual function names.
+- B10 "keyboard accessibility gap": FALSE as stated. The dashboard
+  uses native interactive elements exclusively (224 <button>, plus
+  inputs/selects/textareas — keyboard-interactive by default, which
+  is what B10 itself prescribes; adding tabindex=0 to native
+  buttons would be wrong). Visible keyboard focus is implemented
+  via the modern :focus-visible pattern (outline suppressed only
+  for mouse focus, line ~487), a modal focus trap exists
+  (~9486-9503), Escape closes modals and danger dialogs (5418,
+  9563, 13676), and 52 aria- attributes are present.
 
 ## Test Evidence
 - `go build ./...` → exit 0
