@@ -1062,8 +1062,8 @@ func TestExemptRoutesAreReadOnlyGet(t *testing.T) {
 	// guard.go:223 — plus POST /oauth/token and POST /oauth/revoke
 	// in B3-07: public by design, client auth is the code_verifier
 	// / client secret, not a gateway key).
-	if exempt != 60 {
-		t.Errorf("exempt routes = %d, want 60 (58 before P1.5 + GET /api/capabilities and GET /api/providers/{id}/capabilities in P1.5)", exempt)
+	if exempt != 61 {
+		t.Errorf("exempt routes = %d, want 61 (58 before P1.5 + GET /api/capabilities and GET /api/providers/{id}/capabilities in P1.5 + GET /readyz in AUD-CFG-004)", exempt)
 	}
 }
 

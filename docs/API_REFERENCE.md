@@ -8,9 +8,9 @@ the per-route sections; regenerate instead:
 python3 scripts/gen-api-docs.py
 ```
 
-Coverage: **349 routes** (182 GET, 118 POST, 22 DELETE, 22 PATCH, 5 PUT) —
+Coverage: **350 routes** (183 GET, 118 POST, 22 DELETE, 22 PATCH, 5 PUT) —
 11 `LOCAL_ONLY`, 58 `ALWAYS_PROTECTED`,
-280 `MANAGEMENT`; 60 auth-exempt, 278 scope-gated, 11 key-only (gateway key, no scope).
+281 `MANAGEMENT`; 61 auth-exempt, 278 scope-gated, 11 key-only (gateway key, no scope).
 Enforced by `TestAPIReferenceCoversEveryRoute`
 (`internal/server/api_reference_test.go`): the test reads the guard
 table and this doc and FAILS if any route is missing. That test is
@@ -102,6 +102,22 @@ its key field; the key is kept only in page memory, never stored.
 
   ```sh
   curl -X GET http://127.0.0.1:8080/healthz
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `GET /readyz`
+
+- **Tier:** `MANAGEMENT`
+- **Scope(s):** any authenticated key (no scope listed)
+- **Auth:** None — auth-exempt (Tier 3, explicitly off)
+- **Spawn-capable:** no
+- **Description:** Readiness probe — dependency checks, no data, no auth (AUD-CFG-004).
+- **Request:** no body.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X GET http://127.0.0.1:8080/readyz
   ```
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
