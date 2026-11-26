@@ -103,6 +103,7 @@ func stringsIndex(s, sub string) int {
 	}
 	return -1
 }
+
 // TestGeminiStructuredOutputRejectedHonest: generationConfig's
 // responseMimeType / responseSchema (the structured-OUTPUT surface)
 // have no canonical mapping — they are REJECTED with an error naming

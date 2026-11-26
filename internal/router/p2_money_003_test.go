@@ -7,8 +7,8 @@ package router
 import (
 	"testing"
 
-	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/autorouter"
+	"github.com/raunakiitp/codvian-router/internal/provider"
 )
 
 // TestP2_MONEY_003_GeminiEndpointProjection verifies that

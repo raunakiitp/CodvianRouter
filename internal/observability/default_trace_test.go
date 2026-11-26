@@ -1,13 +1,14 @@
+//go:build !otel
+
 package observability
 
 // WS9F closure item 3: pin the DEFAULT-build tracing behavior. The
 // tracer is build-tagged — trace.go (!otel) is a zero-allocation
 // no-op, trace_otel.go (otel) records real spans — and this file
-// (no build tag) pins the default build: what ships without `-tags
-// otel` does NO tracing, propagates context unchanged, and costs
-// nothing. A default build that started recording would change the
-// production observability posture silently; a no-op that mutated
-// the context would break span correlation in the otel build.
+// pins the default build: what ships without `-tags otel` does NO
+// tracing, propagates context unchanged, and costs nothing. The
+// assertions here do NOT hold in the otel build (where spans DO
+// record), so this file is excluded from it.
 
 import (
 	"context"

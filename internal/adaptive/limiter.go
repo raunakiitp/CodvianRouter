@@ -430,8 +430,8 @@ func (l *Limiter) InFlight(key string) int {
 // globalSemaphore is a channel-based weighted semaphore: TryAcquire
 // non-blockingly reserves one slot, Release frees it.
 type globalSemaphore struct {
-	ch    chan struct{}
-	mu    sync.Mutex
+	ch       chan struct{}
+	mu       sync.Mutex
 	inFlight int
 }
 

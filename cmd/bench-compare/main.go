@@ -39,8 +39,8 @@ type benchResult struct {
 		CPUModel string `json:"cpu_model"`
 	} `json:"rig"`
 	ReadyMS struct {
-		Healthz   float64 `json:"healthz"`
-		V1Models  float64 `json:"v1_models"`
+		Healthz  float64 `json:"healthz"`
+		V1Models float64 `json:"v1_models"`
 	} `json:"ready_ms"`
 	Passes map[string]struct {
 		DirectLatency struct {
@@ -53,8 +53,8 @@ type benchResult struct {
 }
 
 type regression struct {
-	metric              string
-	baseline, current   float64
+	metric            string
+	baseline, current float64
 }
 
 func loadResult(path string) (*benchResult, error) {

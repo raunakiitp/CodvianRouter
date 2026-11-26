@@ -29,8 +29,8 @@ func TestP2_IDENT_002_SessionGatedFeedsOutsideDashboard(t *testing.T) {
 
 	// Test cases: (path, method, expectSessionRequired)
 	cases := []struct {
-		path   string
-		method string
+		path    string
+		method  string
 		want401 bool // true = session required, false = open
 	}{
 		{"/api/providers", http.MethodGet, true},
