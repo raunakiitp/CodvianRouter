@@ -7485,6 +7485,13 @@ func firstEventChan(ch <-chan StreamEvent) <-chan StreamEvent {
 // when set, otherwise every registered client for the model, in sorted
 // provider-ID order (deterministic, if arbitrary).
 func (e *Engine) chainFor(model string) []Attempt {
+	// P2-ROUTE-001: consult the declarative per-model fallback chain
+	// before falling back to config or client IDs. A chain with at
+	// least one enabled entry takes precedence; an unknown model or
+	// an all-disabled chain falls through to config/client IDs.
+	if chain := e.FallbackChainFor(model); len(chain) > 0 {
+		return chain
+	}
 	if e.cfg.ChainFor != nil {
 		return e.cfg.ChainFor(model)
 	}
