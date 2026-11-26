@@ -93,6 +93,12 @@ type addProviderRequest struct {
 	Variant   string   `json:"variant"`
 	Name      string   `json:"name"`
 	Models    []string `json:"models"`
+	// TemplateParams carries values for a templated catalog base
+	// URL (cloudflare-ai {account_id}, cloudflare-ai-gateway
+	// {account_id}/{gateway_id}/{provider}, snowflake-cortex
+	// ${SNOWFLAKE_ACCOUNT}). Values are validated as URL path
+	// segments by catalog.ResolveBaseURLTemplate.
+	TemplateParams map[string]string `json:"template_params,omitempty"`
 }
 
 // addedProviderResponse is the 201 payload for a created provider:
@@ -204,6 +210,7 @@ func (s *Server) handleAddProvider(w http.ResponseWriter, r *http.Request) {
 	if req.CatalogID != "" {
 		p, err = s.providerAdder.AddCatalogWithOptions(r.Context(), req.CatalogID, req.APIKey, provider.CatalogAddOptions{
 			Endpoint: req.Endpoint, Variant: req.Variant, BaseURL: req.BaseURL,
+			TemplateParams: req.TemplateParams,
 		})
 	} else {
 		p, err = s.providerAdder.AddContext(r.Context(), req.Name, req.BaseURL, req.APIKey)
