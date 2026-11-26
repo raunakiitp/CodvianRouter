@@ -906,4 +906,115 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://llmtech.eu/models/qwen3.8-27b",
 		Notes:        "LLM Tech: OpenAI-compatible hosted inference per its own docs, which state the base URL https://api.llmtech.eu/v1 and API-key auth, in production since Aug 22, 2026. Added 2026-11-18 triage round 5; live reachability probe HTTP 410 on the bare base and on /v1/models (the host answers; the docs prove the endpoint).",
 	},
+	{
+		// Verified 2026-11-27 against DeepInfra's own docs: the
+		// OpenAI-compatible surface is /v1/openai (not the bare /v1),
+		// and the Responses API shares that same base.
+		ID:          "deepinfra",
+		Name:        "DeepInfra",
+		Website:     "https://deepinfra.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.deepinfra.com/v1/openai"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointEmbeddings, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointImages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.deepinfra.com/chat/overview",
+		Notes:        "OpenAI-compatible chat, embeddings and image generation at /v1/openai; the Responses API shares that base. Native per-model endpoints (/v1/inference/{model}) fall outside the OpenAI shape.",
+	},
+	{
+		// Verified 2026-11-27: the current inference base is
+		// api.hyperbolic.ai/inference/v1. The provider's own docs
+		// state the previous host (api.hyperbolic.xyz/v1) now answers
+		// 404 — recorded here so the catalog never ships the dead URL.
+		ID:          "hyperbolic",
+		Name:        "Hyperbolic",
+		Website:     "https://hyperbolic.xyz",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.hyperbolic.ai/inference/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://www.hyperbolic.ai/docs/inference/overview",
+		Notes:        "Base moved to api.hyperbolic.ai/inference/v1; the docs state the previous api.hyperbolic.xyz/v1 host returns 404. sk_live_ keys, Bearer auth.",
+	},
+	{
+		// Verified 2026-11-27 against nscale's own chat and
+		// image-generation guides (both pin the same base).
+		ID:          "nscale",
+		Name:        "nScale",
+		Website:     "https://nscale.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://inference.api.nscale.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointImages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.nscale.com/docs/use-cases/chat",
+		Notes:        "Serverless inference: OpenAI-compatible chat and image generation on one base; service-token Bearer auth.",
+	},
+	{
+		// Verified 2026-11-27 against Voyage's own docs: embeddings
+		// only — there is no chat surface, so a chat request must be
+		// refused by capability, not by a missing URL.
+		ID:          "voyage-ai",
+		Name:        "Voyage AI",
+		Website:     "https://www.voyageai.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.voyageai.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointEmbeddings, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.voyageai.com/docs/api-key-and-installation",
+		Notes:        "Embeddings-only API (/v1/embeddings); no chat surface exists.",
+	},
+	{
+		// Verified 2026-11-27 against LLM7's own quickstart, whose
+		// OpenAI-SDK example pins the base.
+		ID:          "llm7",
+		Name:        "LLM7.io",
+		Website:     "https://llm7.io",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.llm7.io/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.llm7.io/quickstart",
+		Notes:        "OpenAI-compatible aggregator; the docs' OpenAI-SDK example sets base https://api.llm7.io/v1.",
+	},
+	{
+		// Verified 2026-11-27 against Jina's own API reference:
+		// embeddings, rerank and chat live on api.jina.ai; document
+		// OCR is served over the chat-completions schema. Reader and
+		// Search are separate hosts with their own catalog entries.
+		ID:          "jina-ai",
+		Name:        "Jina AI (Foundation API)",
+		Website:     "https://jina.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.jina.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointEmbeddings, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointRerank, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.jina.ai/",
+		Notes:        "Foundation API on api.jina.ai: embeddings, rerank, and chat (document OCR uses the chat-completions schema). Reader and Search are separate hosts (r.jina.ai, s.jina.ai).",
+	},
 }
