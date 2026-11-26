@@ -4,10 +4,7 @@
 Other runners write their own files under `docs/bench-results/` — this file only reads them and consolidates.
 **Rule:** never fake a number; never promote a polluted run to verified; every row cites its source file.
 
-**Status (2026-11-19 16:05 IST, file created):**
-`latency 0.851/0.777 ms (MISSED), RPS 1,273/1,174 (MISSED), idle 42.1 MiB (MET), ready 434.8/565.0 ms (MET) — 0 fresh runs pending`
-(`docs/bench-results/` exists but is empty as of 16:13 IST; no runner result has landed.
-VM loadavg at last check 24.92 — storm conditions, no clean run possible right now.)
+**Status:** `docs/bench-results/` has 1 result file as of this reconciliation.
 
 **Keeper note on idle:** the brief said "idle ~38 MiB". The paired verdict run that produced
 0.851/0.777 ms records idle **42.1 MiB** (`docs/benchmark-2026-11-18-globalbudget.json`:

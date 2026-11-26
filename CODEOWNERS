@@ -1,0 +1,4 @@
+# CODEOWNERS — Codvian Router (solo maintainer)
+# Every path falls back to the repository owner.
+
+* @yadavraunak2004

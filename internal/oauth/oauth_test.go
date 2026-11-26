@@ -509,3 +509,34 @@ func TestIssuerRevokeRefreshTokenPersistsAcrossRestart(t *testing.T) {
 		t.Fatal("revoked refresh token came back to life after a restart")
 	}
 }
+
+// TestP2_OAUTH_001_JWTRevocationPersistsAcrossRestart verifies that a
+// revoked JWT access token stays revoked after an issuer restart
+// (P2-OAUTH-001 / AUD-CODE-012 sub-item: persist revoked JTIs).
+func TestP2_OAUTH_001_JWTRevocationPersistsAcrossRestart(t *testing.T) {
+	dir := t.TempDir()
+	iss, err := NewIssuer(dir)
+	if err != nil {
+		t.Fatalf("NewIssuer: %v", err)
+	}
+	c := registerPublicClient(t, iss)
+	code, verifier := authorizeFor(t, iss, c)
+	resp, err := iss.ExchangeCode(code, c.ID, c.RedirectURIs[0], verifier, "")
+	if err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+	if !iss.Revoke(resp.AccessToken) {
+		t.Fatal("Revoke(access token): returned false, want true")
+	}
+	if _, err := iss.VerifyAccessToken(resp.AccessToken); err == nil {
+		t.Fatal("VerifyAccessToken after revoke: err = nil, want an error")
+	}
+	// Reload the issuer from disk — the revoked JTI must persist.
+	iss2, err := NewIssuer(dir)
+	if err != nil {
+		t.Fatalf("NewIssuer (reload): %v", err)
+	}
+	if _, err := iss2.VerifyAccessToken(resp.AccessToken); err == nil {
+		t.Fatal("revoked access token came back to life after a restart")
+	}
+}

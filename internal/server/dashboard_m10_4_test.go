@@ -538,7 +538,7 @@ console.log("alias picker OK");
 // smoke in the slice report records the node version used there.
 func TestDashboardM10_4InlineScriptSyntax(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not installed: cannot run node --check")
+		t.Fatal("node not installed — cannot run node --check (install node or set NODE_PATH)")
 	}
 	body := m10_0DashboardBody(t)
 	script := m10_0InlineScript(t, body)

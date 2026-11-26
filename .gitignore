@@ -17,3 +17,9 @@ docs/packages/benchmark-windows/*.exe
 tests/playwright/node_modules/
 tests/playwright/test-results/
 tests/playwright/package-lock.json
+# Secrets (P2-SEC-01): local env files and key material never enter the repo.
+.env
+.env.*
+!.env.example
+*.pem
+*.key

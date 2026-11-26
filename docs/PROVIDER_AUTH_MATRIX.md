@@ -94,12 +94,15 @@ Full findings, code references, wire/client coverage sweep and the prioritized b
 5. Successful real chat completion: **QUOTA-BLOCKED / PENDING** — inference is not fully verified.
 6. Azure Entra ID: **MOCK-TESTED**.
 
-## OAuth flow audit (P1-08, 2026-11-21)
+## OAuth flow audit (P1-08, 2026-11-21; classification re-verified 2026-11-27)
 
-All 31 `CategoryOAuth` catalog entries are subscription/IDE session flows (ChatGPT, GitHub Copilot, Codex, Claude Code, Cursor, Kiro, Antigravity, GitLab Duo, Zed, Cline, Devin, …), not permitted API-key OAuth:
+All 31 `CategoryOAuth` catalog entries are subscription/IDE session flows (ChatGPT, GitHub Copilot, Codex, Claude Code, Cursor, Kiro, Antigravity, GitLab Duo, Zed, Cline, Devin, ...), not permitted API-key OAuth. Their verified catalog shape is pinned by `TestCategoryOAuthInventoryPinsTheTruth` (`internal/catalog/oauth_inventory_test.go`):
 
-- `claude` (the only docs-verified one) is **ToS-grey** with a documented `oauth-pkce` exchange → refused at add time (tested).
-- The other 30 are reference-metadata-only with no permitted exchange → refused at add time as "credential exchange is not supported yet". Regression-tested for `github-copilot`, `codex`, `cursor`, `kiro`, `xai-oauth` (`TestRegistryAddCatalogRefusals`): a subscription flow can never be silently turned into a static key or a faked token.
+- `claude` (the only docs-verified one, and the only one with an auth surface) is **ToS-grey** with a documented `oauth-pkce` exchange → refused at add time (tested). Its catalog entry is dialable *only* with a user-obtained token; the router does not perform the login.
+- `github-copilot` and `clinepass` carry a probed base URL but **no endpoints and no auth surface** — partially documented, not connectable through the catalog.
+- The other 28 are reference-metadata-only stubs (no base URL, no endpoints, `WireUnknown`) → refused at add time as "credential exchange is not supported yet".
+
+Regression-tested for `github-copilot`, `codex`, `cursor`, `kiro`, `xai-oauth` (`TestRegistryAddCatalogRefusals`): a subscription flow can never be silently turned into a static key or a faked token.
 - Policy: only official, documented, permitted provider flows are implemented. The four implemented exchanges: OpenRouter PKCE (**real-provider-tested**), Azure Entra client credentials (**mock-tested**), Bedrock SigV4 (**mock-tested**), Vertex service-account JSON (**mock-tested**). No browser-cookie scraping, no private subscription session reuse.
 - `internal/oauth` is the **gateway's own** OAuth 2.0 authorization server for gateway clients (authorization-code + PKCE → HS256 JWT access tokens, single-use rotated refresh tokens) — a client-auth surface, not provider auth; tested (`oauth_test.go`, `jwt_test.go`).
 - Perplexity's documented MCP OAuth 2.1+PKCE is an **upstream MCP tool-server** flow, not routing auth: the gateway's MCP surface authenticates with gateway keys (OAuth explicitly NOT APPLICABLE — `internal/mcp/tools_search.go`), and Perplexity routing uses the Bearer API-key path. Status: metadata-only for the MCP OAuth surface; out of Phase 1 routing-auth scope.

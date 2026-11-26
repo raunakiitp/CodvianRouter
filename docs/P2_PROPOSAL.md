@@ -1,6 +1,6 @@
 # Proposed P2 Roadmap — derived from the Post-P1 Forensic Audit
 
-**Status: proposal only. No P2 implementation has started, no P2 branch/commit/PR exists.**
+**Status: IMPLEMENTED and SUPERSEDED. The WS1–WS9G scope was implemented on the `p2-implementation` branch (71 commits, PR #81), verified locally and green on GitHub Actions; `P2_CHECKPOINT.md` is the current status document. This proposal is retained as the historical derivation and is no longer the plan of record.**
 
 Every workstream below traces to verified findings in `docs/POST_P1_FINDINGS_LEDGER.md` against `main` @ `08cadc0`. Work already covered by the "immediate maintenance" section of `docs/POST_P1_RECOMMENDATIONS.md` (AUD-SEC-001, AUD-SEC-009, AUD-CODE-001) is **not** repeated here — those are fixes, not a programme.
 
@@ -12,7 +12,7 @@ Sequencing rationale: WS-1 and WS-2 restore *trustworthiness* (verified CI + one
 
 **Problem statement.** Several verification layers exist but never run in CI: the five client-protocol drivers, the `otel` build tag, fuzzing, Redis, Windows, benchmarks; and `govulncheck` is neutralised by `|| true`. A green pipeline therefore does not imply the feature works (AUD-TEST-001/002/003/004/005/006/007/015, AUD-TEST-017).
 
-**Existing implementation.** `scripts/smoke-client-*.py` (shared lib `smoke-client-lib.py`), `internal/observability` otel-tagged files, 2 fuzz targets, `b_c_redis_live_test.go` (skip-gated), `internal/tray` Windows tests, 23 benchmarks, `scripts/check-route-guard.sh`, 6 workflows.
+**Existing implementation.** `scripts/smoke-client-*.py` (shared lib `smoke-client-lib.py`), `internal/observability` otel-tagged files, 2 fuzz targets, `b_c_redis_live_test.go` (skip-gated), `internal/tray` Windows tests, 27 benchmarks, `scripts/check-route-guard.sh`, 6 workflows.
 
 **Verified gap.** `grep -rln "smoke-client" .github/workflows` → 0; `smoke-client-lib.py:57` hardcodes `/home/hatch/go/bin/go`; no workflow passes `-tags otel` or `-fuzz`; `supply-chain.yml:24-36` ends `|| true`.
 
@@ -166,7 +166,7 @@ Sequencing rationale: WS-1 and WS-2 restore *trustworthiness* (verified CI + one
 
 ## WS-7 — Performance guardrails: measure in CI, then tune
 
-**Problem statement.** 23 benchmarks exist but none run in CI, so the regressions the audit measured (prompt re-hashing per hop, unpooled relay transport, unbounded learned-signal goroutines, missing connection caps, coarse engine mutex) cannot be caught or proven fixed (AUD-PERF-003/004/005/006/007/008/009/010/011/013, AUD-TEST-006).
+**Problem statement.** 27 benchmarks exist but none run in CI, so the regressions the audit measured (prompt re-hashing per hop, unpooled relay transport, unbounded learned-signal goroutines, missing connection caps, coarse engine mutex) cannot be caught or proven fixed (AUD-PERF-003/004/005/006/007/008/009/010/011/013, AUD-TEST-006).
 
 **Existing implementation.** Benchmarks in `internal/tokencount`, `internal/ledger`, `internal/router`, `internal/cache`; `bench-infra-smoke.yml` (compile-only); `bench.sh` (Linux-bound).
 

@@ -34,9 +34,13 @@ first-class feature, not an afterthought:
   running the router. They are never sent to Codvian or any third party.
 - **No telemetry by default.** The router does not phone home with usage
   data. Any future opt-in telemetry would be explicit and off by default.
-- **Secrets are never committed.** See `.gitignore` — `.env` files, API
-  keys, and credentials must never enter the repository. CI and reviewers
-  check for this.
+- **Secrets are never committed.** `.gitignore` excludes `.env`, `.env.*`,
+  `*.pem` and `*.key`; an `.env.example` is allowed. A real gate enforces
+  the rest: `scripts/check-secrets.sh` scans every tracked text file for
+  credential shapes (GitHub/Google/AWS/Slack/Anthropic/OpenAI tokens,
+  private-key headers, long bearer headers), exits 1 on a hit, and is run
+  by `scripts/ci.sh` on every change. The scanner needs no network and no
+  service account, so its verdict can always be reproduced locally.
 
 ## Supported versions
 

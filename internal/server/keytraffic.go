@@ -415,8 +415,8 @@ func (s *Server) checkKeyTrafficForChat(w http.ResponseWriter, r *http.Request, 
 // prompt tokens are not countable before the call (the native
 // relay: the body is forwarded verbatim, so no local estimate
 // exists). The request slot is still enforced; the token axis is
-// not — the relay's spend is invisible to the ledger the same way
-// (see the standing relay gap in relay.go).
+// not — the relay's spend IS recorded in the ledger (AUD-SEC-002),
+// so budgets see it.
 func (s *Server) checkKeyTrafficRequestsOnly(w http.ResponseWriter, r *http.Request) bool {
 	return s.checkKeyTraffic(w, r, 0)
 }

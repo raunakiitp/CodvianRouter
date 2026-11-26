@@ -3948,7 +3948,16 @@ func (e *Engine) callChat(ctx context.Context, att Attempt, req provider.ChatReq
 	// admits — so this can only refuse a provider whose RTT has
 	// actually degraded. The slot is held for the upstream call
 	// only and released the moment it returns.
+	// P2-CAP-002: process-wide admission cap consulted first — fail-open
+	// when unset (nil). Bounds aggregate concurrency regardless of how
+	// many providers/keys are active.
+	if !adaptive.GlobalTryAcquire() {
+		e.noteConcurrencyRejected(att.ProviderID)
+		return attemptResult{att: att, err: adaptive.ErrLimited, reasoning: label}
+	}
+	defer adaptive.GlobalRelease()
 	if !e.limiter.TryAcquire(att.ProviderID) {
+		adaptive.GlobalRelease()
 		e.noteConcurrencyRejected(att.ProviderID)
 		return attemptResult{att: att, err: adaptive.ErrLimited, reasoning: label}
 	}
@@ -7476,6 +7485,13 @@ func firstEventChan(ch <-chan StreamEvent) <-chan StreamEvent {
 // when set, otherwise every registered client for the model, in sorted
 // provider-ID order (deterministic, if arbitrary).
 func (e *Engine) chainFor(model string) []Attempt {
+	// P2-ROUTE-001: consult the declarative per-model fallback chain
+	// before falling back to config or client IDs. A chain with at
+	// least one enabled entry takes precedence; an unknown model or
+	// an all-disabled chain falls through to config/client IDs.
+	if chain := e.FallbackChainFor(model); len(chain) > 0 {
+		return chain
+	}
 	if e.cfg.ChainFor != nil {
 		return e.cfg.ChainFor(model)
 	}

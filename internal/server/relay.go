@@ -286,12 +286,10 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	// answers an honest 502. A panic after a response was already
 	// committed can only produce a superfluous WriteHeader
 	// (logged once by net/http) — the stream half owns the
-	// committed case. No ledger row is recorded here: a
-	// verbatim-forwarded request's spend is never recorded in the
-	// ledger even on success (standing relay gap), and a
-	// translated request's attempts are recorded by the engine —
-	// inventing a row here would double-count one and break the
-	// other's rule. The panic is still counted + logged.
+	// committed case. The spend for a verbatim-forwarded request
+	// IS recorded in the ledger (AUD-SEC-002), via the engine's
+	// attempt row; inventing a second row here would double-count.
+	// The panic is still counted + logged.
 	defer func() {
 		if v := recover(); v != nil {
 			s.noteServerPanic("server_messages", v)
@@ -375,11 +373,10 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	// needs the resolved concrete model, which the relay does
 	// not know yet for "auto/*" (it resolves inside the engine),
 	// so a virtual model gets the cap check only, never a
-	// guessed model. Note the standing relay gap: a
-	// verbatim-forwarded request's spend is never recorded in
-	// the ledger, so its cost does not count toward the window —
-	// the cap still refuses a key the ledger shows as over, but
-	// relay spend itself is invisible to it.
+	// guessed model. Relay spend for verbatim-forwarded requests
+	// IS recorded in the ledger (AUD-SEC-002), so cost counts
+	// toward the window; the cap still refuses a key the ledger
+	// shows as over.
 	if refused := s.checkKeyBudgetForModel(w, r, head.Model); refused {
 		return
 	}
@@ -1500,9 +1497,9 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 		s.recordMetrics(ctx, provider.ChatRequest{Model: head.Model, Stream: head.Stream}, nil, nil, start)
 		writeVerbatimHeaders(w, resp, reason)
 		// Telemetry headers (M2.1): the relay target and model
-		// are known; tokens and cost are not (the body is
-		// forwarded verbatim and the ledger records no row for
-		// it — the standing relay gap), so they stay absent.
+		// are known; tokens and cost come from the provider-reported
+		// usage that the verbatim path records itself (AUD-SEC-002),
+		// so relay spend IS in the ledger.
 		meta := s.verbatimMeta(target, head, start)
 		s.writeResponseHeaders(w, ctx, meta)
 		s.recordTelemetry(ctx, meta, resp.StatusCode)

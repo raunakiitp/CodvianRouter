@@ -628,11 +628,11 @@ func (r *Recorder) WriteTo(b *strings.Builder) {
 
 	// Guardrail redactions / blocks by kind (labels only — no prompt
 	// text or matched values ever reach a metric).
-	b.WriteString("# HELP codvian_router_guardrail_redactions_total Total guardrail redactions by kind.\\n")
-	b.WriteString("# TYPE codvian_router_guardrail_redactions_total counter\\n")
+	b.WriteString("# HELP codvian_router_guardrail_redactions_total Total guardrail redactions by kind.\n")
+	b.WriteString("# TYPE codvian_router_guardrail_redactions_total counter\n")
 	writeStringCounter(b, "codvian_router_guardrail_redactions_total", "kind", r.guardrailRedacted)
-	b.WriteString("# HELP codvian_router_guardrail_blocked_total Total requests blocked by a guardrail, by kind.\\n")
-	b.WriteString("# TYPE codvian_router_guardrail_blocked_total counter\\n")
+	b.WriteString("# HELP codvian_router_guardrail_blocked_total Total requests blocked by a guardrail, by kind.\n")
+	b.WriteString("# TYPE codvian_router_guardrail_blocked_total counter\n")
 	writeStringCounter(b, "codvian_router_guardrail_blocked_total", "kind", r.guardrailBlocked)
 
 	// Guardrail evaluations by phase and action: one entry per Check

@@ -28,9 +28,12 @@
 // before the body reaches this store (internal/server/files_api.go).
 // The previous text here claimed ""there is no upload-size cap""; that
 // was stale and wrong. Uploads stream to a temp file on disk rather
-// than memory, so within the cap the cost is disk, not RAM. Still
-// open: there is no AGGREGATE or per-key disk quota (AUD-SEC-006), so
-// one key can fill the disk with many individually-legal uploads.
+// than memory, so within the cap the cost is disk, not RAM.
+// AGGREGATE AND PER-KEY DISK QUOTA (P2-SEC-05 / AUD-SEC-006): maxDiskBytes
+// bounds all files in this store and maxKeyDiskBytes bounds any single key,
+// so one key cannot fill the disk with many individually-legal uploads.
+// Usage is tracked in CreateOwned/CreateServerGeneratedOwned and freed on
+// DeleteFor; Usage() and KeyUsage() expose the counters for observability.
 package files
 
 import (
@@ -169,28 +172,37 @@ type Store struct {
 	// unowned legacy records are never invisible to the OPERATOR, only
 	// to unauthenticated callers (AUD-SEC-010).
 	legacyIndex bool
+	// totalBytes is the aggregate bytes of all content files in this
+	// store, tracked for the maxDiskBytes quota (P2-SEC-05).
+	totalBytes int64
+	// keyBytes is per-key disk usage, tracked for the maxKeyDiskBytes
+	// quota (P2-SEC-05).
+	keyBytes map[string]int64
 }
 
 // New returns a store rooted at dir. The directory (0700, like the
 // router's data dir) is created on first write, not here, so
 // merely constructing a store never touches disk.
-func New(dir string) *Store { return &Store{root: dir} }
+func New(dir string) *Store {
+	return &Store{root: dir, keyBytes: make(map[string]int64)}
+}
 
 // Root returns the store's root directory.
 func (s *Store) Root() string { return s.root }
 
+// maxDiskBytes is the aggregate disk quota for all files in this store:
+// one key cannot fill the disk with many individually-legal uploads.
+const maxDiskBytes = 10 << 30 // 10 GiB
+
+// maxKeyDiskBytes is the per-key disk quota.
+const maxKeyDiskBytes = 1 << 30 // 1 GiB
+
+// ErrDiskQuota is returned when an upload would exceed the aggregate or
+// per-key disk quota.
+var ErrDiskQuota = errors.New("files: disk quota exceeded")
+
 // StaleUploadTempAge is how long a staging temp must sit
-// unmodified before the orphan sweeper treats it as abandoned
-// (see SweepStaleUploadTemps). It covers both orphan classes:
-// upload-*.tmp staging files and index-*.tmp atomic-index temps
-// (see saveIndexLocked). One hour is deliberately generous: a
-// live upload writes continuously, so its staging temp's mtime
-// is never an hour old — even a 512 MiB upload over a slow link
-// keeps touching the file while bytes flow — and an index write
-// is a single short write+rename, so a live index temp is never
-// an hour old either. Only a temp no process is writing to any
-// more (a crash mid-copy or mid-index-write, or a client stalled
-// past any plausible resume) goes that long untouched.
+
 const StaleUploadTempAge = time.Hour
 
 // SweepStaleUploadTemps removes orphaned staging temps
@@ -489,6 +501,16 @@ func (s *Store) CreateOwned(filename, purpose, owner string, src io.Reader) (*Fi
 		_ = os.Remove(tmpName)
 		return nil, fmt.Errorf("files: store upload: copy=%v fsync=%v close=%v", copyErr, syncErr, closeErr)
 	}
+	// P2-SEC-05 / AUD-SEC-006: reject before committing if this upload
+	// would exceed the per-key or aggregate disk quota.
+	if s.keyBytes[owner]+n > maxKeyDiskBytes {
+		_ = os.Remove(tmpName)
+		return nil, ErrDiskQuota
+	}
+	if s.totalBytes+n > maxDiskBytes {
+		_ = os.Remove(tmpName)
+		return nil, ErrDiskQuota
+	}
 	if err := os.Rename(tmpName, s.contentPath(id)); err != nil {
 		_ = os.Remove(tmpName)
 		return nil, fmt.Errorf("files: commit upload: %w", err)
@@ -518,6 +540,10 @@ func (s *Store) CreateOwned(filename, purpose, owner string, src io.Reader) (*Fi
 		_ = os.Remove(s.contentPath(id))
 		return nil, err
 	}
+	// Quota accounting: record the committed bytes only after the index
+	// successfully reflects them, so the counter never leads the store.
+	s.keyBytes[owner] += n
+	s.totalBytes += n
 	return &f, nil
 }
 
@@ -589,6 +615,16 @@ func (s *Store) CreateServerGeneratedOwned(filename, purpose, owner string, src 
 		_ = os.Remove(tmpName)
 		return nil, fmt.Errorf("files: store upload: copy=%v fsync=%v close=%v", copyErr, syncErr, closeErr)
 	}
+	// P2-SEC-05 / AUD-SEC-006: reject before committing if this upload
+	// would exceed the per-key or aggregate disk quota.
+	if s.keyBytes[owner]+n > maxKeyDiskBytes {
+		_ = os.Remove(tmpName)
+		return nil, ErrDiskQuota
+	}
+	if s.totalBytes+n > maxDiskBytes {
+		_ = os.Remove(tmpName)
+		return nil, ErrDiskQuota
+	}
 	if err := os.Rename(tmpName, s.contentPath(id)); err != nil {
 		_ = os.Remove(tmpName)
 		return nil, fmt.Errorf("files: commit upload: %w", err)
@@ -618,6 +654,10 @@ func (s *Store) CreateServerGeneratedOwned(filename, purpose, owner string, src 
 		_ = os.Remove(s.contentPath(id))
 		return nil, err
 	}
+	// Quota accounting: record the committed bytes only after the index
+	// successfully reflects them, so the counter never leads the store.
+	s.keyBytes[owner] += n
+	s.totalBytes += n
 	return &f, nil
 }
 
@@ -706,6 +746,8 @@ func (s *Store) DeleteFor(id, callerID string) (bool, error) {
 	}
 	kept := idx[:0]
 	found := false
+	var freedBytes int64
+	var freedOwner string
 	for _, f := range idx {
 		if f.ID == id {
 			if !visibleTo(f, callerID) {
@@ -716,6 +758,8 @@ func (s *Store) DeleteFor(id, callerID string) (bool, error) {
 				continue
 			}
 			found = true
+			freedBytes = f.Bytes
+			freedOwner = f.OwnerKeyID
 			continue
 		}
 		kept = append(kept, f)
@@ -733,7 +777,33 @@ func (s *Store) DeleteFor(id, callerID string) (bool, error) {
 	if err := s.saveIndexLocked(kept); err != nil {
 		return false, err
 	}
+	// Free quota accounting: return the deleted file's bytes to the
+	// per-key and aggregate counters so future uploads can use them.
+	s.keyBytes[freedOwner] -= freedBytes
+	if s.keyBytes[freedOwner] < 0 {
+		s.keyBytes[freedOwner] = 0
+	}
+	s.totalBytes -= freedBytes
+	if s.totalBytes < 0 {
+		s.totalBytes = 0
+	}
 	return true, nil
+}
+
+// Usage returns the aggregate bytes of all content files in this store
+// (P2-SEC-05 / AUD-SEC-006).
+func (s *Store) Usage() int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.totalBytes
+}
+
+// KeyUsage returns the bytes of content files owned by key (P2-SEC-05 /
+// AUD-SEC-006).
+func (s *Store) KeyUsage(key string) int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.keyBytes[key]
 }
 
 // Open returns a reader for the file's content plus its metadata.

@@ -275,11 +275,16 @@ func filesUploadReadError(w http.ResponseWriter, body *filesStreamBody, err erro
 // server failure: the cap is 413, a disconnect/corrupt stream is
 // 400 (the store already removed its staging temp in both
 // cases). A store validation failure is 400; anything else is a
-// genuine 500.
+// genuine 500. A disk-quota overflow is 413: the aggregate or
+// per-key quota would be exceeded.
 func (s *Server) filesUploadStoreError(w http.ResponseWriter, body *filesStreamBody, err error) {
 	var mbe *http.MaxBytesError
 	if errors.As(body.err, &mbe) {
 		writeError(w, http.StatusRequestEntityTooLarge, "request body too large: one file is capped at 512 MiB")
+		return
+	}
+	if errors.Is(err, files.ErrDiskQuota) {
+		writeError(w, http.StatusRequestEntityTooLarge, "request body too large: per-key or aggregate disk quota exceeded")
 		return
 	}
 	if body.err != nil {

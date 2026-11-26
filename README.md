@@ -7,162 +7,338 @@
 [![Go](https://img.shields.io/badge/Go-1.27.4-00ADD8?logo=go)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Local-first](https://img.shields.io/badge/local--first-no%20cloud%20needed-brightgreen)](docs/ARCHITECTURE.md)
-[![Single binary](https://img.shields.io/badge/binary-single%20%7E39%20MB-blue)](docs/INSTALL.md)
 
-A local-first, open-source LLM router. Point your app at one OpenAI-compatible
-base URL, plug in your providers once with your own keys, and stop thinking
-about which model is up, which is cheapest, or what to do when one goes down.
+A local-first, open-source LLM router. Point your app at one
+OpenAI-compatible base URL, plug in your providers once with your own
+keys, and stop thinking about which model is up, which is cheapest, or
+what to do when one goes down.
 
 </div>
 
-> **Status: pre-release, local-first AI gateway.** It builds, its test suite
-> passes, and it routes real OpenAI-compatible traffic to providers you add
-> with your own API keys. It is not a published release yet, and several
-> dashboard-era settings routes are honestly marked unavailable (see
+> **Status: pre-release, local-first AI gateway.** It builds, its test
+> suite passes, and it routes real OpenAI-compatible traffic to providers
+> you add with your own API keys. It is not a published release yet, and
+> settings that were never honoured answer an honest
+> `501 feature_unavailable` instead of pretending (see
 > [Feature status](#feature-status)).
 
-## At a glance
+**Contents** ·
+[What this is](#what-this-is) ·
+[Why people use it](#why-people-use-it) ·
+[Features](#feature-overview) ·
+[Architecture](#architecture) ·
+[Routing](#routing-engine) ·
+[Providers](#provider-catalog) ·
+[Auth](#authentication-and-oauth) ·
+[API](#api-compatibility) ·
+[Multimodal](#multimodal) ·
+[Compression](#compression-and-context) ·
+[MCP & A2A](#mcp-and-a2a) ·
+[Security](#security-and-guardrails) ·
+[Billing](#billing-budgets-and-quotas) ·
+[Cache](#cache-and-performance) ·
+[Observability](#observability) ·
+[Dashboard](#dashboard) ·
+[Install](#installation) ·
+[Quick start](#quick-start) ·
+[Configuration](#configuration) ·
+[Provider setup](#provider-setup-examples) ·
+[CLI](#cli-commands) ·
+[Docker](#docker-and-deployment) ·
+[Testing](#testing-and-ci) ·
+[Feature status](#feature-status) ·
+[Limitations](#known-limitations) ·
+[Next steps](#next-steps) ·
+[Contributing](#contributing) ·
+[License](#license-and-links)
 
-| Metric | Value |
-|---|---|
-| Architecture | Local-first, zero external telemetry or cloud relay |
-| Tested toolchain | Go 1.27.4 (minimum `go 1.26.0`) |
-| Test suite | `go test ./...` passes on all 55 packages (Windows, 2026-11-21) |
-| API routes | **349** classified routes (11 Local-Only, 49 Always-Protected, 289 Management), of which **63** answer `501 feature_unavailable` on purpose |
-| Providers in catalog | **610** catalog entries; 379 have a base URL the router can call with your key, 231 have none (metadata only) |
-| Routing strategies | **41** strategies, nested combos, and auto-router variants |
-| Agent & MCP ecosystem | **32** MCP tools over HTTP/SSE/stdio + **CodeVN** setup |
-| Binary | Single Go binary, no runtime dependencies |
+## What this is
 
-## Start here
+Codvian Router is a single Go binary that sits between your applications
+and the model providers you already pay for. It speaks the OpenAI API on
+the front (`/v1/chat/completions`, `/v1/responses`, `/v1/models`, …), the
+Anthropic and Gemini surfaces on the back, and it owns the parts of an AI
+gateway that are easy to get wrong: failover, budgets, cost accounting,
+caching, guardrails, and the ability to explain why a request went where
+it went.
 
-| I want to… | Go to |
-|---|---|
-| Run it in 5 minutes | [Quick start](#quick-start) |
-| See what it can do | [What it does](#what-it-does) |
-| Know how fast it is | [Performance](#performance) |
-| Read the honest status | [Feature status](#feature-status) |
-| Install it properly | [docs/INSTALL.md](docs/INSTALL.md) |
-| Build on it | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+Everything runs on your machine. There is no account, no cloud relay and
+no telemetry: the router sends a request only to the provider you chose,
+for the request you made. State lives in a local SQLite ledger.
 
-## The promise
+- Repository: `raunakiitp/CodvianRouter`
+- Baseline `main`: `a45b4ff` (P1 closure); active branch `p2-implementation`
+- Toolchain: Go 1.27.4 (`go` directive `1.26.0`) — builds on Linux, macOS and Windows
+
+## Why people use it
 
 - **One key, one URL.** Your apps talk to the router; the router talks to
   every provider. Swap models without touching your code.
-- **Your keys stay yours.** Bring your own provider keys. Nothing is sent
-  anywhere except to the provider you chose, for the request you made.
-- **Failures don't reach you.** When a provider errors, rate-limits, or
-  slows down, the router moves to the next one — before the error reaches
-  your app.
-- **Spend what you decide.** Budgets and per-key quotas cap cost before it
-  happens, not after the bill arrives.
-- **Runs on your machine.** A single binary, a local dashboard, a local
-  ledger. No account, no subscription, no cloud in the middle.
+- **Your keys stay yours.** Bring your own provider keys. Nothing leaves
+  your machine except the request you made to the provider you chose.
+- **Failures don't reach you.** When a provider errors, rate-limits or
+  stalls, the router moves to the next one before the error reaches your
+  app.
+- **Spend what you decide.** Per-key budgets and rolling quotas stop
+  requests at the limit, with reservations so parallel requests cannot
+  jointly overshoot.
+- **Honest by construction.** A route that cannot do what its settings
+  imply answers `501`, and a static audit (`scripts/audit-fake.sh`) fails
+  the build if a known fake comes back.
 
-## Quick start
+## Feature overview
 
-```bash
-git clone https://github.com/raunakiitp/CodvianRouter.git
-cd CodvianRouter
-go build -o codvian-router ./cmd/codvian-router
-./codvian-router init        # creates config + a gateway key (shown once — save it)
-./codvian-router serve        # http://127.0.0.1:20128
-```
-
-Then list models through the router:
-
-```bash
-curl http://127.0.0.1:20128/v1/models \
-  -H "Authorization: Bearer $CODVIAN_KEY"
-```
-
-Prefer a guided first run? `./codvian-router init --wizard` walks you through
-provider → key → model → a real test call, every step skippable.
-Full install guide: [docs/INSTALL.md](docs/INSTALL.md).
-
-## What it does
-
-### Route
-
-| Feature | In one line |
+| Area | What you get |
 |---|---|
-| OpenAI-compatible API | `/v1/chat/completions`, `/v1/models`, `/v1/responses` — point any OpenAI client at it |
-| 41 routing strategies | Cheapest, fastest, most reliable, latency-aware, priority, weighted, and more |
-| Combos | Chain strategies — e.g. cheapest first, then fastest on failure |
-| Auto-router | Picks the model for you from cost, context, and capability |
-| Provider catalog | 610 entries; 379 have a callable base URL; add any custom OpenAI-compatible provider |
+| Protocol front door | OpenAI Chat Completions, Responses, Models, Embeddings, Rerank, Images, Audio (speech + transcription/translation), Video, Music, Search, plus batch and files surfaces |
+| Back-end wires | Anthropic Messages, Gemini, Vertex, Bedrock, Cohere, and any custom OpenAI-compatible provider |
+| Routing | 40 strategies (cost, latency, priority, weighted, P2C, quota-aware, LKGP, SLA-aware, …), nested combos and auto-router variants — all selectable via config |
+| Resilience | Failover chains, hedging, health checks, cooldowns, circuit breaking, per-key/per-IP rate limits, fault injection for tests |
+| Money | Local ledger with cost per request, reservations + settlement, per-key calendar budgets, rolling 5-hour budgets, quota pools |
+| Cache | Exact-match and semantic caching with tenant-scoped keys |
+| Context | Prompt compression (lite → ultra) and tool-output compression with fidelity checks |
+| Guardrails | PII detection/redaction, prompt-injection checks, secret redaction, SSRF-safe fetch |
+| Agents | MCP server (32 tools; stdio + SSE + Streamable HTTP), A2A tasks with streaming and owner scoping |
+| Ops | Local dashboard, `/healthz` + `/readyz`, digest-pinned Docker images, SBOM and vulnerability scanning in CI |
 
-### Stay up
-
-| Feature | In one line |
-|---|---|
-| Automatic failover | A failed request retries on the next provider, not in your error handler |
-| Hedging | Slow providers get a parallel twin so one straggler can't stall you |
-| Fault injection | Test-only chaos mode, off by default, so failover can be proven before it's needed |
-| Health checks | Unhealthy providers are skipped until they recover |
-
-### Spend less
-
-| Feature | In one line |
-|---|---|
-| Budgets & quotas | Per-key calendar budgets (`/api/usage/budget`), rolling 5-hour budgets (`/dashboard/key-budgets`), quota pools; requests stop at the limit |
-| Caching | Exact-match and semantic cache — repeat prompts don't re-bill |
-| Compression | Prompt compression from lite to ultra, plus tool-output compression |
-| Cost tracking | Every request logged with its real cost in the local ledger |
-
-### Stay in control
-
-| Feature | In one line |
-|---|---|
-| Local dashboard | Providers, models, usage, and health at `http://127.0.0.1:20128` |
-| Guardrails | PII detection and redaction, prompt-injection checks, content filtering |
-| Keys & auth | Gateway keys, OAuth/JWT clients for the gateway, per-key scopes and IP lists — every request authenticated. Provider account login: OpenRouter OAuth PKCE (`provider login openrouter`); Azure OpenAI via Microsoft Entra ID client credentials. Subscription/cookie sign-in remains unsupported |
-| MCP server | 32 tools, so coding agents can drive the router too |
-| CodeVN & Agent Setup | One-command setup: `codvian-router setup codevn` (also Claude, Continue) |
-| CLI | `serve`, `init`, `eval`, `setup`, `run`, `doctor`, `tray`, `catalog`, `release`, and more |
-
-## Providers
-
-The catalog has 610 entries (catalog audit 2026-11-21,
-[docs/catalog-audit-2026-11-21.md](docs/catalog-audit-2026-11-21.md)):
-379 have a callable base URL, and 231 have none (metadata only). A catalog entry is a starting point,
-not a promise: an entry is routed only after you add it with your own key,
-and the router tests that key against the provider when you add it.
-Web-session-cookie providers are catalogued but refused as routing
-targets. Two credential exchanges are implemented (Phase 1): OpenRouter
-account login via the official OAuth PKCE flow (`codvian-router provider
-login openrouter` or `POST /admin/provider/login` — the exchanged API key
-is live-tested and stored encrypted, and further logins join the same
-provider's key pool as additional accounts), and Azure OpenAI with
-Microsoft Entra ID client credentials (store `{tenant_id, client_id,
-client_secret}` JSON as the key; the router mints the Bearer token and
-re-mints it on expiry). The interactive subscription sign-in flows
-(device code / browser cookie) are still not built, so those entries are
-not usable through a login. Nothing is faked. See
-[docs/PROVIDER_LOGIN.md](docs/PROVIDER_LOGIN.md) and the evidence-tiered
-[docs/PROVIDER_AUTH_MATRIX.md](docs/PROVIDER_AUTH_MATRIX.md).
-
-## How it works
+## Architecture
 
 ```mermaid
 flowchart LR
-    A[Your app / CLI / agent] --> B[Codvian Router\n:20128 — one key, one base URL]
-    B --> C[OpenAI]
-    B --> D[Anthropic]
-    B --> E[Google]
-    B --> F[+ 600 more providers]
-    B --> G[Local dashboard]
+    A[Your app / CLI / agent] -->|OpenAI-compatible| B[Codvian Router :20128]
+    B --> R[Routing engine]
+    R --> P1[Provider A]
+    R --> P2[Provider B]
+    R --> P3[Provider C / +600 catalog entries]
+    B --> L[(Local SQLite ledger)]
+    B --> D[Local dashboard]
+    B --> M[MCP / A2A for agents]
 ```
 
-One process, one binary. Requests arrive at the router, the router picks a
-provider and model, and the response streams back. The ledger records what
-happened; the dashboard shows it.
+One process, one binary. A request is authenticated, matched against the
+guard table, normalized into an internal request, routed by the selected
+strategy over the candidate chain, executed against a provider, and
+streamed back in the client's wire format. Every attempt — success,
+error, retry, cooldown, cache hit, compression saving, cost — is written
+to the ledger, which is what the dashboard and the cost APIs read.
 
-## Performance
+More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-Measured 2026-11-18 on a shared VM (1.5 shared vCPU) — not a dedicated rig,
-so treat these as a floor, not a boast. Full method and history:
-[docs/BENCHMARK.md](docs/BENCHMARK.md).
+## Routing engine
+
+**40 routing strategies**, all registered in `internal/strategy` and all
+selectable through config (`routing.global_strategy`):
+
+| Group | Strategies |
+|---|---|
+| Cost | `cheapest`, `cost-optimized`, `budget-aware`, `quota-weighted` |
+| Speed | `fastest`, `latency-aware`, `sla-aware`, `headroom` |
+| Reliability | `most-reliable`, `priority`, `weighted`, `round-robin`, `p2c`, `least-used`, `lkgp` |
+| Shape / state | `context-optimized`, `cache-optimized`, `reset-aware`, `reset-window`, `expiry-first`, `sticky`, `random`, `strict-random` |
+| Composite | `auto`, `combo`, `fusion`, `pipeline`, `jev`, `nadir`, plus the auto-router variants |
+
+- **Combos** chain strategies (e.g. cheapest first, then fastest on
+  failure) and are validated as a graph, not a list.
+- **Auto-router** picks the model from cost, context and capability
+  signals instead of taking the model id literally.
+- **Decision telemetry**: every attempt records which candidates were
+  considered and why the others were excluded (cooldown, capability,
+  budget, quota), so a routing decision can be explained after the fact.
+
+Routing behaviour is pinned by tests across `internal/router`,
+`internal/autorouter` and `internal/strategy` (see
+[Testing and CI](#testing-and-ci)).
+
+## Provider catalog
+
+The catalog is data, and it is explicit about what each entry can do:
+
+| Metric | Count (audit 2026-11-21) |
+|---|---|
+| Active catalog entries | **610** (4 retired) |
+| With a base URL the router can call | **379** (370 routable + 9 template-only) |
+| Metadata-only (no base URL) | **231** |
+| Docs-verified | 65 |
+| By category | api-key 476 · oauth 31 · web-cookie 37 · search 21 · local 18 · audio 12 · no-auth 10 · cloud-agent 3 · upstream-proxy 2 |
+
+A catalog entry is a starting point, **not a promise**: nothing routes
+until you add the provider with your own key, and the router tests that
+key against the provider when you add it. Web-session-cookie providers
+are catalogued but refused as routing targets. The OAuth-category entries
+are classified honestly (see
+[Authentication and OAuth](#authentication-and-oauth)), and the numbers
+above are pinned by tests (`TestCatalogExecutableMatrixCounts`,
+`TestCategoryOAuthInventoryPinsTheTruth`).
+
+Evidence: [docs/catalog-audit-2026-11-21.md](docs/catalog-audit-2026-11-21.md),
+[docs/PROVIDER_AUTH_MATRIX.md](docs/PROVIDER_AUTH_MATRIX.md).
+
+## Authentication and OAuth
+
+Two identities, kept strictly apart: **your clients** authenticate to the
+gateway, and **the router** authenticates to providers.
+
+- **Gateway auth** — gateway keys (with scopes, IP allowlists, expiry),
+  plus OAuth/JWT clients for the gateway itself. One canonical
+  `principalFor` resolver extracts the credential once with documented
+  precedence (Bearer → `X-Api-Key` → `X-Goog-Api-Key` → `?key=` on
+  `/v1beta/` only), so conflicting headers can never mix identities, and
+  scope checks fail closed.
+- **Provider credentials** — stored locally and encrypted at rest; the
+  router mints and re-mints short-lived tokens where the provider
+  requires it.
+
+Provider account login, classified honestly:
+
+| Provider | Mechanism | Status |
+|---|---|---|
+| OpenRouter | OAuth PKCE, in-router (`codvian-router provider login openrouter`, `POST /admin/provider/login`); the exchanged key is live-tested and stored encrypted; further logins join the provider's key pool | Implemented |
+| Azure OpenAI | Microsoft Entra ID client credentials (`{tenant_id, client_id, client_secret}`); the router mints the Bearer token and re-mints it on expiry | Implemented |
+| Claude | Docs-verified endpoint with an `oauth-pkce` exchange description: you obtain the subscription token (`claude setup-token` or a PKCE client) and the router dials with it — **the router does not perform the login** | Supported with external login |
+| GitHub Copilot, ClinePass | Base URL known; no auth surface declared | Partially documented |
+| Other 28 `CategoryOAuth` entries | Metadata stubs (no base URL, no endpoints) | Metadata only |
+
+Interactive subscription sign-in (device code / browser cookie) is **not
+built**; those entries are not usable through a login. Details:
+[docs/PROVIDER_LOGIN.md](docs/PROVIDER_LOGIN.md).
+
+Provider-side flows implemented in-router: OpenRouter PKCE (above),
+Azure Entra ID client credentials, Vertex service-account JWT and Bedrock
+SigV4. All are deterministic-mock-tested; only the flows you configure
+with real keys touch the network.
+
+## API compatibility
+
+**350 registered routes** (183 GET · 118 POST · 22 DELETE · 22 PATCH ·
+5 PUT), tiered as 11 local-only, 58 always-protected and 281 management.
+The full list with request/response shapes is generated into
+[docs/API_REFERENCE.md](docs/API_REFERENCE.md) (regeneration is
+reproducible and checked).
+
+| Surface | Status |
+|---|---|
+| OpenAI Chat Completions (streaming, tools, JSON schema) | Implemented, tested |
+| OpenAI Responses | Implemented, tested |
+| OpenAI Models / Embeddings / Rerank | Implemented, tested |
+| Images (generations/edits), Audio (speech, transcription, translation) | Implemented; upstream tested against mocks |
+| Video, Music, Search, OCR passthrough | Implemented; upstream tested against mocks |
+| Anthropic Messages, Gemini `generateContent` | Implemented, tested (including streamed tool-call reassembly) |
+| Structured output | Tool schemas (`parametersJsonSchema`) mapped and tested; response-side `responseSchema`/`responseMimeType` is **rejected with the field named** rather than silently dropped |
+| Usage accounting, cancellation, retry semantics, error mapping | Implemented and tested per surface |
+
+**63 routes answer `501 feature_unavailable` on purpose** — settings that
+were stored but never applied (budget templates, management tokens, key
+pools, global IP filters, feature flags, CORS, stickiness, log
+destinations, and others). Each answer names the route to use instead
+when one exists. The list is `internal/server/unavailable_routes.go`.
+
+## Multimodal
+
+A modality is only listed as supported where the request layer, the
+router's endpoint projection and a provider wire exist together:
+
+| Modality / operation | State |
+|---|---|
+| Text in/out (chat, responses, tools, structured tool schemas) | Implemented, tested |
+| Embeddings, rerank | Implemented, tested |
+| Image generation/edit | Implemented, mock-tested upstream |
+| Audio in (transcription, translation), audio out (speech) | Implemented, mock-tested upstream |
+| Video, music, OCR, search | Implemented, mock-tested upstream |
+| Mixed-modality requests | Passed through per provider wire; per-provider capability is what the catalog declares |
+
+The endpoint→surface projection matrix (chat/messages/responses/gemini →
+chat; embeddings; rerank; images; audio ×3; search; ocr; video → videos;
+music) is pinned by tests, and an unknown endpoint kind fails loudly
+instead of degrading to chat.
+
+## Compression and context
+
+- Prompt compression from **lite to ultra**, plus **tool-output
+  compression**, with fidelity verification and a lossless fallback.
+- A worker pool exists for compression workloads with a deliberate
+  contract: it serves **background/evaluation work only** — request-path
+  parking is forbidden by design, so hot-path compression latency is
+  measured serially and honestly.
+- Token counting and budget estimation feed the budget and cost paths.
+- Compression savings are recorded per request in the ledger and
+  surfaced in the dashboard.
+
+## MCP and A2A
+
+**MCP: 32 tools** (3 built-in + 29 registered) over three transports:
+
+| Transport | Endpoint | Notes |
+|---|---|---|
+| stdio | MCP mode | for local agents |
+| SSE | `GET /api/mcp/sse` + `POST` | session-bound |
+| Streamable HTTP | `POST/GET/DELETE /api/mcp/stream` | full session lifecycle |
+
+Security model: gateway-key auth in a **disjoint `mcp:` scope namespace**
+(an `admin`, `chat` or `*` scope key is refused — no privilege
+escalation), per-key and per-IP rate limits that answer `429` with
+`Retry-After`, bounded crypto-random sessions (64 per transport, 16 per
+key, 5-minute idle eviction), session isolation, and fail-closed
+transport toggles that default to **off** (`503` until enabled). Covered
+by 27 dedicated transport tests plus the A2A suite.
+
+**A2A**: agent card discovery, task creation and persistence, status
+transitions, cancellation, streaming, owner-scoped task visibility, and
+background panic containment — a panicking worker is counted in
+`codvian_router_panics_total` and logged redacted, never silently
+swallowed.
+
+Agent setup is one command: `codvian-router setup codevn` (the CLI also
+supports `claude` and `continue`).
+
+## Security and guardrails
+
+- **Identity** — single canonical principal resolution, documented
+  precedence, conflicting credentials resolved safely, scope checks
+  fail-closed, per-key IP allowlists.
+- **Tenant isolation** — owner-scoped ledger reads; batch, file and
+  webhook ownership checks; IDOR tests on task and resource paths.
+- **SSRF** — the fetch surface resolves and validates targets (including
+  DNS-rebinding protection) before any request leaves the machine.
+- **Redaction** — secrets are redacted from logs and error paths, with
+  fuzz targets (`FuzzRedactPEMWholeBlock`, `FuzzStreamRedactorChunkSplits`)
+  running in CI.
+- **Prompt/PII guardrails** — prompt-injection checks, PII detection and
+  redaction, content filtering.
+- **Limits** — request body size limits, per-key and per-IP rate limits,
+  and disk quotas for the files API.
+- **Supply chain** — dependency vulnerability scanning (`govulncheck`),
+  SBOM generation, gitleaks secret scanning and a repository secret
+  scanner in CI; no competitor references in tracked content
+  (`scripts/check-naming.sh`).
+
+## Billing, budgets and quotas
+
+- Every request is costed and written to a local SQLite ledger (prompt,
+  completion, cached, reasoning and cache-write tokens; provider/model/key
+  attribution; errors; latency).
+- **Reserve before send, settle after**: a request reserves its estimated
+  spend, and the reservation is released exactly once per request —
+  idempotent by construction, so retries and re-opened streams cannot
+  double-charge.
+- **Per-key budgets** (calendar daily/weekly/monthly) and **rolling
+  5-hour budgets**, with strict/cheapest over-budget behaviour, plus
+  **quota pools** for keys that share a cap.
+- Unpriced models fail closed rather than being billed as free.
+- Async spend writers batch writes with bounded retry and honest
+  drop-after-retry accounting.
+- A forecast endpoint projects exhaustion from real 1h/24h spend and
+  request windows, kept consistent at exact-millisecond boundaries by a
+  dedicated regression test.
+
+## Cache and performance
+
+- **Exact-match cache** and **semantic cache** with tenant-scoped keys.
+- Request deduplication for identical concurrent work.
+- Connection pooling and bounded concurrency, with backpressure rather
+  than unbounded queues.
+
+Measured 2026-11-18 on a shared VM (1.5 shared vCPU) — a floor, not a
+boast; method and history in [docs/BENCHMARK.md](docs/BENCHMARK.md):
 
 | Metric | Measured | Target | Verdict |
 |---|---|---|---|
@@ -171,67 +347,204 @@ so treat these as a floor, not a boast. Full method and history:
 | Idle memory | 42.1 MiB | < 70 MiB | Met |
 | Ready to serve | ~435 / 565 ms | < 10 s | Met |
 
-The latency and throughput targets are the work ahead — they are printed
-here precisely because they are not met yet.
+An automatic regression gate (`cmd/bench-compare`) compares a fresh run
+against a committed baseline and reports an honest `SKIP` when no
+comparable baseline exists.
 
-## Where it runs
+## Observability
 
-| Method | Status |
-|---|---|
-| Build from source (`go build`) | Works today |
-| Background gateway (`codvian-router restart`, `tray`) | Works today (supervised child process) |
-| Docker | `Dockerfile` and `docker-compose.yml` in the repo; no published image yet |
-| System service (systemd / launchd / Windows service) | Not supported yet (`POST /admin/service/install` answers 501) |
-| npm install | Not published |
-| Install script / prebuilt binaries | Files exist; no release published yet |
+- **Structured logs** (text or JSON) with request ids; provider, model,
+  key, outcome and latency on every request line.
+- **Metrics** covering requests, tokens, cost, cache hits, compression
+  savings, cooldowns, quota events, panics and rate-limit decisions.
+- **Tracing is honest about itself**: the default build compiles tracing
+  as a zero-cost no-op (pinned by tests — spans never record and no
+  fabricated `traceparent` is emitted); the recording tracer is behind an
+  explicit `-tags otel` build with its own tests.
+- **Decision visibility**: candidate selection and exclusion reasons are
+  recorded so a failed or surprising routing decision can be explained.
+- Everything is local; no external collector is required or contacted.
 
-Requires Go 1.26+ to build. Runs on Linux, macOS, and Windows.
+## Dashboard
+
+A local dashboard at `http://127.0.0.1:20128/dashboard` covers providers,
+models, keys, usage and forecasts, budgets, logs, health, resilience
+state, webhooks, verifications, MCP/A2A controls and routing
+configuration. Every view is wired to a live endpoint — a static audit
+(`scripts/audit-fake.sh`) fails the build if a control without a working
+backend is reintroduced. The UI uses native interactive elements with
+`:focus-visible` focus styling, modal focus trapping and
+Escape-to-close.
+
+> The latest UI has **not** been manually reviewed by the owner; treat the
+> dashboard as functionally wired and test-covered, not visually
+> acceptance-tested.
+
+## Installation
+
+```bash
+# From source (Go 1.27.4 toolchain)
+git clone https://github.com/raunakiitp/CodvianRouter.git
+cd CodvianRouter
+go build -o codvian-router ./cmd/codvian-router
+```
+
+Docker images build from the repository's Dockerfiles, with every base
+image pinned by registry digest. Published binaries and an npm package do
+not exist yet. Full guide: [docs/INSTALL.md](docs/INSTALL.md).
+
+## Quick start
+
+```bash
+./codvian-router init          # creates config + a gateway key (shown once — save it)
+./codvian-router serve         # http://127.0.0.1:20128
+```
+
+Then list models through the router:
+
+```bash
+curl http://127.0.0.1:20128/v1/models \
+  -H "Authorization: Bearer ***"
+```
+
+Prefer a guided first run? `./codvian-router init --wizard` walks through
+provider → key → model → a real test call, every step skippable. Verify a
+running gateway with `./codvian-router doctor`.
+
+## Configuration
+
+Config is a single JSON file (default under your user profile; override
+with `--config`). The pieces you will actually touch:
+
+```jsonc
+{
+  "routing": {
+    "global_strategy": "cheapest",   // any of the 40 strategies
+    "combos": { /* named strategy chains */ }
+  },
+  "gateway_keys": [ /* keys with scopes, IP allowlists, budgets */ ],
+  "providers": [ /* each entry: provider id, base URL, your key */ ]
+}
+```
+
+Settings that exist but are not honoured answer `501` instead of silently
+doing nothing. Route-by-route reference:
+[docs/API_REFERENCE.md](docs/API_REFERENCE.md).
+
+## Provider setup examples
+
+```bash
+# OpenAI-compatible provider with your own key
+./codvian-router providers add --id openai --key sk-…
+
+# OpenRouter account login (OAuth PKCE) — key live-tested, stored encrypted
+./codvian-router provider login openrouter
+
+# Azure OpenAI via Microsoft Entra ID client credentials
+#   store {"tenant_id": "...", "client_id": "...", "client_secret": "..."} as the key
+
+# Claude: obtain the subscription token yourself, then let the router dial with it
+claude setup-token
+```
+
+Browse what the catalog offers with `./codvian-router catalog`.
+
+## CLI commands
+
+27 subcommands, including `serve`, `init`, `run`, `doctor`, `tray`,
+`restart`, `stop`, `status`, `provider`/`providers`, `catalog`, `key`,
+`eval`, `setup` and `release`, plus maintenance helpers.
+`./codvian-router --help` lists them all with usage; the guided wizard and
+`doctor` are the two commands worth knowing first.
+
+## Docker and deployment
+
+- `Dockerfile` and `Dockerfile.release` pin every base image by `@sha256`
+  digest (enforced by `scripts/ci.sh`).
+- The container healthcheck hits `GET /healthz` (unauthenticated, 2s
+  timeout); `/readyz` performs a dependency check so orchestration can
+  tell "process up" from "ready to serve".
+- Graceful shutdown drains in-flight work; `restart`/`tray` manage a
+  supervised child process.
+- System-service installation (systemd / launchd / Windows service) is
+  **not** supported yet and answers `501`.
+
+## Testing and CI
+
+- **55 packages with tests** (of 57 packages), **5,039 test functions**,
+  **2 fuzz targets**; `go test ./...` is green on Windows and Linux.
+- Real-provider tests are separated from mock upstreams: provider wires
+  (Anthropic, Gemini, Vertex, Bedrock, Cohere, audio, images, video,
+  music) are tested against deterministic mock upstreams, and this README
+  says so rather than implying live verification.
+- GitHub Actions runs on every push: `ci` (build, vet, test, gofmt, route
+  guards, secrets), `windows`, `secret-scan` (gitleaks), `fuzz` (30 s per
+  target), `redis` (live-Redis cache test), `playwright` and
+  `client-smoke` (browser/CLI smoke), `bench-smoke`, `sbom-and-vuln`,
+  `supply-chain`.
+- Local gates: `scripts/ci.sh` runs the same battery on your machine.
 
 ## Feature status
 
 | Status | What it covers |
 |---|---|
-| Implemented and verified (tests + local run) | OpenAI-compatible chat, models, embeddings, rerank, Responses API; routing strategies and combos; failover, hedging, health checks; exact and semantic cache; compression; ledger, cost tracking, per-key budgets and quota pools; guardrails; gateway keys and OAuth/JWT clients; `/admin/restart` (graceful relaunch); `/admin/update` (release check only); SSRF-safe `/v1/web/fetch`; OpenRouter OAuth PKCE account login and Azure Entra ID client-credentials auth (deterministic mock auth-host/upstream tests — see the auth matrix for evidence tiers) |
-| Implemented, not verified against a real provider in this repo's checks | Provider-specific wires (Anthropic, Gemini, Vertex, Bedrock, Cohere), audio, images, video and music passthroughs. They are tested against mock upstreams |
-| Metadata only | Catalog entries without a base URL (231), web-cookie entries, and subscription OAuth entries that need an unbuilt sign-in flow |
-| Unsupported or deferred (`501 feature_unavailable`) | System service install, dynamic plugin loading, and 61 dashboard settings routes whose values were never applied (budget templates, management tokens, key pools, global IP filter, feature flags, CORS, stickiness, log destinations, and others). Each 501 names the route to use instead when one exists. The full list is `internal/server/unavailable_routes.go` |
+| Implemented and verified (tests + local run) | OpenAI-compatible chat, models, embeddings, rerank, Responses; the 40 routing strategies and combos; failover, hedging, health checks, cooldowns; exact and semantic cache; compression; ledger, cost tracking, reservations, per-key budgets and quota pools; guardrails; gateway keys and OAuth/JWT clients; `/admin/restart` (real relaunch); `/admin/update` (release check only); SSRF-safe `/v1/web/fetch`; OpenRouter OAuth PKCE and Azure Entra ID login (deterministic mock auth-host tests — see the auth matrix for evidence tiers) |
+| Implemented, mock-tested upstream | Provider-specific wires (Anthropic, Gemini, Vertex, Bedrock, Cohere), audio, images, video, music, OCR and search passthroughs |
+| Supported with external login | Claude — you obtain the subscription token; the router dials with it and does not perform the login |
+| Metadata only | 231 catalog entries without a base URL, web-cookie entries, and subscription-OAuth entries that would need an unbuilt sign-in flow |
+| Unsupported or deferred (`501 feature_unavailable`) | System service install, dynamic plugin loading, and 63 dashboard-era routes whose settings were never applied |
 
-`scripts/audit-fake.sh` checks this contract statically and fails if a
-known fake (canned success text, fixed metrics, an undocumented 501) comes
-back.
+`scripts/audit-fake.sh` enforces this contract statically: a canned
+success, a fixed metric or an undocumented `501` fails the audit.
 
-## What's new
+## Known limitations
 
-- **21 Nov 2026 — Phase 0 cleanup.** Removed fabricated endpoints (a canned
-  "SystemOne" reply, fixed video "drilldown" metrics, a static voice list),
-  fixed a DNS-rebinding hole in `/v1/web/fetch`, made `/admin/restart` a
-  real relaunch and `/admin/update` a real release check, and turned 61
-  settings routes that stored values nothing read into honest
-  `501 feature_unavailable` answers.
-- **On GitHub.** The first build blocks are merged to `main`
-  ([PR #2](https://github.com/raunakiitp/CodvianRouter/pull/2)).
+- **WS3 batch re-queue is intentionally not implemented.** Interrupted
+  batches are marked failed on recovery and deliberately not re-run; safe
+  automatic re-queue needs durable per-row served/failed accounting to
+  avoid duplicate provider charges. Recovery is client-side: read
+  `output_file_id` (succeeded) + `error_file_id` (failed), correct the
+  input, submit a new batch.
+- Added latency and throughput targets are **not met** (see
+  [Cache and performance](#cache-and-performance)).
+- 231 catalog entries are metadata only; interactive subscription sign-in
+  (device code / browser cookie) is not built.
+- Dynamic (loadable) plugins are not supported; built-in capabilities are
+  compiled in.
+- The latest dashboard UI has not had a manual owner review.
+- No published release, binary or npm package yet.
 
-## Documentation
+## Next steps
 
-| Doc | What it is |
-|---|---|
-| [docs/INSTALL.md](docs/INSTALL.md) | Install, verify, troubleshoot |
-| [docs/BENCHMARK.md](docs/BENCHMARK.md) | How speed is measured, and every result |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the router is put together |
-| [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | The API, endpoint by endpoint |
-| [CHANGELOG.md](CHANGELOG.md) | What changed, release by release |
-| [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) | What "ready to release" means here |
+Proposed, pending owner approval — not commitments:
+
+1. Close the latency/throughput gap on a dedicated benchmark rig rather
+   than a shared VM.
+2. Design durable per-row batch accounting, the prerequisite for any safe
+   re-queue.
+3. Owner review of the dashboard UI.
 
 ## Contributing
 
 Issues and pull requests are welcome. The bar is high on purpose: every
-change needs a test that fails without it, and the full gate must stay green.
-Check the internal tracker before adding a feature — if it
-says the feature is missing, that's the queue.
+change needs a test that fails without it, and the full gate must stay
+green. Check [Known limitations](#known-limitations) before adding a
+feature — if it is listed there, that is the queue.
 
-## License
+## License and links
 
 MIT — © Codvian. See [LICENSE](LICENSE).
+
+| Doc | What it is |
+|---|---|
+| [docs/INSTALL.md](docs/INSTALL.md) | Install, verify, troubleshoot |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the router is put together |
+| [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | Every route, generated from the guard table |
+| [docs/PROVIDER_LOGIN.md](docs/PROVIDER_LOGIN.md) | Provider account login flows |
+| [docs/PROVIDER_AUTH_MATRIX.md](docs/PROVIDER_AUTH_MATRIX.md) | Per-provider auth evidence tiers |
+| [docs/BENCHMARK.md](docs/BENCHMARK.md) | How speed is measured, and every result |
+| [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md) | What "ready to release" means here |
+| [CHANGELOG.md](CHANGELOG.md) | What changed, release by release |
 
 ---
 

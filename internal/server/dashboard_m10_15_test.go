@@ -423,7 +423,7 @@ func TestDashboardM10_15EmptyLedgerIsHonest(t *testing.T) {
 // nulls ("No data yet"), never zeros.
 func TestDashboardM10_15PureHelpersUnderNode(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not on PATH — cannot run the inline-script check")
+		t.Fatal("node not on PATH — cannot run the inline-script check (install node or set NODE_PATH)")
 	}
 	setup, srv := m10_15AdminSetup(t)
 	seedAnalyticsRows(t, setup)
@@ -725,7 +725,7 @@ func TestDashboardM10_15CutCommentIsAccurate(t *testing.T) {
 // the cards read "No data yet".
 func TestDashboardM10_15LivePillAfterLoad(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not on PATH — cannot run the render driver")
+		t.Fatal("node not on PATH — cannot run the render driver (install node or set NODE_PATH)")
 	}
 	setup, srv := m10_15AdminSetup(t)
 	seedAnalyticsRows(t, setup)

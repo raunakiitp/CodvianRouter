@@ -13,7 +13,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
+	"github.com/raunakiitp/codvian-router/internal/compress"
 	"github.com/raunakiitp/codvian-router/internal/compress/evalharness"
 )
 
@@ -51,10 +53,22 @@ func runCompressionOut(args []string, out, errOut io.Writer) int {
 		return 2
 	}
 
+	// P2-CMP-002 integration: the compression pool drains the
+	// fidelity evaluations off the calling goroutine — background
+	// quality work that may wait, the pool's documented purpose.
+	// The bounded queue applies backpressure; Shutdown (deferred)
+	// stops the workers deterministically. Latency measurement
+	// stays serial inside RunBenchmark in both paths, so the
+	// report is identical to the serial run.
+	pool := compress.NewCompressionPool(compress.PoolConfig{})
+	defer pool.Shutdown()
+
 	report, err := evalharness.RunBenchmark(evalharness.Options{
-		Model:   *model,
-		Cases:   cases,
-		Repeats: *repeats,
+		Model:      *model,
+		Cases:      cases,
+		Repeats:    *repeats,
+		Pool:       pool,
+		JobTimeout: 5 * time.Minute,
 	})
 	if err != nil {
 		fmt.Fprintf(errOut, "codvian-bench compression: measurement failed: %v\n", err)

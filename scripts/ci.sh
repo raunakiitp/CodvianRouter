@@ -59,7 +59,12 @@ echo ""
 
 # --- 2-4. build, vet, test. ---
 run_step "go build ./..." go build ./...
+run_step "scripts/check-secrets.sh" bash scripts/check-secrets.sh
 run_step "go vet ./..." go vet ./...
+# AUD-TEST-008 / P2-TEST-06: the spawn-capable route classification gate
+# existed as a script but no CI job ran it. It is a real gate (the table
+# must classify every spawn-capable route LOCAL_ONLY), so CI runs it.
+run_step "scripts/check-route-guard.sh" sh scripts/check-route-guard.sh
 
 # --- otel build tag (AUD-TEST-002): the tagged sources only compile with
 # -tags otel, and nothing in CI ever built them.
@@ -91,18 +96,44 @@ else
 fi
 echo ""
 
+# --- P2-DEPLOY-02: Docker FROM digest pinning check ---
+# Reject any FROM line without a @sha256: digest so container images
+# are reproducible and verifiable. Keep the tag as a comment for readability.
+echo "== docker FROM digest pinning =="
+DOCKER_FROM_OK=1
+while IFS= read -r df; do
+  if [ -f "$df" ]; then
+    while IFS= read -r line; do
+      case "$line" in
+        FROM*)
+          case "$line" in
+            *@sha256:*) ;;
+            *)
+              echo "FAIL: $df: unpinned FROM: $line"
+              DOCKER_FROM_OK=0
+              ;;
+          esac
+          ;;
+      esac
+    done < "$df"
+  fi
+done < <(printf '%s\n' "Dockerfile" "Dockerfile.release")
+if [ "$DOCKER_FROM_OK" -eq 1 ]; then
+  echo "PASS: docker FROM digest pinning (both Dockerfiles use @sha256: digests)"
+else
+  echo "FAIL: docker FROM digest pinning"
+  FAILURES=$((FAILURES + 1))
+fi
+echo ""
+
+# --- Benchmark smoke (one iteration each, no unit tests).
+# P2-TEST-01: benchmarks must execute in CI, not merely compile.
+run_step "go test -bench=. -benchtime=1x -run=^\\$ ./... (bench-smoke)" \
+  go test -bench=. -benchtime=1x -run='^$' ./...
+
 # go test writes its own per-package output; the PASS/FAIL line
 # above is the gate verdict for the whole suite.
 run_step "go test ./... -race -count=1" go test ./... -race -count=1
-
-# --- Optional: benchmark smoke (one iteration each, no unit tests). ---
-if [ "${CI_BENCH_SMOKE:-0}" = "1" ]; then
-  run_step "go test -bench=. -benchtime=1x -run=^\$ ./... (smoke)" \
-    go test -bench=. -benchtime=1x -run='^$' ./...
-else
-  echo "SKIP: bench-smoke (set CI_BENCH_SMOKE=1 to run go test -bench=. -benchtime=1x)"
-  echo ""
-fi
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "CI: PASS"

@@ -11,6 +11,16 @@
   },
   {
     "method": "GET",
+    "path": "/readyz",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Readiness probe \u2014 dependency checks, no data, no auth (AUD-CFG-004).",
+    "auth_exempt": true,
+    "scopes": [],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
     "path": "/dashboard",
     "tier": "MANAGEMENT",
     "spawn_capable": false,

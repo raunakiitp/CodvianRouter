@@ -93,6 +93,11 @@ type oauthConnStore struct {
 	mu    sync.Mutex
 	vault *crypto.Vault // nil = in-memory only
 	conns map[string]*oauthConn
+
+	// client, when non-nil, is used for the provider token exchange
+	// instead of the SSRF-guarded egress client. It exists so tests can
+	// target a local server; production always uses the guarded client.
+	client *http.Client
 }
 
 func newOAuthConnStore(vault *crypto.Vault) *oauthConnStore {
@@ -100,6 +105,27 @@ func newOAuthConnStore(vault *crypto.Vault) *oauthConnStore {
 		vault: vault,
 		conns: make(map[string]*oauthConn),
 	}
+}
+
+// oauthTokenClient returns the HTTP client for the provider token
+// exchange. It is the SSRF-guarded egress client (internal/egress),
+// never http.DefaultClient: a token endpoint URL comes from provider
+// metadata, and the egress guard (validated-IP dialing, no proxy, no
+// second DNS resolution) is the control that constrains where an
+// operator-configured provider can send the exchange.
+//
+// maxRedirects is 0 on purpose: the guard then returns the 3xx to the
+// caller instead of following it, so a redirect cannot move the
+// POST body (which carries client_secret and the authorization code)
+// to a different host.
+func (s *oauthConnStore) oauthTokenClient() *http.Client {
+	s.mu.Lock()
+	c := s.client
+	s.mu.Unlock()
+	if c != nil {
+		return c
+	}
+	return defaultEgressGuard().Client(30*time.Second, 0, nil)
 }
 
 // StartAuth generates a random state and returns the provider
@@ -169,7 +195,9 @@ func (s *oauthConnStore) CompleteAuth(providerID, code, redirectURI string) erro
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	// The exchange goes through the SSRF-guarded egress client — never
+	// http.DefaultClient (audit finding AUD-SEC-005).
+	resp, err := s.oauthTokenClient().Do(req)
 	if err != nil {
 		return fmt.Errorf("oauth: token exchange: %w", err)
 	}

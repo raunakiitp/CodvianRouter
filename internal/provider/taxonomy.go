@@ -52,6 +52,11 @@ const (
 	EndpointMessages EndpointKind = "messages"
 	// EndpointResponses is POST /v1/responses.
 	EndpointResponses EndpointKind = "responses"
+	// EndpointGeminiGenerateContent is POST /v1beta/models/{model}:generateContent
+	// (Gemini native surface). It maps to the chat surface for routing
+	// purposes but carries its own kind so Gemini spend rows are
+	// attributable separately from chat completions in analytics.
+	EndpointGeminiGenerateContent EndpointKind = "gemini_generate_content"
 	// EndpointEmbeddings is POST /v1/embeddings.
 	EndpointEmbeddings EndpointKind = "embeddings"
 	// EndpointImages is POST /v1/images (generations/edits).

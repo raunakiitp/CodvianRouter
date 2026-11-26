@@ -173,7 +173,7 @@ func SkillDescriptors() []SkillDescriptor {
 	return out
 }
 
-// SkillSource is the MINIMAL live router state the six skills
+// SkillSource is the MINIMAL live router state the twelve skills
 // need — exactly the methods they call, no more. Every method
 // has the same signature as the corresponding mcp.Source method
 // and returns mcp's own result types, so any mcp.Source

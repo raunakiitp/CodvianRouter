@@ -5306,7 +5306,16 @@ func runServe(opts options) int {
 	// delivered best-effort to subscribed endpoints with no secret or
 	// payload content in the body.
 	st.engine.SetBreakerEvents(srv.BreakerEventsWire())
-	httpSrv := &http.Server{Addr: st.listen, Handler: srv}
+	httpSrv := &http.Server{
+		Addr:              st.listen,
+		Handler:           srv,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1 MiB
+		// WriteTimeout deliberately 0: SSE streams must not be
+		// killed by a write deadline (P2-CAP-001).
+	}
 	// The listener is created explicitly (instead of
 	// ListenAndServe) so it can be wrapped with
 	// server.NoDelayListener: TCP_NODELAY is set on every

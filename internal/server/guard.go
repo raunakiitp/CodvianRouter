@@ -94,6 +94,7 @@ type GuardRoute struct {
 // register() panics if a route has no entry.
 var guardRouteTable = []GuardRoute{
 	{Method: "GET", Path: "/healthz", Tier: TierManagement, Description: "Liveness probe — no data, no auth.", AuthExempt: true},
+	{Method: "GET", Path: "/readyz", Tier: TierManagement, Description: "Readiness probe — dependency checks, no data, no auth (AUD-CFG-004).", AuthExempt: true},
 	{Method: "GET", Path: "/dashboard", Tier: TierManagement, Description: "Static dashboard UI — no live data of its own.", AuthExempt: true},
 	// B3-04 dashboard operator login: the login surface itself.
 	// These four routes are classified TierManagement with the
@@ -778,13 +779,11 @@ func (s *Server) register(mux *http.ServeMux, method, path string, handler http.
 	case TierManagement:
 		if !route.AuthExempt {
 			h = s.requireAuthUnlessRelaxed(scoped)
-		} else if strings.HasPrefix(path, "/dashboard/") {
+		} else if isSessionGatedFeed(path) {
 			// B3-04 feed gate: once an operator password is set,
-			// the read-only dashboard feeds require a session (or
-			// a gateway key) — requireLogin. With no password set
-			// the feeds stay open exactly as today. GET /dashboard
-			// itself is the bare path, not the prefix, so the
-			// static shell (with its login overlay) stays open.
+			// the read-only dashboard/API feeds require a session
+			// (or a gateway key). With no password set the feeds
+			// stay open exactly as today.
 			h = s.requireDashboardSession(scoped)
 		}
 	}
@@ -797,7 +796,29 @@ func (s *Server) register(mux *http.ServeMux, method, path string, handler http.
 }
 
 // ---------------------------------------------------------------------------
-// Guard status feed (GET /dashboard/guard).
+// isSessionGatedFeed reports whether an AuthExempt management route should
+// still require a dashboard session (or a gateway key) when an operator
+// password is set. The truly public endpoints (healthz, well-known, OAuth,
+// OpenAPI spec, the bare /dashboard shell) stay open; every other read-only
+// feed that exposes operator data is gated.
+// P2-IDENT-002: exempt feeds outside /dashboard/ are no longer silently
+// open — they join the B3-04 feed gate.
+func isSessionGatedFeed(path string) bool {
+	// Dashboard feeds (all /dashboard/* except the bare /dashboard path).
+	if strings.HasPrefix(path, "/dashboard/") {
+		return true
+	}
+	// Operator-data API feeds outside /dashboard/.
+	switch path {
+	case "/api/providers", "/api/capabilities",
+		"/api/providers/{id}/capabilities", "/api/catalog",
+		"/api/cache/stats", "/api/telemetry/model-latency-stats",
+		"/api/pricing", "/api/mcp/audit", "/api/mcp/status":
+		return true
+	}
+	return false
+}
+
 // ---------------------------------------------------------------------------
 
 // guardTierView is one tier as the dashboard renders it.
@@ -813,6 +834,11 @@ type guardStatus struct {
 	BootstrapPending     bool   `json:"bootstrap_pending"`
 	AuthRelaxed          bool   `json:"auth_relaxed"`
 	LocalOnlyDenials     uint64 `json:"local_only_denials"`
+	// ScopeEnforcement reports whether the configured verifier can name
+	// scopes (P2-IDENT-003). StaticKeyVerifier deployments now implement
+	// ScopeVerifier (returning empty scopes) so requireScope fails closed;
+	// verifiers without KeyScopes cannot enforce per-key policy.
+	ScopeEnforcement bool `json:"scope_enforcement"`
 	// SecurityRefusals counts security refusals since this
 	// process started, by reason label (CHECKLIST 246): a
 	// client Vertex override rejected, a write naming an
@@ -868,6 +894,7 @@ func (s *Server) handleGuard(w http.ResponseWriter, r *http.Request) {
 		BootstrapPending:     s.bootstrapPending.Load(),
 		AuthRelaxed:          s.authRelaxed,
 		LocalOnlyDenials:     s.localOnlyDenials.Load(),
+		ScopeEnforcement:     s.verifier != nil,
 		SecurityRefusals:     s.guardrails.Stats().SecurityRefusals,
 		Listen:               listen,
 	}})

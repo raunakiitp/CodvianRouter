@@ -26,6 +26,7 @@ package evalharness
 // what the determinism test compares byte-for-byte.
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -105,6 +106,21 @@ type Options struct {
 	// Values < 1 are treated as 1. Latency is informational: it is
 	// excluded from JSONStable and never affects Pass.
 	Repeats int
+	// Pool, when set, runs the per-(case, engine) fidelity
+	// evaluations OFF the calling goroutine on the bounded worker
+	// pool (P2-CMP-002 integration): the harness is background
+	// quality work that may wait, exactly the pool's documented
+	// purpose — a request that needs its compressed prompt now
+	// must not be parked behind a queue, and nothing here does.
+	// The pool's bounded queue provides backpressure (Submit
+	// blocks until space frees), and a nil Pool selects the
+	// original serial path — same report, no pool dependency.
+	// LATENCY MEASUREMENT STAYS SERIAL even with a pool: parallel
+	// workers measuring wall-clock latency inflate each other's
+	// numbers under CPU contention, so the samples would lie.
+	Pool *compress.CompressionPool
+	// JobTimeout bounds one pooled evaluation (0 = pool default).
+	JobTimeout time.Duration
 }
 
 // RunBenchmark runs both engines over every case, measures tokens,
@@ -128,13 +144,44 @@ func RunBenchmark(opts Options) (*Report, error) {
 	}
 	seenThresholds := map[string]bool{}
 
-	for _, c := range opts.Cases {
-		cr := CaseReport{Name: c.Name, Category: c.Category}
-		for _, eng := range []Engine{EngineLossless, EngineLossy} {
-			er, err := runBenchmarkOne(model, c, eng, repeats)
-			if err != nil {
-				return report, fmt.Errorf("case %s engine %s: %w", c.Name, eng, err)
+	// Evaluate every (case, engine) pair — through the pool when one
+	// is wired (bounded parallelism, backpressure via the pool's
+	// bounded queue), serially otherwise. results[case][engine].
+	engines := []Engine{EngineLossless, EngineLossy}
+	results := make([][]evalResult, len(opts.Cases))
+	for i := range results {
+		results[i] = make([]evalResult, len(engines))
+	}
+	if opts.Pool != nil {
+		if err := evalPooled(model, opts, engines, results); err != nil {
+			return report, err
+		}
+	} else {
+		for ci, c := range opts.Cases {
+			for ei, eng := range engines {
+				er, err := runBenchmarkEval(model, c, eng)
+				results[ci][ei] = evalResult{er: er, err: err}
 			}
+		}
+	}
+
+	for ci, c := range opts.Cases {
+		cr := CaseReport{Name: c.Name, Category: c.Category}
+		for ei, eng := range engines {
+			res := results[ci][ei]
+			if res.err != nil {
+				return report, fmt.Errorf("case %s engine %s: %w", c.Name, eng, res.err)
+			}
+			// Latency stays SERIAL in both paths (measurement
+			// integrity): parallel workers measuring wall-clock
+			// latency inflate each other's samples under CPU
+			// contention.
+			er := res.er
+			budget := 0
+			if eng == EngineLossy {
+				budget = c.LossyBudget
+			}
+			er.Latency = measureLatency(model, c, eng, budget, repeats)
 			th := ThresholdsForCase(eng, c.Category)
 			key := string(eng) + "|" + c.Category
 			if !seenThresholds[key] {
@@ -172,7 +219,66 @@ func RunBenchmark(opts Options) (*Report, error) {
 	return report, nil
 }
 
-func runBenchmarkOne(model string, c Case, eng Engine, repeats int) (EngineReport, error) {
+// evalResult carries one (case, engine) evaluation between the
+// evaluation phase and the report assembly.
+type evalResult struct {
+	er  EngineReport
+	err error
+}
+
+// evalPooled runs every (case, engine) fidelity evaluation on the
+// pool (P2-CMP-002): all jobs are submitted up-front so the pool's
+// bounded workers drain them with backpressure (Submit blocks while
+// the bounded queue is full), then the futures are collected IN
+// ORDER so the report is identical to the serial path. Each job
+// writes exactly its own results slot — no shared mutable state
+// beyond the slot, and nothing is read until every future has
+// resolved. A job whose Run returns an error resolves the future
+// with that error; a context end or pool shutdown abandons the wait
+// and fails the benchmark honestly (never silently drops cases).
+func evalPooled(model string, opts Options, engines []Engine, results [][]evalResult) error {
+	ctx := context.Background()
+	type slot struct {
+		ci, ei int
+		c      Case
+		eng    Engine
+	}
+	var slots []slot
+	var futures []*compress.CompressionFuture
+	for ci := range opts.Cases {
+		for ei, eng := range engines {
+			s := slot{ci: ci, ei: ei, c: opts.Cases[ci], eng: eng}
+			slots = append(slots, s)
+			futures = append(futures, opts.Pool.Submit(ctx, compress.CompressionJob{
+				Timeout: opts.JobTimeout,
+				Run: func(ctx context.Context, msgs []provider.Message, cfg compress.StackedConfig) (compress.StackedResult, error) {
+					er, err := runBenchmarkEval(model, s.c, s.eng)
+					results[s.ci][s.ei] = evalResult{er: er, err: err}
+					// The StackedResult shape is not what this
+					// job produces; the slot above carries the
+					// real outcome, and the error rides the
+					// future so a failing job still surfaces.
+					return compress.StackedResult{}, err
+				},
+			}))
+		}
+	}
+	for i, f := range futures {
+		r, err := f.WaitContext(ctx)
+		if err != nil {
+			return fmt.Errorf("pooled eval case %s: %w", slots[i].c.Name, err)
+		}
+		if r.Err != nil {
+			return fmt.Errorf("case %s engine %s: %w", slots[i].c.Name, slots[i].eng, r.Err)
+		}
+	}
+	return nil
+}
+
+// runBenchmarkEval is runBenchmarkOne without the latency samples:
+// the fidelity/token evaluation runs pooled or serial; latency is
+// measured serially afterwards in both paths (see RunBenchmark).
+func runBenchmarkEval(model string, c Case, eng Engine) (EngineReport, error) {
 	lossless := true
 	req := &provider.CompressionRequest{Lossless: &lossless}
 	budget := 0
@@ -227,7 +333,6 @@ func runBenchmarkOne(model string, c Case, eng Engine, repeats int) (EngineRepor
 		}
 	}
 	er.Fidelity = MeasureFidelity(eng, c.Messages, compressed)
-	er.Latency = measureLatency(model, c, eng, budget, repeats)
 	return er, nil
 }
 

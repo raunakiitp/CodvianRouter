@@ -147,6 +147,11 @@ func noRetryBackoff(t *testing.T) {
 	orig := webhookRetryBackoff
 	webhookRetryBackoff = func(int) time.Duration { return 0 }
 	t.Cleanup(func() { webhookRetryBackoff = orig })
+	// AUD-REL-007 tests also shrink the Retry-After cap: a real
+	// hint of 120s must not outlive the test window.
+	origCap := webhookRetryAfterCap
+	webhookRetryAfterCap = 0
+	t.Cleanup(func() { webhookRetryAfterCap = origCap })
 }
 
 // waitForAttempts polls until the server has seen n attempts
@@ -254,6 +259,86 @@ func TestDispatcherRetriesTransportError(t *testing.T) {
 	d := New([]Endpoint{{ID: "resetting", URL: srv.URL, Events: []string{QuotaExceededEvent}}}, srv.Client(), nil)
 	d.Notify(QuotaExceededEvent, map[string]any{"reason": "budget"})
 	waitForAttempts(t, &mu, &attempts, 4)
+}
+
+// AUD-REL-007: 429 is retryable, not terminal. A rate-limited
+// endpoint is asking for slower traffic, not rejecting the payload.
+func TestDispatcherRetries429(t *testing.T) {
+	noRetryBackoff(t)
+	var mu sync.Mutex
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		attempts++
+		at := attempts
+		mu.Unlock()
+		if at <= 3 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	d := New([]Endpoint{{ID: "limited", URL: srv.URL, Events: []string{QuotaExceededEvent}}}, srv.Client(), nil)
+	d.Notify(QuotaExceededEvent, map[string]any{"reason": "budget"})
+	// Three 429s are retried; the fourth attempt succeeds.
+	waitForAttempts(t, &mu, &attempts, 4)
+}
+
+// AUD-REL-007: Retry-After delta-seconds replaces the exponential
+// backoff for a 429. The delay is observable via the dispatch log;
+// the functional assertion is that the retries still happen and
+// honor the attempt budget.
+func TestDispatcherRetries429HonorsRetryAfter(t *testing.T) {
+	noRetryBackoff(t)
+	var mu sync.Mutex
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		attempts++
+		mu.Unlock()
+		w.Header().Set("Retry-After", "120") // delta-seconds form
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+	d := New([]Endpoint{{ID: "hinted", URL: srv.URL, Events: []string{QuotaExceededEvent}}}, srv.Client(), nil)
+	d.Notify(QuotaExceededEvent, map[string]any{"reason": "budget"})
+	waitForAttempts(t, &mu, &attempts, 4)
+}
+
+// webhookRetryAfter unit tests: both RFC 7231 forms, invalid input,
+// past dates, negative deltas, and the webhookRetryAfterCap.
+func TestWebhookRetryAfterParsing(t *testing.T) {
+	now := time.Date(2026, 11, 26, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name string
+		h    string
+		want time.Duration
+	}{
+		{"empty", "", 0},
+		{"whitespace-only", "   ", 0},
+		{"delta seconds", "30", 30 * time.Second},
+		{"delta zero", "0", 0},
+		{"delta negative", "-5", 0},
+		{"delta huge capped", "86400", webhookRetryAfterCap},
+		{"invalid number", "abc", 0},
+		{"http-date future", now.Add(90 * time.Second).Format(http.TimeFormat), webhookRetryAfterCap},
+		{"http-date past", now.Add(-time.Second).Format(http.TimeFormat), 0},
+		{"garbage", "soon", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := webhookRetryAfter(tc.h, now)
+			if got != tc.want {
+				t.Errorf("webhookRetryAfter(%q) = %v, want %v", tc.h, got, tc.want)
+			}
+		})
+	}
+	// Uncapped future date inside the cap window.
+	got := webhookRetryAfter("45", now)
+	if got != 45*time.Second {
+		t.Errorf("webhookRetryAfter(\"45\") = %v, want 45s", got)
+	}
 }
 
 // panicTransport panics inside RoundTrip, exercising the delivery

@@ -413,7 +413,7 @@ func TestDashboardM10_10MemoryOnlySavingsNote(t *testing.T) {
 // with fixture data.
 func TestDashboardM10_10PureHelpersUnderNode(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not on PATH — cannot run the inline-script check")
+		t.Fatal("node not on PATH — cannot run the inline-script check (install node or set NODE_PATH)")
 	}
 	srv := newTestServer(t, &fakeEngine{})
 	rec := doReq(t, srv, http.MethodGet, "/dashboard", "", "")

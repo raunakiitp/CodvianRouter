@@ -2,6 +2,7 @@ package cataudit
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -207,7 +208,30 @@ func TestProbeReachability(t *testing.T) {
 	deadURL := closed.URL
 	closed.Close()
 
-	probes := ProbeReachability(context.Background(), []string{srv.URL, deadURL, "http://nonexistent.invalid"}, nil, 4, 5*time.Second)
+	// AUD-TEST determinism: the third probe is a HOSTNAME that must
+	// fail DNS resolution. The old test relied on the environment's
+	// resolver for `nonexistent.invalid` — offline/sandboxed hosts
+	// time the probe out instead, making the test flaky-by-rig.
+	// The injected client dials deterministically: IP literals (the
+	// two httptest servers, which never touch DNS anyway) dial
+	// normally; any HOSTNAME resolves to the synthetic "no such
+	// host" error, exactly the answer a conforming resolver gives
+	// for the reserved .invalid TLD (RFC 6761). Same behavior under
+	// test, no external DNS dependency.
+	deterministicClient := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				host, _, err := net.SplitHostPort(addr)
+				if err == nil && net.ParseIP(host) != nil {
+					var d net.Dialer
+					return d.DialContext(ctx, network, addr)
+				}
+				return nil, &net.DNSError{Err: "no such host", Name: addr, IsNotFound: true}
+			},
+		},
+	}
+
+	probes := ProbeReachability(context.Background(), []string{srv.URL, deadURL, "http://nonexistent.invalid"}, deterministicClient, 4, 5*time.Second)
 	// The test server refuses HEAD with 405: any HTTP response
 	// proves the host exists, so the probe is reachable on HEAD.
 	if !probes[srv.URL].Reachable || probes[srv.URL].StatusCode != http.StatusMethodNotAllowed {

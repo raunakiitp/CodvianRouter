@@ -329,6 +329,18 @@ func (v *StaticKeyVerifier) KeyID(_ context.Context, key string) (string, bool) 
 	return "static-" + hex.EncodeToString(sum[:])[:12], true
 }
 
+// KeyScopes reports the scopes carried by a static key. StaticKeyVerifier
+// is a test/fallback helper only, so static keys carry the full scope set
+// (admin, chat, models) used by the guard table. This keeps requireScope
+// enforced (P2-IDENT-003) while allowing test keys to pass scoped routes;
+// production deployments use configVerifier with real per-key scopes.
+func (v *StaticKeyVerifier) KeyScopes(_ context.Context, key string) ([]string, bool) {
+	if !v.VerifyKey(context.Background(), key) {
+		return nil, false
+	}
+	return []string{"admin", "chat", "models"}, true
+}
+
 // ---------------------------------------------------------------------------
 // Model registry.
 // ---------------------------------------------------------------------------
@@ -961,6 +973,15 @@ type Server struct {
 	// (see wsOriginAllowed). Set by WithWSAllowedOrigins; empty
 	// means same-origin only.
 	wsAllowedOrigins []string
+	// bgWorkers is a registry of long-lived background workers (health
+	// watcher, eval scheduler, A2A prune loop, etc.) keyed by name, with
+	// their cancel functions. All workers started after P2-BG-003 are
+	// registered here so Server.Close can stop them all at once instead
+	// of relying on every caller to invoke a matching Stop/Close.
+	// P2-BG-003: previously each goroutine was started and stopped ad hoc,
+	// so a missed Stop call leaked a goroutine until process exit.
+	bgWorkers   map[string]context.CancelFunc
+	bgWorkersMu sync.Mutex
 }
 
 // Option configures a Server.
@@ -1672,6 +1693,11 @@ func New(engine Engine, opts ...Option) *Server {
 	}
 	mux := http.NewServeMux()
 	s.register(mux, "GET", "/healthz", s.handleHealthz)
+	// AUD-CFG-004: readiness is a distinct endpoint from liveness —
+	// /healthz says "process up", /readyz says "dependencies ready".
+	// Both unauthenticated and loopback-safe like /healthz: neither
+	// returns anything but a status word and check names.
+	s.register(mux, "GET", "/readyz", s.handleReadyz)
 	s.register(mux, "GET", "/dashboard", s.handleDashboard)
 	s.register(mux, "POST", "/dashboard/auth/setup", s.handleDashAuthSetup)
 	s.register(mux, "POST", "/dashboard/auth/login", s.handleDashAuthLogin)
@@ -2106,7 +2132,16 @@ func (s *Server) keyPolicyAllows(w http.ResponseWriter, r *http.Request) bool {
 		// a verifier that cannot name identities by design, the
 		// previous no-op behaviour stands.
 		if credentialPresented(r) && s.identityResolvable() {
-			writeError(w, http.StatusForbidden, "credential could not be resolved to a gateway key identity")
+			// P2-IDENT-001 / P2-PROTO-001: Anthropic and Gemini
+			// surfaces answer 403 in their own error envelopes.
+			msg := "credential could not be resolved to a gateway key identity"
+			if isAnthropicEndpointPath(r.URL.Path) {
+				writeAnthropicError(w, http.StatusForbidden, msg)
+			} else if strings.HasPrefix(r.URL.Path, "/v1beta/") {
+				writeGeminiClientError(w, http.StatusForbidden, msg)
+			} else {
+				writeError(w, http.StatusForbidden, msg)
+			}
 			return false
 		}
 		return true
@@ -2164,19 +2199,11 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *Server) authorized(r *http.Request) bool {
-	if s.verifier == nil {
-		return false
-	}
-	key := requestKey(r)
-	if key == "" {
-		return false
-	}
-	if s.verifier.VerifyKey(r.Context(), key) {
-		return true
-	}
-	// B3-07: a gateway JWT access token authenticates exactly
-	// like a gateway key — the same funnel, the same 401.
-	return s.oauthTokenValid(key)
+	// WS2 unified identity: the canonical principal resolution —
+	// the same parse, validation and precedence every other
+	// identity-dependent check uses.
+	p := s.principalFor(r)
+	return p.Authenticated
 }
 
 // requestKey extracts the gateway credential from a request, or ""
@@ -2206,6 +2233,15 @@ func requestKey(r *http.Request) string {
 	if k := strings.TrimSpace(r.Header.Get("X-Goog-Api-Key")); k != "" {
 		return k
 	}
+	// P2-PROTO-002: Gemini clients may present the API key as a
+	// ?key= query parameter. Scope tightly to /v1beta/ so query
+	// keys never leak into non-Gemini surfaces (query keys appear
+	// in server logs and proxy headers).
+	if strings.HasPrefix(r.URL.Path, "/v1beta/") {
+		if k := strings.TrimSpace(r.URL.Query().Get("key")); k != "" {
+			return k
+		}
+	}
 	return ""
 }
 
@@ -2214,6 +2250,97 @@ func requestKey(r *http.Request) string {
 // parse the credential the same way (P1.3 widened it to the
 // vendor-style API-key headers).
 func bearerKey(r *http.Request) string { return requestKey(r) }
+
+// principal is the canonical identity and authorization context of
+// one request (WS2 unified identity — the single resolution path
+// behind AUD-SEC-001). Every identity-dependent check (authentication,
+// scope enforcement, caller attribution, ownership) resolves the same
+// principal instead of independently parsing or validating the
+// credential.
+//
+// Fields:
+//   - Raw: the presented credential, verbatim. NEVER logged and
+//     never returned to a client.
+//   - Presented: any credential in a form the server accepts.
+//   - Authenticated: the verifier (or the OAuth issuer) accepted it.
+//   - KeyID: the caller identity — the gateway key's stored ID, or
+//     "oauth:<client_id>" for a gateway JWT (B3-07). "" when the
+//     deployment cannot name identities or the credential is absent.
+//   - Scopes / ScopesKnown: the resolved scope set. ScopesKnown=false
+//     means the deployment cannot name scopes for this credential
+//     (shared-key verifier without KeyScopes) and scope checks pass
+//     through as before — the pre-existing no-metadata semantics,
+//     NOT a grant.
+type principal struct {
+	Raw           string
+	Presented     bool
+	Authenticated bool
+	KeyID         string
+	Scopes        []string
+	ScopesKnown   bool
+	IsJWT         bool
+}
+
+// principalFor resolves the ONE canonical principal for a request.
+// Precedence is deterministic and documented:
+//
+//  1. The credential is extracted once by requestKey: Authorization
+//     Bearer wins, then X-Api-Key, then X-Goog-Api-Key, then ?key=
+//     on /v1beta/ only. Only one credential is ever consulted — a
+//     request carrying several gets the highest-precedence one, so
+//     conflicting credentials cannot mix identities mid-request.
+//  2. A gateway key the verifier accepts authenticates; its stored
+//     key ID (when the verifier can name IDs) and stored scopes
+//     (when it can name scopes) ride the same resolution.
+//  3. Otherwise a gateway JWT access token authenticates exactly
+//     like a key (B3-07): identity "oauth:<client_id>", scopes from
+//     the token.
+//  4. Anything presented but accepted by neither is unauthenticated
+//     (Authenticated=false) — callers answer 401/fail closed; no
+//     identity or scopes are manufactured for it.
+//
+// A verifier that cannot validate (nil) yields an unauthenticated
+// principal with the credential still marked presented, preserving
+// auth-relaxed diagnostics.
+func (s *Server) principalFor(r *http.Request) *principal {
+	p := &principal{}
+	raw := requestKey(r)
+	p.Raw = raw
+	p.Presented = raw != ""
+	if raw == "" || s.verifier == nil {
+		return p
+	}
+	if s.verifier.VerifyKey(r.Context(), raw) {
+		p.Authenticated = true
+		if idv, ok := s.verifier.(KeyIDVerifier); ok {
+			if id, ok := idv.KeyID(r.Context(), raw); ok {
+				p.KeyID = id
+			}
+		}
+		if sv, ok := s.verifier.(ScopeVerifier); ok {
+			got, known := sv.KeyScopes(r.Context(), raw)
+			if known {
+				p.Scopes, p.ScopesKnown = got, true
+			}
+		}
+		return p
+	}
+	// B3-07: a gateway JWT access token authenticates exactly like
+	// a gateway key — the same funnel.
+	if s.oauthTokenValid(raw) {
+		p.Authenticated = true
+		p.IsJWT = true
+		if iss, err := s.oauthIssuer(); err == nil && iss != nil {
+			if claims, err := iss.VerifyAccessToken(raw); err == nil && claims.ClientID != "" {
+				p.KeyID = "oauth:" + claims.ClientID
+			}
+		}
+		if got, known := s.oauthTokenScopes(raw); known {
+			p.Scopes, p.ScopesKnown = got, true
+		}
+	}
+	return p
+}
 
 // requireScope enforces the guard table's scope list for one route
 // (M1.1): the caller's key must carry at least one listed scope,
@@ -2230,8 +2357,11 @@ func (s *Server) requireScope(next http.HandlerFunc, scopes []string) http.Handl
 		return next
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		raw := bearerKey(r)
-		if raw == "" {
+		// WS2 unified identity: the scopes come from the same
+		// canonical principal resolution auth and caller
+		// attribution use — no independent scope lookup here.
+		p := s.principalFor(r)
+		if !p.Presented {
 			next(w, r)
 			return
 		}
@@ -2239,29 +2369,31 @@ func (s *Server) requireScope(next http.HandlerFunc, scopes []string) http.Handl
 		// not in the key store — enforce them the same way
 		// (admin implies all, below). A verifier that cannot
 		// name scopes and a token that is not a gateway JWT
-		// still pass through, as before.
-		var got []string
-		hasScopes := false
-		if sv, ok := s.verifier.(ScopeVerifier); ok {
-			got, hasScopes = sv.KeyScopes(r.Context(), raw)
-		}
-		if !hasScopes {
-			if scopes, ok := s.oauthTokenScopes(raw); ok {
-				got, hasScopes = scopes, true
-			}
-		}
-		if !hasScopes {
+		// still pass through, as before (ScopesKnown=false is
+		// the deployment's no-metadata property, not a grant).
+		if !p.ScopesKnown {
 			next(w, r)
 			return
 		}
-		key := config.GatewayKey{Scopes: got}
+		key := config.GatewayKey{Scopes: p.Scopes}
 		for _, want := range scopes {
 			if key.HasScope(want) || key.HasScope("admin") {
 				next(w, r)
 				return
 			}
 		}
-		writeError(w, http.StatusForbidden, "gateway key lacks required scope "+strings.Join(scopes, " or "))
+		// P2-IDENT-001 / P2-PROTO-001: Anthropic and Gemini surfaces
+		// answer 403 in their own error envelopes, not the OpenAI one.
+		msg := "gateway key lacks required scope " + strings.Join(scopes, " or ")
+		if isAnthropicEndpointPath(r.URL.Path) {
+			writeAnthropicError(w, http.StatusForbidden, msg)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/v1beta/") {
+			writeGeminiClientError(w, http.StatusForbidden, msg)
+			return
+		}
+		writeError(w, http.StatusForbidden, msg)
 	}
 }
 
@@ -2281,6 +2413,13 @@ func (s *Server) unauthorized(w http.ResponseWriter, r *http.Request) {
 	deny := func(status int, msg string) {
 		if isAnthropicEndpointPath(r.URL.Path) {
 			writeAnthropicError(w, status, msg)
+			return
+		}
+		// P2-PROTO-001: Gemini surfaces answer 401/403 in the
+		// Gemini error envelope {error:{code,message,status}},
+		// not the OpenAI envelope.
+		if strings.HasPrefix(r.URL.Path, "/v1beta/") {
+			writeGeminiClientError(w, status, msg)
 			return
 		}
 		writeError(w, status, msg)
@@ -2321,38 +2460,17 @@ func (s *Server) unauthorized(w http.ResponseWriter, r *http.Request) {
 // gateway keys never share a cache key. The ID is never logged or
 // returned to any client.
 func (s *Server) callerKeyID(r *http.Request) string {
-	if s.verifier == nil {
-		return ""
-	}
-	// AUD-SEC-001: the credential is read through requestKey, the SAME
-	// parser auth and scope use, so every accepted presentation
-	// (Authorization: Bearer, X-Api-Key, X-Goog-Api-Key) resolves to the
-	// caller's real identity. Parsing only the Authorization header here
-	// made a vendor-header caller look like "no key", which bypassed
-	// per-key policy, budgets, limits and cache tenancy.
-	raw := requestKey(r)
-	if raw == "" {
-		return ""
-	}
-	idv, ok := s.verifier.(KeyIDVerifier)
-	if !ok {
-		return ""
-	}
-	id, ok := idv.KeyID(r.Context(), raw)
-	if !ok {
-		// B3-07: a JWT caller is named "oauth:<client_id>" —
-		// the caller identity for prompt-cache affinity and
-		// ledger attribution. keyPolicyAllows passes it
-		// untouched (no stored gateway key matches it), since
-		// a token's scope IS its policy.
-		if iss, err := s.oauthIssuer(); err == nil && iss != nil {
-			if claims, err := iss.VerifyAccessToken(raw); err == nil && claims.ClientID != "" {
-				return "oauth:" + claims.ClientID
-			}
-		}
-		return ""
-	}
-	return id
+	// WS2 unified identity: resolve the canonical principal once.
+	// KeyID semantics preserved exactly: no verifier, no presented
+	// credential, or a verifier that cannot name identities → ""
+	// (a verifier WITHOUT KeyIDVerifier never resolved a JWT
+	// identity here before, and principalFor preserves that); a
+	// verifier WITH KeyIDVerifier whose lookup misses resolves the
+	// JWT caller identity "oauth:<client_id>" (B3-07), which
+	// principalFor runs when key validation did not succeed. An
+	// unauthenticated credential resolves to "" either way — the
+	// old code's JWT lookup on a non-JWT string always missed too.
+	return s.principalFor(r).KeyID
 }
 
 // callerForOwnership resolves the caller identity for owner-scoped
@@ -2364,7 +2482,14 @@ func (s *Server) callerKeyID(r *http.Request) string {
 func (s *Server) callerForOwnership(w http.ResponseWriter, r *http.Request) (string, bool) {
 	keyID := s.callerKeyID(r)
 	if keyID == "" && credentialPresented(r) && s.identityResolvable() {
-		writeError(w, http.StatusForbidden, "credential could not be resolved to a gateway key identity")
+		// P2-IDENT-001: Anthropic surfaces answer 403 in the
+		// Anthropic error envelope.
+		msg := "credential could not be resolved to a gateway key identity"
+		if isAnthropicEndpointPath(r.URL.Path) {
+			writeAnthropicError(w, http.StatusForbidden, msg)
+		} else {
+			writeError(w, http.StatusForbidden, msg)
+		}
 		return "", false
 	}
 	return keyID, true
@@ -2480,6 +2605,53 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// handleReadyz serves GET /readyz — READINESS, not liveness
+// (AUD-CFG-004). /healthz answers "the process is up" and is the
+// liveness probe; /readyz answers "this process can serve real
+// requests" and is the readiness probe (and the container
+// healthcheck target): every critical dependency is checked with a
+// bounded timeout and a failed dependency answers 503 with the
+// failing check named — never a bare 503, never an internal secret
+// or connection string.
+//
+// Critical dependencies (a failed one means requests cannot be
+// served honestly):
+//   - engine: the routing engine must be wired. New always sets it,
+//     so a nil engine means a misconstructed server — fail closed.
+//   - ledger: when one is wired, its SQLite connection must answer
+//     a ping within readyzTimeout. NOT wired is legitimate on a
+//     fresh install (the dashboard feeds answer honestly with empty
+//     data, see WithLedger), so an absent ledger is not unready.
+//
+// Optional providers (the readiness capability gate at
+// /dashboard/readiness) stay out of this check: a provider being
+// unready degrades specific models, it does not take the gateway
+// down.
+const readyzTimeout = 2 * time.Second
+
+func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var failed []string
+	if s.engine == nil {
+		failed = append(failed, "engine not wired")
+	}
+	if s.ledger != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), readyzTimeout)
+		if err := s.ledger.Ping(ctx); err != nil {
+			failed = append(failed, "ledger unavailable: "+err.Error())
+		}
+		cancel()
+	}
+	if len(failed) > 0 {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "unready", "reasons": failed})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }
 
 // handleDashboard serves the approved static dashboard UI (embedded
@@ -4965,8 +5137,44 @@ func (s *Server) getCCRStore() *compress.CCRStore {
 // (newTestServer registers it via t.Cleanup): on Windows an
 // open ccr.db blocks t.TempDir cleanup, failing the test at
 // teardown even when every assertion passed.
+
+// RegisterBackgroundWorker registers a long-lived background worker by name
+// with its cancel function, so StopAllBackgroundWorkers can stop all workers
+// at once. Registering the same name twice replaces the previous entry
+// (the old cancel is NOT called — callers must not double-register).
+// P2-BG-003: a centralized shutdown registry replaces ad-hoc Stop/Close calls,
+// so no goroutine can leak because a caller forgot to stop it.
+func (s *Server) RegisterBackgroundWorker(name string, cancel context.CancelFunc) {
+	s.bgWorkersMu.Lock()
+	defer s.bgWorkersMu.Unlock()
+	if s.bgWorkers == nil {
+		s.bgWorkers = make(map[string]context.CancelFunc)
+	}
+	s.bgWorkers[name] = cancel
+}
+
+// StopAllBackgroundWorkers cancels every registered background worker
+// and clears the registry. It is called by Close to ensure no goroutine
+// outlives the server. Workers that were already stopped are no-ops.
+func (s *Server) StopAllBackgroundWorkers() {
+	s.bgWorkersMu.Lock()
+	workers := make(map[string]context.CancelFunc, len(s.bgWorkers))
+	for name, cancel := range s.bgWorkers {
+		workers[name] = cancel
+	}
+	s.bgWorkers = make(map[string]context.CancelFunc)
+	s.bgWorkersMu.Unlock()
+	for name, cancel := range workers {
+		cancel()
+		s.logger.Printf("background worker stopped: %s", name)
+	}
+}
+
 func (s *Server) Close() error {
 	var errs []error
+	// P2-BG-003: stop all registered background workers first so no
+	// goroutine touches stores or other state after Close begins.
+	s.StopAllBackgroundWorkers()
 	s.ccrMu.Lock()
 	store := s.ccrStore
 	s.ccrStore = nil

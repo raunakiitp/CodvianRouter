@@ -1,8 +1,9 @@
 # Install Codvian Router
 
-> **Status (2026-11-17):** Phase 1 MVP is built and verified (133/133 tests
-> in the coordinator's gate; 207/207 including the Phase 2/3 packages in a
-> docs-time re-run — see [CHANGELOG.md](../CHANGELOG.md)). There is **no
+> **Status (2026-11-17):** Phase 1 MVP is built and verified. The repository
+> contains 55 Go packages (as of 2026-11-26); test counts from earlier eras
+> (133/133, 207/207) reflect different package snapshots and are not
+> comparable to the current tree. There is **no
 > release binary, no published npm package, and no published Docker image
 > yet**. The only install path that works today is **build from source**.
 > Everything else on this page is labelled **planned** until a release is
@@ -22,14 +23,15 @@
 
 ### Prerequisites
 
-- **Go 1.22 or newer.** The module declares `go 1.22`; the verification
-  gate ran on Go 1.27.4. (`go 1.22` is the minimum; newer is fine.)
+- **Go 1.26.0 or newer.** The module declares `go 1.26.0` with `toolchain go1.27.4`; the verification gate ran on Go 1.27.4. (`go 1.26.0` is the minimum; newer is fine.)
 - **git**
 - **curl** (to verify the install)
-- No other build dependencies. The module uses only two direct
-  dependencies (`golang.org/x/crypto v0.24.0`,
-  `modernc.org/sqlite v1.34.0`); the SQLite driver is pure Go, so no C
-  toolchain is needed (`CGO_ENABLED=0` builds work).
+- No other build dependencies. The module uses six direct
+  dependencies (`github.com/gorilla/websocket`,
+  `github.com/pkoukk/tiktoken-go`, `github.com/redis/go-redis/v9`,
+  `golang.org/x/crypto v0.59.0`, `golang.org/x/sys`, `modernc.org/sqlite`);
+  the SQLite driver is pure Go, so no C toolchain is needed
+  (`CGO_ENABLED=0` builds work).
 
 ### Steps
 
@@ -38,7 +40,7 @@ git clone https://github.com/raunakiitp/CodvianRouter
 cd CodvianRouter
 go build -o codvian-router ./cmd/codvian-router
 ./codvian-router init      # creates config + your first gateway key (shown ONCE)
-./codvian-router serve     # listens on 127.0.0.1:20128, auth ON
+./codvian-router serve     # listens on 127.0.0.1:20128/dashboard, auth ON
 ```
 
 What `init` prints (save the key — it cannot be recovered):
@@ -191,7 +193,7 @@ docker compose up -d --build       # or: docker run -d --network host codvian-ro
 curl http://127.0.0.1:20128/healthz
 ```
 
-**How the port gets through:** the image is a multi-stage build (Go 1.22
+**How the port gets through:** the image is a multi-stage build (Go 1.27.4
 builder, distroless nonroot runtime, healthcheck that GETs `/healthz`),
 but the router binds 127.0.0.1 **by default**, which Docker's
 published-port forwarding cannot reach (it delivers traffic to the

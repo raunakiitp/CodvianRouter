@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -552,5 +553,40 @@ func TestPanicValueRedactedInLog(t *testing.T) {
 	}
 	if !strings.Contains(logged, "panic recovered in server_chat") {
 		t.Fatalf("server log has no panic-recovered line:\n%s", logged)
+	}
+}
+
+// TestNoteBackgroundPanicCountsAndRedacts (AUD-REL-006): the
+// background-worker recovery path increments
+// codvian_router_panics_total under its bg_ location and logs the
+// redacted value — never the raw panic payload (a key-shaped value
+// here on purpose, mirroring TestPanicValueRedactedInLog).
+func TestNoteBackgroundPanicCountsAndRedacts(t *testing.T) {
+	led, err := ledger.Open(filepath.Join(t.TempDir(), "ledger.db"))
+	if err != nil {
+		t.Fatalf("ledger.Open: %v", err)
+	}
+	defer led.Close()
+	var logBuf bytes.Buffer
+	rec := metrics.NewRecorder()
+	srv := newTestServer(t, &fakeEngine{}, WithLedger(led), WithMetrics(rec),
+		WithLogger(log.New(&logBuf, "", 0)))
+
+	srv.noteBackgroundPanic("bg_a2a_stream_task", "sk-ant-FAKESECRET-explosion")
+	if got := rec.Panics(); got != 1 {
+		t.Fatalf("panics counter = %d, want 1", got)
+	}
+	logged := logBuf.String()
+	if strings.Contains(logged, "FAKESECRET") {
+		t.Fatalf("background panic log leaks the panic value:\n%s", logged)
+	}
+	if !strings.Contains(logged, "panic recovered in background worker bg_a2a_stream_task") {
+		t.Fatalf("background panic log line missing:\n%s", logged)
+	}
+	// A second background panic in the same location counts again
+	// (per-occurrence, not deduped).
+	srv.noteBackgroundPanic("bg_a2a_stream_task", errors.New("again"))
+	if got := rec.Panics(); got != 2 {
+		t.Fatalf("panics counter after second panic = %d, want 2", got)
 	}
 }

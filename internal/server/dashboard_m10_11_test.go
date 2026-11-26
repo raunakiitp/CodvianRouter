@@ -494,7 +494,7 @@ func TestDashboardM10_11ReadinessRetryAfterEqualsFeed(t *testing.T) {
 		// skip explicitly: the feed + expression-shape checks
 		// above ran, but the rendered-value check did not, and
 		// the run must say so instead of passing silently weaker.
-		t.Skip("node not on PATH — rendered-value check skipped, feed + expression-shape checks ran")
+		t.Fatal("node not on PATH — rendered-value check skipped, feed + expression-shape checks ran (install node or set NODE_PATH)")
 	}
 
 	// The served fmtNum, as served — the rendering expression
@@ -577,7 +577,7 @@ func TestDashboardM10_11ReadinessRetryAfterEqualsFeed(t *testing.T) {
 // readiness counts, breaker state label) driven with fixture data.
 func TestDashboardM10_11PureHelpersUnderNode(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not on PATH — cannot run the inline-script check")
+		t.Fatal("node not on PATH — cannot run the inline-script check (install node or set NODE_PATH)")
 	}
 	srv := newTestServer(t, &fakeEngine{})
 	rec := doReq(t, srv, http.MethodGet, "/dashboard", "", "")

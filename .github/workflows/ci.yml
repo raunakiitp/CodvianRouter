@@ -8,6 +8,14 @@
 # items 307-308). This workflow publishes nothing, deploys
 # nothing, and needs no secrets: it is a read-only gate.
 #
+# Three additional jobs close the gates the audit found missing:
+#   windows — builds every package and tests the Windows-only ones, so a
+#             //go:build windows regression cannot ship unnoticed (P2-TEST-03);
+#   redis   — runs the live Redis integration test against a real server and
+#             FAILS if it skips, because a skip proves nothing (P2-TEST-04);
+#   fuzz    — executes both fuzz targets for a bounded time, which no gate
+#             did before (P2-TEST-05).
+#
 # PINNING POLICY (mirrors release.yml, items 223-224): every tool
 # in this file is pinned to an exact version — no `latest`, no
 # floating major tag, no floating runner image. Each `uses:` entry
@@ -49,3 +57,108 @@ jobs:
 
       - name: Run the CI gate
         run: bash scripts/ci.sh
+  # P2-TEST-03: the Windows-only paths (tray supervisor, TCP fast-open, host
+  # RAM detection, binary lifecycle) are compiled and tested here. Windows
+  # archives are published, yet without this job a //go:build windows file
+  # could break and no gate would notice.
+  # P2-SEC-02: secret scanning with gitleaks (pinned)
+  # Runs in parallel with other jobs; fails the build on any finding.
+  secret-scan:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks (pinned release, sha256-verified)
+        run: |
+          curl -sSfL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Run gitleaks (full history)
+        # The MIT gitleaks CLI needs no license key; the v2 GitHub
+        # Action wrapper enforces a GITLEAKS_LICENSE secret, which
+        # this project does not use. Pinning the CLI release with a
+        # sha256 check keeps the control equivalent without an
+        # external licensing dependency.
+        run: gitleaks detect --source . --config .github/gitleaks.toml --redact --no-banner --verbose --exit-code 1
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.27.4"
+          cache: true
+
+      - name: Build every package on Windows
+        run: go build ./...
+
+      - name: Test the Windows-only packages
+        run: go test -count=1 ./internal/tray/ ./internal/gctune/ ./internal/provider/ ./cmd/codvian-router/
+
+  # P2-TEST-04: TestB2RedisLiveSetGetSyncReopen is gated on
+  # CODVIAN_TEST_REDIS_ADDR, so with no service it never ran in CI and the
+  # Redis path was unproven. This job supplies a real Redis and fails if the
+  # test SKIPS, because a skip would make the job green while proving nothing.
+  redis:
+    runs-on: ubuntu-24.04
+    services:
+      redis:
+        image: redis:7.4.2
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.27.4"
+          cache: true
+
+      - name: Run the live Redis integration test (fail on skip)
+        env:
+          CODVIAN_TEST_REDIS_ADDR: 127.0.0.1:6379
+        run: |
+          out="$(go test -count=1 -v -run 'TestB2RedisLive' ./internal/cache/ 2>&1)"
+          echo "$out"
+          if ! echo "$out" | grep -q -- '--- PASS: TestB2RedisLive'; then
+            echo "FAIL: the live Redis test did not PASS. A skip or a missing server proves nothing."
+            exit 1
+          fi
+
+  # P2-TEST-05: both fuzz targets existed but no gate ever executed them, so
+  # a regression in the PEM redactor would first be seen in production.
+  fuzz:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: "1.27.4"
+          cache: true
+
+      - name: Fuzz the PEM redactor whole-block path
+        run: go test -run=^$ -fuzz=FuzzRedactPEMWholeBlock -fuzztime=30s ./internal/guardrails/
+
+      - name: Fuzz the streaming redactor chunk-split path
+        run: go test -run=^$ -fuzz=FuzzStreamRedactorChunkSplits -fuzztime=30s ./internal/guardrails/

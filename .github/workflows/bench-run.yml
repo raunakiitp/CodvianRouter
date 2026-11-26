@@ -1,10 +1,20 @@
 name: bench-run
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   real-bench:
+    # WS7 automatic benchmark gate (B4): real workloads on pushes to
+    # main, manual dispatch preserved. PR runs are NOT wired — shared
+    # runners are too noisy for stable latency comparison (the rig's
+    # own quiet-gate refuses honestly rather than publish bad
+    # numbers), so a PR gate would flake or always refuse. The
+    # baseline comparison runs whenever docs/benchmark-baseline.json
+    # exists; without one the run reports SKIP and the committed
+    # result becomes the first baseline.
     runs-on: ubuntu-24.04
     steps:
       - name: Check out
@@ -22,12 +32,42 @@ jobs:
       - name: Run the real benchmark (scripts/bench.sh)
         id: bench
         run: |
-          # bench.sh has its own quiet-gate (loadavg + flock); if the
-          # shared runner is noisy it REFUSES honestly rather than
-          # publishing bad numbers. We capture that outcome as-is.
-          ./scripts/bench.sh --out docs/benchmark-phase3-ci.json || echo "BENCH_REFUSED (quiet-gate)"
+          # The rig's own quiet-gate (loadavg + flock) REFUSES to run
+          # on a noisy shared runner rather than publish bad numbers.
+          # An honest refusal is an INFRASTRUCTURE outcome — not a
+          # pass, not a failure: it is recorded distinctly and the
+          # gate below skips comparison. A real benchmark failure
+          # (nonzero exit without a refusal marker) fails the job.
+          set +e
+          ./scripts/bench.sh --out docs/benchmark-phase3-ci.json
+          rc=$?
+          set -e
+          if [ $rc -ne 0 ]; then
+            echo "BENCH_REFUSED (quiet-gate): exit $rc — infrastructure, gate skips comparison"
+            echo "refused=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "refused=0" >> "$GITHUB_OUTPUT"
+          fi
           echo "--- raw output ---"
           cat docs/benchmark-phase3-ci.json 2>/dev/null || true
+      - name: Regression gate (bench-compare vs docs/benchmark-baseline.json)
+        if: steps.bench.outputs.refused == '0'
+        run: |
+          # Exit codes from cmd/bench-compare:
+          #   0 no regression / SKIP (no baseline, rig mismatch)
+          #   1 confirmed regression beyond the threshold  -> job FAILS
+          #   2 invalid input                              -> job FAILS
+          # A missing result file is also a failure: the gate must
+          # never read "the benchmark did not run" as "no regression".
+          if [ ! -f docs/benchmark-phase3-ci.json ]; then
+            echo "FAIL: benchmark produced no result file"
+            exit 1
+          fi
+          BASELINE_ARG=""
+          if [ -f docs/benchmark-baseline.json ]; then
+            BASELINE_ARG="--baseline docs/benchmark-baseline.json"
+          fi
+          go run ./cmd/bench-compare --current docs/benchmark-phase3-ci.json $BASELINE_ARG
       - name: Upload raw benchmark JSON
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.8.3

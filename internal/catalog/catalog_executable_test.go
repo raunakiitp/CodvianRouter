@@ -125,19 +125,14 @@ func catalogExecutableMatrix() []ExecutableCapability {
 
 		streaming := hasClient && (primaryWire != "ollama" || false)
 
-		embeddings, images, audio := false, false, false
-		switch primaryWire {
-		case "openai":
-			embeddings, images, audio = true, true, true
-		case "anthropic":
-			embeddings, images, audio = false, false, false
-		case "gemini", "vertex":
-			embeddings, images, audio = true, false, false
-		case "cohere":
-			embeddings, images, audio = true, false, false
-		case "bedrock-converse":
-			embeddings, images, audio = false, false, false
-		}
+		// Passthrough endpoints are served only by an
+		// OpenAI-compatible client that actually exists — the same rule
+		// the router's selection gates apply
+		// (provider.WireFormatServesPassthrough). P2-PROV-001: the
+		// matrix used to claim embeddings/images/audio for gemini,
+		// vertex and cohere, which the runtime refuses.
+		passthrough := hasClient && EndpointPassthroughSupported(primaryWire)
+		embeddings, images, audio := passthrough, passthrough, passthrough
 
 		tools := toolCallingSupported(p)
 

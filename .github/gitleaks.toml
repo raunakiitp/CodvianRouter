@@ -1,0 +1,85 @@
+title = "Codvian Router secret scanning rules"
+
+[allowlist]
+  # Test fixtures that contain credential-shaped strings by design
+  paths = [
+    "internal/guardrails/guardrails_test.go"
+  ]
+  # Regexes that match only the test fixtures, not real credentials
+  regexes = [
+    # The synthetic ghp_... token used in guardrails_test.go:25
+    'ghp_[A-Za-z0-9]{40,}'
+  ]
+
+# Extend default rules with our own patterns for tokens we care about
+[[rules]]
+  id = "codvian-github-pat"
+  description = "GitHub Personal Access Token (classic)"
+  regex = '''(?i)ghp_[A-Za-z0-9]{30,}'''
+  tags = ["key", "github"]
+
+[[rules]]
+  id = "codvian-github-fine-grained"
+  description = "GitHub Fine-Grained PAT"
+  regex = '''(?i)github_pat_[A-Za-z0-9_]{30,}'''
+  tags = ["key", "github"]
+
+[[rules]]
+  id = "codvian-github-oauth"
+  description = "GitHub OAuth token"
+  regex = '''(?i)gho_[A-Za-z0-9]{30,}'''
+  tags = ["key", "github"]
+
+[[rules]]
+  id = "codvian-github-app"
+  description = "GitHub App token"
+  regex = '''(?i)ghs_[A-Za-z0-9]{30,}'''
+  tags = ["key", "github"]
+
+[[rules]]
+  id = "codvian-gitlab-pat"
+  description = "GitLab Personal Access Token"
+  regex = '''(?i)glpat-[A-Za-z0-9_-]{20,}'''
+  tags = ["key", "gitlab"]
+
+[[rules]]
+  id = "codvian-aws-access-key"
+  description = "AWS Access Key ID"
+  regex = '''AKIA[0-9A-Z]{16}'''
+  tags = ["key", "aws"]
+
+[[rules]]
+  id = "codvian-google-api-key"
+  description = "Google API Key"
+  regex = '''(?i)AIza[0-9A-Za-z\-_]{35}'''
+  tags = ["key", "google"]
+
+[[rules]]
+  id = "codvian-slack-token"
+  description = "Slack token"
+  regex = '''(?i)xox[baprs]-[0-9A-Za-z-]{10,}'''
+  tags = ["key", "slack"]
+
+[[rules]]
+  id = "codvian-anthropic-key"
+  description = "Anthropic API Key"
+  regex = '''(?i)sk-ant-[A-Za-z0-9_-]{24,}'''
+  tags = ["key", "anthropic"]
+
+[[rules]]
+  id = "codvian-openai-key"
+  description = "OpenAI API Key"
+  regex = '''(?i)sk-[A-Za-z0-9]{48}'''
+  tags = ["key", "openai"]
+
+[[rules]]
+  id = "codvian-private-key-header"
+  description = "Private key header"
+  regex = '''-----BEGIN (RSA|EC|OPENSSH|PGP) PRIVATE KEY-----'''
+  tags = ["key", "private-key"]
+
+[[rules]]
+  id = "codvian-bearer-token-long"
+  description = "Long Bearer token in Authorization header"
+  regex = '''(?i)Authorization: *Bearer [A-Za-z0-9._-]{40,}'''
+  tags = ["key", "bearer"]

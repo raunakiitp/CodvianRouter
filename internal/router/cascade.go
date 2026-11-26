@@ -382,7 +382,7 @@ var comboStrategyNames = func() map[string]bool {
 // silently collapse to chat and let a combo strategy through.
 func endpointForProjection(kind provider.EndpointKind) (autorouter.Endpoint, error) {
 	switch kind {
-	case "", provider.EndpointChatCompletions, provider.EndpointMessages, provider.EndpointResponses:
+	case "", provider.EndpointChatCompletions, provider.EndpointMessages, provider.EndpointResponses, provider.EndpointGeminiGenerateContent:
 		return autorouter.EndpointChat, nil
 	case provider.EndpointEmbeddings:
 		return autorouter.EndpointEmbeddings, nil

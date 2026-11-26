@@ -94,7 +94,7 @@ var verifiedProviders = []Provider{
 		Verification: VerificationDocs,
 		ToSGrey:      true,
 		SourceURL:    "https://github.com/oakimov/claude-code-router/blob/HEAD/docs/docs/server/guides/claude-auth.md",
-		Notes:        "Subscription login, not an API key. Use only the user's own login. Usage via GET /api/oauth/usage.",
+		Notes:        "Subscription login, not an API key. Use only the user's own login (claude setup-token or a PKCE client); the router dials the surface with the resulting token — it does not perform the login itself.",
 	},
 	{
 		ID:          "gemini",

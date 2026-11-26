@@ -7,7 +7,7 @@
 # Scope `admin` implies every scope. LOCAL_ONLY = loopback-only
 # even with a valid key. Destructive routes need a typed
 # {"confirm": "<phrase>"} body in addition to the key.
-# Routes: 349
+# Routes: 350
 
 ## Auth
 header: Authorization: Bearer <gateway-key>
@@ -17,6 +17,7 @@ bootstrap: POST /admin/bootstrap issues the first key (loopback-only, no key, 40
 
 ## Routes (METHOD path | tier | scopes | auth | description)
 GET /healthz | MANAGEMENT | scopes=- | auth=exempt | Liveness probe — no data, no auth.
+GET /readyz | MANAGEMENT | scopes=- | auth=exempt | Readiness probe — dependency checks, no data, no auth (AUD-CFG-004).
 GET /dashboard | MANAGEMENT | scopes=- | auth=exempt | Static dashboard UI — no live data of its own.
 POST /dashboard/auth/setup | MANAGEMENT | scopes=admin | auth=key | Sets the dashboard operator password for the first time (only while none is set); admin gateway key required. The password is stored only as an Argon2id hash in the data dir; no default password exists.
 POST /dashboard/auth/login | MANAGEMENT | scopes=admin | auth=key | Operator login with the dashboard password; on success sets an HttpOnly session cookie (12h). Failed attempts are throttled per peer (5 failures → 60s lockout).

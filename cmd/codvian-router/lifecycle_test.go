@@ -102,8 +102,24 @@ func TestProbeHealthz(t *testing.T) {
 	if !probe.ok || probe.status != 200 || probe.body != `{"status":"ok"}` {
 		t.Fatalf("probe = %+v", probe)
 	}
-	if probe.rtt <= 0 {
-		t.Fatalf("probe.rtt = %v, want > 0", probe.rtt)
+	// The RTT assertion measures against a server that genuinely
+	// waits: a bare rtt > 0 check would only assert the OS clock
+	// resolution (on Windows a sub-tick round trip legitimately
+	// measures exactly 0, which flaked CI). A 30ms server with a
+	// >= 20ms floor proves the probe times elapsed work.
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(30 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"status":"ok"}`)
+	}))
+	defer slow.Close()
+	slowPort := slow.Listener.Addr().(*net.TCPAddr).Port
+	slowProbe := probeHealthz(slowPort)
+	if !slowProbe.ok {
+		t.Fatalf("slow probe = %+v, want ok", slowProbe)
+	}
+	if slowProbe.rtt < 20*time.Millisecond {
+		t.Fatalf("probe.rtt = %v for a 30ms server, want >= 20ms — the probe must report elapsed time", slowProbe.rtt)
 	}
 
 	srv.Close()

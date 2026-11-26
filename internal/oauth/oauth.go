@@ -162,6 +162,12 @@ type persistedState struct {
 	SigningKey    string          `json:"signing_key"`
 	Clients       []*Client       `json:"clients"`
 	RefreshTokens []*refreshToken `json:"refresh_tokens"`
+	Revoked       []revokedEntry  `json:"revoked,omitempty"`
+}
+
+type revokedEntry struct {
+	JTI    string    `json:"jti"`
+	Expiry time.Time `json:"expiry"`
 }
 
 // Issuer is the gateway's OAuth 2.0 authorization server: client
@@ -213,6 +219,11 @@ func NewIssuer(dataDir string) (*Issuer, error) {
 					iss.refresh[t.Hash] = t
 				}
 			}
+			for _, r := range st.Revoked {
+				if time.Now().Before(r.Expiry) {
+					iss.revoked[r.JTI] = r.Expiry
+				}
+			}
 			return iss, nil
 		}
 		if !os.IsNotExist(err) {
@@ -247,6 +258,9 @@ func (iss *Issuer) saveLocked() error {
 	sort.Slice(st.Clients, func(i, j int) bool { return st.Clients[i].ID < st.Clients[j].ID })
 	for _, t := range iss.refresh {
 		st.RefreshTokens = append(st.RefreshTokens, t)
+	}
+	for jti, exp := range iss.revoked {
+		st.Revoked = append(st.Revoked, revokedEntry{JTI: jti, Expiry: exp})
 	}
 	raw, err := json.Marshal(st)
 	if err != nil {
@@ -462,6 +476,25 @@ func (iss *Issuer) Authorize(clientID, redirectURI string, scopes []string, chal
 	return code, nil
 }
 
+// ValidateRedirectURI checks if the given redirectURI is registered for the
+// clientID. It returns nil if valid, or an error if the client doesn't exist
+// or the redirectURI is not registered for that client.
+// Used by the authorize error path to prevent open redirects (P2-SEC-03).
+func (iss *Issuer) ValidateRedirectURI(clientID, redirectURI string) error {
+	iss.mu.Lock()
+	defer iss.mu.Unlock()
+	client, ok := iss.clients[clientID]
+	if !ok {
+		return errors.New("oauth: unknown client_id")
+	}
+	for _, r := range client.RedirectURIs {
+		if r == redirectURI {
+			return nil
+		}
+	}
+	return errors.New("oauth: redirect_uri does not match the registered redirect_uris")
+}
+
 // authenticateClient checks a confidential client's secret
 // (constant-time hash compare). Public clients skip this step —
 // PKCE is their authentication.
@@ -623,6 +656,14 @@ func (iss *Issuer) Revoke(token string) bool {
 	claims, err := VerifyJWT(iss.key, token, time.Now())
 	if err == nil {
 		iss.revoked[claims.ID] = time.Unix(claims.Expires, 0)
+		if err := iss.saveLocked(); err != nil {
+			// The revocation did not reach disk. Roll back so a
+			// restart won't silently un-revoke, log, and return
+			// false so the caller learns the revocation failed.
+			delete(iss.revoked, claims.ID)
+			persistLogf("oauth: persist JWT revocation failed: %v", err)
+			return false
+		}
 		return true
 	}
 	return false

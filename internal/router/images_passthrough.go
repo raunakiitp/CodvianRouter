@@ -85,7 +85,7 @@ func supportsImages(client provider.Client) bool {
 	}
 	if wf, ok := client.(wireFormatClient); ok {
 		format := wf.WireFormat()
-		return format == "" || format == provider.WireFormatOpenAI
+		return provider.WireFormatServesPassthrough(format)
 	}
 	return true
 }

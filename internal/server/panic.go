@@ -78,6 +78,20 @@ func (s *Server) noteServerPanic(location string, v any) *router.PanicError {
 	return router.NewPanicError(location, v)
 }
 
+// noteBackgroundPanic records a panic recovered in a background
+// goroutine (AUD-REL-006): the same codvian_router_panics_total
+// increment and one redacted log line as noteServerPanic, but with
+// no response to answer — the goroutine ends and the metric plus
+// log line are the observable record. Background locations use the
+// "bg_" prefix so logPanicError's server_* dedup rule is not
+// triggered by anything that later surfaces the same value.
+func (s *Server) noteBackgroundPanic(location string, v any) {
+	if s.recorder != nil {
+		s.recorder.IncPanic(location)
+	}
+	s.logger.Printf("panic recovered in background worker %s: %s", location, guardrails.Redact(panicValueString(v)))
+}
+
 // logPanicError logs a PanicError the engine returned (already
 // counted by the engine — this only logs, never counts). Non-panic
 // errors are ignored, and so are server-side panics (locations

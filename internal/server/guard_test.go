@@ -71,7 +71,7 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 	// without a table entry breaks register() first (it panics),
 	// and forgetting one here breaks this test.
 	expected := []string{
-		"GET /healthz", "GET /dashboard", "GET /dashboard/providers",
+		"GET /healthz", "GET /readyz", "GET /dashboard", "GET /dashboard/providers",
 		"GET /dashboard/auto-route", "GET /dashboard/auto-route/last",
 		"GET /dashboard/coalescing", "GET /dashboard/concurrency",
 		"GET /dashboard/pools",
@@ -233,8 +233,8 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 	for _, r := range table {
 		counts[r.Tier]++
 	}
-	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 58 || counts[TierManagement] != 280 {
-		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/58/280, the two extra always-protected routes being the admin file-reclaim pair added for AUD-SEC-010)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
+	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 58 || counts[TierManagement] != 281 {
+		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/58/281, the two extra always-protected routes being the admin file-reclaim pair added for AUD-SEC-010, and /readyz added for AUD-CFG-004)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
 	}
 }
 
@@ -1062,8 +1062,8 @@ func TestExemptRoutesAreReadOnlyGet(t *testing.T) {
 	// guard.go:223 — plus POST /oauth/token and POST /oauth/revoke
 	// in B3-07: public by design, client auth is the code_verifier
 	// / client secret, not a gateway key).
-	if exempt != 60 {
-		t.Errorf("exempt routes = %d, want 60 (58 before P1.5 + GET /api/capabilities and GET /api/providers/{id}/capabilities in P1.5)", exempt)
+	if exempt != 61 {
+		t.Errorf("exempt routes = %d, want 61 (58 before P1.5 + GET /api/capabilities and GET /api/providers/{id}/capabilities in P1.5 + GET /readyz in AUD-CFG-004)", exempt)
 	}
 }
 

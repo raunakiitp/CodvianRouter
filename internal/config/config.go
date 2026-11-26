@@ -1836,8 +1836,14 @@ func (c *Config) Validate() error {
 		// capability registry can actually record, otherwise the
 		// filter would silently skip every attempt forever.
 		for _, name := range rc.RequireCapabilities {
-			if _, ok := capability.ParseCapability(name); !ok {
+			c, ok := capability.ParseCapability(name)
+			if !ok {
 				return fmt.Errorf("config: routing.require_capabilities %q is not a known capability (known: %s)", name, strings.Join(capability.KnownCapabilities(), ", "))
+			}
+			// P2-PROV-002: reject a capability nothing can ever record,
+			// instead of letting the filter silently skip every attempt.
+			if reason, usable := capability.Configurable(c); !usable {
+				return fmt.Errorf("config: routing.require_capabilities %q cannot be satisfied: %s", name, reason)
 			}
 		}
 		for model, m := range rc.ChainCooldownModes {
