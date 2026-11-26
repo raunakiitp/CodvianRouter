@@ -32,6 +32,46 @@ complete while backlog items remain open.
 - 4.1: WS9 mapping corrected in docs/P2_REMAINING_FINDINGS_DISPOSITION.md
 - 4.3: TestProbeReachability determinism (injected dialer, no external DNS)
 
+### Closure status after the final closure session (items 1-5)
+
+1. WS9D OAuth inventory — DONE (commit 69ef9f0): all 31 CategoryOAuth
+   entries classified and pinned: claude = connectable via external
+   login (docs-verified messages surface, oauth-pkce Exchange; the
+   router dials with the user-obtained token, no in-router Claude
+   OAuth client — providerlogin has only OpenRouter); github-copilot
+   + clinepass = partially documented (base URL probed, no auth
+   surface, not docs-verified); 28 = metadata stubs. The claude
+   Notes referenced GET /api/oauth/usage, a route that does not
+   exist — replaced with the honest external-login disclosure.
+2. WS9E structured output + modality matrix — DONE (commit 8aeb723):
+   parametersJsonSchema mapping pinned (verbatim when classic absent,
+   classic wins when both, {"type":"object"} default); structured
+   OUTPUT (responseMimeType/responseSchema) rejection asserted;
+   full endpoint → autorouter projection matrix pinned, unknown kind
+   fails loudly.
+3. WS9F default-build tracing — DONE (commit 95546f8): the default
+   build (no -tags otel) pinned as an honest no-op — spans never
+   record, context unchanged, Traceparent "" (never fabricated).
+4. WS6 stream re-open idempotency — DONE (commit 4a2d60e): ledger
+   double-settle idempotency pinned (hold releases exactly once);
+   re-open bound + classification pinned (only pre-output
+   truncations re-open; statuses/panics/cancellation never do);
+   billing stays one-settle-per-request (single deferred settle onto
+   an idempotent ledger delete).
+5. WS3 batch re-queue — EXPLICITLY OPEN, documented (this section):
+   the BATCHES API implements the OpenAI contract (create/list/get/
+   cancel/delete, output_file_id, error_file_id, per-batch counters);
+   interrupted batches are marked failed on load ("server_restart")
+   and deliberately NOT re-run. A safe in-server re-queue would need
+   durable per-row served/failed accounting plus a guarantee the
+   provider did not serve a row whose response died mid-stream —
+   without that, re-queueing risks double-charging rows that were
+   actually served. The OpenAI API itself has no batch re-queue
+   endpoint; the sanctioned client-side recovery is: read
+   output_file_id (succeeded) + error_file_id (failed), correct the
+   input, submit a NEW batch. Implementing a lesser re-queue would
+   be unsafe; documenting instead per the closure rule.
+
 ### Still open (tracked in P2_FINAL_FORENSIC_AUDIT.md Deliverable I)
 - WS3 batch re-queue at the BATCHES-API level (async-writer level done)
 - WS9D provider OAuth connectability inventory (31 CategoryOAuth entries)
