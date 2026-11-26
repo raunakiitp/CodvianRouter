@@ -16,9 +16,13 @@
 // capability, not copied code): one delivery is retried up to
 // webhookMaxRetries times (3 retries, 4 attempts total) with
 // exponential backoff (1s, 2s, 4s) and a per-attempt timeout
-// (10s). Only 5xx responses and transport errors are retried:
-// a 2xx is success and anything below 500 is terminal (a 4xx
-// means the endpoint rejected the payload — retrying the same
+// (10s). Retried: 5xx responses, transport errors, and 429 with
+// Retry-After honored (AUD-REL-007 — a rate-limited endpoint is
+// asking for slower traffic, not rejecting the payload; a
+// Retry-After hint, delta-seconds or HTTP-date, replaces the
+// exponential delay and is capped at webhookRetryAfterCap).
+// Terminal: a 2xx is success and every other 4xx/3xx means the
+// endpoint rejected the payload — retrying the same
 // body would fail the same way). Retries never queue work
 // beyond the one in-flight Notify goroutine, and the attempt
 // count bounds the whole sequence — there is no unbounded
@@ -37,6 +41,8 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/egress"
@@ -112,6 +118,41 @@ const webhookAttemptTimeout = 10 * time.Second
 // reassigns it.
 var webhookRetryBackoff = func(failedAttempts int) time.Duration {
 	return time.Duration(1<<(failedAttempts-1)) * time.Second
+}
+
+// webhookRetryAfterCap bounds any Retry-After delay a 429 endpoint
+// asks for (AUD-REL-007): an endpoint answering "Retry-After: 86400"
+// must not park the delivery goroutine for a day when the whole
+// delivery budget is 4 attempts. A var, not a const, so tests can
+// shrink it just like webhookRetryBackoff; production never reassigns it.
+var webhookRetryAfterCap = 60 * time.Second
+
+// webhookRetryAfter parses the Retry-After header of an HTTP 429
+// response and returns the delay to wait before the next attempt,
+// or 0 when the header is absent/invalid (the caller then falls
+// back to the exponential backoff). RFC 7231 allows two forms:
+// delta-seconds ("120") and an HTTP-date. A date in the past, a
+// negative delta, or an unparseable value all mean "no usable
+// hint". The result is capped at webhookRetryAfterCap.
+func webhookRetryAfter(h string, now time.Time) time.Duration {
+	h = strings.TrimSpace(h)
+	if h == "" {
+		return 0
+	}
+	if secs, err := strconv.Atoi(h); err == nil {
+		if secs <= 0 {
+			return 0
+		}
+		return min(time.Duration(secs)*time.Second, webhookRetryAfterCap)
+	}
+	if t, err := http.ParseTime(h); err == nil {
+		d := t.Sub(now)
+		if d <= 0 {
+			return 0
+		}
+		return min(d, webhookRetryAfterCap)
+	}
+	return 0
 }
 
 // New builds a dispatcher. A nil logger disables delivery logging
@@ -230,9 +271,29 @@ func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
 			continue
 		}
 		if resp.StatusCode < 500 {
-			// 2xx is success; 3xx/4xx is terminal — the
-			// endpoint rejected this payload, and the same
-			// body would fail the same way again.
+			// AUD-REL-007: 429 is RETRYABLE, not terminal — a
+			// rate-limited endpoint is asking for slower traffic,
+			// not rejecting the payload. Retry-After (delta-seconds
+			// or HTTP-date) is honored when present, bounded by
+			// webhookRetryAfterCap; the exponential backoff fills in
+			// when the header is absent or unparseable.
+			if resp.StatusCode == http.StatusTooManyRequests {
+				resp.Body.Close()
+				if attempt == webhookMaxRetries {
+					d.logf("webhook %s: endpoint returned %s after %d attempts", ep.ID, resp.Status, webhookMaxRetries+1)
+					return
+				}
+				delay := webhookRetryBackoff(attempt + 1)
+				if ra := webhookRetryAfter(resp.Header.Get("Retry-After"), time.Now()); ra > 0 {
+					delay = ra
+				}
+				d.logf("webhook %s: endpoint returned %s (attempt %d/%d); retrying after %s", ep.ID, resp.Status, attempt+1, webhookMaxRetries+1, delay)
+				time.Sleep(delay)
+				continue
+			}
+			// Other 3xx/4xx are terminal — the endpoint rejected
+			// this payload, and the same body would fail the same
+			// way again.
 			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 				d.logf("webhook %s: endpoint returned %s", ep.ID, resp.Status)
 			}
