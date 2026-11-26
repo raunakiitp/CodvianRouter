@@ -1693,6 +1693,11 @@ func New(engine Engine, opts ...Option) *Server {
 	}
 	mux := http.NewServeMux()
 	s.register(mux, "GET", "/healthz", s.handleHealthz)
+	// AUD-CFG-004: readiness is a distinct endpoint from liveness —
+	// /healthz says "process up", /readyz says "dependencies ready".
+	// Both unauthenticated and loopback-safe like /healthz: neither
+	// returns anything but a status word and check names.
+	s.register(mux, "GET", "/readyz", s.handleReadyz)
 	s.register(mux, "GET", "/dashboard", s.handleDashboard)
 	s.register(mux, "POST", "/dashboard/auth/setup", s.handleDashAuthSetup)
 	s.register(mux, "POST", "/dashboard/auth/login", s.handleDashAuthLogin)
@@ -2600,6 +2605,53 @@ func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// handleReadyz serves GET /readyz — READINESS, not liveness
+// (AUD-CFG-004). /healthz answers "the process is up" and is the
+// liveness probe; /readyz answers "this process can serve real
+// requests" and is the readiness probe (and the container
+// healthcheck target): every critical dependency is checked with a
+// bounded timeout and a failed dependency answers 503 with the
+// failing check named — never a bare 503, never an internal secret
+// or connection string.
+//
+// Critical dependencies (a failed one means requests cannot be
+// served honestly):
+//   - engine: the routing engine must be wired. New always sets it,
+//     so a nil engine means a misconstructed server — fail closed.
+//   - ledger: when one is wired, its SQLite connection must answer
+//     a ping within readyzTimeout. NOT wired is legitimate on a
+//     fresh install (the dashboard feeds answer honestly with empty
+//     data, see WithLedger), so an absent ledger is not unready.
+//
+// Optional providers (the readiness capability gate at
+// /dashboard/readiness) stay out of this check: a provider being
+// unready degrades specific models, it does not take the gateway
+// down.
+const readyzTimeout = 2 * time.Second
+
+func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var failed []string
+	if s.engine == nil {
+		failed = append(failed, "engine not wired")
+	}
+	if s.ledger != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), readyzTimeout)
+		if err := s.ledger.Ping(ctx); err != nil {
+			failed = append(failed, "ledger unavailable: "+err.Error())
+		}
+		cancel()
+	}
+	if len(failed) > 0 {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "unready", "reasons": failed})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }
 
 // handleDashboard serves the approved static dashboard UI (embedded

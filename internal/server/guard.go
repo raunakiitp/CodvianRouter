@@ -94,6 +94,7 @@ type GuardRoute struct {
 // register() panics if a route has no entry.
 var guardRouteTable = []GuardRoute{
 	{Method: "GET", Path: "/healthz", Tier: TierManagement, Description: "Liveness probe — no data, no auth.", AuthExempt: true},
+	{Method: "GET", Path: "/readyz", Tier: TierManagement, Description: "Readiness probe — dependency checks, no data, no auth (AUD-CFG-004).", AuthExempt: true},
 	{Method: "GET", Path: "/dashboard", Tier: TierManagement, Description: "Static dashboard UI — no live data of its own.", AuthExempt: true},
 	// B3-04 dashboard operator login: the login surface itself.
 	// These four routes are classified TierManagement with the

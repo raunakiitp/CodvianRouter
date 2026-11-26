@@ -61,8 +61,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" \
       -o /out/codvian-router ./cmd/codvian-router
 
 # Tiny healthcheck helper. Distroless has no shell, curl, or wget, so the
-# HEALTHCHECK needs a real binary. It GETs http://127.0.0.1:20128/healthz
-# (unauthenticated) and exits 0 only on HTTP 200. It lives in this
+# HEALTHCHECK needs a real binary. It GETs http://127.0.0.1:20128/readyz
+# (unauthenticated; readiness, not mere liveness — AUD-CFG-004) and exits
+# 0 only on HTTP 200. It lives in this
 # Dockerfile — not in the repo — so it never touches Go source ownership.
 RUN mkdir -p /tmp/healthcheck && cat > /tmp/healthcheck/main.go <<'EOF'
 package main
@@ -80,7 +81,11 @@ func main() {
 		port = "20128"
 	}
 	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get("http://127.0.0.1:" + port + "/healthz")
+	// /readyz, not /healthz (AUD-CFG-004): the container healthcheck
+	// must gate on READINESS — the ledger (when wired) actually
+	// answering — not mere process liveness. 503 = unready, and the
+	// retries give the process time to become ready.
+	resp, err := client.Get("http://127.0.0.1:" + port + "/readyz")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "healthcheck: %v\n", err)
 		os.Exit(1)

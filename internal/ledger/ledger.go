@@ -1338,6 +1338,19 @@ func ensureKeyBudgetColumns(db *sql.DB) error {
 	return nil
 }
 
+// Ping reports whether the ledger's SQLite connection is currently
+// usable (AUD-CFG-004 / readiness): one db.PingContext, no queries.
+// The /readyz endpoint calls it with a bounded context so a wedged
+// DB answers 503 instead of hanging the probe. A nil receiver is a
+// healthy no-op (no ledger wired is a legitimate fresh-install
+// state, not a dependency failure).
+func (l *Ledger) Ping(ctx context.Context) error {
+	if l == nil {
+		return nil
+	}
+	return l.db.PingContext(ctx)
+}
+
 // Close closes the underlying databases (any prepared hot-path
 // statement, prepared on the reader pool, first).
 func (l *Ledger) Close() error {
