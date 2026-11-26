@@ -96,18 +96,44 @@ else
 fi
 echo ""
 
-# go test writes its own per-package output; the PASS/FAIL line
-# above is the gate verdict for the whole suite.
-run_step "go test ./... -race -count=1" go test ./... -race -count=1
+# --- P2-DEPLOY-02: Docker FROM digest pinning check ---
+# Reject any FROM line without a @sha256: digest so container images
+# are reproducible and verifiable. Keep the tag as a comment for readability.
+echo "== docker FROM digest pinning =="
+DOCKER_FROM_OK=1
+while IFS= read -r df; do
+  if [ -f "$df" ]; then
+    while IFS= read -r line; do
+      case "$line" in
+        FROM*)
+          case "$line" in
+            *@sha256:*) ;;
+            *)
+              echo "FAIL: $df: unpinned FROM: $line"
+              DOCKER_FROM_OK=0
+              ;;
+          esac
+          ;;
+      esac
+    done < "$df"
+  fi
+done < <(printf '%s\n' "Dockerfile" "Dockerfile.release")
+if [ "$DOCKER_FROM_OK" -eq 1 ]; then
+  echo "PASS: docker FROM digest pinning (both Dockerfiles use @sha256: digests)"
+else
+  echo "FAIL: docker FROM digest pinning"
+  FAILURES=$((FAILURES + 1))
+fi
+echo ""
 
 # --- Benchmark smoke (one iteration each, no unit tests).
 # P2-TEST-01: benchmarks must execute in CI, not merely compile.
-# A committed baseline (docs/benchmark-baseline.txt) records the
-# expected benchmark names; any benchmark that fails to run or
-# panics fails the gate. Timing comparisons live in the full rig
-# (scripts/bench.sh, quiet Linux).
 run_step "go test -bench=. -benchtime=1x -run=^\\$ ./... (bench-smoke)" \
   go test -bench=. -benchtime=1x -run='^$' ./...
+
+# go test writes its own per-package output; the PASS/FAIL line
+# above is the gate verdict for the whole suite.
+run_step "go test ./... -race -count=1" go test ./... -race -count=1
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "CI: PASS"
