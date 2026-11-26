@@ -34,13 +34,28 @@ complete while backlog items remain open.
 
 ### Still open (tracked in P2_FINAL_FORENSIC_AUDIT.md Deliverable I)
 - WS3 batch re-queue at the BATCHES-API level (async-writer level done)
-- WS9C MCP SSE + streamable-HTTP transports (stdio only today, M9.2)
 - WS9D provider OAuth connectability inventory (31 CategoryOAuth entries)
-- WS9E structured-output tests + provider x modality x operation matrix
-- WS9F default tracing decision + candidate-selection trace tests
-- WS6 stream re-open idempotency (AUD-REL-008)
+- WS9E structured-output tests (ParametersJSONSchema mapping/response untested)
+- WS9E provider x modality x operation capability matrix test
+- WS9F default-build tracing tests + explicit no-op status documentation
+- WS6 stream re-open idempotency evidence (AUD-REL-008; client billing is
+  already idempotent via one-settle-per-request reservations — what remains
+  is a pinning test)
 
-### Audit items disproved by source inspection (no code change — recorded per campaign rules)
+### Audit items DISPROVED by source inspection (no code change — recorded per campaign rules)
+- B7/B8 "MCP SSE + Streamable HTTP transports missing": FALSE. Both remote
+  transports are FULLY IMPLEMENTED in internal/server/mcp_http.go (2,514
+  lines) — SSE (GET /api/mcp/sse stream + POST with session_id) and
+  Streamable HTTP (POST /api/mcp/stream, GET stream, DELETE session), with
+  gateway-key auth in the disjoint mcp: scope namespace (admin/chat/* scope
+  escalation refused, per M9.1 N4), per-key + per-IP rate limits, bounded
+  crypto-random sessions (64/transport, 16/key, 5-min idle eviction),
+  fail-closed transport toggles (default OFF, flipped via POST
+  /api/mcp/status), and the M9.3 ledger-backed methods. Registered in the
+  guard table (TierManagement) and covered by 27 tests (mcp_http_test.go).
+  THE AUDIT MISSED THIS FILE — the "missing transports" verdict was based
+  on internal/mcp/identity.go comments (the stdio-only package) and never
+  searched the server layer.
 - B9 "five dead dashboard views": FALSE. All views have real load
   dispatches wired to live endpoints — keys -> loadRouterKeys()
   (GET /dashboard/keys), health -> m10_11LoadHealth() (GET
@@ -58,6 +73,9 @@ complete while backlog items remain open.
   for mouse focus, line ~487), a modal focus trap exists
   (~9486-9503), Escape closes modals and danger dialogs (5418,
   9563, 13676), and 52 aria- attributes are present.
+- A redundant transport built during the campaign
+  (internal/mcp/http.go) was deleted: the server-layer transport
+  already existed; two competing transports would be worse than one.
 
 ## Test Evidence
 - `go build ./...` → exit 0
