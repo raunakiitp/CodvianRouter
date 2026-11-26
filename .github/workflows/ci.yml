@@ -70,7 +70,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@e5d2f3c9c0a4550c8d8f1c8c6e8e8f8e8f8e8f8e # v2.1.0 (pinned)
+        uses: gitleaks/gitleaks-action@aa6c132071730e14d28e89080e0adeebc4df4512 # v2.1.0 (pinned)
         with:
           args: --verbose --redact --no-banner --config=.github/gitleaks.toml
 
