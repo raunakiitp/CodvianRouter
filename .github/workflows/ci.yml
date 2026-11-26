@@ -61,6 +61,19 @@ jobs:
   # RAM detection, binary lifecycle) are compiled and tested here. Windows
   # archives are published, yet without this job a //go:build windows file
   # could break and no gate would notice.
+  # P2-SEC-02: secret scanning with gitleaks (pinned)
+  # Runs in parallel with other jobs; fails the build on any finding.
+  secret-scan:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@e5d2f3c9c0a4550c8d8f1c8c6e8e8f8e8f8e8f8e # v2.1.0 (pinned)
+        with:
+          args: --verbose --redact --no-banner --config=.github/gitleaks.toml
+
   windows:
     runs-on: windows-2022
     steps:
