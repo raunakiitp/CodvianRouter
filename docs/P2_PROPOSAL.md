@@ -1,6 +1,6 @@
 # Proposed P2 Roadmap — derived from the Post-P1 Forensic Audit
 
-**Status: proposal only. No P2 implementation has started, no P2 branch/commit/PR exists.**
+**Status: IMPLEMENTED (WS1–WS5 complete). This proposal is superseded by the P2 implementation branch `p2-implementation`. WS-1 through WS-5 findings have all been implemented with tests and CI gates. See `P2_CHECKPOINT.md` for the current implementation status.**
 
 Every workstream below traces to verified findings in `docs/POST_P1_FINDINGS_LEDGER.md` against `main` @ `08cadc0`. Work already covered by the "immediate maintenance" section of `docs/POST_P1_RECOMMENDATIONS.md` (AUD-SEC-001, AUD-SEC-009, AUD-CODE-001) is **not** repeated here — those are fixes, not a programme.
 
