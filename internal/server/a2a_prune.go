@@ -10,11 +10,12 @@
 // blocks shutdown (it selects on ctx.Done), and a prune failure is
 // logged, never fatal and never surfaced to a gateway-key caller.
 //
-// Wiring (integration-B, NOT in this slice): a2aService opens the
-// store via a2a.OpenWithLimits with the effective config values and
-// starts exactly one loop, guarded next to a2aMu/a2aSvc/a2aCancels.
-// This file only defines the loop and its options; it starts nothing
-// on its own.
+// Wiring (integration-B): a2aService opens the store via
+// a2a.OpenWithLimits with the effective config values and starts
+// exactly one prune loop at a2a.go:183, guarded next to
+// a2aMu/a2aSvc/a2aCancels. This file defines the loop and its options;
+// the loop is started from the lazy A2A open path and runs until its
+// context is cancelled.
 package server
 
 import (
