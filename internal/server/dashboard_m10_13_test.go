@@ -241,7 +241,7 @@ func TestDashboardM10_13A2AFeedEnabledLiveCounts(t *testing.T) {
 // when node is not installed.
 func TestDashboardM10_13A2AInlineScriptSyntax(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not installed: cannot run node --check")
+		t.Fatal("node not installed — cannot run node --check (install node or set NODE_PATH)")
 	}
 	body := m10_0DashboardBody(t)
 	script := m10_0InlineScript(t, body)

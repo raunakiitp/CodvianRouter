@@ -447,7 +447,7 @@ func m10_7ExtractFunction(t *testing.T, body, name string) string {
 //     typed values alone (the by-design case).
 func TestDashboardM10_7PrefillKeyManageForm(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not installed — cannot drive the prefill path")
+		t.Fatal("node not installed — cannot drive the prefill path (install node or set NODE_PATH)")
 	}
 	body := m10_7DashboardBody(t)
 	fn := m10_7ExtractFunction(t, body, "prefillKeyManageForm")
@@ -631,7 +631,7 @@ func TestDashboardM10_7ServedHTML(t *testing.T) {
 
 func TestDashboardM10_7InlineScriptSyntax(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not installed — cannot run node --check")
+		t.Fatal("node not installed — cannot run node --check (install node or set NODE_PATH)")
 	}
 	body := m10_7DashboardBody(t)
 	start := strings.Index(body, "<script>")

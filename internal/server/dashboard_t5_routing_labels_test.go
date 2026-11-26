@@ -43,7 +43,7 @@ func dashboardInlineScript(t *testing.T) string {
 
 func TestDashboardT5RoutingLabelsUnderNode(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not on PATH — cannot run the inline-script check")
+		t.Fatal("node not on PATH — cannot run the inline-script check (install node or set NODE_PATH)")
 	}
 	script := dashboardInlineScript(t)
 	dir := t.TempDir()

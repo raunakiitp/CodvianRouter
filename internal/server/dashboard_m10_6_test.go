@@ -513,7 +513,7 @@ func TestDashboardM10_6TeamCreateMemberRoundTrip(t *testing.T) {
 // with fixture data.
 func TestDashboardM10_6PureHelpersUnderNode(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not on PATH — cannot run the inline-script check")
+		t.Fatal("node not on PATH — cannot run the inline-script check (install node or set NODE_PATH)")
 	}
 	srv := newTestServer(t, &fakeEngine{})
 	rec := doReq(t, srv, http.MethodGet, "/dashboard", "", "")
@@ -806,7 +806,7 @@ func TestDashboardM10_6ByKeyRenders(t *testing.T) {
 // where the key has unpriced requests, and no totals figure.
 func TestDashboardM10_6ByKeyFeedValues(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not on PATH — cannot drive the by-key helper")
+		t.Fatal("node not on PATH — cannot drive the by-key helper (install node or set NODE_PATH)")
 	}
 	s, _ := keyStatusSetup(t)
 	key2, _, err := config.IssueKey("test-2", []string{"chat"}, 0)

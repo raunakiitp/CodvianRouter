@@ -448,7 +448,7 @@ func TestDashboardM10_11bNitFixesStatic(t *testing.T) {
 // come back enabled and no keyed reload may happen.
 func TestDashboardM10_11bNitFixesUnderNode(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not on PATH — cannot run the inline-script check")
+		t.Fatal("node not on PATH — cannot run the inline-script check (install node or set NODE_PATH)")
 	}
 	srv := newTestServer(t, &fakeEngine{})
 	rec := doReq(t, srv, http.MethodGet, "/dashboard", "", "")
@@ -636,7 +636,7 @@ function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 
 func TestDashboardM10_11bPureHelpersUnderNode(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not on PATH — cannot run the inline-script check")
+		t.Fatal("node not on PATH — cannot run the inline-script check (install node or set NODE_PATH)")
 	}
 	srv := newTestServer(t, &fakeEngine{})
 	rec := doReq(t, srv, http.MethodGet, "/dashboard", "", "")

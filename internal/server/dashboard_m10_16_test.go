@@ -335,7 +335,7 @@ func TestDashboardM10_16ResponsesRowsEqualFeed(t *testing.T) {
 // live batch list, the live responses feed and the live tree.
 func TestDashboardM10_16PureHelpersUnderNode(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not on PATH — cannot run the inline-script check")
+		t.Fatal("node not on PATH — cannot run the inline-script check (install node or set NODE_PATH)")
 	}
 
 	// Live batch list JSON: one real batch run to completion.

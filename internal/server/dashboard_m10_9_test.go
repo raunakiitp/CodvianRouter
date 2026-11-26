@@ -333,7 +333,7 @@ func TestDashboardM10_9FeedValuesEqualSmoke(t *testing.T) {
 // rows, never invented ones.
 func TestDashboardM10_9PureHelpersUnderNode(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node not on PATH — cannot run the inline-script check")
+		t.Fatal("node not on PATH — cannot run the inline-script check (install node or set NODE_PATH)")
 	}
 	log := m10_9SeedMCPLog(t)
 	srv, adminRaw := m10_9AdminSetup(t, log)
