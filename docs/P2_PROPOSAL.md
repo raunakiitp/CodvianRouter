@@ -12,7 +12,7 @@ Sequencing rationale: WS-1 and WS-2 restore *trustworthiness* (verified CI + one
 
 **Problem statement.** Several verification layers exist but never run in CI: the five client-protocol drivers, the `otel` build tag, fuzzing, Redis, Windows, benchmarks; and `govulncheck` is neutralised by `|| true`. A green pipeline therefore does not imply the feature works (AUD-TEST-001/002/003/004/005/006/007/015, AUD-TEST-017).
 
-**Existing implementation.** `scripts/smoke-client-*.py` (shared lib `smoke-client-lib.py`), `internal/observability` otel-tagged files, 2 fuzz targets, `b_c_redis_live_test.go` (skip-gated), `internal/tray` Windows tests, 23 benchmarks, `scripts/check-route-guard.sh`, 6 workflows.
+**Existing implementation.** `scripts/smoke-client-*.py` (shared lib `smoke-client-lib.py`), `internal/observability` otel-tagged files, 2 fuzz targets, `b_c_redis_live_test.go` (skip-gated), `internal/tray` Windows tests, 27 benchmarks, `scripts/check-route-guard.sh`, 6 workflows.
 
 **Verified gap.** `grep -rln "smoke-client" .github/workflows` → 0; `smoke-client-lib.py:57` hardcodes `/home/hatch/go/bin/go`; no workflow passes `-tags otel` or `-fuzz`; `supply-chain.yml:24-36` ends `|| true`.
 
@@ -166,7 +166,7 @@ Sequencing rationale: WS-1 and WS-2 restore *trustworthiness* (verified CI + one
 
 ## WS-7 — Performance guardrails: measure in CI, then tune
 
-**Problem statement.** 23 benchmarks exist but none run in CI, so the regressions the audit measured (prompt re-hashing per hop, unpooled relay transport, unbounded learned-signal goroutines, missing connection caps, coarse engine mutex) cannot be caught or proven fixed (AUD-PERF-003/004/005/006/007/008/009/010/011/013, AUD-TEST-006).
+**Problem statement.** 27 benchmarks exist but none run in CI, so the regressions the audit measured (prompt re-hashing per hop, unpooled relay transport, unbounded learned-signal goroutines, missing connection caps, coarse engine mutex) cannot be caught or proven fixed (AUD-PERF-003/004/005/006/007/008/009/010/011/013, AUD-TEST-006).
 
 **Existing implementation.** Benchmarks in `internal/tokencount`, `internal/ledger`, `internal/router`, `internal/cache`; `bench-infra-smoke.yml` (compile-only); `bench.sh` (Linux-bound).
 

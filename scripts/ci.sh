@@ -100,14 +100,14 @@ echo ""
 # above is the gate verdict for the whole suite.
 run_step "go test ./... -race -count=1" go test ./... -race -count=1
 
-# --- Optional: benchmark smoke (one iteration each, no unit tests). ---
-if [ "${CI_BENCH_SMOKE:-0}" = "1" ]; then
-  run_step "go test -bench=. -benchtime=1x -run=^\$ ./... (smoke)" \
-    go test -bench=. -benchtime=1x -run='^$' ./...
-else
-  echo "SKIP: bench-smoke (set CI_BENCH_SMOKE=1 to run go test -bench=. -benchtime=1x)"
-  echo ""
-fi
+# --- Benchmark smoke (one iteration each, no unit tests).
+# P2-TEST-01: benchmarks must execute in CI, not merely compile.
+# A committed baseline (docs/benchmark-baseline.txt) records the
+# expected benchmark names; any benchmark that fails to run or
+# panics fails the gate. Timing comparisons live in the full rig
+# (scripts/bench.sh, quiet Linux).
+run_step "go test -bench=. -benchtime=1x -run=^\\$ ./... (bench-smoke)" \
+  go test -bench=. -benchtime=1x -run='^$' ./...
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "CI: PASS"

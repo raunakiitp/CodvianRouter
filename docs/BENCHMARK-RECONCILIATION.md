@@ -2,7 +2,7 @@
 
 Author: BENCH-ANALYST (Benchmark Reconciliation Analyst) — read-only analysis.
 Date: 2026-11-19. Worktree: `~/workspace/codvian-router/`.
-Scope: every `docs/benchmark-*.json` file (38 files), reconciled against
+Scope: every `docs/benchmark-*.json` file (40 files), reconciled against
 `docs/BENCHMARK.md`, `docs/cpu-profile-2026-11-18*.md`,
 `docs/memory-profile-2026-11-18.md`, `docs/benchmark-round2-report.md`,
 and the harness `scripts/bench-geekflare.sh`.
@@ -44,7 +44,7 @@ with documented contention — quote only the clean pass, with the
 caveat) · **POLLUTED** (do not quote as a measurement; keep for the
 record only).
 
-## 1. Inventory — all 38 files
+## 1. Inventory — all 40 files
 
 Times are UTC as recorded in each file's `rig.date`. Loadavg shown is
 `rig.loadavg` (END of run) and, where recorded, `loadavg_start`.
