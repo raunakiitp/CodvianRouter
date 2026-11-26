@@ -1166,6 +1166,7 @@ func (s *Server) geminiGenerate(w http.ResponseWriter, r *http.Request, model st
 	req.CallerID = s.callerKeyID(r)
 	req.CacheControls = parseCacheControls(r)
 	req.Stream = stream
+	req.Endpoint = provider.EndpointGeminiGenerateContent
 	if blocked := s.applyGuardrails(ctx, w, &req, s.keyGuardrailScope(r)); blocked {
 		return
 	}
