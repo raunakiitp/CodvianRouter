@@ -30,7 +30,7 @@ ARG TARGETPLATFORM
 # ---------------------------------------------------------------------------
 # Healthcheck builder (runs on the build machine, cross-compiles)
 # ---------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM golang:1.27.4-bookworm AS healthcheck-builder
+FROM --platform=$BUILDPLATFORM golang:1.27.4-bookworm@sha256:ce59b41415e2524ae99926fe1f37ce48ba8c194dcbd2a56a65436cdcefa2bd34 AS healthcheck-builder
 
 ARG TARGETARCH
 
@@ -71,7 +71,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath -ldflags "-s 
 # ---------------------------------------------------------------------------
 # Runtime
 # ---------------------------------------------------------------------------
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 
 ARG TARGETPLATFORM
 
