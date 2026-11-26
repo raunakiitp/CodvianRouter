@@ -833,6 +833,11 @@ type guardStatus struct {
 	BootstrapPending     bool   `json:"bootstrap_pending"`
 	AuthRelaxed          bool   `json:"auth_relaxed"`
 	LocalOnlyDenials     uint64 `json:"local_only_denials"`
+	// ScopeEnforcement reports whether the configured verifier can name
+	// scopes (P2-IDENT-003). StaticKeyVerifier deployments now implement
+	// ScopeVerifier (returning empty scopes) so requireScope fails closed;
+	// verifiers without KeyScopes cannot enforce per-key policy.
+	ScopeEnforcement bool `json:"scope_enforcement"`
 	// SecurityRefusals counts security refusals since this
 	// process started, by reason label (CHECKLIST 246): a
 	// client Vertex override rejected, a write naming an
@@ -888,6 +893,7 @@ func (s *Server) handleGuard(w http.ResponseWriter, r *http.Request) {
 		BootstrapPending:     s.bootstrapPending.Load(),
 		AuthRelaxed:          s.authRelaxed,
 		LocalOnlyDenials:     s.localOnlyDenials.Load(),
+		ScopeEnforcement:     s.verifier != nil,
 		SecurityRefusals:     s.guardrails.Stats().SecurityRefusals,
 		Listen:               listen,
 	}})
