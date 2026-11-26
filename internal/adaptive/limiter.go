@@ -417,3 +417,95 @@ func (l *Limiter) InFlight(key string) int {
 	}
 	return 0
 }
+
+// ---------------------------------------------------------------------------
+// Global admission cap (P2-CAP-002): an optional process-wide ceiling on
+// in-flight requests, consulted before dispatch in addition to the
+// per-key adaptive limiter. Nil (unset) means fail open — no process-wide
+// cap — which preserves existing behaviour. When set, it bounds aggregate
+// concurrency regardless of how many providers/keys are active.
+// P2-CAP-002: No process-wide in-flight cap existed; each key could reach
+// MaxLimit=100, so aggregate concurrency ≈ P×100 unbounded goroutines.
+
+// globalSemaphore is a channel-based weighted semaphore: TryAcquire
+// non-blockingly reserves one slot, Release frees it.
+type globalSemaphore struct {
+	ch    chan struct{}
+	mu    sync.Mutex
+	inFlight int
+}
+
+func newGlobalSemaphore(capacity int) *globalSemaphore {
+	return &globalSemaphore{ch: make(chan struct{}, capacity)}
+}
+
+func (s *globalSemaphore) TryAcquire() bool {
+	select {
+	case s.ch <- struct{}{}:
+		s.mu.Lock()
+		s.inFlight++
+		s.mu.Unlock()
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *globalSemaphore) Release() {
+	select {
+	case <-s.ch:
+	default:
+		// Should not happen if Release matches TryAcquire, but
+		// guard against double-release.
+	}
+	s.mu.Lock()
+	if s.inFlight > 0 {
+		s.inFlight--
+	}
+	s.mu.Unlock()
+}
+
+func (s *globalSemaphore) InFlight() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.inFlight
+}
+
+var globalLimiter *globalSemaphore
+
+// SetGlobalLimiter installs the process-wide admission cap. Nil
+// disables it (fail open). Called once at startup.
+func SetGlobalLimiter(capacity int) {
+	if capacity <= 0 {
+		globalLimiter = nil
+		return
+	}
+	globalLimiter = newGlobalSemaphore(capacity)
+}
+
+// GlobalTryAcquire admits one call under the process-wide cap.
+// Returns false when the aggregate cap is reached. Nil limiter
+// admits everything (fail open).
+func GlobalTryAcquire() bool {
+	if globalLimiter == nil {
+		return true
+	}
+	return globalLimiter.TryAcquire()
+}
+
+// GlobalRelease frees one slot under the process-wide cap.
+func GlobalRelease() {
+	if globalLimiter == nil {
+		return
+	}
+	globalLimiter.Release()
+}
+
+// GlobalInFlight returns the current aggregate in-flight count under
+// the process-wide cap (0 when unset). For dashboard exposure.
+func GlobalInFlight() int {
+	if globalLimiter == nil {
+		return 0
+	}
+	return globalLimiter.InFlight()
+}
