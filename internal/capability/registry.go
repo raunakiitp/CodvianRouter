@@ -89,6 +89,28 @@ func ParseCapability(s string) (Capability, bool) {
 	return "", false
 }
 
+// Configurable reports whether a capability name may be used in
+// routing.require_capabilities. Four names are part of the vocabulary for
+// API completeness but no builder populates them from real evidence, so
+// requiring one would silently skip every attempt (ErrNoAvailableAttempt).
+// They are rejected at config load with the reason below (P2-PROV-002).
+func Configurable(c Capability) (reason string, ok bool) {
+	switch c {
+	case CapImageOutput:
+		return "image_output: no provider or probe data populates it, so requiring it would reject every attempt", false
+	case CapAudioOutput:
+		return "audio_output: no provider or probe data populates it, so requiring it would reject every attempt", false
+	case CapStructuredOutput:
+		return "structured_output: no provider or probe data populates it, so requiring it would reject every attempt", false
+	case CapJSONMode:
+		return "json_mode: no provider or probe data populates it, so requiring it would reject every attempt", false
+	}
+	if _, known := ParseCapability(string(c)); !known {
+		return "not a known capability", false
+	}
+	return "", true
+}
+
 // KnownCapabilities lists every capability name, for validation error
 // messages (so the operator sees the full vocabulary).
 func KnownCapabilities() []string {
@@ -290,6 +312,30 @@ func (b *Builder) buildModels(out map[string]ModelCapabilities, providerID strin
 			mc[CapStreaming] = Entry{Capability: CapStreaming, Support: SupportUnknown, Provenance: unknownProv}
 		}
 
+		// Passthrough endpoint capabilities (P2-PROV-002): these four
+		// were accepted by config validation but never populated by any
+		// builder, so require_capabilities silently found no candidates.
+		// They are recorded now — SUPPORTED for an OpenAI-compatible
+		// wire, UNSUPPORTED for a native one — from the same rule the
+		// router's selection gates use (provider.WireFormatServesPassthrough),
+		// so a capability filter and a routing decision agree.
+		if len(wireFormats) > 0 && wireFormats[0] != catalog.WireUnknown {
+			passthrough := provider.WireFormatServesPassthrough(string(wireFormats[0]))
+			passthroughProv := Provenance{
+				Source:       SourceCatalogWireFormat,
+				Verification: VerificationVerified,
+				ObservedAt:   time.Now(),
+				Confidence:   "high",
+				Note:         "wire format decides the OpenAI-compatible passthrough endpoints",
+			}
+			for _, c := range []Capability{CapAPIEmbeddings, CapAPIRerank, CapAPIImages, CapAPIAudio} {
+				sup := SupportUnsupported
+				if passthrough {
+					sup = SupportSupported
+				}
+				mc[c] = Entry{Capability: c, Support: sup, Provenance: passthroughProv}
+			}
+		}
 		out[providerID+"|"+model] = mc
 	}
 }
