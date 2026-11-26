@@ -160,12 +160,29 @@ func (s *Server) handleOAuthDeleteClient(w http.ResponseWriter, r *http.Request)
 }
 
 // oauthAuthorizeError answers an authorization error: when the
-// redirect_uri is usable it redirects with ?error= (RFC 6749
-// §4.1.2.1); otherwise it answers 400 JSON, because there is
-// nowhere safe to send the error.
-func oauthAuthorizeError(w http.ResponseWriter, r *http.Request, redirectURI, code, state string) {
+// redirect_uri is usable AND matches one of the client's registered
+// redirect_uris it redirects with ?error= (RFC 6749 §4.1.2.1);
+// otherwise it answers 400 JSON, because there is nowhere safe to
+// send the error. The redirect_uri is validated against the client's
+// registered redirect_uris to prevent open-redirect/phishing on the
+// error path (P2-SEC-03 / AUD-SEC-004).
+func oauthAuthorizeError(w http.ResponseWriter, r *http.Request, iss *oauth.Issuer, clientID, redirectURI, code, state string) {
+	// If clientID is empty, we cannot validate the redirect_uri, so we must not redirect.
+	// RFC 6749 §4.1.2.1: MUST NOT automatically redirect to an invalid redirection URI.
+	if clientID == "" {
+		writeError(w, http.StatusBadRequest, "oauth authorize failed: "+code)
+		return
+	}
 	if redirectURI != "" {
 		if u, err := url.Parse(redirectURI); err == nil && u.IsAbs() {
+			// Validate the redirect_uri against the client's registered redirect_uris
+			if iss != nil && clientID != "" {
+				if err := iss.ValidateRedirectURI(clientID, redirectURI); err != nil {
+					// Invalid redirect_uri for this client: do not redirect
+					writeError(w, http.StatusBadRequest, "oauth authorize failed: redirect_uri does not match registered URIs")
+					return
+				}
+			}
 			q := u.Query()
 			q.Set("error", code)
 			if state != "" {
@@ -188,16 +205,16 @@ func oauthAuthorizeError(w http.ResponseWriter, r *http.Request, redirectURI, co
 func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	redirectURI := q.Get("redirect_uri")
-	state := q.Get("state")
-	if q.Get("response_type") != "code" {
-		oauthAuthorizeError(w, r, redirectURI, "unsupported_response_type", state)
-		return
-	}
-	clientID := q.Get("client_id")
-	if clientID == "" {
-		oauthAuthorizeError(w, r, redirectURI, "invalid_request", state)
-		return
-	}
+		state := q.Get("state")
+		if q.Get("response_type") != "code" {
+			oauthAuthorizeError(w, r, nil, "", redirectURI, "unsupported_response_type", state)
+			return
+		}
+		clientID := q.Get("client_id")
+		if clientID == "" {
+			oauthAuthorizeError(w, r, nil, "", redirectURI, "invalid_request", state)
+			return
+		}
 	iss, err := s.oauthIssuer()
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, "oauth unavailable: "+err.Error())
@@ -222,10 +239,10 @@ func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 		scopes = strings.Fields(raw)
 	}
 	code, err := iss.Authorize(clientID, redirectURI, scopes, q.Get("code_challenge"), q.Get("code_challenge_method"), s.callerKeyID(r), operatorScopes)
-	if err != nil {
-		oauthAuthorizeError(w, r, redirectURI, "invalid_request", state)
-		return
-	}
+		if err != nil {
+			oauthAuthorizeError(w, r, iss, clientID, redirectURI, "invalid_request", state)
+			return
+		}
 	u, err := url.Parse(redirectURI)
 	if err != nil || !u.IsAbs() {
 		writeError(w, http.StatusBadRequest, "oauth authorize failed: redirect_uri is not an absolute URL")
