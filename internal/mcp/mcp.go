@@ -2,7 +2,7 @@
 // Protocol) tools over stdio (newline-delimited JSON-RPC 2.0, the
 // transport MCP clients use for local servers).
 //
-// It is deliberately small and honest: 24 tools, all backed by a
+// It is deliberately small and honest: 32 tools, all backed by a
 // Source that the caller wires to the real provider registry —
 // provider_list, model_list and router_status return live data from
 // that registry, never canned responses. There is no sampling,
