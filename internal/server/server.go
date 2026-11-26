@@ -2106,7 +2106,14 @@ func (s *Server) keyPolicyAllows(w http.ResponseWriter, r *http.Request) bool {
 		// a verifier that cannot name identities by design, the
 		// previous no-op behaviour stands.
 		if credentialPresented(r) && s.identityResolvable() {
-			writeError(w, http.StatusForbidden, "credential could not be resolved to a gateway key identity")
+			// P2-IDENT-001: Anthropic surfaces answer 403 in the
+			// Anthropic error envelope.
+			msg := "credential could not be resolved to a gateway key identity"
+			if isAnthropicEndpointPath(r.URL.Path) {
+				writeAnthropicError(w, http.StatusForbidden, msg)
+			} else {
+				writeError(w, http.StatusForbidden, msg)
+			}
 			return false
 		}
 		return true
@@ -2261,8 +2268,15 @@ func (s *Server) requireScope(next http.HandlerFunc, scopes []string) http.Handl
 				return
 			}
 		}
-		writeError(w, http.StatusForbidden, "gateway key lacks required scope "+strings.Join(scopes, " or "))
-	}
+		// P2-IDENT-001: Anthropic surfaces must answer 403 in the
+		// Anthropic error envelope, not the OpenAI one.
+		msg := "gateway key lacks required scope " + strings.Join(scopes, " or ")
+		if isAnthropicEndpointPath(r.URL.Path) {
+			writeAnthropicError(w, http.StatusForbidden, msg)
+			return
+		}
+		writeError(w, http.StatusForbidden, msg)
+		}
 }
 
 // unauthorized writes the 401 for a failed auth check (CHECKLIST
@@ -2364,7 +2378,14 @@ func (s *Server) callerKeyID(r *http.Request) string {
 func (s *Server) callerForOwnership(w http.ResponseWriter, r *http.Request) (string, bool) {
 	keyID := s.callerKeyID(r)
 	if keyID == "" && credentialPresented(r) && s.identityResolvable() {
-		writeError(w, http.StatusForbidden, "credential could not be resolved to a gateway key identity")
+		// P2-IDENT-001: Anthropic surfaces answer 403 in the
+		// Anthropic error envelope.
+		msg := "credential could not be resolved to a gateway key identity"
+		if isAnthropicEndpointPath(r.URL.Path) {
+			writeAnthropicError(w, http.StatusForbidden, msg)
+		} else {
+			writeError(w, http.StatusForbidden, msg)
+		}
 		return "", false
 	}
 	return keyID, true
