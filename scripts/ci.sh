@@ -61,6 +61,10 @@ echo ""
 run_step "go build ./..." go build ./...
 run_step "scripts/check-secrets.sh" bash scripts/check-secrets.sh
 run_step "go vet ./..." go vet ./...
+# AUD-TEST-008 / P2-TEST-06: the spawn-capable route classification gate
+# existed as a script but no CI job ran it. It is a real gate (the table
+# must classify every spawn-capable route LOCAL_ONLY), so CI runs it.
+run_step "scripts/check-route-guard.sh" sh scripts/check-route-guard.sh
 
 # --- otel build tag (AUD-TEST-002): the tagged sources only compile with
 # -tags otel, and nothing in CI ever built them.
