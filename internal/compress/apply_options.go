@@ -22,12 +22,12 @@
 //     conservative choice). HasCacheControl is still unsupplied
 //     in the engine — the canonical message drops native markers
 //     at parse — and the process-wide PrefixFreeze observation
-//     is wired since :939: the engine holds the observer hooks
-//     (SetPrefixFreezeHooks, installed by main.go, which owns
-//     the *degrade.PrefixFreeze), maybeCompress observes once
-//     per request and passes FrozenPrefix here. The observer
-//     instance itself is still installed by main.go (follow-up);
-//     until then the hooks are nil and behaviour is unchanged.
+//     is wired: the engine holds the observer hooks
+//     (SetPrefixFreezeHooks, installed by main.go at startup,
+//     which owns the *degrade.PrefixFreeze), maybeCompress
+//     observes once per request, the server lane observes the
+//     same way (compression.go), and BOTH lanes pass the
+//     checker here as FrozenPrefix (router.go / compression.go).
 //   - PreserveSystemPromptMode (row :869): the per-request field
 //     preserve_system_prompt_mode wins when set; otherwise this
 //     option; otherwise the "always" default.
