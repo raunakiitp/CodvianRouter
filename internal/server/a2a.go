@@ -180,8 +180,11 @@ func (s *Server) a2aService() (*a2a.Service, error) {
 	if s.a2aPruneLoop == nil {
 		ctx, cancel := context.WithCancel(context.Background())
 		s.a2aPruneCancel = cancel
+		// P2-BG-003: register with the background-worker registry so
+		// Close() stops all workers at once.
+		s.RegisterBackgroundWorker("a2a-prune-loop", cancel)
 		s.a2aPruneLoop = StartA2APruneLoop(ctx, store, opts, s.logger)
-	}
+		}
 	return svc, nil
 }
 

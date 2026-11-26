@@ -4913,8 +4913,11 @@ func runServe(opts options) int {
 	// applying quota hints to the registry so the router skips
 	// exhausted providers and scoring sees fresh latency/success.
 	watchCtx, cancelWatch := context.WithCancel(context.Background())
-	defer cancelWatch()
-	go st.checker.StartWatcher(watchCtx, 60*time.Second)
+		defer cancelWatch()
+		go st.checker.StartWatcher(watchCtx, 60*time.Second)
+		// P2-BG-003: register the health watcher with the server's
+		// background-worker registry so Close() stops it.
+		st.RegisterBackgroundWorker("health-watcher", cancelWatch)
 
 	// MCP selector mode (CHECKLIST 141): with `mcp.servers`
 	// configured, build the registry of stdio MCP servers and

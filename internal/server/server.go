@@ -972,7 +972,16 @@ type Server struct {
 	// (see wsOriginAllowed). Set by WithWSAllowedOrigins; empty
 	// means same-origin only.
 	wsAllowedOrigins []string
-}
+		// bgWorkers is a registry of long-lived background workers (health
+		// watcher, eval scheduler, A2A prune loop, etc.) keyed by name, with
+		// their cancel functions. All workers started after P2-BG-003 are
+		// registered here so Server.Close can stop them all at once instead
+		// of relying on every caller to invoke a matching Stop/Close.
+		// P2-BG-003: previously each goroutine was started and stopped ad hoc,
+		// so a missed Stop call leaked a goroutine until process exit.
+		bgWorkers   map[string]context.CancelFunc
+		bgWorkersMu sync.Mutex
+	}
 
 // Option configures a Server.
 type Option func(*Server)
@@ -5019,8 +5028,44 @@ func (s *Server) getCCRStore() *compress.CCRStore {
 // (newTestServer registers it via t.Cleanup): on Windows an
 // open ccr.db blocks t.TempDir cleanup, failing the test at
 // teardown even when every assertion passed.
+
+// RegisterBackgroundWorker registers a long-lived background worker by name
+// with its cancel function, so StopAllBackgroundWorkers can stop all workers
+// at once. Registering the same name twice replaces the previous entry
+// (the old cancel is NOT called — callers must not double-register).
+// P2-BG-003: a centralized shutdown registry replaces ad-hoc Stop/Close calls,
+// so no goroutine can leak because a caller forgot to stop it.
+func (s *Server) RegisterBackgroundWorker(name string, cancel context.CancelFunc) {
+	s.bgWorkersMu.Lock()
+	defer s.bgWorkersMu.Unlock()
+	if s.bgWorkers == nil {
+		s.bgWorkers = make(map[string]context.CancelFunc)
+	}
+	s.bgWorkers[name] = cancel
+}
+
+// StopAllBackgroundWorkers cancels every registered background worker
+// and clears the registry. It is called by Close to ensure no goroutine
+// outlives the server. Workers that were already stopped are no-ops.
+func (s *Server) StopAllBackgroundWorkers() {
+	s.bgWorkersMu.Lock()
+	workers := make(map[string]context.CancelFunc, len(s.bgWorkers))
+	for name, cancel := range s.bgWorkers {
+		workers[name] = cancel
+	}
+	s.bgWorkers = make(map[string]context.CancelFunc)
+	s.bgWorkersMu.Unlock()
+	for name, cancel := range workers {
+		cancel()
+		s.logger.Printf("background worker stopped: %s", name)
+	}
+}
+
 func (s *Server) Close() error {
 	var errs []error
+	// P2-BG-003: stop all registered background workers first so no
+	// goroutine touches stores or other state after Close begins.
+	s.StopAllBackgroundWorkers()
 	s.ccrMu.Lock()
 	store := s.ccrStore
 	s.ccrStore = nil

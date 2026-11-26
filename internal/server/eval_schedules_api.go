@@ -82,12 +82,17 @@ func (s *Server) startEvalScheduler() {
 	}
 	st := s.evalStateInit()
 	st.mu.Lock()
-	ctx, cancel := context.WithCancel(context.Background())
-	st.cancel = cancel
-	if st.scheduler == nil {
-		eng := s.evalEngine
-		if eng == nil {
-			eng = s.engine
+		ctx, cancel := context.WithCancel(context.Background())
+		st.cancel = cancel
+		// P2-BG-003: register with the background-worker registry so
+		// Close() stops all workers at once.
+		s.RegisterBackgroundWorker("eval-scheduler", cancel)
+		var eng eval.Engine
+		if st.scheduler == nil {
+			eng = s.evalEngine
+			if eng == nil {
+				eng = s.engine
+			}
 		}
 		// Adapter: server.Engine has Chat and ChatStream; eval.Engine only needs Chat.
 		// Since server.Engine implements eval.Engine's Chat method, we can wrap it.
@@ -104,7 +109,6 @@ func (s *Server) startEvalScheduler() {
 				})
 			},
 		}
-	}
 	sch := st.scheduler
 	st.mu.Unlock()
 	// AUD-REL-006 (second half): the loop goroutine gets its own panic
