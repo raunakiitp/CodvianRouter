@@ -184,7 +184,7 @@ func (s *Server) a2aService() (*a2a.Service, error) {
 		// Close() stops all workers at once.
 		s.RegisterBackgroundWorker("a2a-prune-loop", cancel)
 		s.a2aPruneLoop = StartA2APruneLoop(ctx, store, opts, s.logger)
-		}
+	}
 	return svc, nil
 }
 

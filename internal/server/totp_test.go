@@ -360,77 +360,77 @@ func TestTotpHandlers(t *testing.T) {
 	}
 
 	// Test disable endpoint (no auth — should fail)
-		body, _ = json.Marshal(map[string]string{})
-		req = httptest.NewRequest(http.MethodPost, "/dashboard/auth/totp/disable", strings.NewReader(string(body)))
-		req.Header.Set("Content-Type", "application/json")
-		w = httptest.NewRecorder()
-		s.handleTotpDisable(w, req)
-		if w.Code != http.StatusUnauthorized {
-			t.Errorf("disable without auth: expected 401, got %d", w.Code)
-		}
+	body, _ = json.Marshal(map[string]string{})
+	req = httptest.NewRequest(http.MethodPost, "/dashboard/auth/totp/disable", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	s.handleTotpDisable(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("disable without auth: expected 401, got %d", w.Code)
+	}
+}
+
+// TestTotpVerifyRateLimited verifies that POST /dashboard/auth/totp/verify
+// is rate-limited per peer like password login (P2-SEC-06 / AUD-SEC-007).
+func TestTotpVerifyRateLimited(t *testing.T) {
+	srv := newTestServer(t, &fakeEngine{})
+	s := srv
+
+	dir := t.TempDir()
+	s.cfg = &config.Config{DataDir: dir}
+
+	// Enroll TOTP via store
+	st, err := s.totpStoreFor()
+	if err != nil {
+		t.Fatalf("totpStoreFor: %v", err)
+	}
+	secret, _, err := st.StartEnrollment("rate@example.com")
+	if err != nil {
+		t.Fatalf("StartEnrollment: %v", err)
+	}
+	stepStart := time.Unix((time.Now().Unix()/totpInterval)*totpInterval, 0)
+	code := totpCodeForSecret(secret, stepStart)
+	_, err = st.ConfirmEnrollment(code)
+	if err != nil {
+		t.Fatalf("ConfirmEnrollment: %v", err)
 	}
 
-	// TestTotpVerifyRateLimited verifies that POST /dashboard/auth/totp/verify
-	// is rate-limited per peer like password login (P2-SEC-06 / AUD-SEC-007).
-	func TestTotpVerifyRateLimited(t *testing.T) {
-		srv := newTestServer(t, &fakeEngine{})
-		s := srv
-
-		dir := t.TempDir()
-		s.cfg = &config.Config{DataDir: dir}
-
-		// Enroll TOTP via store
-		st, err := s.totpStoreFor()
-		if err != nil {
-			t.Fatalf("totpStoreFor: %v", err)
-		}
-		secret, _, err := st.StartEnrollment("rate@example.com")
-		if err != nil {
-			t.Fatalf("StartEnrollment: %v", err)
-		}
-		stepStart := time.Unix((time.Now().Unix()/totpInterval)*totpInterval, 0)
-		code := totpCodeForSecret(secret, stepStart)
-		_, err = st.ConfirmEnrollment(code)
-		if err != nil {
-			t.Fatalf("ConfirmEnrollment: %v", err)
-		}
-
-		// Make dashLoginMaxFailures failed verify attempts.
-		// All from httptest, so RemoteAddr is "" → same peer.
-		badBody, _ := json.Marshal(map[string]string{"code": "000000"})
-		for i := 0; i < dashLoginMaxFailures; i++ {
-			req := httptest.NewRequest(http.MethodPost, "/dashboard/auth/totp/verify", strings.NewReader(string(badBody)))
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Authorization", "Bearer test-key-123")
-			w := httptest.NewRecorder()
-			s.handleTotpVerify(w, req)
-			if w.Code != http.StatusUnauthorized {
-				t.Errorf("attempt %d: expected 401, got %d: %s", i+1, w.Code, w.Body.String())
-			}
-		}
-
-		// The next attempt should be rate-limited (429).
+	// Make dashLoginMaxFailures failed verify attempts.
+	// All from httptest, so RemoteAddr is "" → same peer.
+	badBody, _ := json.Marshal(map[string]string{"code": "000000"})
+	for i := 0; i < dashLoginMaxFailures; i++ {
 		req := httptest.NewRequest(http.MethodPost, "/dashboard/auth/totp/verify", strings.NewReader(string(badBody)))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer test-key-123")
 		w := httptest.NewRecorder()
 		s.handleTotpVerify(w, req)
-		if w.Code != http.StatusTooManyRequests {
-			t.Errorf("after %d failures: expected 429, got %d: %s", dashLoginMaxFailures, w.Code, w.Body.String())
-		}
-
-		// A valid code while locked out should still be 429 (rate limit takes precedence).
-		goodStep := time.Unix((time.Now().Unix()/totpInterval)*totpInterval, 0)
-		goodCode := totpCodeForSecret(secret, goodStep)
-		goodBody, _ := json.Marshal(map[string]string{"code": goodCode})
-		req = httptest.NewRequest(http.MethodPost, "/dashboard/auth/totp/verify", strings.NewReader(string(goodBody)))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer test-key-123")
-		w = httptest.NewRecorder()
-		s.handleTotpVerify(w, req)
-		if w.Code != http.StatusTooManyRequests {
-			t.Errorf("locked out with valid code: expected 429, got %d: %s", w.Code, w.Body.String())
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("attempt %d: expected 401, got %d: %s", i+1, w.Code, w.Body.String())
 		}
 	}
+
+	// The next attempt should be rate-limited (429).
+	req := httptest.NewRequest(http.MethodPost, "/dashboard/auth/totp/verify", strings.NewReader(string(badBody)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-key-123")
+	w := httptest.NewRecorder()
+	s.handleTotpVerify(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("after %d failures: expected 429, got %d: %s", dashLoginMaxFailures, w.Code, w.Body.String())
+	}
+
+	// A valid code while locked out should still be 429 (rate limit takes precedence).
+	goodStep := time.Unix((time.Now().Unix()/totpInterval)*totpInterval, 0)
+	goodCode := totpCodeForSecret(secret, goodStep)
+	goodBody, _ := json.Marshal(map[string]string{"code": goodCode})
+	req = httptest.NewRequest(http.MethodPost, "/dashboard/auth/totp/verify", strings.NewReader(string(goodBody)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-key-123")
+	w = httptest.NewRecorder()
+	s.handleTotpVerify(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("locked out with valid code: expected 429, got %d: %s", w.Code, w.Body.String())
+	}
+}
 
 // configForTest removed — using config.Config directly.

@@ -973,16 +973,16 @@ type Server struct {
 	// (see wsOriginAllowed). Set by WithWSAllowedOrigins; empty
 	// means same-origin only.
 	wsAllowedOrigins []string
-		// bgWorkers is a registry of long-lived background workers (health
-		// watcher, eval scheduler, A2A prune loop, etc.) keyed by name, with
-		// their cancel functions. All workers started after P2-BG-003 are
-		// registered here so Server.Close can stop them all at once instead
-		// of relying on every caller to invoke a matching Stop/Close.
-		// P2-BG-003: previously each goroutine was started and stopped ad hoc,
-		// so a missed Stop call leaked a goroutine until process exit.
-		bgWorkers   map[string]context.CancelFunc
-		bgWorkersMu sync.Mutex
-	}
+	// bgWorkers is a registry of long-lived background workers (health
+	// watcher, eval scheduler, A2A prune loop, etc.) keyed by name, with
+	// their cancel functions. All workers started after P2-BG-003 are
+	// registered here so Server.Close can stop them all at once instead
+	// of relying on every caller to invoke a matching Stop/Close.
+	// P2-BG-003: previously each goroutine was started and stopped ad hoc,
+	// so a missed Stop call leaked a goroutine until process exit.
+	bgWorkers   map[string]context.CancelFunc
+	bgWorkersMu sync.Mutex
+}
 
 // Option configures a Server.
 type Option func(*Server)
@@ -2394,8 +2394,8 @@ func (s *Server) requireScope(next http.HandlerFunc, scopes []string) http.Handl
 			return
 		}
 		writeError(w, http.StatusForbidden, msg)
-		}
 	}
+}
 
 // unauthorized writes the 401 for a failed auth check (CHECKLIST
 // 195): when the presented key matches a stored gateway key whose

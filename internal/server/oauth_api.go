@@ -205,16 +205,16 @@ func oauthAuthorizeError(w http.ResponseWriter, r *http.Request, iss *oauth.Issu
 func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	redirectURI := q.Get("redirect_uri")
-		state := q.Get("state")
-		if q.Get("response_type") != "code" {
-			oauthAuthorizeError(w, r, nil, "", redirectURI, "unsupported_response_type", state)
-			return
-		}
-		clientID := q.Get("client_id")
-		if clientID == "" {
-			oauthAuthorizeError(w, r, nil, "", redirectURI, "invalid_request", state)
-			return
-		}
+	state := q.Get("state")
+	if q.Get("response_type") != "code" {
+		oauthAuthorizeError(w, r, nil, "", redirectURI, "unsupported_response_type", state)
+		return
+	}
+	clientID := q.Get("client_id")
+	if clientID == "" {
+		oauthAuthorizeError(w, r, nil, "", redirectURI, "invalid_request", state)
+		return
+	}
 	iss, err := s.oauthIssuer()
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, "oauth unavailable: "+err.Error())
@@ -239,10 +239,10 @@ func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 		scopes = strings.Fields(raw)
 	}
 	code, err := iss.Authorize(clientID, redirectURI, scopes, q.Get("code_challenge"), q.Get("code_challenge_method"), s.callerKeyID(r), operatorScopes)
-		if err != nil {
-			oauthAuthorizeError(w, r, iss, clientID, redirectURI, "invalid_request", state)
-			return
-		}
+	if err != nil {
+		oauthAuthorizeError(w, r, iss, clientID, redirectURI, "invalid_request", state)
+		return
+	}
 	u, err := url.Parse(redirectURI)
 	if err != nil || !u.IsAbs() {
 		writeError(w, http.StatusBadRequest, "oauth authorize failed: redirect_uri is not an absolute URL")

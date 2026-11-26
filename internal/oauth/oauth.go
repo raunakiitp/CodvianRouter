@@ -159,10 +159,10 @@ type TokenResponse struct {
 }
 
 type persistedState struct {
-	SigningKey    string                    `json:"signing_key"`
-	Clients       []*Client                 `json:"clients"`
-	RefreshTokens []*refreshToken           `json:"refresh_tokens"`
-	Revoked       []revokedEntry            `json:"revoked,omitempty"`
+	SigningKey    string          `json:"signing_key"`
+	Clients       []*Client       `json:"clients"`
+	RefreshTokens []*refreshToken `json:"refresh_tokens"`
+	Revoked       []revokedEntry  `json:"revoked,omitempty"`
 }
 
 type revokedEntry struct {
@@ -474,28 +474,28 @@ func (iss *Issuer) Authorize(clientID, redirectURI string, scopes []string, chal
 		ExpiresAt:   time.Now().Add(CodeTTL),
 	}
 	return code, nil
-	}
+}
 
-	// ValidateRedirectURI checks if the given redirectURI is registered for the
-	// clientID. It returns nil if valid, or an error if the client doesn't exist
-	// or the redirectURI is not registered for that client.
-	// Used by the authorize error path to prevent open redirects (P2-SEC-03).
-	func (iss *Issuer) ValidateRedirectURI(clientID, redirectURI string) error {
-		iss.mu.Lock()
-		defer iss.mu.Unlock()
-		client, ok := iss.clients[clientID]
-		if !ok {
-			return errors.New("oauth: unknown client_id")
-		}
-		for _, r := range client.RedirectURIs {
-			if r == redirectURI {
-				return nil
-			}
-		}
-		return errors.New("oauth: redirect_uri does not match the registered redirect_uris")
+// ValidateRedirectURI checks if the given redirectURI is registered for the
+// clientID. It returns nil if valid, or an error if the client doesn't exist
+// or the redirectURI is not registered for that client.
+// Used by the authorize error path to prevent open redirects (P2-SEC-03).
+func (iss *Issuer) ValidateRedirectURI(clientID, redirectURI string) error {
+	iss.mu.Lock()
+	defer iss.mu.Unlock()
+	client, ok := iss.clients[clientID]
+	if !ok {
+		return errors.New("oauth: unknown client_id")
 	}
+	for _, r := range client.RedirectURIs {
+		if r == redirectURI {
+			return nil
+		}
+	}
+	return errors.New("oauth: redirect_uri does not match the registered redirect_uris")
+}
 
-	// authenticateClient checks a confidential client's secret
+// authenticateClient checks a confidential client's secret
 // (constant-time hash compare). Public clients skip this step —
 // PKCE is their authentication.
 func (iss *Issuer) authenticateClient(client *Client, secret string) bool {

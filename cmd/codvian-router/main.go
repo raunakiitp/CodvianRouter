@@ -4916,7 +4916,7 @@ func runServe(opts options) int {
 	defer cancelWatch()
 	go st.checker.StartWatcher(watchCtx, 60*time.Second)
 
-// MCP selector mode (CHECKLIST 141): with `mcp.servers`
+	// MCP selector mode (CHECKLIST 141): with `mcp.servers`
 	// configured, build the registry of stdio MCP servers and
 	// discover their tools now, at startup. A server that fails
 	// to start or answer tools/list is logged and recorded as

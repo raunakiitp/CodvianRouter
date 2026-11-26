@@ -3943,25 +3943,25 @@ func (e *Engine) callChat(ctx context.Context, att Attempt, req provider.ChatReq
 	attReq := reqWithModel(req, att)
 	attReq, att = e.withEffortForwarding(attReq, att, client)
 	// Adaptive admission: a provider at its cap sheds this call
-		// (ErrLimited, called=false) instead of queueing behind its
-		// in-flight work. The limiter fails open — a nil limiter
-		// admits — so this can only refuse a provider whose RTT has
-		// actually degraded. The slot is held for the upstream call
-		// only and released the moment it returns.
-		// P2-CAP-002: process-wide admission cap consulted first — fail-open
-		// when unset (nil). Bounds aggregate concurrency regardless of how
-		// many providers/keys are active.
-		if !adaptive.GlobalTryAcquire() {
-			e.noteConcurrencyRejected(att.ProviderID)
-			return attemptResult{att: att, err: adaptive.ErrLimited, reasoning: label}
-		}
-		defer adaptive.GlobalRelease()
-		if !e.limiter.TryAcquire(att.ProviderID) {
-			adaptive.GlobalRelease()
-			e.noteConcurrencyRejected(att.ProviderID)
-			return attemptResult{att: att, err: adaptive.ErrLimited, reasoning: label}
-		}
-		defer e.limiter.Release(att.ProviderID)
+	// (ErrLimited, called=false) instead of queueing behind its
+	// in-flight work. The limiter fails open — a nil limiter
+	// admits — so this can only refuse a provider whose RTT has
+	// actually degraded. The slot is held for the upstream call
+	// only and released the moment it returns.
+	// P2-CAP-002: process-wide admission cap consulted first — fail-open
+	// when unset (nil). Bounds aggregate concurrency regardless of how
+	// many providers/keys are active.
+	if !adaptive.GlobalTryAcquire() {
+		e.noteConcurrencyRejected(att.ProviderID)
+		return attemptResult{att: att, err: adaptive.ErrLimited, reasoning: label}
+	}
+	defer adaptive.GlobalRelease()
+	if !e.limiter.TryAcquire(att.ProviderID) {
+		adaptive.GlobalRelease()
+		e.noteConcurrencyRejected(att.ProviderID)
+		return attemptResult{att: att, err: adaptive.ErrLimited, reasoning: label}
+	}
+	defer e.limiter.Release(att.ProviderID)
 	start := time.Now()
 	// Panic isolation (CHECKLIST 165): a provider client that
 	// panics — a bug in the client, or in a wire chunk converter

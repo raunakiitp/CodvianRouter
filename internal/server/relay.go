@@ -1496,11 +1496,11 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 		}
 		s.recordMetrics(ctx, provider.ChatRequest{Model: head.Model, Stream: head.Stream}, nil, nil, start)
 		writeVerbatimHeaders(w, resp, reason)
-				// Telemetry headers (M2.1): the relay target and model
-				// are known; tokens and cost come from the provider-reported
-				// usage that the verbatim path records itself (AUD-SEC-002),
-				// so relay spend IS in the ledger.
-				meta := s.verbatimMeta(target, head, start)
+		// Telemetry headers (M2.1): the relay target and model
+		// are known; tokens and cost come from the provider-reported
+		// usage that the verbatim path records itself (AUD-SEC-002),
+		// so relay spend IS in the ledger.
+		meta := s.verbatimMeta(target, head, start)
 		s.writeResponseHeaders(w, ctx, meta)
 		s.recordTelemetry(ctx, meta, resp.StatusCode)
 		w.WriteHeader(resp.StatusCode)
