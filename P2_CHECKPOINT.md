@@ -1,53 +1,56 @@
-# P2 Implementation Checkpoint — All Workstreams Complete
+# P2 Implementation Checkpoint
 
 ## Current State
 - **Branch:** `p2-implementation`
-- **Current HEAD:** `4dfd8ff` (P2-IDENT-003 test updates)
+- **Current HEAD:** see `git rev-parse HEAD` (advances per implementation commit)
 - **Working tree:** clean
-- **Ahead of origin/p2-implementation by 39 commits**
+- **Ahead of origin/p2-implementation:** grows with each unpushed commit
+- **main / origin/main:** `a45b4ff` (P1 closure baseline)
 
-## Completed Workstreams
+## Status — NOT complete
 
-### WS1 — Verification Integrity: 14/14 ✓
-### WS2 — Unified Identity: 3/3 ✓
-### WS3 — Money & Billing: 3/3 ✓
-### WS4 — Protocol Truthfulness: 2/2 ✓
-### WS5 — Capacity & Concurrency: 6/6 ✓
-### WS6 — Background Resilience: 4/4 ✓
-### WS7 — Performance Guardrails ✓
-### WS8 — Hygiene & Deployment: dispositioned (docs/P2_REMAINING_FINDINGS_DISPOSITION.md)
-### WS9A — Account-Aware Intelligent Routing: 4/4 ✓
-### WS9B — Token Privacy & Consent: dispositioned
-### WS9C — Push/Pull/OAuth Provider Routing: dispositioned
-### WS9D — Observability: dispositioned
-### WS9E — Dashboard: dispositioned
-### WS9F — Compression: dispositioned
-### WS9G — A2A: dispositioned
+`P2_FINAL_FORENSIC_AUDIT.md` (repo root) is the authoritative
+backlog. Its verdict: **NOT_READY — IMPLEMENTATION GAPS REMAIN**.
+The current campaign closes those gaps block by block; this
+checkpoint is updated as blocks land. Do not mark all workstreams
+complete while backlog items remain open.
 
-## Additional Fixes (beyond original checkpoint)
-- P2-OAUTH-001: JWT revocation JTIs persisted across restart (oauth.go + test)
-- P2-OBS-02: Prometheus `\\n` → `\n` in guardrail HELP/TYPE lines (metrics.go)
-- P2-MCP-001: MCP tool count doc "24" → "32" (mcp.go)
-- P2-UI-02: Removed duplicate `data-view="batch"` sidebar button (web/index.html)
-- P2-UI-05: Removed `&& false` from dark-mode detection (web/index.html)
-- P2-UI-06: Removed fonts.googleapis.com/gstatic.com preconnect+stylesheet (web/index.html)
+## Workstream status (independently audited, not ledger-copied)
 
-## Regression Fixes (this session)
-- **P2-IDENT-003 scope regression:** `StaticKeyVerifier.KeyScopes` now returns `["admin","chat","models"]` instead of `nil`. Empty scopes broke all static-key tests (403 on every scoped route). StaticKeyVerifier is test/fallback helper only; production configVerifier enforces real per-key scopes. Updated P2-IDENT-003 tests to match.
-- **P2-SEC-06 TOTP test:** `TestTotpHandlers` now clears rate-limit failures for `dashLoginPeer(req)` (`"192.0.2.1"` from httptest) instead of `""`. httptest sets RemoteAddr to `192.0.2.1:1234`, not `""`.
-- **P2-UI-02 nav count:** `TestDashboardM10_0NavSlots` expects 32 data-view entries (was 33) after duplicate batch button removal.
-- **Build fix:** Removed broken `stack.RegisterBackgroundWorker` call in `cmd/codvian-router/main.go` — `stack` type has no such method; `defer cancelWatch()` already provides cleanup.
-- **P2-A2A-003:** Fixed "six skills" → "twelve skills" comment in `internal/a2a/skills.go`.
+### Strong
+- WS4 Protocol Truthfulness — envelopes + query-key auth implemented
+- WS5 Capacity — stream byte counter, ledger read pool implemented
+- WS9A Routing — fallback chains wired + pinned tests
 
-## Disposition Document
-`docs/P2_REMAINING_FINDINGS_DISPOSITION.md` — all remaining WS8/WS9B-G findings dispositioned as CODE FIX, DOC, OWNER, or N/A.
+### Gaps closed by the current campaign (P2_FINAL_FORENSIC_AUDIT.md backlog)
+- A1/A2/A3 (P0): canonical principalFor, webhook 429 retry, A2A panic containment
+- B1 (P1): ledger async batch bounded retry (AUD-REL-002)
+- B2 (P1): Docker digest pinning (AUD-CFG-001)
+- B3 (P1): /readyz readiness probe wired into healthcheck (AUD-CFG-004)
+- B4 (P1): automatic benchmark regression gate (cmd/bench-compare + bench-run.yml)
+- B5/B6 (P1): compression pool integration; PrefixFreeze stale comment corrected
+- 4.1: WS9 mapping corrected in docs/P2_REMAINING_FINDINGS_DISPOSITION.md
+- 4.3: TestProbeReachability determinism (injected dialer, no external DNS)
+
+### Still open (tracked in P2_FINAL_FORENSIC_AUDIT.md Deliverable I)
+- WS3 batch re-queue at the BATCHES-API level (async-writer level done)
+- WS9C MCP SSE + streamable-HTTP transports (stdio only today, M9.2)
+- WS9D provider OAuth connectability inventory (31 CategoryOAuth entries)
+- WS9E structured-output tests + provider x modality x operation matrix
+- WS9F default tracing decision + candidate-selection trace tests
+- WS9G dashboard load functions (keys/health/resilience/verifications/webhooks),
+  keyboard accessibility, route-disposition recount
+- WS6 stream re-open idempotency (AUD-REL-008)
 
 ## Test Evidence
 - `go build ./...` → exit 0
-- `go test -count=1 ./...` → all packages PASS except `TestProbeReachability` in `internal/cataudit` (10s timeout on DNS resolution of `nonexistent.invalid` — sandbox has no external DNS; infrastructure failure, not code failure)
-- All P2-IDENT-003, P2-SEC-03/06, P2-UI-02/05/06 tests pass
+- Full `go test -count=1 ./...` green after the determinism fix —
+  the one previously failing package (internal/cataudit,
+  TestProbeReachability) was an infrastructure-DNS flake, now fixed.
+- The consolidated final verification campaign has NOT been run.
 
-## Next Steps
-- WS9G + targeted verification is complete
-- Ready for consolidated final verification campaign (requires owner approval)
-- No production deployment, no paid API spending
+## Rules in force
+- No production deployment, no paid API spending, no force-push.
+- Do not push without separate authorization.
+- Stop and request authorization before the single consolidated
+  final verification campaign.

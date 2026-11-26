@@ -19,7 +19,7 @@ or existing docs). Items marked "OWNER" require maintainer action.
 | P2-BASE-003 | Historical reconciliation | DOC | Superseded; three findings re-verified under AUD-SEC-005, AUD-PERF-007, AUD-CFG-001. |
 | P2-BASE-005 | Branch hygiene | DOC | 3 local branches merged into main. Remote branches tracked via GitHub. No action needed. |
 
-## WS9B — Token Privacy & Consent
+## WS9D — Provider OAuth & Connections (OAuth findings; mapping corrected per the final audit — was mislabeled "Token Privacy & Consent")
 
 | ID | Area | Disposition | Evidence |
 |----|------|-------------|----------|
@@ -28,13 +28,13 @@ or existing docs). Items marked "OWNER" require maintainer action.
 | P2-OAUTH-005 | State double-submit cookie | CODE FIX | State is stored in a short-lived `codvian_oauth_state_<provider>` cookie and validated at callback. Already implemented. |
 | P2-OAUTH-006 | OpenRouter login | N/A | OpenRouter PKCE returns a user-controlled API key, not a refresh-token pair. Documented honestly; no refresh claimed. |
 
-## WS9C — Push/Pull/OAuth Provider Routing
+## WS9D — Provider OAuth & Connections (continued)
 
 | ID | Area | Disposition | Evidence |
 |----|------|-------------|----------|
 | P2-OAUTH-003 | Provider OAuth connections | DOC | Dashboard `oauthConnStore` holds only github/google/microsoft integration providers. Catalog `AuthOAuth` providers (31 `CategoryOAuth` entries) are advertised but unconnectable via this store. OpenRouter PKCE is the real provider path (separate code path). Document the split: dashboard OAuth = integration-only; catalog provider OAuth = OpenRouter PKCE + Entra client-credentials. |
 
-## WS9D — Observability
+## WS9F — Observability (P2-OBS findings; mapping corrected — was mislabeled "Observability" under WS9D)
 
 | ID | Area | Disposition | Evidence |
 |----|------|-------------|----------|
@@ -48,7 +48,7 @@ or existing docs). Items marked "OWNER" require maintainer action.
 | P2-OBS-08 | B8 endpoints 501 | DOC | B8 proxy/console/timeline/activity/conversations/compression/audit/log-destination endpoints answer 501 `feature_unavailable`. Documented as not-yet-implemented surface. |
 | P2-OBS-09 | No Prometheus scrape config | DOC | No Prometheus scrape config committed. Metrics endpoint exists at `/metrics`; scrape config is deployment-specific. |
 
-## WS9E — Dashboard
+## WS9G — Product/UI Completion (P2-UI findings; mapping corrected — was mislabeled "Dashboard" under WS9E)
 
 | ID | Area | Disposition | Evidence |
 |----|------|-------------|----------|
@@ -59,7 +59,7 @@ or existing docs). Items marked "OWNER" require maintainer action.
 | P2-UI-06 | Third-party web fonts | CODE FIX | Removed `fonts.googleapis.com`/`fonts.gstatic.com` preconnect + stylesheet to honor the "all traffic stays on this machine" claim (commit `eb23714`). |
 | P2-UI-07 | Single inline HTML | DOC | 13,710-line self-contained `web/index.html` is deliberate (no asset pipeline, no CSP). Documented as self-contained-embed design. |
 
-## WS9F — Compression
+## WS9B — Advanced Compression (P2-CMP findings; mapping corrected — was mislabeled "Compression" under WS9F)
 
 | ID | Area | Disposition | Evidence |
 |----|------|-------------|----------|
@@ -68,7 +68,7 @@ or existing docs). Items marked "OWNER" require maintainer action.
 | P2-CMP-003 | Unknown window fit gate | DOC | Fit gate treats unknown window as fitting ("unknown is not proof of too-small"). Conservative in one direction. No correctness change. |
 | P2-CMP-004 | PrefixFreeze observer | DOC | `apply_options.go` documents the observer as installed by main.go with nil hooks. Verified installed. |
 
-## WS9G — A2A
+## WS9C — MCP/A2A Ecosystem (P2-A2A findings; mapping corrected — was mislabeled "A2A" under WS9G)
 
 | ID | Area | Disposition | Evidence |
 |----|------|-------------|----------|
