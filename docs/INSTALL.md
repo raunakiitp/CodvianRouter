@@ -38,7 +38,7 @@ git clone https://github.com/raunakiitp/CodvianRouter
 cd CodvianRouter
 go build -o codvian-router ./cmd/codvian-router
 ./codvian-router init      # creates config + your first gateway key (shown ONCE)
-./codvian-router serve     # listens on 127.0.0.1:20128, auth ON
+./codvian-router serve     # listens on 127.0.0.1:20128/dashboard, auth ON
 ```
 
 What `init` prints (save the key — it cannot be recovered):

@@ -114,7 +114,7 @@ Full install guide: [docs/INSTALL.md](docs/INSTALL.md).
 
 | Feature | In one line |
 |---|---|
-| Local dashboard | Providers, models, usage, and health at `http://127.0.0.1:20128` |
+| Local dashboard | Providers, models, usage, and health at `http://127.0.0.1:20128/dashboard` |
 | Guardrails | PII detection and redaction, prompt-injection checks, content filtering |
 | Keys & auth | Gateway keys, OAuth/JWT clients for the gateway, per-key scopes and IP lists — every request authenticated. Provider account login: OpenRouter OAuth PKCE (`provider login openrouter`); Azure OpenAI via Microsoft Entra ID client credentials. Subscription/cookie sign-in remains unsupported |
 | MCP server | 32 tools, so coding agents can drive the router too |
