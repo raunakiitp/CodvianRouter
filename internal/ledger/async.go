@@ -35,9 +35,17 @@
 //   - Batch failure: if a batch commit fails, the rows are counted
 //     in FailedRows, the failure is logged to stderr, and the
 //     writer keeps going — a poisoned batch must not wedge the
-//     writer and take the request path down with it. Failed rows
-//     are lost; the count is exposed via Stats so the loss is
-//     visible, never silent.
+//     writer and take the request path down with it. AUD-REL-002:
+//     a batch whose transaction PROVABLY rolled back with nothing
+//     applied (begin/prepare failure, budget-update or agent-session
+//     rollback) is retried with a bounded budget — the retry cannot
+//     double-record because nothing landed. Failure modes where a
+//     partial application cannot be ruled out (a failed chunk insert
+//     while other chunks of the same batch proceed, a failed COMMIT)
+//     are never retried: re-running them could duplicate rows, so
+//     they stay count-and-continue. Retry attempts are counted in
+//     RetryAttempts (Stats) and the final loss stays visible in
+//     FailedRows — never silent.
 //   - Read lag: dashboard feeds read SQLite, so they lag the live
 //     request count by at most one flush interval. Counts are
 //     never invented to hide the lag.
@@ -68,13 +76,16 @@ type AsyncWriterConfig struct {
 
 // AsyncStats is the writer's honest accounting: rows still queued,
 // rows written synchronously because the queue was full, rows lost
-// to failed batch commits, and batches committed so far.
+// to failed batch commits, batches committed so far, and extra
+// commit attempts made for batches whose transaction provably
+// rolled back with nothing applied (AUD-REL-002 bounded retry).
 type AsyncStats struct {
 	Queued        int
 	SyncFallbacks uint64
 	FailedRows    uint64
 	Batches       uint64
 	CommittedRows uint64
+	RetryAttempts uint64
 }
 
 // AsyncWriter batches ledger rows off the request path. Use
@@ -102,6 +113,7 @@ type AsyncWriter struct {
 	failedRows    uint64
 	batches       uint64
 	committedRows uint64
+	retryAttempts uint64
 }
 
 // SetPrices replaces the price map the writer charges rows with
@@ -245,6 +257,7 @@ func (w *AsyncWriter) Stats() AsyncStats {
 		FailedRows:    atomic.LoadUint64(&w.failedRows),
 		Batches:       atomic.LoadUint64(&w.batches),
 		CommittedRows: atomic.LoadUint64(&w.committedRows),
+		RetryAttempts: atomic.LoadUint64(&w.retryAttempts),
 	}
 }
 
@@ -321,36 +334,69 @@ func (w *AsyncWriter) run() {
 // on any build.
 const multiRowInsertChunk = 32
 
-// commitBatch writes one batch in a single transaction with one
+// asyncCommitMaxAttempts bounds the AUD-REL-002 retry: the first
+// attempt plus two retries for failure modes where the transaction
+// provably rolled back with nothing applied (transient SQLite
+// busy/lock errors clear in milliseconds).
+const asyncCommitMaxAttempts = 3
+
+// commitBatch runs one batch commit with a bounded retry budget
+// (AUD-REL-002). commitBatchOnce reports whether the failure was
+// retry-safe — the transaction rolled back with NOTHING applied, so
+// re-running the whole batch cannot double-record. A failed COMMIT
+// (or a successful one) is never retried: a failed commit may have
+// partially applied, so re-running could duplicate rows. Rows are
+// counted failed only when their loss is final: either a chunk
+// failed and the batch still committed, the commit itself failed,
+// or every retry attempt rolled back (the rows never landed).
+// Retry attempts are counted in RetryAttempts (Stats).
+func (w *AsyncWriter) commitBatch(batch []Usage) {
+	for attempt := 1; ; attempt++ {
+		retrySafe, lost := w.commitBatchOnce(batch)
+		if !retrySafe {
+			atomic.AddUint64(&w.failedRows, lost)
+			return
+		}
+		// The transaction rolled back with nothing applied: a
+		// retry cannot double-record.
+		if attempt >= asyncCommitMaxAttempts {
+			atomic.AddUint64(&w.failedRows, uint64(len(batch)))
+			return
+		}
+		atomic.AddUint64(&w.retryAttempts, 1)
+		// Brief bounded backoff — 5ms, 10ms — for a transient
+		// busy/lock; the writer goroutine sleeps, nothing on the
+		// request path waits on it.
+		time.Sleep(time.Duration(5<<uint(attempt-1)) * time.Millisecond)
+	}
+}
+
+// commitBatchOnce writes one batch in a single transaction with one
 // multi-row INSERT per 32-row chunk (one SQL parse per chunk, not
 // per row — the driver re-parses on every Exec, see
 // multiRowInsertChunk) and one aggregated budget UPDATE per
-// gateway key, with one fsync per batch, not per row. A failure
-// is counted and logged, never retried in a way that could
-// double-record: a failed COMMIT may have partially applied, so
-// re-running the batch could duplicate rows. A failed chunk
-// counts exactly its rows as failed and excludes their spend
-// from the budget update; the blast radius grows from 1 row to
-// at most one 32-row chunk, and usage_events has no UNIQUE
-// constraint a row can violate, so a chunk failure in practice
-// means a DB-level error that would have failed every row
-// anyway.
-func (w *AsyncWriter) commitBatch(batch []Usage) {
+// gateway key, with one fsync per batch, not per row. The returned
+// bool is true only when the transaction was rolled back with
+// nothing applied (begin/prepare failure, agent-session upsert
+// failure, budget-update failure — NEW-M-02), making the whole
+// batch retry-safe. lost is the number of rows whose loss is FINAL
+// from this attempt: a chunk that failed while the batch still
+// committed, or the whole batch on a failed COMMIT (a failed
+// commit may have partially applied — never retried, counted lost).
+func (w *AsyncWriter) commitBatchOnce(batch []Usage) (retrySafe bool, lost uint64) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	tx, err := w.l.db.BeginTx(ctx, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ledger: async batch begin failed (%d rows lost): %v\n", len(batch), err)
-		atomic.AddUint64(&w.failedRows, uint64(len(batch)))
-		return
+		fmt.Fprintf(os.Stderr, "ledger: async batch begin failed (%d rows, will retry): %v\n", len(batch), err)
+		return true, 0
 	}
 	defer tx.Rollback()
 	update, err := tx.PrepareContext(ctx, `
 		UPDATE budgets SET spent_usd = spent_usd + ? WHERE key_id = ?`)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ledger: async batch prepare update failed (%d rows lost): %v\n", len(batch), err)
-		atomic.AddUint64(&w.failedRows, uint64(len(batch)))
-		return
+		fmt.Fprintf(os.Stderr, "ledger: async batch prepare update failed (%d rows, will retry): %v\n", len(batch), err)
+		return true, 0
 	}
 	defer update.Close()
 	now := time.Now().UnixMilli()
@@ -377,6 +423,7 @@ func (w *AsyncWriter) commitBatch(batch []Usage) {
 	for _, u := range batch {
 		rows = append(rows, normalizeUsage(u, w.pricesSnapshot(), w.flatRateAsZero()))
 	}
+	chunkLost := uint64(0)
 	for start := 0; start < len(rows); start += multiRowInsertChunk {
 		end := start + multiRowInsertChunk
 		if end > len(rows) {
@@ -385,7 +432,11 @@ func (w *AsyncWriter) commitBatch(batch []Usage) {
 		chunk := rows[start:end]
 		if err := insertChunk(ctx, tx, now, chunk); err != nil {
 			fmt.Fprintf(os.Stderr, "ledger: async batch insert failed (%d rows in chunk lost): %v\n", len(chunk), err)
-			atomic.AddUint64(&w.failedRows, uint64(len(chunk)))
+			// The loss is only FINAL when this batch still
+			// commits; if a later failure rolls the transaction
+			// back, the retry re-attempts these rows — so the
+			// count is deferred to the commit paths below.
+			chunkLost += uint64(len(chunk))
 			continue
 		}
 		for _, r := range chunk {
@@ -408,9 +459,12 @@ func (w *AsyncWriter) commitBatch(batch []Usage) {
 		// partial batch could double-record.
 		for _, r := range chunk {
 			if err := upsertAgentSessionTx(ctx, tx, r, time.Now()); err != nil {
-				fmt.Fprintf(os.Stderr, "ledger: async batch agent-session upsert failed (%d rows lost): %v\n", len(batch), err)
-				atomic.AddUint64(&w.failedRows, uint64(len(batch)))
-				return
+				fmt.Fprintf(os.Stderr, "ledger: async batch agent-session upsert failed (%d rows, will retry): %v\n", len(batch), err)
+				// The deferred rollback discards this whole
+				// attempt — including any earlier chunk losses,
+				// whose deferred count no longer applies — so the
+				// batch is retry-safe with nothing landed.
+				return true, 0
 			}
 		}
 	}
@@ -428,17 +482,22 @@ func (w *AsyncWriter) commitBatch(batch []Usage) {
 		ks := spend[key]
 		if _, err := update.ExecContext(ctx, ks.total, ks.key); err != nil {
 			fmt.Fprintf(os.Stderr, "ledger: async batch budget update failed, rolling back %d rows: %v\n", len(batch), err)
-			atomic.AddUint64(&w.failedRows, uint64(len(batch)))
-			return
+			// NEW-M-02: the whole batch rolls back — nothing
+			// landed, so the batch is retry-safe (AUD-REL-002).
+			return true, 0
 		}
 	}
-	atomic.AddUint64(&w.committedRows, uint64(len(batch)))
 	if err := tx.Commit(); err != nil {
 		fmt.Fprintf(os.Stderr, "ledger: async batch commit failed (%d rows may be lost): %v\n", len(batch), err)
-		atomic.AddUint64(&w.failedRows, uint64(len(batch)))
-		return
+		// A failed COMMIT may have partially applied — retrying
+		// could double-record, so the loss is final here. The
+		// committedRows counter is NOT incremented: it counts
+		// rows that actually landed.
+		return false, uint64(len(batch))
 	}
+	atomic.AddUint64(&w.committedRows, uint64(len(batch)))
 	atomic.AddUint64(&w.batches, 1)
+	return false, chunkLost
 }
 
 // insertChunk writes one chunk of normalized rows with a single
