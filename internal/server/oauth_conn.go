@@ -69,10 +69,14 @@ var oauthProviders = map[string]oauthProvider{
 
 // oauthConn is one connected OAuth account. AccessToken/RefreshToken hold
 // either the raw token (no vault) or the Vault.Seal() ciphertext (vault).
+// TokenURL is the provider's token endpoint, recorded at CompleteAuth
+// time so GetAccessToken can refresh an expiring token without the
+// caller knowing the endpoint.
 type oauthConn struct {
 	Provider     string    `json:"provider"`
 	AccessToken  string    `json:"-"`
 	RefreshToken string    `json:"-"`
+	TokenURL     string    `json:"-"`
 	TokenType    string    `json:"token_type"`
 	ExpiresAt    time.Time `json:"expires_at"`
 	Scope        string    `json:"scope"`
@@ -120,10 +124,16 @@ func newOAuthConnStore(vault *crypto.Vault) *oauthConnStore {
 // to a different host.
 func (s *oauthConnStore) oauthTokenClient() *http.Client {
 	s.mu.Lock()
-	c := s.client
-	s.mu.Unlock()
-	if c != nil {
-		return c
+	defer s.mu.Unlock()
+	return s.oauthTokenClientLocked()
+}
+
+// oauthTokenClientLocked is oauthTokenClient for callers that already
+// hold s.mu (the refresh path runs under the store lock so concurrent
+// requests cannot stampede the token endpoint).
+func (s *oauthConnStore) oauthTokenClientLocked() *http.Client {
+	if s.client != nil {
+		return s.client
 	}
 	return defaultEgressGuard().Client(30*time.Second, 0, nil)
 }
@@ -246,6 +256,7 @@ func (s *oauthConnStore) CompleteAuth(providerID, code, redirectURI string) erro
 		Provider:     providerID,
 		AccessToken:  accessStore,
 		RefreshToken: refreshStore,
+		TokenURL:     p.TokenURL,
 		TokenType:    tokenResp.TokenType,
 		ExpiresAt:    expiresAt,
 		Scope:        tokenResp.Scope,
@@ -286,6 +297,13 @@ func (s *oauthConnStore) RevokeConnection(providerID string) error {
 
 // GetAccessToken returns the access token for a provider, decrypting via
 // the Vault when configured.
+//
+// A3 (token refresh): a token expiring within refreshSkew — or already
+// expired — is REFRESHED via the provider's token endpoint (recorded at
+// CompleteAuth time) using the stored refresh token; the new tokens are
+// stored and returned. A token that cannot be refreshed (no refresh
+// token stored, no token endpoint recorded, refresh refused) errors with
+// the reason instead of serving a stale credential.
 func (s *oauthConnStore) GetAccessToken(providerID string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -293,6 +311,26 @@ func (s *oauthConnStore) GetAccessToken(providerID string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("oauth: no connection for %q", providerID)
 	}
+	if time.Until(c.ExpiresAt) > refreshSkew {
+		return s.decryptAccessToken(providerID, c)
+	}
+	// Expiring (or expired): refresh when the stored state allows it.
+	if c.RefreshToken == "" || c.TokenURL == "" {
+		return "", fmt.Errorf("oauth: token for %q expired at %s and cannot be refreshed (no refresh token or token endpoint stored) — reconnect the provider", providerID, c.ExpiresAt.Format(time.RFC3339))
+	}
+	if err := s.refreshLocked(providerID, c); err != nil {
+		return "", fmt.Errorf("oauth: refresh token for %q: %w", providerID, err)
+	}
+	return s.decryptAccessToken(providerID, c)
+}
+
+// refreshSkew is how long before expiry a token is treated as needing
+// refresh: refreshed early rather than raced against the wire.
+const refreshSkew = 60 * time.Second
+
+// decryptAccessToken unseals the stored access token (raw passthrough
+// when no vault is configured). Callers hold s.mu.
+func (s *oauthConnStore) decryptAccessToken(providerID string, c *oauthConn) (string, error) {
 	if s.vault != nil {
 		plain, err := s.vault.Unseal(c.AccessToken)
 		if err != nil {
@@ -301,6 +339,99 @@ func (s *oauthConnStore) GetAccessToken(providerID string) (string, error) {
 		return string(plain), nil
 	}
 	return c.AccessToken, nil
+}
+
+// refreshLocked exchanges the stored refresh token for a fresh access
+// token and stores the result. Callers hold s.mu (serializing refreshes
+// so concurrent requests cannot stampede the token endpoint).
+func (s *oauthConnStore) refreshLocked(providerID string, c *oauthConn) error {
+	clientID := oauthClientID(providerID)
+	clientSecret := oauthClientSecret(providerID)
+	if clientID == "" || clientSecret == "" {
+		return fmt.Errorf("client credentials not configured (set CODVIAN_OAUTH_%s_CLIENT_ID / _CLIENT_SECRET)", strings.ToUpper(providerID))
+	}
+	refreshPlain := c.RefreshToken
+	if s.vault != nil {
+		plain, err := s.vault.Unseal(c.RefreshToken)
+		if err != nil {
+			return fmt.Errorf("decrypt refresh token: %w", err)
+		}
+		refreshPlain = string(plain)
+	}
+
+	form := url.Values{}
+	form.Set("client_id", clientID)
+	form.Set("client_secret", clientSecret)
+	form.Set("refresh_token", refreshPlain)
+	form.Set("grant_type", "refresh_token")
+
+	req, err := http.NewRequest(http.MethodPost, c.TokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return fmt.Errorf("build refresh request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+
+	// Same egress rule as the code exchange: the SSRF-guarded client,
+	// never http.DefaultClient (AUD-SEC-005). The LOCKED variant —
+	// this call runs while s.mu is held.
+	resp, err := s.oauthTokenClientLocked().Do(req)
+	if err != nil {
+		return fmt.Errorf("token refresh: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("token refresh failed: status %d", resp.StatusCode)
+	}
+	var tokenResp struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		TokenType    string `json:"token_type"`
+		ExpiresIn    int    `json:"expires_in"`
+		Scope        string `json:"scope"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return fmt.Errorf("decode refresh response: %w", err)
+	}
+	if tokenResp.AccessToken == "" {
+		return fmt.Errorf("refresh response carried no access_token")
+	}
+
+	accessStore := tokenResp.AccessToken
+	if s.vault != nil {
+		sealed, serr := s.vault.Seal([]byte(tokenResp.AccessToken))
+		if serr != nil {
+			return fmt.Errorf("encrypt access token: %w", serr)
+		}
+		accessStore = sealed
+	}
+	// OAuth refresh responses may omit the refresh token when the old
+	// one remains valid (no rotation) — keep the stored one then.
+	if tokenResp.RefreshToken != "" {
+		if s.vault != nil {
+			sealed, serr := s.vault.Seal([]byte(tokenResp.RefreshToken))
+			if serr != nil {
+				return fmt.Errorf("encrypt refresh token: %w", serr)
+			}
+			c.RefreshToken = sealed
+		} else {
+			c.RefreshToken = tokenResp.RefreshToken
+		}
+	}
+	expiresAt := time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+	if tokenResp.ExpiresIn == 0 {
+		expiresAt = time.Now().Add(24 * time.Hour)
+	}
+	c.AccessToken = accessStore
+	c.ExpiresAt = expiresAt
+	c.UpdatedAt = time.Now()
+	if tokenResp.TokenType != "" {
+		c.TokenType = tokenResp.TokenType
+	}
+	if tokenResp.Scope != "" {
+		c.Scope = tokenResp.Scope
+	}
+	return nil
 }
 
 // ---------- HTTP handlers ----------
