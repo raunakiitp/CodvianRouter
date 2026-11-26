@@ -45,7 +45,7 @@ as the release blobs. `output: true` keeps cosign's output in the CI log.
 `Dockerfile.release` (what actually gets built per platform):
 
 - Healthcheck builder: `FROM --platform=$BUILDPLATFORM
-  golang:1.22-bookworm`, cross-compiles the tiny healthcheck helper with
+  golang:1.27.4-bookworm`, cross-compiles the tiny healthcheck helper with
   `CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath
   -ldflags "-s -w"`. The RUN step executes on the build platform and
   cross-compiles — it never executes a foreign-architecture binary.
@@ -296,13 +296,12 @@ not do it (see §3).
   entry is absent the step exits 1 and fails the release loudly — a
   failed release, not a silent gap — but the lookup code has never run
   against a real GoReleaser output.
-- **G7 — OPEN: the release Dockerfile's base images float.** 
-  `Dockerfile.release` uses `golang:1.22-bookworm` and
+- **G7 — OPEN: the release Dockerfile's base images float.**
+  `Dockerfile.release` uses `golang:1.27.4-bookworm` and
   `gcr.io/distroless/static-debian12:nonroot` with no digest pin, so a
   later rebuild can pick up different base layers. The healthcheck
-  builder also runs Go 1.22 while the main binary is built with Go
-  1.27.4 — the helper is trivial and dependency-free, so the drift is
-  low-risk, but it is real drift. Not fixed here: digest pinning needs
+  builder also runs Go 1.27.4 while the main binary is built with Go
+  1.27.4 — no drift. Not fixed here: digest pinning needs
   resolved digests and a policy decision about when to bump them.
 - **G8 — OPEN (upstream): `dockers_v2` is provisional/alpha** (GoReleaser's
   own marking; it becomes `dockers` in v3). If it breaks in a future
