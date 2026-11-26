@@ -79,13 +79,13 @@ func TestBaseURLCoverage(t *testing.T) {
 	if cov.Total != 609 {
 		t.Fatalf("catalog total = %d, want 609 (614 at triage round 5, minus 4 CT-3 retirements and the D2 cheaperinference retirement)", cov.Total)
 	}
-	// A1 batch 1 (2026-11-27): six API-key entries gained a
-	// docs-verified base URL (deepinfra, hyperbolic, nscale,
+	// A1 batches 1-2 (2026-11-27): twelve API-key entries gained a
+	// docs-verified base URL (deepinfra, hyperbolic, nscale, lambda-ai, featherless-ai, moonshot, yi, qianfan, heroku,
 	// voyage-ai, llm7, jina-ai), all concrete — with 385 / routable
 	// 376 / template-only 9. The 610 total is unchanged because each
 	// fill overlays an existing reference ID.
-	if cov.WithBaseURL != 385 || cov.Routable != 376 || cov.TemplateOnly != 9 {
-		t.Fatalf("coverage = with %d / routable %d / template-only %d, want 385 / 376 / 9 (379 / 370 / 9 before the A1 batch-1 fills)",
+	if cov.WithBaseURL != 391 || cov.Routable != 382 || cov.TemplateOnly != 9 {
+		t.Fatalf("coverage = with %d / routable %d / template-only %d, want 391 / 382 / 9 (385 / 376 / 9 after A1 batch 1; 379 / 370 / 9 originally)",
 			cov.WithBaseURL, cov.Routable, cov.TemplateOnly)
 	}
 	if cov.WithBaseURL+cov.WithoutByCategory[CategoryAPIKey]+cov.WithoutByCategory[CategoryAudio]+
@@ -101,11 +101,11 @@ func TestBaseURLCoverage(t *testing.T) {
 	// A1 batch 1 filled six of the 105 api-key entries, so the
 	// API-capable-without-base-URL figure drops 138 -> 132 and the
 	// api-key slice drops 105 -> 99 (99 + audio 12 + search 21).
-	if cov.APICapableWithout != 131 {
-		t.Fatalf("API-capable without base URL = %d, want 131 (api-key 98 + audio 12 + search 21; was 138 before A1 batch 1 + the D2 retirement)", cov.APICapableWithout)
+	if cov.APICapableWithout != 125 {
+		t.Fatalf("API-capable without base URL = %d, want 125 (api-key 92 + audio 12 + search 21; 138 originally)", cov.APICapableWithout)
 	}
-	if cov.WithoutByCategory[CategoryAPIKey] != 98 {
-		t.Fatalf("api-key without base URL = %d, want 98 (105 originally; 99 after A1 batch 1; 98 after the D2 retirement)", cov.WithoutByCategory[CategoryAPIKey])
+	if cov.WithoutByCategory[CategoryAPIKey] != 92 {
+		t.Fatalf("api-key without base URL = %d, want 92 (105 originally; 99 after A1 batch 1; 98 after D2; 92 after A1 batch 2)", cov.WithoutByCategory[CategoryAPIKey])
 	}
 }
 
