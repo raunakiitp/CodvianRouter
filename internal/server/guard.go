@@ -778,13 +778,11 @@ func (s *Server) register(mux *http.ServeMux, method, path string, handler http.
 	case TierManagement:
 		if !route.AuthExempt {
 			h = s.requireAuthUnlessRelaxed(scoped)
-		} else if strings.HasPrefix(path, "/dashboard/") {
+		} else if isSessionGatedFeed(path) {
 			// B3-04 feed gate: once an operator password is set,
-			// the read-only dashboard feeds require a session (or
-			// a gateway key) — requireLogin. With no password set
-			// the feeds stay open exactly as today. GET /dashboard
-			// itself is the bare path, not the prefix, so the
-			// static shell (with its login overlay) stays open.
+			// the read-only dashboard/API feeds require a session
+			// (or a gateway key). With no password set the feeds
+			// stay open exactly as today.
 			h = s.requireDashboardSession(scoped)
 		}
 	}
@@ -797,7 +795,29 @@ func (s *Server) register(mux *http.ServeMux, method, path string, handler http.
 }
 
 // ---------------------------------------------------------------------------
-// Guard status feed (GET /dashboard/guard).
+// isSessionGatedFeed reports whether an AuthExempt management route should
+// still require a dashboard session (or a gateway key) when an operator
+// password is set. The truly public endpoints (healthz, well-known, OAuth,
+// OpenAPI spec, the bare /dashboard shell) stay open; every other read-only
+// feed that exposes operator data is gated.
+// P2-IDENT-002: exempt feeds outside /dashboard/ are no longer silently
+// open — they join the B3-04 feed gate.
+func isSessionGatedFeed(path string) bool {
+	// Dashboard feeds (all /dashboard/* except the bare /dashboard path).
+	if strings.HasPrefix(path, "/dashboard/") {
+		return true
+	}
+	// Operator-data API feeds outside /dashboard/.
+	switch path {
+	case "/api/providers", "/api/capabilities",
+		"/api/providers/{id}/capabilities", "/api/catalog",
+		"/api/cache/stats", "/api/telemetry/model-latency-stats",
+		"/api/pricing", "/api/mcp/audit", "/api/mcp/status":
+		return true
+	}
+	return false
+}
+
 // ---------------------------------------------------------------------------
 
 // guardTierView is one tier as the dashboard renders it.
