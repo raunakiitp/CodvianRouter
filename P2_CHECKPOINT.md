@@ -32,6 +32,20 @@ complete while backlog items remain open.
 - 4.1: WS9 mapping corrected in docs/P2_REMAINING_FINDINGS_DISPOSITION.md
 - 4.3: TestProbeReachability determinism (injected dialer, no external DNS)
 
+### Verification campaign outcome (2026-11-26, HEAD 2a8257f)
+The one authorized consolidated campaign ran to completion. Two
+concrete defects were found and fixed (commit 07ba920: gofmt drift
+in 6 files; default_trace_test.go scoped //go:build !otel), and the
+owner approved fixing the third: the forecast window-boundary
+defect. FIXED in commit 2a8257f — the forecast's 1h/24h request
+summaries now use SpendFor's exact window (zero until, unbounded);
+Summary's display-form exclusive `ts < until` semantics are pinned
+unchanged for display callers; the ledger-level boundary test pins
+all three semantics at one boundary millisecond. The
+TestUsageBudgetForecastProjected flake is eliminated (full suite
+55 ok / 0 FAIL after the fix; ci.sh green except the two host
+blocks: gofmt CRLF working-tree artifact and -race requiring cgo).
+
 ### Closure status after the final closure session (items 1-5)
 
 1. WS9D OAuth inventory — DONE (commit 69ef9f0): all 31 CategoryOAuth
