@@ -76,8 +76,8 @@ func TestBaseURLCoverage(t *testing.T) {
 	}
 	// CT-8: the headline total is pinned so README/docs cannot drift
 	// silently again — 614 at triage round 5 minus 4 CT-3 retirements.
-	if cov.Total != 610 {
-		t.Fatalf("catalog total = %d, want 610 (614 at triage round 5 minus 4 CT-3 retirements)", cov.Total)
+	if cov.Total != 609 {
+		t.Fatalf("catalog total = %d, want 609 (614 at triage round 5, minus 4 CT-3 retirements and the D2 cheaperinference retirement)", cov.Total)
 	}
 	// A1 batch 1 (2026-11-27): six API-key entries gained a
 	// docs-verified base URL (deepinfra, hyperbolic, nscale,
@@ -101,11 +101,11 @@ func TestBaseURLCoverage(t *testing.T) {
 	// A1 batch 1 filled six of the 105 api-key entries, so the
 	// API-capable-without-base-URL figure drops 138 -> 132 and the
 	// api-key slice drops 105 -> 99 (99 + audio 12 + search 21).
-	if cov.APICapableWithout != 132 {
-		t.Fatalf("API-capable without base URL = %d, want 132 (api-key 99 + audio 12 + search 21; was 138 before the A1 batch-1 fills)", cov.APICapableWithout)
+	if cov.APICapableWithout != 131 {
+		t.Fatalf("API-capable without base URL = %d, want 131 (api-key 98 + audio 12 + search 21; was 138 before A1 batch 1 + the D2 retirement)", cov.APICapableWithout)
 	}
-	if cov.WithoutByCategory[CategoryAPIKey] != 99 {
-		t.Fatalf("api-key without base URL = %d, want 99 (105 before the A1 batch-1 fills)", cov.WithoutByCategory[CategoryAPIKey])
+	if cov.WithoutByCategory[CategoryAPIKey] != 98 {
+		t.Fatalf("api-key without base URL = %d, want 98 (105 originally; 99 after A1 batch 1; 98 after the D2 retirement)", cov.WithoutByCategory[CategoryAPIKey])
 	}
 }
 

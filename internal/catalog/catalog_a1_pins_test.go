@@ -61,9 +61,9 @@ func TestA1Batch1EntriesFilled(t *testing.T) {
 // Update these numbers in the same commit that changes the catalog,
 // with the reason in the commit message.
 func TestCatalogShapePins(t *testing.T) {
-	const wantTotal = 610
+	const wantTotal = 609
 	nilByCategory := map[Category]int{
-		CategoryAPIKey:        99, // 105 before the A1 batch-1 fills
+		CategoryAPIKey:        98, // 105 originally; 99 after A1 batch 1; 98 after the D2 retirement
 		CategoryWebCookie:     37,
 		CategoryOAuth:         28,
 		CategorySearch:        21,
