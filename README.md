@@ -28,7 +28,7 @@ about which model is up, which is cheapest, or what to do when one goes down.
 | Architecture | Local-first, zero external telemetry or cloud relay |
 | Tested toolchain | Go 1.27.4 (minimum `go 1.26.0`) |
 | Test suite | `go test ./...` passes on all 55 packages (Windows, 2026-11-21) |
-| API routes | **349** classified routes (11 Local-Only, 49 Always-Protected, 289 Management), of which **63** answer `501 feature_unavailable` on purpose |
+| API routes | **349** classified routes (11 Local-Only, 58 Always-Protected, 280 Management), of which **63** answer `501 feature_unavailable` on purpose |
 | Providers in catalog | **610** catalog entries; 379 have a base URL the router can call with your key, 231 have none (metadata only) |
 | Routing strategies | **41** strategies, nested combos, and auto-router variants |
 | Agent & MCP ecosystem | **32** MCP tools over HTTP/SSE/stdio + **CodeVN** setup |
