@@ -190,6 +190,20 @@ func (l *A2APruneLoop) Start(ctx context.Context) bool {
 	l.running = true
 	go func() {
 		defer func() {
+			// AUD-REL-006: a panic inside the prune loop must end
+			// this goroutine, not the process. Defers run LIFO, so
+			// the running-state reset below unwinds first (it runs
+			// while the panic is still active), and this recover —
+			// registered before it — runs last and stops the panic
+			// before it can kill the process. The panic is logged;
+			// the loop is not restarted (an hourly janitor that
+			// panicked once gets a fresh Start on the next server
+			// construction, not a hot crash loop).
+			if r := recover(); r != nil {
+				l.logger.Printf("a2a: prune loop panicked and stopped: %v", r)
+			}
+		}()
+		defer func() {
 			l.mu.Lock()
 			l.running = false
 			l.mu.Unlock()

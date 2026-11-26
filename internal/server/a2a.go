@@ -1146,6 +1146,22 @@ func (s *Server) handleA2AStream(w http.ResponseWriter, r *http.Request, svc *a2
 	defer cancel()
 	s.a2aRegisterCancel(task.ID, cancel)
 	go func() {
+		// AUD-REL-006: a panic in RunTask (a store bug, a
+		// processor bug) must not crash the process. Registered
+		// first so it unwinds LAST, after the cleanup defers
+		// below have run: the reservation is still settled and
+		// the cancel unregistered, then the panic is contained
+		// here — counted in codvian_router_panics_total and
+		// logged redacted — instead of killing the process. The
+		// task stays in its last store state (Working): the
+		// stream client sees a silent stall rather than a false
+		// success, and the reservation settlement above keeps
+		// the books honest.
+		defer func() {
+			if r := recover(); r != nil {
+				s.noteBackgroundPanic("bg_a2a_stream_task", r)
+			}
+		}()
 		defer s.a2aUnregisterCancel(task.ID)
 		defer cancel()
 		// The reservation is held across the provider call and

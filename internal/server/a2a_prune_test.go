@@ -322,6 +322,49 @@ func TestA2APruneLoopNilStore(t *testing.T) {
 	loop.Stop()
 }
 
+// TestA2APruneLoopPanicIsContained (AUD-REL-006): a panic inside
+// the prune function must end the loop goroutine — logging the
+// panic and resetting the running state — instead of crashing the
+// whole process (an unrecovered goroutine panic is fatal). After
+// the panic the loop is NOT running, Stop is a no-op, and the
+// panic text is in the log.
+func TestA2APruneLoopPanicIsContained(t *testing.T) {
+	s := openPruneStore(t)
+	var logBuf syncBuffer
+	logger := log.New(&logBuf, "", 0)
+
+	opts := DefaultA2APruneOptions()
+	opts.Interval = 10 * time.Millisecond
+	loop := NewA2APruneLoop(s, opts, logger)
+	loop.prune = func(now time.Time) (int, int, error) {
+		panic("prune exploded")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if started := loop.Start(ctx); !started {
+		t.Fatal("Start returned false, want true")
+	}
+	// Wait for the panic to unwind. If recovery did not work this
+	// test process itself dies — the assertion below only runs
+	// when containment succeeded.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && loop.Running() {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if loop.Running() {
+		t.Fatal("loop still Running after a panic in prune, want the goroutine ended")
+	}
+	if !strings.Contains(logBuf.String(), "a2a: prune loop panicked and stopped: prune exploded") {
+		t.Fatalf("log = %q, want the contained-panic line", logBuf.String())
+	}
+	// Stop on a loop that died panicking must be a safe no-op.
+	loop.Stop()
+	if loop.Running() {
+		t.Fatal("loop Running after Stop following a panic")
+	}
+}
+
 // TestA2APruneOptionsDefaults: the design defaults (7 days, 1,000
 // tasks, pruning on, 1h interval) and the zero-value-means-default
 // rule, plus the Limits() bridge to the store.
