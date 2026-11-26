@@ -611,6 +611,7 @@ func (s *Server) handleTotpConfirm(w http.ResponseWriter, r *http.Request) {
 // handleTotpVerify serves POST /dashboard/auth/totp/verify: verifies a TOTP
 // or backup code for login step 2. On success, sets the session cookie.
 // Used when TOTP is enabled and login step 1 returned totp_required.
+// Rate-limited per peer like password login (P2-SEC-06 / AUD-SEC-007).
 func (s *Server) handleTotpVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -618,6 +619,17 @@ func (s *Server) handleTotpVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	if !s.dashSessionValid(r) && !s.authorized(r) {
 		s.unauthorized(w, r)
+		return
+	}
+	// P2-SEC-06: rate-limit TOTP verify per peer, same as password login.
+	dst, derr := s.dashboardAuth()
+	if derr != nil {
+		writeError(w, http.StatusServiceUnavailable, "dashboard auth unavailable: "+derr.Error())
+		return
+	}
+	peer := dashLoginPeer(r)
+	if !dst.LoginAllowed(peer) {
+		writeError(w, http.StatusTooManyRequests, "too many failed TOTP verifications — try again in a minute")
 		return
 	}
 	st, err := s.totpStoreFor()
@@ -638,11 +650,13 @@ func (s *Server) handleTotpVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !st.VerifyLoginCode(req.Code) {
+		dst.RecordLoginFailure(peer)
 		writeError(w, http.StatusUnauthorized, "invalid TOTP or backup code")
 		return
 	}
+	// Record a successful verification so the peer's failure count clears.
+	dst.RecordLoginSuccess(peer)
 	// Create a dashboard session (same store as password login).
-	dst := s.dashAuthStore()
 	if dst == nil {
 		writeError(w, http.StatusServiceUnavailable, "dashboard auth unavailable")
 		return
