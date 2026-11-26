@@ -1,8 +1,9 @@
 # Install Codvian Router
 
-> **Status (2026-11-17):** Phase 1 MVP is built and verified (133/133 tests
-> in the coordinator's gate; 207/207 including the Phase 2/3 packages in a
-> docs-time re-run — see [CHANGELOG.md](../CHANGELOG.md)). There is **no
+> **Status (2026-11-17):** Phase 1 MVP is built and verified. The repository
+> contains 55 Go packages (as of 2026-11-26); test counts from earlier eras
+> (133/133, 207/207) reflect different package snapshots and are not
+> comparable to the current tree. There is **no
 > release binary, no published npm package, and no published Docker image
 > yet**. The only install path that works today is **build from source**.
 > Everything else on this page is labelled **planned** until a release is
