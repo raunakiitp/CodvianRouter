@@ -2117,11 +2117,13 @@ func (s *Server) keyPolicyAllows(w http.ResponseWriter, r *http.Request) bool {
 		// a verifier that cannot name identities by design, the
 		// previous no-op behaviour stands.
 		if credentialPresented(r) && s.identityResolvable() {
-			// P2-IDENT-001: Anthropic surfaces answer 403 in the
-			// Anthropic error envelope.
+			// P2-IDENT-001 / P2-PROTO-001: Anthropic and Gemini
+			// surfaces answer 403 in their own error envelopes.
 			msg := "credential could not be resolved to a gateway key identity"
 			if isAnthropicEndpointPath(r.URL.Path) {
 				writeAnthropicError(w, http.StatusForbidden, msg)
+			} else if strings.HasPrefix(r.URL.Path, "/v1beta/") {
+				writeGeminiClientError(w, http.StatusForbidden, msg)
 			} else {
 				writeError(w, http.StatusForbidden, msg)
 			}
@@ -2224,6 +2226,15 @@ func requestKey(r *http.Request) string {
 	if k := strings.TrimSpace(r.Header.Get("X-Goog-Api-Key")); k != "" {
 		return k
 	}
+	// P2-PROTO-002: Gemini clients may present the API key as a
+	// ?key= query parameter. Scope tightly to /v1beta/ so query
+	// keys never leak into non-Gemini surfaces (query keys appear
+	// in server logs and proxy headers).
+	if strings.HasPrefix(r.URL.Path, "/v1beta/") {
+		if k := strings.TrimSpace(r.URL.Query().Get("key")); k != "" {
+			return k
+		}
+	}
 	return ""
 }
 
@@ -2279,16 +2290,20 @@ func (s *Server) requireScope(next http.HandlerFunc, scopes []string) http.Handl
 				return
 			}
 		}
-		// P2-IDENT-001: Anthropic surfaces must answer 403 in the
-		// Anthropic error envelope, not the OpenAI one.
+		// P2-IDENT-001 / P2-PROTO-001: Anthropic and Gemini surfaces
+		// answer 403 in their own error envelopes, not the OpenAI one.
 		msg := "gateway key lacks required scope " + strings.Join(scopes, " or ")
 		if isAnthropicEndpointPath(r.URL.Path) {
 			writeAnthropicError(w, http.StatusForbidden, msg)
 			return
 		}
+		if strings.HasPrefix(r.URL.Path, "/v1beta/") {
+			writeGeminiClientError(w, http.StatusForbidden, msg)
+			return
+		}
 		writeError(w, http.StatusForbidden, msg)
 		}
-}
+	}
 
 // unauthorized writes the 401 for a failed auth check (CHECKLIST
 // 195): when the presented key matches a stored gateway key whose
@@ -2306,6 +2321,13 @@ func (s *Server) unauthorized(w http.ResponseWriter, r *http.Request) {
 	deny := func(status int, msg string) {
 		if isAnthropicEndpointPath(r.URL.Path) {
 			writeAnthropicError(w, status, msg)
+			return
+		}
+		// P2-PROTO-001: Gemini surfaces answer 401/403 in the
+		// Gemini error envelope {error:{code,message,status}},
+		// not the OpenAI envelope.
+		if strings.HasPrefix(r.URL.Path, "/v1beta/") {
+			writeGeminiClientError(w, status, msg)
 			return
 		}
 		writeError(w, status, msg)
