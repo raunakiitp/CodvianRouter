@@ -59,6 +59,7 @@ echo ""
 
 # --- 2-4. build, vet, test. ---
 run_step "go build ./..." go build ./...
+run_step "scripts/check-secrets.sh" bash scripts/check-secrets.sh
 run_step "go vet ./..." go vet ./...
 
 # --- otel build tag (AUD-TEST-002): the tagged sources only compile with
