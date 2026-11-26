@@ -358,6 +358,11 @@ type catalogEntryView struct {
 	Routable         bool   `json:"routable"`
 	HasFreeTier      bool   `json:"has_free_tier"`
 	Category         string `json:"category"`
+	// UnroutableReason is the honest, category-specific reason the
+	// entry cannot be dialed; empty exactly when Routable is true.
+	// Zero live entries are silently unroutable — the reason is
+	// pinned by TestEveryUnroutableEntryHasAReason.
+	UnroutableReason string `json:"unroutable_reason,omitempty"`
 }
 
 type catalogResponse struct {
@@ -453,6 +458,7 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 			HasBaseURL: hasBase, TemplatedBaseURL: templated,
 			Routable:    e.Routable(),
 			HasFreeTier: e.HasFreeTier, Category: string(e.Category),
+			UnroutableReason: e.UnroutableReason(),
 		})
 	}
 	writeJSON(w, http.StatusOK, catalogResponse{Providers: out, Total: len(out), FreeTier: buildFreeTierView()})
