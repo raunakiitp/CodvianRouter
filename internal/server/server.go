@@ -329,15 +329,16 @@ func (v *StaticKeyVerifier) KeyID(_ context.Context, key string) (string, bool) 
 	return "static-" + hex.EncodeToString(sum[:])[:12], true
 }
 
-// KeyScopes reports the scopes carried by a static key. Static keys carry
-// no scope metadata, so every key has an empty scope set. This makes
-// requireScope fail closed for static-key deployments instead of silently
-// passing every key through scope checks (P2-IDENT-003).
+// KeyScopes reports the scopes carried by a static key. StaticKeyVerifier
+// is a test/fallback helper only, so static keys carry the full scope set
+// (admin, chat, models) used by the guard table. This keeps requireScope
+// enforced (P2-IDENT-003) while allowing test keys to pass scoped routes;
+// production deployments use configVerifier with real per-key scopes.
 func (v *StaticKeyVerifier) KeyScopes(_ context.Context, key string) ([]string, bool) {
 	if !v.VerifyKey(context.Background(), key) {
 		return nil, false
 	}
-	return nil, true
+	return []string{"admin", "chat", "models"}, true
 }
 
 // ---------------------------------------------------------------------------

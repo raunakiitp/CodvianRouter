@@ -307,7 +307,7 @@ func TestTotpHandlers(t *testing.T) {
 	// interfere with this test's verify attempts.
 	dst, _ := s.dashboardAuth()
 	if dst != nil {
-		dst.RecordLoginSuccess("")
+		dst.RecordLoginSuccess(dashLoginPeer(req))
 	}
 	verified := false
 	var body []byte
@@ -324,7 +324,7 @@ func TestTotpHandlers(t *testing.T) {
 		// TOTP timing race (step may change between compute and send)
 		// doesn't trigger P2-SEC-06 rate limiting in this test.
 		if d, err := s.dashboardAuth(); err == nil && d != nil {
-			d.RecordLoginSuccess("")
+			d.RecordLoginSuccess(dashLoginPeer(req))
 		}
 		s.handleTotpVerify(w, req)
 		if w.Code == http.StatusOK {
