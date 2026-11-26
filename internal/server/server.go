@@ -2194,19 +2194,11 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *Server) authorized(r *http.Request) bool {
-	if s.verifier == nil {
-		return false
-	}
-	key := requestKey(r)
-	if key == "" {
-		return false
-	}
-	if s.verifier.VerifyKey(r.Context(), key) {
-		return true
-	}
-	// B3-07: a gateway JWT access token authenticates exactly
-	// like a gateway key — the same funnel, the same 401.
-	return s.oauthTokenValid(key)
+	// WS2 unified identity: the canonical principal resolution —
+	// the same parse, validation and precedence every other
+	// identity-dependent check uses.
+	p := s.principalFor(r)
+	return p.Authenticated
 }
 
 // requestKey extracts the gateway credential from a request, or ""
@@ -2254,6 +2246,97 @@ func requestKey(r *http.Request) string {
 // vendor-style API-key headers).
 func bearerKey(r *http.Request) string { return requestKey(r) }
 
+// principal is the canonical identity and authorization context of
+// one request (WS2 unified identity — the single resolution path
+// behind AUD-SEC-001). Every identity-dependent check (authentication,
+// scope enforcement, caller attribution, ownership) resolves the same
+// principal instead of independently parsing or validating the
+// credential.
+//
+// Fields:
+//   - Raw: the presented credential, verbatim. NEVER logged and
+//     never returned to a client.
+//   - Presented: any credential in a form the server accepts.
+//   - Authenticated: the verifier (or the OAuth issuer) accepted it.
+//   - KeyID: the caller identity — the gateway key's stored ID, or
+//     "oauth:<client_id>" for a gateway JWT (B3-07). "" when the
+//     deployment cannot name identities or the credential is absent.
+//   - Scopes / ScopesKnown: the resolved scope set. ScopesKnown=false
+//     means the deployment cannot name scopes for this credential
+//     (shared-key verifier without KeyScopes) and scope checks pass
+//     through as before — the pre-existing no-metadata semantics,
+//     NOT a grant.
+type principal struct {
+	Raw           string
+	Presented     bool
+	Authenticated bool
+	KeyID         string
+	Scopes        []string
+	ScopesKnown   bool
+	IsJWT         bool
+}
+
+// principalFor resolves the ONE canonical principal for a request.
+// Precedence is deterministic and documented:
+//
+//  1. The credential is extracted once by requestKey: Authorization
+//     Bearer wins, then X-Api-Key, then X-Goog-Api-Key, then ?key=
+//     on /v1beta/ only. Only one credential is ever consulted — a
+//     request carrying several gets the highest-precedence one, so
+//     conflicting credentials cannot mix identities mid-request.
+//  2. A gateway key the verifier accepts authenticates; its stored
+//     key ID (when the verifier can name IDs) and stored scopes
+//     (when it can name scopes) ride the same resolution.
+//  3. Otherwise a gateway JWT access token authenticates exactly
+//     like a key (B3-07): identity "oauth:<client_id>", scopes from
+//     the token.
+//  4. Anything presented but accepted by neither is unauthenticated
+//     (Authenticated=false) — callers answer 401/fail closed; no
+//     identity or scopes are manufactured for it.
+//
+// A verifier that cannot validate (nil) yields an unauthenticated
+// principal with the credential still marked presented, preserving
+// auth-relaxed diagnostics.
+func (s *Server) principalFor(r *http.Request) *principal {
+	p := &principal{}
+	raw := requestKey(r)
+	p.Raw = raw
+	p.Presented = raw != ""
+	if raw == "" || s.verifier == nil {
+		return p
+	}
+	if s.verifier.VerifyKey(r.Context(), raw) {
+		p.Authenticated = true
+		if idv, ok := s.verifier.(KeyIDVerifier); ok {
+			if id, ok := idv.KeyID(r.Context(), raw); ok {
+				p.KeyID = id
+			}
+		}
+		if sv, ok := s.verifier.(ScopeVerifier); ok {
+			got, known := sv.KeyScopes(r.Context(), raw)
+			if known {
+				p.Scopes, p.ScopesKnown = got, true
+			}
+		}
+		return p
+	}
+	// B3-07: a gateway JWT access token authenticates exactly like
+	// a gateway key — the same funnel.
+	if s.oauthTokenValid(raw) {
+		p.Authenticated = true
+		p.IsJWT = true
+		if iss, err := s.oauthIssuer(); err == nil && iss != nil {
+			if claims, err := iss.VerifyAccessToken(raw); err == nil && claims.ClientID != "" {
+				p.KeyID = "oauth:" + claims.ClientID
+			}
+		}
+		if got, known := s.oauthTokenScopes(raw); known {
+			p.Scopes, p.ScopesKnown = got, true
+		}
+	}
+	return p
+}
+
 // requireScope enforces the guard table's scope list for one route
 // (M1.1): the caller's key must carry at least one listed scope,
 // and scope "admin" implies every scope (the operator scope). It
@@ -2269,8 +2352,11 @@ func (s *Server) requireScope(next http.HandlerFunc, scopes []string) http.Handl
 		return next
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		raw := bearerKey(r)
-		if raw == "" {
+		// WS2 unified identity: the scopes come from the same
+		// canonical principal resolution auth and caller
+		// attribution use — no independent scope lookup here.
+		p := s.principalFor(r)
+		if !p.Presented {
 			next(w, r)
 			return
 		}
@@ -2278,22 +2364,13 @@ func (s *Server) requireScope(next http.HandlerFunc, scopes []string) http.Handl
 		// not in the key store — enforce them the same way
 		// (admin implies all, below). A verifier that cannot
 		// name scopes and a token that is not a gateway JWT
-		// still pass through, as before.
-		var got []string
-		hasScopes := false
-		if sv, ok := s.verifier.(ScopeVerifier); ok {
-			got, hasScopes = sv.KeyScopes(r.Context(), raw)
-		}
-		if !hasScopes {
-			if scopes, ok := s.oauthTokenScopes(raw); ok {
-				got, hasScopes = scopes, true
-			}
-		}
-		if !hasScopes {
+		// still pass through, as before (ScopesKnown=false is
+		// the deployment's no-metadata property, not a grant).
+		if !p.ScopesKnown {
 			next(w, r)
 			return
 		}
-		key := config.GatewayKey{Scopes: got}
+		key := config.GatewayKey{Scopes: p.Scopes}
 		for _, want := range scopes {
 			if key.HasScope(want) || key.HasScope("admin") {
 				next(w, r)
@@ -2378,38 +2455,17 @@ func (s *Server) unauthorized(w http.ResponseWriter, r *http.Request) {
 // gateway keys never share a cache key. The ID is never logged or
 // returned to any client.
 func (s *Server) callerKeyID(r *http.Request) string {
-	if s.verifier == nil {
-		return ""
-	}
-	// AUD-SEC-001: the credential is read through requestKey, the SAME
-	// parser auth and scope use, so every accepted presentation
-	// (Authorization: Bearer, X-Api-Key, X-Goog-Api-Key) resolves to the
-	// caller's real identity. Parsing only the Authorization header here
-	// made a vendor-header caller look like "no key", which bypassed
-	// per-key policy, budgets, limits and cache tenancy.
-	raw := requestKey(r)
-	if raw == "" {
-		return ""
-	}
-	idv, ok := s.verifier.(KeyIDVerifier)
-	if !ok {
-		return ""
-	}
-	id, ok := idv.KeyID(r.Context(), raw)
-	if !ok {
-		// B3-07: a JWT caller is named "oauth:<client_id>" —
-		// the caller identity for prompt-cache affinity and
-		// ledger attribution. keyPolicyAllows passes it
-		// untouched (no stored gateway key matches it), since
-		// a token's scope IS its policy.
-		if iss, err := s.oauthIssuer(); err == nil && iss != nil {
-			if claims, err := iss.VerifyAccessToken(raw); err == nil && claims.ClientID != "" {
-				return "oauth:" + claims.ClientID
-			}
-		}
-		return ""
-	}
-	return id
+	// WS2 unified identity: resolve the canonical principal once.
+	// KeyID semantics preserved exactly: no verifier, no presented
+	// credential, or a verifier that cannot name identities → ""
+	// (a verifier WITHOUT KeyIDVerifier never resolved a JWT
+	// identity here before, and principalFor preserves that); a
+	// verifier WITH KeyIDVerifier whose lookup misses resolves the
+	// JWT caller identity "oauth:<client_id>" (B3-07), which
+	// principalFor runs when key validation did not succeed. An
+	// unauthenticated credential resolves to "" either way — the
+	// old code's JWT lookup on a non-JWT string always missed too.
+	return s.principalFor(r).KeyID
 }
 
 // callerForOwnership resolves the caller identity for owner-scoped
