@@ -126,6 +126,9 @@ func readRSSKiB() (int64, error) {
 
 // handleDashboardMemstats serves GET /dashboard/memstats (and the
 // ?profile=heap / ?profile=goroutine pprof snapshots).
+// P2-CAP-004: the JSON counters feed remains AuthExempt, but the binary
+// pprof snapshots (?profile=heap/*) expose process heap/stack data and
+// require a session (or gateway key) when an operator password is set.
 func (s *Server) handleDashboardMemstats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -133,8 +136,22 @@ func (s *Server) handleDashboardMemstats(w http.ResponseWriter, r *http.Request)
 	}
 	switch profile := r.URL.Query().Get("profile"); profile {
 	case "":
-		// JSON snapshot below.
+		// JSON snapshot below — AuthExempt, no session required.
 	case "heap", "goroutine":
+		// Binary pprof profile: requires auth when a password is set,
+		// because it exposes heap/stack data that could aid an attacker.
+		dst, derr := s.dashboardAuth()
+		if derr != nil {
+			writeError(w, http.StatusServiceUnavailable, "dashboard auth unavailable: "+derr.Error())
+			return
+		}
+		if dst == nil || !dst.PasswordSet() {
+			// No password configured: profile endpoints stay open,
+			// matching the auth-relaxed deployment model.
+		} else if !s.dashSessionValid(r) && !s.authorized(r) {
+			writeError(w, http.StatusUnauthorized, "dashboard login required for profile endpoint: POST /dashboard/auth/login with the operator password (or send an admin gateway key)")
+			return
+		}
 		s.serveMemProfile(w, r, profile)
 		return
 	default:
