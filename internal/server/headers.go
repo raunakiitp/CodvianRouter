@@ -292,9 +292,9 @@ func (s *Server) responseMeta(ctx context.Context, req provider.ChatRequest, res
 
 // verbatimMeta builds the telemetry meta for a verbatim relay:
 // the relay target and the model it served are known; tokens and
-// cost are not (the body is forwarded byte-for-byte and the ledger
-// records no row for a relayed request — the standing relay gap),
-// so they stay absent rather than guessed.
+// cost come from the provider-reported usage that the verbatim
+// path records itself (AUD-SEC-002), so relay spend IS in the
+// ledger and not guessed.
 func (s *Server) verbatimMeta(target *relayTarget, head messagesHeader, start time.Time) ResponseMeta {
 	meta := ResponseMeta{Started: start}
 	if target != nil {
