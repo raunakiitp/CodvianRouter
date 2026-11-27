@@ -99,6 +99,8 @@ func init() {
 	register(&xaiDeviceHandler{info: grokCLIInfo()})
 	register(&zedHandler{info: zedInfo()})
 	register(&zedHandler{info: zedHostedInfo()})
+	register(&traeHandler{})
+	register(&freebuffHandler{})
 	registerImportOnly(Info{
 		ID:          "antigravity",
 		Name:        "Antigravity",
@@ -118,7 +120,7 @@ func init() {
 		DocsURL:     pasteImportDocsURL,
 		Reason:      "",
 	})
-	// The remaining 13 catalog OAuth providers have no publicly
+	// The remaining 11 catalog OAuth providers have no publicly
 	// documented OAuth surface; the registry lists them with the
 	// reason so the refusal is explainable, never silent.
 	for _, u := range unimplemented {

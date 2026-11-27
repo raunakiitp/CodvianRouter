@@ -80,14 +80,14 @@ func TestInfoHonesty(t *testing.T) {
 			}
 		}
 	}
-	if implemented != 16 {
-		t.Errorf("implemented interactive handlers = %d, want 16 (claude, github-copilot, ghe-copilot, cline, clinepass, codex, chatgpt, kimi-coding, gitlab-duo, kiro, amazon-q, cursor, xai-oauth, grok-cli, zed, zed-hosted)", implemented)
+	if implemented != 18 {
+		t.Errorf("implemented interactive handlers = %d, want 18 (claude, github-copilot, ghe-copilot, cline, clinepass, codex, chatgpt, kimi-coding, gitlab-duo, kiro, amazon-q, cursor, xai-oauth, grok-cli, zed, zed-hosted, trae, freebuff)", implemented)
 	}
 	if importOnly != 2 {
 		t.Errorf("import-only providers = %d, want 2 (antigravity, agy)", importOnly)
 	}
-	if unimpl != 13 {
-		t.Errorf("unimplemented providers = %d, want 13 (the honestly-documented gaps)", unimpl)
+	if unimpl != 11 {
+		t.Errorf("unimplemented providers = %d, want 11 (the honestly-documented gaps)", unimpl)
 	}
 }
 
@@ -131,6 +131,8 @@ func TestImplementedFlowTypes(t *testing.T) {
 		"grok-cli":       FlowDeviceCode,
 		"zed":            FlowBrowserSignIn,
 		"zed-hosted":     FlowBrowserSignIn,
+		"trae":           FlowBrowserSignIn,
+		"freebuff":       FlowDeviceCode,
 	}
 	for _, in := range ImplementedInfos() {
 		if in.ImportOnly {
