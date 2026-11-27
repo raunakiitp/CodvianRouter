@@ -214,9 +214,9 @@ func (w imageWireResponse) usage() Usage {
 }
 
 // imagesURL is POST {base}/v1/images/<operation> (with the /v1
-// rule from joinAPIPath).
+// rule from joinAPIPath; a NoV1Insert quirk surface appends verbatim).
 func (c *openAIClient) imagesURL(op ImageOperation) string {
-	return joinAPIPath(c.baseURL, "images/"+string(op))
+	return c.apiPath(c.baseURL, "images/"+string(op))
 }
 
 // PostImage performs one non-streaming images call: the raw body

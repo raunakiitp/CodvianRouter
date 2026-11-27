@@ -48,14 +48,14 @@ minus a piece that cannot travel, with the reason), and
 
 ### Translation matrix
 
-| From \ To | Anthropic | Gemini | OpenAI (replay models) | Bedrock | Cohere |
+| From \ To | Anthropic | Gemini | OpenAI (replay models) | Bedrock | Cohere (reasoning models) |
 |---|---|---|---|---|---|
-| Anthropic thinking (signed) | preserved | translated to thought part; signature dropped (foreign signatures are rejected) | translated to `reasoning_content` | unrepresentable (no Anthropic signature) | unrepresentable |
-| Anthropic redacted | preserved | dropped with reason | dropped with reason | dropped with reason | unrepresentable |
-| Plain thought text | unrepresentable (no Anthropic signature) | translated to thought part | translated to `reasoning_content` | unrepresentable (no signature) | unrepresentable |
-| Gemini thought_signature | dropped with reason (function call itself preserved) | preserved on its part | dropped with reason | dropped with reason | unrepresentable |
-| Bedrock reasoningContent | unrepresentable | translated to thought part | translated to `reasoning_content` | preserved verbatim | unrepresentable |
-| Bedrock redacted-only | dropped with reason | dropped with reason | dropped with reason | preserved verbatim | unrepresentable |
+| Anthropic thinking (signed) | preserved | translated to thought part; signature dropped (foreign signatures are rejected) | translated to `reasoning_content` | unrepresentable (no Anthropic signature) | translated to unsigned thinking content block; signature dropped |
+| Anthropic redacted | preserved | dropped with reason | dropped with reason | dropped with reason | dropped with reason |
+| Plain thought text | unrepresentable (no Anthropic signature) | translated to thought part | translated to `reasoning_content` | unrepresentable (no signature) | translated to unsigned thinking content block |
+| Gemini thought_signature | dropped with reason (function call itself preserved) | preserved on its part | dropped with reason | dropped with reason | dropped with reason |
+| Bedrock reasoningContent | unrepresentable | translated to thought part | translated to `reasoning_content` | preserved verbatim | translated to unsigned thinking content block; signature dropped |
+| Bedrock redacted-only | dropped with reason | dropped with reason | dropped with reason | preserved verbatim | dropped with reason |
 
 Mixed states fail as a whole: any fatal block makes the hop
 `unrepresentable` rather than partially translating the rest.
@@ -133,6 +133,91 @@ reject a foreign signature — and a Gemini signature is never
 attached to an Anthropic block. The wire converters enforce
 this: only Gemini-origin signatures attach to Gemini parts.
 
+### Cohere: the replay field the old stance denied (A1 gap 5)
+
+The original implementation refused every reasoning state on the
+Cohere wire ("no reasoning replay field exists"). Cohere's own
+docs disprove that: the Chat API v2 reference (reference/chat,
+read 2026-11-27) lists `thinking` content blocks
+(`{"type":"thinking","thinking": ...}`) in the assistant message
+content of chat requests, alongside text, and the reasoning guide
+documents the hybrid `command-a-reasoning` family with thinking
+on by default. The block schema carries no signature, so replay
+is unsigned or not at all — nothing is fabricated.
+
+Replay is model-gated exactly like the OpenAI wire
+(`reasoning.CohereReplayModel`): only the reasoning models accept
+thinking blocks; any other Cohere model has no reasoning slot and
+text-bearing state stays unrepresentable there. The exact
+emission form lives in `State.CohereThinkingBlocks` — the
+documented block shape, text-bearing blocks in order. Wiring the
+block emission into the Cohere request converter is the wire
+slice's change (separate file ownership in this batch); until it
+lands, a Cohere reasoning-model hop admits the state but does not
+yet carry the blocks — recorded here as the known follow-up, so
+the label and the behaviour can be reconciled in one review.
+
+### Unknown wires and Vertex
+
+`reasoning.Check` no longer answers "unknown wire format" with a
+blanket refusal. Two facts ground the replacement policy:
+
+- **Vertex AI** (`vertex`) is not unknown: it speaks the Gemini
+  generateContent shape — the provider client converts Vertex
+  requests through the Gemini converters — so its verdict is
+  Gemini's verdict exactly (thought parts, per-part signatures).
+- **Any other unrecognized wire** rides the OpenAI-compatible
+  passthrough client ("everything else" is an OpenAI-compatible
+  client), so its verdict is the OpenAI-compatible one: the
+  reasoning text is carried opaquely in `reasoning_content` — a
+  pass-through field the router attaches verbatim and never
+  interprets; the target either surfaces or ignores it — for
+  replay-capable models. Unrepresentable is reserved for the
+  provable drop: a model with no reasoning field on the
+  passthrough (not on the replay list) fails the hop with the
+  reason stated. The old blanket refusal actually mislabeled
+  hops: a replay-capable model behind an unrecognized wire
+  format always did carry the text.
+
+### Reasoning placeholders for tool-call turns
+
+When a multi-turn conversation carries tool calls and an
+assistant tool-call turn lost its reasoning (client stripped it,
+or the store missed after a restart), the router can inject a
+documented placeholder instead of sending the turn bare:
+`reasoning.ToolCallPlaceholder(wire, model)` returns one `thought`
+block whose text is the sentinel
+
+    [REASONING:OMITTED:TOOL_CALL_TURN]
+
+— the same bracketed-token mechanism the redaction placeholders
+use (`[REDACTED:<label>]`, `[VAULT:<kind>:<id>]`): stable,
+content-free, never carrying any reasoning text. Injection is
+deliberately narrow: only targets that admit an unsigned
+placeholder in their reasoning slot — OpenAI-wire and
+passthrough replay models, and Cohere's reasoning models (whose
+thinking blocks are unsigned by schema). Anthropic (unsigned
+thinking rejected), Gemini/Vertex (per-part thought signatures
+cannot be fabricated) and Bedrock (`reasoningText` must carry the
+API's signature) never receive one; those hops proceed bare — a
+store miss is a miss, never a wrong replay. An admitted
+placeholder always passes `Check` on the same target, so the hop
+it rides can never fail because of it.
+
+### Reasoning-only responses
+
+A response whose only payload is reasoning — no text, no tool
+calls — is decided by `reasoning.ReasoningOnlyTurn`, and the
+documented behavior is: keep the turn. The model spent its budget
+thinking, and failing over cannot improve the same budget on
+another target (live OpenRouter verification, 2026-11-21, already
+encoded in the engine's empty-completion predicate). The client
+sees an empty assistant turn; the reasoning is never rendered as
+content — it travels on the response's reasoning state and is
+captured for the next turn's replay. A response whose state is
+opaque metadata only (signatures, redacted payloads) has nothing
+to replay and remains a plain empty completion.
+
 ### The dashboard
 
 - **Live Routing trace:** every attempt carries a `reasoning`
@@ -161,8 +246,16 @@ this: only Gemini-origin signatures attach to Gemini parts.
   `functionCall` gets its matching signature; otherwise the
   first part carries it. A bare signature with no matching call
   attaches in order.
-- Cohere Chat API v2 has no reasoning replay field: any state
+- Cohere Chat API v2: the old "no reasoning replay field" limit
+  is retired — the v2 assistant message accepts unsigned thinking
+  content blocks (see the divergence note above). Non-reasoning
+  Cohere models still have no reasoning slot: text-bearing state
   fails that hop honestly.
+- The Cohere request converter does not yet emit the thinking
+  blocks (separate file ownership in this batch): a Cohere
+  reasoning-model hop admits the state but does not yet carry it.
+  The emission shape is `State.CohereThinkingBlocks`; the wire
+  slice's follow-up closes the gap.
 - The trace label and the wire behaviour share `reasoning.Check`
   as the single source of truth, but a client that does not
   expose its wire format gets no label at all — guessing would

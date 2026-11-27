@@ -39,8 +39,35 @@
 //     reasoningContent in requests, and the signature must be
 //     included with all previous messages. Reasoning text without
 //     a signature cannot be sent, so it is unrepresentable.
-//   - Cohere Chat v2: no reasoning replay field exists, so any
-//     reasoning state is unrepresentable on a Cohere target.
+//   - Cohere Chat v2: reasoning rides the assistant message's
+//     unsigned thinking content block ({"type":"thinking",
+//     "thinking": ...}). The old stance — "no reasoning replay
+//     field exists, so any state is unrepresentable" — is a
+//     recorded divergence: Cohere's own v2 docs (reference/chat,
+//     docs/reasoning; read 2026-11-27) document thinking blocks
+//     in the assistant message content of chat requests, with no
+//     signature field, so the block replays unsigned or not at
+//     all. Replay is model-gated exactly like the OpenAI wire:
+//     only Cohere's reasoning models (the command-a-reasoning
+//     family, hybrid models with thinking on by default) accept
+//     thinking blocks; any other Cohere model has no reasoning
+//     slot, so text-bearing state stays unrepresentable there.
+//   - Vertex AI: speaks the Gemini generateContent shape (the
+//     provider client converts Vertex requests through the Gemini
+//     converters), so it follows the Gemini strategy exactly
+//     instead of the old blanket "unknown wire" refusal.
+//   - Unknown wires: an unrecognized wire format rides the
+//     OpenAI-compatible passthrough client, so its verdict is the
+//     OpenAI-compatible one: the reasoning text is carried
+//     opaquely in reasoning_content — a pass-through field the
+//     router attaches verbatim and never interprets, and the
+//     target either surfaces or ignores — for models documented
+//     to accept it. Unrepresentable is reserved for the provable
+//     drop: a model with no reasoning field on the passthrough
+//     (not on the replay list) fails the hop with the reason
+//     stated, instead of the old blanket "unknown wire format"
+//     refusal that mislabeled hops which actually carried the
+//     text.
 //
 // The policy lives in exactly one place — Check. Wire converters
 // call it before emitting, and the router calls it to label each
@@ -86,6 +113,13 @@ const (
 	WireGemini    = "gemini"
 	WireCohere    = "cohere"
 	WireBedrock   = "bedrock-converse"
+	// WireVertex is Vertex AI's Gemini generateContent surface
+	// (provider.WireFormatVertex): the same request/response shape
+	// as WireGemini, served from Vertex AI. The reasoning strategy
+	// is the Gemini one — the provider client converts Vertex
+	// requests through the Gemini converters, so a thought part
+	// replayed to Vertex behaves exactly as it does on Gemini.
+	WireVertex = "vertex"
 )
 
 // Block kinds. Kind is the origin shape of the reasoning unit; a
@@ -257,14 +291,19 @@ func Check(s *State, wire, model string) (Status, string, error) {
 		return checkAnthropic(s)
 	case WireGemini:
 		return checkGemini(s)
+	case WireVertex:
+		// Vertex speaks the Gemini shape (vertex requests are
+		// converted through the Gemini converters), so its
+		// verdict is Gemini's — never the unknown-wire refusal.
+		return checkGemini(s)
 	case WireOpenAI:
 		return checkOpenAI(s, model)
 	case WireCohere:
-		return StatusUnrepresentable, "", unrepErr(wire, "cohere chat api v2 has no reasoning replay field")
+		return checkCohere(s, model)
 	case WireBedrock:
 		return checkBedrock(s)
 	default:
-		return StatusUnrepresentable, "", unrepErr(wire, "unknown wire format")
+		return checkUnknown(s, wire, model)
 	}
 }
 
@@ -484,6 +523,137 @@ func checkBedrock(s *State) (Status, string, error) {
 	return st, detail, nil
 }
 
+// cohereReplayModelPatterns is the model list that accepts
+// reasoning on the Cohere wire, from Cohere's own docs
+// (docs.cohere.com — docs/reasoning and docs/command-a-reasoning,
+// read 2026-11-27): the command-a-reasoning family, Cohere's
+// hybrid reasoning models, whose thinking content blocks ride the
+// Chat API v2 assistant message with thinking enabled by default.
+// The pattern is unanchored so a dated model id
+// ("command-a-reasoning-08-2025") matches.
+var cohereReplayModelPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)command-a-reasoning`),
+}
+
+// CohereReplayModel reports whether a Cohere-wire model accepts
+// thinking content blocks in its assistant history, and so can
+// carry a reasoning state across a provider switch.
+func CohereReplayModel(model string) bool {
+	for _, re := range cohereReplayModelPatterns {
+		if re.MatchString(model) {
+			return true
+		}
+	}
+	return false
+}
+
+// checkCohere: reasoning text becomes the assistant message's
+// thinking content block — the documented Cohere Chat API v2
+// shape ({"type":"thinking","thinking": ...}). The block schema
+// carries no signature, so any foreign signature drops with a
+// recorded reason and nothing is fabricated; the block replays
+// unsigned or not at all. Replay is model-gated like the OpenAI
+// wire: only Cohere's reasoning models accept thinking blocks —
+// any other Cohere model has no reasoning slot, so text-bearing
+// state is unrepresentable there.
+//
+// Divergence from the old stance, recorded deliberately: every
+// state used to be refused here ("cohere chat api v2 has no
+// reasoning replay field"), which the v2 docs disprove — the
+// assistant-message content schema lists the thinking block
+// alongside text, so a text-bearing state CAN be carried, and the
+// blanket refusal mislabeled hops to reasoning models that could
+// actually take it.
+func checkCohere(s *State, model string) (Status, string, error) {
+	replay := CohereReplayModel(model)
+	v := &verdict{}
+	for _, b := range s.Blocks {
+		switch b.Kind {
+		case KindThinking, KindThought:
+			if !replay {
+				return StatusUnrepresentable, "", unrepErr(WireCohere, fmt.Sprintf("model %q does not accept thinking content blocks (cohere chat api v2 carries reasoning only on its reasoning models)", model))
+			}
+			v.translated++
+			v.note("reasoning text → cohere thinking content block; signature dropped (cohere thinking blocks are unsigned)")
+		case KindThoughtSignature:
+			v.dropped++
+			v.note("thought signature dropped (no cohere equivalent; the function call itself is preserved)")
+		case KindRedactedThinking:
+			v.dropped++
+			v.note("redacted thinking dropped (no cohere equivalent)")
+		case KindBedrock:
+			brText, _, _ := ParseBedrockReasoning(b.Data)
+			if strings.TrimSpace(brText) != "" {
+				if !replay {
+					return StatusUnrepresentable, "", unrepErr(WireCohere, fmt.Sprintf("model %q does not accept thinking content blocks (cohere chat api v2 carries reasoning only on its reasoning models)", model))
+				}
+				v.translated++
+				v.note("reasoning text → cohere thinking content block; bedrock signature dropped (no cohere equivalent)")
+			} else {
+				v.dropped++
+				v.note("bedrock redacted content dropped (no cohere equivalent)")
+			}
+		default:
+			return StatusUnrepresentable, "", unrepErr(WireCohere, fmt.Sprintf("unknown reasoning block kind %q", b.Kind))
+		}
+	}
+	st, detail := v.finish()
+	return st, detail, nil
+}
+
+// checkUnknown: an unrecognized wire format rides the router's
+// OpenAI-compatible passthrough client (the client builder speaks
+// "everything else" as OpenAI-compatible chat completions), so its
+// verdict is the OpenAI-compatible one, worded for the unknown
+// wire: the reasoning text is carried opaquely in the assistant
+// message's reasoning_content — a pass-through field the router
+// attaches verbatim and never interprets, and the target either
+// surfaces or ignores. The model gate is the same replay list the
+// OpenAI wire applies. Unrepresentable is reserved for the
+// provable drop — a model with no reasoning field on the
+// passthrough fails the hop with the reason stated — never the
+// old blanket "unknown wire format" refusal, which mislabeled
+// hops whose passthrough actually carried the text (a
+// replay-capable model behind an unrecognized wire format always
+// did). Opaque metadata (signatures, redacted payloads) drops
+// with a recorded reason.
+func checkUnknown(s *State, wire, model string) (Status, string, error) {
+	replay := ReplayModel(model)
+	v := &verdict{}
+	for _, b := range s.Blocks {
+		switch b.Kind {
+		case KindThinking, KindThought:
+			if !replay {
+				return StatusUnrepresentable, "", unrepErr(wire, fmt.Sprintf("model %q does not accept reasoning_content (the %q wire rides the openai-compatible passthrough, which has no reasoning field for it)", model, wire))
+			}
+			v.translated++
+			v.note("reasoning text → reasoning_content pass-through (opaque; the target surfaces or ignores it)")
+		case KindThoughtSignature:
+			v.dropped++
+			v.note("thought signature dropped (no passthrough equivalent; the function call itself is preserved)")
+		case KindRedactedThinking:
+			v.dropped++
+			v.note("redacted thinking dropped (no passthrough equivalent)")
+		case KindBedrock:
+			brText, _, _ := ParseBedrockReasoning(b.Data)
+			if strings.TrimSpace(brText) != "" {
+				if !replay {
+					return StatusUnrepresentable, "", unrepErr(wire, fmt.Sprintf("model %q does not accept reasoning_content (the %q wire rides the openai-compatible passthrough, which has no reasoning field for it)", model, wire))
+				}
+				v.translated++
+				v.note("reasoning text → reasoning_content pass-through (opaque; the target surfaces or ignores it)")
+			} else {
+				v.dropped++
+				v.note("bedrock redacted content dropped (no passthrough equivalent)")
+			}
+		default:
+			return StatusUnrepresentable, "", unrepErr(wire, fmt.Sprintf("unknown reasoning block kind %q", b.Kind))
+		}
+	}
+	st, detail := v.finish()
+	return st, detail, nil
+}
+
 // replayModelPatterns is the model list that accepts
 // reasoning_content on the OpenAI wire, taken from the reference router's
 // requiresReasoningReplay model patterns
@@ -571,4 +741,154 @@ func (s *State) ReasoningText() string {
 		}
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// CohereThinkingBlock is one documented Cohere Chat API v2
+// thinking content block — the replay shape for a Cohere
+// reasoning model's assistant message. The v2 chat reference
+// gives the block exactly two fields and no signature: an
+// unsigned block is the only thinking block the API accepts in a
+// request.
+type CohereThinkingBlock struct {
+	Type     string `json:"type"` // always "thinking"
+	Thinking string `json:"thinking"`
+}
+
+// CohereThinkingBlocks renders the state's text-bearing blocks in
+// order as documented Cohere v2 thinking content blocks — the
+// emission form the cohere wire converter prepends to the
+// assistant message's content list when it carries a restored
+// state (Check already proved the target model accepts it).
+// Signatures, thought signatures and redacted payloads have no
+// Cohere form and are skipped here exactly as Check records them
+// dropped. nil when the state carries no text.
+func (s *State) CohereThinkingBlocks() []CohereThinkingBlock {
+	if s == nil {
+		return nil
+	}
+	var out []CohereThinkingBlock
+	for _, b := range s.Blocks {
+		switch b.Kind {
+		case KindThinking, KindThought:
+			if strings.TrimSpace(b.Text) != "" {
+				out = append(out, CohereThinkingBlock{Type: "thinking", Thinking: b.Text})
+			}
+		case KindBedrock:
+			if brText, _, _ := ParseBedrockReasoning(b.Data); strings.TrimSpace(brText) != "" {
+				out = append(out, CohereThinkingBlock{Type: "thinking", Thinking: brText})
+			}
+		}
+	}
+	return out
+}
+
+// PlaceholderText is the documented reasoning placeholder: a
+// stable, content-free sentinel in the same bracketed-token form
+// the redaction placeholders use ([REDACTED:<label>] /
+// [VAULT:<kind>:<id>]) — it marks WHERE reasoning was, never
+// carries any. It rides the target's own reasoning slot
+// (reasoning_content, a thinking content block), never user
+// content, and tells the downstream model honestly that the
+// original reasoning for this turn was not retained.
+const PlaceholderText = "[REASONING:OMITTED:TOOL_CALL_TURN]"
+
+// ToolCallPlaceholder returns the documented placeholder reasoning
+// state for an assistant turn that made tool calls and whose
+// original reasoning was not retained (the client stripped it, or
+// the replay store missed after a restart), plus whether THIS
+// (wire, model) should receive it. Injection is deliberately
+// narrow: the target must admit an unsigned placeholder in its
+// reasoning slot for this model — the same gate Check applies to
+// any state, so an admitted placeholder never fails the hop:
+//
+//   - OpenAI wire and unknown (passthrough) wires: replay-capable
+//     models only — reasoning_content takes any text.
+//   - Cohere: its reasoning models only — the documented v2
+//     thinking content block carries no signature, so an unsigned
+//     placeholder is representable.
+//   - Anthropic: never — the API rejects unsigned thinking blocks,
+//     so a fabricated placeholder would be unrepresentable anyway;
+//     the hop proceeds bare (a store miss is a miss, never a wrong
+//     replay).
+//   - Gemini / Vertex: never — continuity there is the per-part
+//     thought signature, which cannot be fabricated; a
+//     signature-less thought part does not satisfy it.
+//   - Bedrock: never — converse reasoningText must carry the
+//     signature the API issued.
+//
+// ok is false (with a nil state) when this target has no
+// placeholder slot: the caller sends the turn without reasoning,
+// exactly as before this existed.
+func ToolCallPlaceholder(wire, model string) (*State, bool) {
+	var slot bool
+	switch wire {
+	case WireOpenAI:
+		slot = ReplayModel(model)
+	case WireCohere:
+		slot = CohereReplayModel(model)
+	case WireAnthropic, WireGemini, WireVertex, WireBedrock:
+		return nil, false
+	default:
+		// Unknown wire: the OpenAI-compatible passthrough slot.
+		slot = ReplayModel(model)
+	}
+	if !slot {
+		return nil, false
+	}
+	return &State{Blocks: []Block{{Kind: KindThought, Text: PlaceholderText}}}, true
+}
+
+// ReasoningOnlyDecision is the turn-level verdict for a response
+// whose payload is (or may be) reasoning only.
+type ReasoningOnlyDecision struct {
+	// IsReasoningOnly: the response carried no visible text and no
+	// tool calls, but real reasoning output.
+	IsReasoningOnly bool
+	// KeepTurn: serve the response as an assistant turn instead of
+	// treating it as an empty completion (which fails over). A
+	// reasoning-only turn is kept: the model spent its budget
+	// thinking, and failing over cannot improve the same budget on
+	// another target — the live-verified empty-completion policy
+	// already exempts reasoning-only completions from the empty
+	// set, and this is the documented source of that decision.
+	KeepTurn bool
+	// VisibleContent is what the client sees: "" for a
+	// reasoning-only turn — reasoning is never rendered as content
+	// (it travels on the response's reasoning state and in the
+	// replay store only). For a normal turn it is the text itself.
+	VisibleContent string
+	// Capturable: the reasoning state carries text worth storing
+	// for next-turn replay. A state of opaque metadata only
+	// (signatures, redacted payloads) has nothing to replay.
+	Capturable bool
+}
+
+// ReasoningOnlyTurn decides how to serve a response that contains
+// ONLY reasoning content — no text, no tool calls (toolCalls is
+// the response's tool-call count). The documented behavior: the
+// turn is KEPT and served as an empty assistant turn with the
+// reasoning attached (captured for the next turn's replay), never
+// failed over and never rendered to the client; a response with
+// no text-bearing reasoning at all remains a plain empty
+// completion.
+func ReasoningOnlyTurn(content string, toolCalls int, s *State) ReasoningOnlyDecision {
+	if strings.TrimSpace(content) != "" || toolCalls > 0 {
+		return ReasoningOnlyDecision{
+			IsReasoningOnly: false,
+			KeepTurn:        true,
+			VisibleContent:  content,
+			Capturable:      !s.Empty() && strings.TrimSpace(s.ReasoningText()) != "",
+		}
+	}
+	if !s.Empty() && strings.TrimSpace(s.ReasoningText()) != "" {
+		return ReasoningOnlyDecision{
+			IsReasoningOnly: true,
+			KeepTurn:        true,
+			VisibleContent:  "",
+			Capturable:      true,
+		}
+	}
+	// No text-bearing reasoning: an empty completion, not a
+	// reasoning-only turn.
+	return ReasoningOnlyDecision{}
 }

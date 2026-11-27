@@ -402,7 +402,11 @@ func TestRegistryAddCatalogRefusals(t *testing.T) {
 		{"azure entra exchange", "azure-openai", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
 		{"openrouter jwt exchange", "openrouter", CatalogAddOptions{Variant: "jwt", BaseURL: srv.URL}, "exchange"},
 		{"unknown id", "no-such-provider", CatalogAddOptions{BaseURL: srv.URL}, "unknown catalog provider"},
-		{"no base url", "oneminai", CatalogAddOptions{}, "no known base URL"},
+		// oneminai gained a docs-verified base URL in A1 batch 15
+		// (api.1min.ai/openai/v1); codestral is a documented permanent
+		// nil (no own-docs OpenAI-wire base) and keeps this refusal
+		// fixture off the live network.
+		{"no base url", "codestral", CatalogAddOptions{}, "no known base URL"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

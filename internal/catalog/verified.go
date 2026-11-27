@@ -1869,4 +1869,422 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://opencode.ai/docs/console/models",
 		Notes:        "OpenCode's model gateway: OpenAI-compatible inference at opencode.ai/inference/v1 (models list, chat completions; embeddings under the openai-prefixed surface).",
 	},
+	{
+		// Verified 2026-11-27 against 1min.AI's own API docs: the
+		// OpenAI-compatible surface at api.1min.ai/openai/v1 with Bearer auth.
+		ID:          "oneminai",
+		Name:        "1min.AI",
+		Website:     "https://1min.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.1min.ai/openai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.1min.ai/docs/api/openai-compatible",
+		Notes:        "OpenAI-compatible base api.1min.ai/openai/v1 (chat completions + models list, Bearer 1min.AI key); the legacy /api/* surface keeps its API-KEY header per the docs.",
+	},
+	{
+		// Verified 2026-11-27 against Charm Hyper's own docs: OpenAI chat
+		// completions at hyper.charm.land/v1 and the Anthropic Messages base.
+		ID:          "charm-hyper",
+		Name:        "Charm Hyper",
+		Website:     "https://hyper.charm.land",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://hyper.charm.land/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointAnthropic, AuthKind: AuthXAPIKey, HeaderName: "x-api-key", BaseURL: "https://hyper.charm.land"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://hyper-docs.charm.land/docs/api/openai-chat-completions",
+		Notes:        "OpenAI chat completions at hyper.charm.land/v1 (Bearer) and Anthropic Messages at the host root (ANTHROPIC_BASE_URL=https://hyper.charm.land with ANTHROPIC_API_KEY, per the Claude Code setup doc).",
+	},
+	{
+		// Verified 2026-11-27 against Dahl's own API reference: base
+		// inference.dahl.global/v1, Bearer, OpenAI chat + Responses.
+		ID:          "dahl",
+		Name:        "Dahl",
+		Website:     "https://inference.dahl.global",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://inference.dahl.global/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://inference.dahl.global/docs/api/",
+		Notes:        "Open models broker: /v1/chat/completions and /v1/responses at inference.dahl.global/v1; Bearer key with an allocated token balance per the API reference.",
+	},
+	{
+		// Verified 2026-11-27 against FreeTheAI's own API reference: base
+		// api.freetheai.org, OpenAI SDK base .../v1, Bearer (x-api-key alt).
+		ID:          "freetheai",
+		Name:        "FreeTheAi",
+		Website:     "https://freetheai.org",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.freetheai.org/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointMessages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.freetheai.org/api/",
+		Notes:        "OpenAI SDKs take api.freetheai.org/v1 (chat completions, responses, embeddings); the Anthropic SDK takes the host root for /v1/messages; Bearer ftai_ keys (x-api-key also accepted).",
+	},
+	{
+		// Verified 2026-11-27 against FreeModel's own docs: OpenAI- and
+		// Anthropic-compatible gateway at api.freemodel.dev/v1.
+		ID:          "freemodel-dev",
+		Name:        "FreeModel.dev",
+		Website:     "https://freemodel.dev",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.freemodel.dev/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointMessages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://freemodel.dev/docs",
+		Notes:        "Auto-routing gateway serving OpenAI (/v1/chat/completions, /v1/responses) and Anthropic (/v1/messages) formats from one base api.freemodel.dev/v1; Bearer fe_ key.",
+	},
+	{
+		// Verified 2026-11-27 against NagaAI's own quickstart: OpenAI SDK
+		// base api.naga.ac/v1, Bearer ng- keys.
+		ID:          "naga-ac",
+		Name:        "Naga.ac",
+		Website:     "https://naga.ac",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.naga.ac/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.naga.ac/get-started/quickstart",
+		Notes:        "OpenAI-compatible base api.naga.ac/v1 (responses + chat completions); Bearer ng- key from the dashboard.",
+	},
+	{
+		// Verified 2026-11-27 against Openference's own API overview: base
+		// api.openference.com/v1, Bearer, OpenAI + Anthropic surfaces.
+		ID:          "openference-api",
+		Name:        "Openference API",
+		Website:     "https://openference.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.openference.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointMessages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.openference.com/api-reference/overview",
+		Notes:        "OpenAI-compatible surface (chat completions, responses, embeddings, images, videos, models) plus direct Anthropic /messages at api.openference.com/v1; Authorization: Bearer on all.",
+	},
+	{
+		// Verified 2026-11-27 against OpenVecta's own site: OpenAI-compatible
+		// base api.openvecta.com/v1, Bearer ov_sk_ keys.
+		ID:          "openvecta",
+		Name:        "OpenVecta",
+		Website:     "https://openvecta.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.openvecta.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://openvecta.com/",
+		Notes:        "OpenAI-compatible /v1 chat completions at api.openvecta.com/v1; ov_sk_ key issued in-console, usage metered per token.",
+	},
+	{
+		// Verified 2026-11-27 against Zhipu's own GLM Coding Plan (China)
+		// docs: Claude Code configured with ANTHROPIC_BASE_URL at open.bigmodel.cn.
+		ID:          "glm-cn",
+		Name:        "GLM Coding (China)",
+		Website:     "https://open.bigmodel.cn",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://open.bigmodel.cn/api/anthropic"},
+		WireFormats: []WireFormat{WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointAnthropic, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.bigmodel.cn/cn/coding-plan/tool/claude",
+		Notes:        "China coding-plan endpoint open.bigmodel.cn/api/anthropic (Anthropic Messages) with ANTHROPIC_AUTH_TOKEN bearer; coding-plan keys are managed separately from standard API keys per the docs.",
+	},
+	{
+		// Verified 2026-11-27 against Zhipu's own HTTP API docs: GLM thinking
+		// variants are served from the standard BigModel base; no separate
+		// thinking-plan endpoint is documented anywhere in Zhipu's docs.
+		ID:          "glmt",
+		Name:        "GLM Thinking",
+		Website:     "https://open.bigmodel.cn",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://open.bigmodel.cn/api/paas/v4"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.bigmodel.cn/cn/guide/develop/http/introduction",
+		Notes:        "GLM thinking-capable models are requested by model ID from Zhipu's standard base open.bigmodel.cn/api/paas/v4 (same platform the bigmodel entry documents); no separate thinking endpoint exists in the docs.",
+	},
+	{
+		// Verified 2026-11-27 against Twigpine's own OpenGateway docs (the
+		// opengateway.gitlawb.com service now redirects to Twigpine): base
+		// api.twigpine.com/v1, Bearer, OpenAI + Anthropic.
+		ID:          "gitlawb",
+		Name:        "Gitlawb Opengateway (MiMo)",
+		Website:     "https://opengateway.gitlawb.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.twigpine.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointAnthropic, AuthKind: AuthXAPIKey, HeaderName: "x-api-key", BaseURL: "https://api.twigpine.com"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://twigpine.com/opengateway/docs",
+		Notes:        "OpenGateway (ex-opengateway.gitlawb.com, now Twigpine): OpenAI /v1 at api.twigpine.com/v1 and Anthropic /v1/messages on the host root; ogw_live_ Bearer key, x-api-key accepted on the Anthropic surface; MiMo ids like mimo-v2.6-pro.",
+	},
+	{
+		// Verified 2026-11-27 against Twigpine's own OpenGateway docs (same
+		// gateway as the gitlawb row): base api.twigpine.com/v1.
+		ID:          "gitlawb-gmi",
+		Name:        "Gitlawb Opengateway (GMI Cloud)",
+		Website:     "https://opengateway.gitlawb.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.twigpine.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointAnthropic, AuthKind: AuthXAPIKey, HeaderName: "x-api-key", BaseURL: "https://api.twigpine.com"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://twigpine.com/opengateway/docs",
+		Notes:        "Same OpenGateway endpoint as the gitlawb row after the Twigpine rebrand: one catalog, one base api.twigpine.com/v1 (OpenAI) with /v1/messages (Anthropic); the GMI-Cloud variant shares the documented base.",
+	},
+	{
+		// Verified 2026-11-27 against Xiaomi MiMo's own Token Plan docs:
+		// dedicated bases token-plan-cn.xiaomimimo.com/v1 and /anthropic.
+		ID:          "xiaomi-mimo-token-plan",
+		Name:        "Xiaomi MiMo Token Plan",
+		Website:     "https://mimo.mi.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://token-plan-cn.xiaomimimo.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointAnthropic, AuthKind: AuthBearer, HeaderName: "Authorization", BaseURL: "https://token-plan-cn.xiaomimimo.com/anthropic"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://mimo.mi.com/docs/en-US/integration/codex-configuration",
+		Notes:        "Token Plan subscription: OpenAI base https://token-plan-cn.xiaomimimo.com/v1 and Anthropic base https://token-plan-cn.xiaomimimo.com/anthropic with tp-/ttp- keys (distinct from the pay-as-you-go api.xiaomimimo.com bases).",
+	},
+	{
+		// Verified 2026-11-27 against Volcengine Ark's own Agent Plan docs:
+		// plan bases ark.cn-beijing.volces.com/api/plan[/v3].
+		ID:          "volcengine-agent-plan",
+		Name:        "Volcengine Ark Agent Plan",
+		Website:     "https://console.volcengine.com/ark/region:cn-beijing/subscription/agent-plan",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://ark.cn-beijing.volces.com/api/plan/v3"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointAnthropic, AuthKind: AuthBearer, HeaderName: "Authorization", BaseURL: "https://ark.cn-beijing.volces.com/api/plan"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://console.volcengine.com/ark/region:cn-beijing/docs/agent-plan-personal-other-tools",
+		Notes:        "Agent Plan bases per the docs table: OpenAI protocol https://ark.cn-beijing.volces.com/api/plan/v3 (Codex, OpenCode, Cline...) and Anthropic protocol https://ark.cn-beijing.volces.com/api/plan (Claude Code); plan-exclusive API key, model ark-code-latest.",
+	},
+	{
+		// Verified 2026-11-27 against Huancheng Public API's own docs: base
+		// api.hcnsec.cn/v1, Bearer sk- keys, OpenAI-compatible.
+		ID:          "hcnsec",
+		Name:        "Huancheng Public API",
+		Website:     "https://api.hcnsec.cn",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.hcnsec.cn/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://api.hcnsec.cn/free-api/",
+		Notes:        "Free GLM/DeepSeek/Qwen/Kimi/Step gateway: Base URL https://api.hcnsec.cn/v1 per the docs, Bearer sk- token, /v1/chat/completions with streaming.",
+	},
+	{
+		// Verified 2026-11-27 against Agnes AI (China)'s own quickstart: base
+		// api.agnes-ai.cn/v1, Bearer, OpenAI chat completions.
+		ID:          "agnes-cn",
+		Name:        "Agnes AI (China)",
+		Website:     "https://api.agnes-ai.cn",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.agnes-ai.cn/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://wiki.agnes-ai.cn/zh-Hans/docs/quickstart.md",
+		Notes:        "China site quickstart documents api.agnes-ai.cn/v1/chat/completions with Authorization: Bearer; OpenAI-style interface per the overview.",
+	},
+	{
+		// Verified 2026-11-27 against Apmix's own SDK docs: bases
+		// api.apmix.ai/v1 (OpenAI) and api.apmix.ai (Anthropic).
+		ID:          "apmix",
+		Name:        "Apmix",
+		Website:     "https://apmix.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.apmix.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointAnthropic, AuthKind: AuthXAPIKey, HeaderName: "x-api-key", BaseURL: "https://api.apmix.ai"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://apmix.ai/docs/sdk",
+		Notes:        "Bases per the docs page: https://api.apmix.ai/v1 OpenAI-compatible (chat completions + responses, models list) and https://api.apmix.ai Anthropic-compatible (Messages); apx_live_ keys.",
+	},
+	{
+		// Verified 2026-11-27 against KIE.AI's own Market docs: OpenAI-format
+		// endpoints at api.kie.ai/openai/v1, Bearer.
+		ID:          "kie",
+		Name:        "KIE.AI",
+		Website:     "https://kie.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.kie.ai/openai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.kie.ai/market/kimi/kimi-k3",
+		Notes:        "KIE Market chat/Responses API: https://api.kie.ai/openai/v1/responses (OpenAI Responses format, streaming; chat completions on the same surface); Bearer key from kie.ai/api-key.",
+	},
+	{
+		// Verified 2026-11-27 against Baidu Qianfan's own international
+		// quickstart: ERNIE models served at api.baiduqianfan.ai/v1, Bearer.
+		ID:          "baidu",
+		Name:        "Baidu (ERNIE)",
+		Website:     "https://ernie.baidu.com/",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.baiduqianfan.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://intl.cloud.baidu.com/en/doc/qianfan/s/qm8qxemze-intl-en",
+		Notes:        "Qianfan quickstart documents ERNIE models (e.g. ernie-3.5-8k) via OpenAI-compatible https://api.baiduqianfan.ai/v1/chat/completions; Authorization: Bearer bce-v3 API key (one key covers AppBuilder/ModelBuilder).",
+	},
+	{
+		// Verified 2026-11-27 against 360 SmartBrain's own docs:
+		// chat/completions POST /v1/chat/completions at api.360.cn, Bearer.
+		ID:          "360ai",
+		Name:        "360 AI",
+		Website:     "https://ai.360.cn",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.360.cn/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://ai.360.com/docs/413291990e0",
+		Notes:        "360 SmartBrain open platform: OpenAI-format chat completions at https://api.360.cn/v1/chat/completions per the official docs; Authorization: Bearer apikey from the console.",
+	},
+	{
+		// Verified 2026-11-27 against Kimi Code's own docs: Kimi Code API
+		// bases api.kimi.ai/coding/v1 (overseas) and api.kimi.com/coding/v1
+		// (China), OpenAI + Anthropic protocols.
+		ID:          "kimi-coding-apikey",
+		Name:        "Kimi Code API Key",
+		Website:     "https://www.kimi.ai/code",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.kimi.ai/coding/v1", "https://api.kimi.com/coding/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointAnthropic, AuthKind: AuthBearer, HeaderName: "Authorization", BaseURL: "https://api.kimi.ai/coding/"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://www.kimi.com/code/docs/en/",
+		Notes:        "Kimi Code API (membership API key): OpenAI-compatible base api.kimi.ai/coding/v1 overseas / api.kimi.com/coding/v1 China, Anthropic-compatible base api.kimi.ai/coding/ overseas (api.kimi.com/coding/ China) per the platform-comparison table.",
+	},
+	{
+		// Verified 2026-11-27 against iFlytek's own Spark HTTP docs (the
+		// SparkDesk platform is the same xfyun Spark open platform the
+		// iflytek entry cites): base spark-api-open.xf-yun.com/v1.
+		ID:          "sparkdesk",
+		Name:        "SparkDesk",
+		Website:     "https://xinghuo.xfyun.cn",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://spark-api-open.xf-yun.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://www.xfyun.cn/doc/spark/HTTP%E8%B0%83%E7%94%A8%E6%96%87%E6%A1%A3.html",
+		Notes:        "Same Spark HTTP API as the iflytek entry: spark-api-open.xf-yun.com/v1/chat/completions with Bearer APIPassword; SparkDesk (xinghuo.xfyun.cn) is the platform behind it.",
+	},
+	{
+		// Verified 2026-11-27 against Alibaba Cloud Model Studio's own base-URL
+		// overview (same docs the qwen-cloud entry cites): token-plan keys
+		// call the same DashScope compatible-mode base.
+		ID:          "qwen-cloud-token-plan",
+		Name:        "Qwen Cloud Token Plan",
+		Website:     "https://www.qwencloud.com/pricing/token-plan",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://dashscope.aliyuncs.com/compatible-mode/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://help.aliyun.com/en/model-studio/base-url",
+		Notes:        "Token-plan subscriptions call Model Studio's OpenAI-compatible base https://dashscope.aliyuncs.com/compatible-mode/v1 (same base the qwen-cloud entry documents; region-specific bases per the overview).",
+	},
+	{
+		// Verified 2026-11-27 against Google's own partner-models doc: partner
+		// MaaS models (Claude, Mistral, GPT-OSS...) are served from the same
+		// regional Vertex AI endpoints as first-party models.
+		ID:          "vertex-partner",
+		Name:        "Vertex AI Partners",
+		Website:     "https://cloud.google.com/vertex-ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT}/locations/{LOCATION}"},
+		WireFormats: []WireFormat{WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{
+				Endpoint: EndpointGenerate,
+				AuthKind: AuthExchange,
+				Exchange: &ExchangeAuth{
+					Kind:        "service-account-json",
+					Description: "Service-account JSON exchanged via RS256 JWT-bearer grant (RFC 7523), scope https://www.googleapis.com/auth/cloud-platform, as for first-party Vertex AI requests.",
+					TokenTTL:    "1h",
+					DocURL:      "https://docs.cloud.google.com/vertex-ai/generative-ai/docs/partner-models/use-partner-models",
+				},
+			},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.cloud.google.com/vertex-ai/generative-ai/docs/partner-models/use-partner-models",
+		Notes:        "Partner models (MaaS: Claude, Mistral, GPT-OSS and friends) keep using Vertex AI endpoints per Google's docs — the {LOCATION}-aiplatform.googleapis.com request shape of the vertex entry applies; the Anthropic partner surface (ANTHROPIC_VERTEX against the regional endpoint) is the documented serving wire for the Claude-class partner models.",
+	},
 }
