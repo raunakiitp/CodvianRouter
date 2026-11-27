@@ -68,6 +68,21 @@ func (s *Server) ensureEvalStore() (*eval.Store, error) {
 	return st.store, nil
 }
 
+// evalNotify forwards an eval scheduler event (eval.completed /
+// eval.run.failed / eval.regression) to the webhook dispatcher as
+// {schedule_id, run_id}. A nil dispatcher is a no-op. Named (not an
+// inline closure) so the wiring is directly testable — A4 requires
+// proving the eval events actually reach a subscriber.
+func (s *Server) evalNotify(event, scheduleID, runID string) {
+	if s.webhooks == nil {
+		return
+	}
+	s.webhooks.Notify(event, map[string]any{
+		"schedule_id": scheduleID,
+		"run_id":      runID,
+	})
+}
+
 // startEvalScheduler starts the scheduler loop owned by the Server. It
 // is called from New once. The scheduler uses the Server's routing
 // engine by default (real provider-backed evaluations). Use
@@ -99,15 +114,7 @@ func (s *Server) startEvalScheduler() {
 	st.scheduler = &eval.Scheduler{
 		Store:     st.store,
 		NewEngine: func() eval.Engine { return eng },
-		Notify: func(event, scheduleID, runID string) {
-			if s.webhooks == nil {
-				return
-			}
-			s.webhooks.Notify(event, map[string]any{
-				"schedule_id": scheduleID,
-				"run_id":      runID,
-			})
-		},
+		Notify:    s.evalNotify,
 	}
 	sch := st.scheduler
 	st.mu.Unlock()

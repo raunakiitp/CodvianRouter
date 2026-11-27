@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/provider"
+	"github.com/raunakiitp/codvian-router/internal/webhooks"
 )
 
 // Schedule describes one recurring evaluation.
@@ -574,14 +575,27 @@ func (s *Scheduler) execute(ctx context.Context, sch *Schedule) {
 		run.PassRate = rep.PassRate
 	}
 	run.IsRegression = s.Store.DetectRegression(sch.ID, run, sch)
-	if _, err := s.Store.AddRun(run); err != nil && s.Notify != nil {
-		s.Notify("eval.run.failed", sch.ID, run.ID)
+	if _, err := s.Store.AddRun(run); err != nil && s.Logf != nil {
+		// A store write failure is a persistence problem, not a run
+		// outcome: it is logged, never reported as a failed eval run
+		// (A4 item 2 — eval.run.failed must reflect the RUN, not the
+		// store). The in-memory history still holds the run.
+		s.Logf("eval: could not persist run for schedule %q: %v", sch.ID, err)
 	}
 	if s.Notify != nil {
-		if run.IsRegression {
-			s.Notify("eval.regression", sch.ID, run.ID)
-		} else if run.Status == "completed" {
-			s.Notify("eval.completed", sch.ID, run.ID)
+		// The event reflects the RUN outcome, independent of whether
+		// the run persisted:
+		//   - a failed run (no cases, or every case failed) emits
+		//     eval.run.failed, whether or not it also regressed;
+		//   - otherwise a regression emits eval.regression;
+		//   - otherwise a completed run emits eval.completed.
+		switch {
+		case run.Status == "failed":
+			s.Notify(webhooks.EvalRunFailedEvent, sch.ID, run.ID)
+		case run.IsRegression:
+			s.Notify(webhooks.EvalRegressionEvent, sch.ID, run.ID)
+		default:
+			s.Notify(webhooks.EvalCompletedEvent, sch.ID, run.ID)
 		}
 	}
 }
