@@ -80,14 +80,14 @@ func TestInfoHonesty(t *testing.T) {
 			}
 		}
 	}
-	if implemented != 4 {
-		t.Errorf("implemented interactive handlers = %d, want 4 in this PR (claude, github-copilot, cline, clinepass) — the rest land in the follow-up PRs", implemented)
+	if implemented != 8 {
+		t.Errorf("implemented interactive handlers = %d, want 8 (claude, github-copilot, cline, clinepass, codex, chatgpt, kimi-coding, gitlab-duo) — kiro/amazon-q land in the final PR", implemented)
 	}
 	if importOnly != 2 {
 		t.Errorf("import-only providers = %d, want 2 (antigravity, agy)", importOnly)
 	}
-	if unimpl != 25 {
-		t.Errorf("unimplemented providers = %d, want 25 (19 documented gaps + 6 landing in the follow-up PRs of this stack)", unimpl)
+	if unimpl != 21 {
+		t.Errorf("unimplemented providers = %d, want 21 (19 documented gaps + kiro/amazon-q landing in the final PR of this stack)", unimpl)
 	}
 }
 
@@ -116,9 +116,13 @@ func TestGetRefusals(t *testing.T) {
 func TestImplementedFlowTypes(t *testing.T) {
 	want := map[string]Flow{
 		"claude":         FlowPKCE,
+		"codex":          FlowPKCE,
+		"chatgpt":        FlowPKCE,
 		"github-copilot": FlowDeviceCode,
 		"cline":          FlowDeviceCode,
 		"clinepass":      FlowDeviceCode,
+		"kimi-coding":    FlowDeviceCode,
+		"gitlab-duo":     FlowBrowserSignIn,
 	}
 	for _, in := range ImplementedInfos() {
 		if in.ImportOnly {
