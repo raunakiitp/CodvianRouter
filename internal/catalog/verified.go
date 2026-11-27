@@ -1696,4 +1696,38 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://platform.publicai.co/api/~endpoints",
 		Notes:        "Public AI Gateway at api.publicai.co (models list and OpenAI-style inference paths per the developer portal); agent documentation also mirrored in the forpublicai platform repo.",
 	},
+	{
+		// Verified 2026-11-27 against Kilo's own gateway docs: the
+		// OpenAI-compatible gateway base ai-gateway.kilo.ai/api/v1.
+		ID:          "kilo-gateway",
+		Name:        "Kilo Gateway",
+		Website:     "https://kilo.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://ai-gateway.kilo.ai/api/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://kilo.ai/docs/gateway/api-reference",
+		Notes:        "Kilo AI Gateway: unified OpenAI-compatible API to hundreds of models at ai-gateway.kilo.ai/api/v1 (also FIM endpoints per the reference).",
+	},
+	{
+		// Verified 2026-11-27 against iFlytek's own Spark HTTP doc: the
+		// language-model request URL spark-api-open.xf-yun.com/v1/chat/completions
+		// with Bearer APIPassword auth.
+		ID:          "iflytek",
+		Name:        "iFlytek Spark",
+		Website:     "https://xinghuo.xfyun.cn",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://spark-api-open.xf-yun.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://www.xfyun.cn/doc/spark/HTTP%E8%B0%83%E7%94%A8%E6%96%87%E6%A1%A3.html",
+		Notes:        "Spark HTTP API (Lite/Pro/Max/Ultra versions) at spark-api-open.xf-yun.com/v1/chat/completions; Bearer APIPassword from the console; system role and function calling supported on Ultra/Max.",
+	},
 }
