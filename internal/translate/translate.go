@@ -16,9 +16,12 @@ package translate
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/raunakiitp/codvian-router/internal/wire"
 )
 
 // UnrepresentableError marks a translation the target wire cannot
@@ -40,10 +43,22 @@ func unrep(format string, args ...any) error {
 }
 
 // IsUnrepresentable reports whether err is (or wraps) an
-// *UnrepresentableError.
+// *UnrepresentableError from this package or the native-wire
+// *wire.UnrepresentableError (the inner Gemini/Anthropic conversions
+// used by pairs like antigravity return the wire type).
 func IsUnrepresentable(err error) bool {
 	var ue *UnrepresentableError
-	return asUnrepresentable(err, &ue)
+	if asUnrepresentable(err, &ue) {
+		return true
+	}
+	return wireIsUnrepresentable(err)
+}
+
+// wireIsUnrepresentable errors.As-checks the native wire's
+// UnrepresentableError.
+func wireIsUnrepresentable(err error) bool {
+	var we *wire.UnrepresentableError
+	return errors.As(err, &we)
 }
 
 // asUnrepresentable is errors.As, kept local so the package needs no
