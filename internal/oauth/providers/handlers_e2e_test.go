@@ -15,6 +15,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1144,6 +1145,181 @@ func TestZedRedirectRequiresLoopbackPort(t *testing.T) {
 	}
 	if _, _, _, err := h.StartAuthorization("https://app.example.com/callback"); err == nil {
 		t.Errorf("StartAuthorization without a port: want refusal, got nil")
+	}
+}
+
+// TestTraeHandlerE2E — the realm's authorization-page sign-in with the
+// IDE's client and device identity; a bare callback refresh token is
+// exchanged for the pair, and the renewal rotates the refresh token.
+func TestTraeHandlerE2E(t *testing.T) {
+	var calls int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/cloudide/api/v3/trae/oauth/ExchangeToken", func(w http.ResponseWriter, r *http.Request) {
+		body := readBody(t, r)
+		if body["ClientID"] != traeClientID || body["RefreshToken"] == "" {
+			t.Errorf("exchange body = %v", body)
+		}
+		calls++
+		writeJSONToken(t, w, map[string]any{
+			"Result": map[string]any{
+				"Token":         fmt.Sprintf("trae-jwt-%d", calls),
+				"RefreshToken":  fmt.Sprintf("trae-rt-%d", calls),
+				"TokenExpireAt": time.Now().Add(time.Hour).Unix(),
+			},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	SetEndpointsForTest(t, "trae", map[string]string{
+		"auth":  srv.URL + "/authorization",
+		"token": srv.URL + "/cloudide/api/v3/trae/oauth/ExchangeToken",
+	})
+
+	h, err := Get("trae")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	state, authURL, _, err := h.StartAuthorization("http://127.0.0.1:48484/authorize")
+	if err != nil {
+		t.Fatalf("StartAuthorization: %v", err)
+	}
+	u, err := url.Parse(authURL)
+	if err != nil {
+		t.Fatalf("authorize URL: %v", err)
+	}
+	q := u.Query()
+	// The URL-shape assertions check the query only: the "auth"
+	// endpoint override repoints the base URL at the mock (the
+	// documented base is the realm's www.trae.ai/authorization page —
+	// asserted in TestTraeCNRealmSelection).
+	if q.Get("client_id") != traeClientID ||
+		q.Get("auth_callback_url") != "http://127.0.0.1:48484/authorize" ||
+		q.Get("device_id") == "" || q.Get("machine_id") == "" || state == "" {
+		t.Errorf("authorize params = %v (state=%s)", q, state)
+	}
+
+	// The callback's older shape: a bare refresh token. The handler
+	// exchanges it for the token pair.
+	tr, err := h.ExchangeCode(e2eCtx, srv.Client(), "trae-rt-1", "http://127.0.0.1:48484/authorize", "")
+	if err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+	if tr.AccessToken != "trae-jwt-1" || tr.RefreshToken != "trae-rt-1" || tr.ExpiresIn <= 0 {
+		t.Errorf("exchange result = %+v", tr)
+	}
+	if tr.TokenURL == "" {
+		t.Errorf("exchange result carries no refresh TokenURL")
+	}
+	// The renewal rotates the refresh token (Trae issues a new one and
+	// spends the old).
+	tr2, err := h.Refresh(e2eCtx, srv.Client(), tr.RefreshToken)
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if tr2.AccessToken != "trae-jwt-2" || tr2.RefreshToken != "trae-rt-2" {
+		t.Errorf("refresh result = %+v, want the rotated pair", tr2)
+	}
+	if calls != 2 {
+		t.Errorf("mock hits = %d, want 2 (exchange + refresh)", calls)
+	}
+}
+
+// TestTraeCNRealmSelection — the CN realm is selected via env and gets
+// its own hosts.
+func TestTraeCNRealmSelection(t *testing.T) {
+	t.Setenv(traeClientIDEnv, "cn")
+	h, err := Get("trae")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	_, authURL, _, err := h.StartAuthorization("http://127.0.0.1:48485/authorize")
+	if err != nil {
+		t.Fatalf("StartAuthorization: %v", err)
+	}
+	u, _ := url.Parse(authURL)
+	if u.Host != "www.trae.cn" {
+		t.Errorf("CN realm authorize host = %q, want www.trae.cn", u.Host)
+	}
+	t.Setenv(traeClientIDEnv, "bogus")
+	if _, _, _, err := h.StartAuthorization("http://127.0.0.1:48486/authorize"); err == nil ||
+		!strings.Contains(err.Error(), traeClientIDEnv) {
+		t.Errorf("bogus realm error = %v, want it to name %s", err, traeClientIDEnv)
+	}
+}
+
+// TestFreebuffHandlerE2E — the CLI's device-style login: one-time
+// login code, 401-means-pending status poll, authToken on approval,
+// and no refresh grant.
+func TestFreebuffHandlerE2E(t *testing.T) {
+	var polls int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/auth/cli/code", func(w http.ResponseWriter, r *http.Request) {
+		body := readBody(t, r)
+		if !strings.HasPrefix(body["fingerprintId"], "codebuff-cli-") {
+			t.Errorf("fingerprintId = %q, want the codebuff-cli- shape", body["fingerprintId"])
+		}
+		writeJSONToken(t, w, map[string]any{
+			"loginUrl":        "https://freebuff.com/login?auth_code=abc",
+			"fingerprintHash": "a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4a1b2c3d4",
+			"expiresAt":       time.Now().Add(10 * time.Minute).Unix(),
+		})
+	})
+	mux.HandleFunc("/api/auth/cli/status", func(w http.ResponseWriter, r *http.Request) {
+		qv := r.URL.Query()
+		if qv.Get("fingerprintId") == "" || qv.Get("fingerprintHash") == "" || qv.Get("expiresAt") == "" {
+			t.Errorf("status query = %v", qv)
+		}
+		polls++
+		if polls == 1 {
+			// Documented pending: 401 "Authentication failed".
+			w.WriteHeader(http.StatusUnauthorized)
+			writeJSONToken(t, w, map[string]any{"error": "Authentication failed"})
+			return
+		}
+		writeJSONToken(t, w, map[string]any{
+			"user": map[string]any{
+				"id": "280d0ec6-0000-0000-0000-000000000000", "name": "tester",
+				"email": "tester@example.com", "authToken": "freebuff-auth-token-1",
+			},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	SetEndpointsForTest(t, "freebuff", map[string]string{
+		"device": srv.URL + "/api/auth/cli/code",
+		"token":  srv.URL + "/api/auth/cli/status",
+	})
+
+	h, err := Get("freebuff")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, _, _, err := h.StartAuthorization("http://127.0.0.1/x"); !errIs(err, ErrNotCodeFlow) {
+		t.Errorf("StartAuthorization error = %v, want ErrNotCodeFlow", err)
+	}
+	dc, err := h.StartDevice(e2eCtx, srv.Client())
+	if err != nil {
+		t.Fatalf("StartDevice: %v", err)
+	}
+	if dc.VerificationURI == "" || dc.DeviceCode != "" {
+		t.Errorf("device offer = %+v (login-style flow: no RFC 8628 device_code)", dc)
+	}
+	if _, err := h.PollDevice(e2eCtx, srv.Client(), dc); !errIs(err, ErrAuthorizationPending) {
+		t.Errorf("first poll error = %v, want ErrAuthorizationPending (the 401 pending signal)", err)
+	}
+	tr, err := h.PollDevice(e2eCtx, srv.Client(), dc)
+	if err != nil {
+		t.Fatalf("second poll: %v", err)
+	}
+	if tr.AccessToken != "freebuff-auth-token-1" || tr.TokenType != "bearer" {
+		t.Errorf("poll result = %+v", tr)
+	}
+	// No refresh grant: the honest refusal.
+	if _, err := h.Refresh(e2eCtx, srv.Client(), tr.AccessToken); !errIs(err, ErrNoRefresh) {
+		t.Errorf("Refresh error = %v, want ErrNoRefresh", err)
+	}
+	if polls != 2 {
+		t.Errorf("mock polls = %d, want 2", polls)
 	}
 }
 
