@@ -248,6 +248,13 @@ type Registry struct {
 	// the resolver is the only source of OAuth credentials and it is
 	// never faked. Guarded by mu (set once at startup).
 	oauthTokenFn func(catalogProviderID string) (string, error)
+	// tosAckFn reports whether the operator has acknowledged the ToS
+	// risk for a ToS-grey catalog provider (A3 item 6, tos_gate.go).
+	// Set by the server from its acknowledgement store. Nil means
+	// nothing is acknowledged: the ToS-grey gate stays closed,
+	// matching the former hard refusal. Guarded by mu (set once at
+	// startup, read per resolution).
+	tosAckFn func(catalogProviderID string) bool
 }
 
 // RegistryOption configures a Registry.
@@ -802,8 +809,12 @@ func (r *Registry) AddCatalogWithOptions(ctx context.Context, catalogID, apiKey 
 			return nil, &catalog.RemovedProviderError{Entry: entry, Removed: rem}
 		}
 	}
-	if entry.ToSGrey {
-		return nil, fmt.Errorf("catalog provider %q (%s) is ToS-grey (web-cookie / subscription auth) and cannot be added as a routing target", entry.ID, entry.Name)
+	// ToS risk-acknowledgement gate (A3 item 6): a ToS-grey
+	// provider adds only after the operator has acknowledged the
+	// risk (tos_gate.go); otherwise the plain-words gate refusal
+	// tells them where to acknowledge it.
+	if entry.ToSGrey && !r.tosAcknowledged(entry.ID) {
+		return nil, r.tosGateRefusal(entry.ID, entry.Name, "add")
 	}
 	endpoint := opts.Endpoint
 	if endpoint == "" {
@@ -819,6 +830,18 @@ func (r *Registry) AddCatalogWithOptions(ctx context.Context, catalogID, apiKey 
 	// auth cache). Any other exchange, or an exchange surface whose
 	// key is not the right credential material, stays refused.
 	res, err := catalog.ResolveAuth(entry, endpoint, opts.Variant, apiKey)
+	if err != nil {
+		// Gate-open web-cookie surface: the catalog refuses to
+		// resolve cookie auth (it is ToS-grey, auth.go); with the
+		// risk acknowledged the registry resolves it itself — the
+		// operator's own session cookie as the static Cookie
+		// header (tos_gate.go).
+		if headers, wire, ok := webCookieHeadersFor(entry, apiKey); ok && r.tosAcknowledged(entry.ID) {
+			res.Headers = headers
+			res.Wire = catalog.WireFormat(wire)
+			err = nil
+		}
+	}
 	if err != nil {
 		if errors.Is(err, catalog.ErrExchangeRequired) {
 			if headers, wire, ok := sigv4Headers(res, apiKey); ok {
@@ -988,8 +1011,11 @@ func (r *Registry) resolveCatalogForLoad(p *Provider) error {
 			return fmt.Errorf("provider %q: %w", p.ID, &catalog.RemovedProviderError{Entry: entry, Removed: rem})
 		}
 	}
-	if entry.ToSGrey {
-		return fmt.Errorf("provider %q: catalog provider %q (%s) is ToS-grey and cannot be a routing target", p.ID, entry.ID, entry.Name)
+	// ToS risk-acknowledgement gate (A3 item 6): a config-file
+	// ToS-grey provider loads only after the operator has
+	// acknowledged the risk (tos_gate.go).
+	if entry.ToSGrey && !r.tosAcknowledged(entry.ID) {
+		return fmt.Errorf("provider %q: %w", p.ID, r.tosGateRefusal(entry.ID, entry.Name, "config-load"))
 	}
 	endpoint := p.AuthEndpoint
 	if endpoint == "" {
@@ -997,7 +1023,18 @@ func (r *Registry) resolveCatalogForLoad(p *Provider) error {
 	}
 	res, err := catalog.ResolveAuth(entry, endpoint, p.AuthVariant, "codvian-router-load-probe")
 	if err != nil && !errors.Is(err, catalog.ErrExchangeRequired) {
-		return fmt.Errorf("provider %q: catalog provider %q: %w", p.ID, entry.ID, err)
+		// Gate-open web-cookie surface: the resolver refuses
+		// cookie auth (ToS-grey); with the risk acknowledged the
+		// registry resolves the cookie itself at request time
+		// (tos_gate.go), so the load tolerates the refusal and
+		// keeps the operator's base URL.
+		ep, epOK := entry.Endpoint(endpoint, p.AuthVariant)
+		if !epOK {
+			ep = entry.DefaultEndpointAuth()
+		}
+		if !(ep.AuthKind == catalog.AuthCookie && r.tosAcknowledged(entry.ID)) {
+			return fmt.Errorf("provider %q: catalog provider %q: %w", p.ID, entry.ID, err)
+		}
 	}
 	if p.BaseURL == "" {
 		if res.BaseURL == "" {
@@ -2260,8 +2297,12 @@ func (r *Registry) resolveAuthHeadersUncached(p *Provider, key string) (map[stri
 		if err != nil {
 			return nil, "", time.Time{}, fmt.Errorf("provider %q: %w", p.ID, err)
 		}
-		if entry.ToSGrey {
-			return nil, "", time.Time{}, fmt.Errorf("provider %q: catalog provider %q is ToS-grey and cannot be a routing target", p.ID, entry.ID)
+		// ToS risk-acknowledgement gate (A3 item 6): the
+		// per-request check fires before the OAuth branch — an
+		// unacknowledged ToS-grey provider is refused here no
+		// matter how its credential would resolve (tos_gate.go).
+		if entry.ToSGrey && !r.tosAcknowledged(entry.ID) {
+			return nil, "", time.Time{}, fmt.Errorf("provider %q: %w", p.ID, r.tosGateRefusal(entry.ID, entry.Name, "request"))
 		}
 		// A2: OAuth surfaces (device-code / PKCE, category-oauth).
 		// The stored API key is NOT the credential here — the OAuth
@@ -2279,6 +2320,13 @@ func (r *Registry) resolveAuthHeadersUncached(p *Provider, key string) (map[stri
 		}
 		res, err := catalog.ResolveAuth(entry, p.AuthEndpoint, p.AuthVariant, key)
 		if err != nil {
+			// Gate-open web-cookie surface (tos_gate.go): the
+			// operator's own session cookie as the static Cookie
+			// header — the same credential resolution the add
+			// path used, now per request.
+			if headers, wire, ok := webCookieHeadersFor(entry, key); ok && ep.AuthKind == catalog.AuthCookie && r.tosAcknowledged(entry.ID) {
+				return headers, wire, time.Time{}, nil
+			}
 			if headers, wire, ok := sigv4Headers(res, key); ok {
 				return headers, wire, time.Time{}, nil
 			}
