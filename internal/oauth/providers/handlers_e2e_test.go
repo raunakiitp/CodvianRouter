@@ -744,6 +744,229 @@ func TestPendingClassification(t *testing.T) {
 	}
 }
 
+// TestCursorHandlerE2E — PKCE authorize URL with the operator's
+// dashboard-registered client, Basic-authenticated code exchange and
+// rotating refresh at the documented token endpoint.
+func TestCursorHandlerE2E(t *testing.T) {
+	t.Setenv(cursorClientIDEnv, "oauth_client_cursor-1")
+	t.Setenv(cursorClientSecretEnv, "cursor-secret-1")
+	wantBasic := "Basic " + base64.StdEncoding.EncodeToString([]byte("oauth_client_cursor-1:cursor-secret-1"))
+	var exchanged, refreshed int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/oauth/applications/token", func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != wantBasic {
+			t.Errorf("Authorization = %q, want HTTP Basic client auth", got)
+		}
+		body := readBody(t, r)
+		switch body["grant_type"] {
+		case "authorization_code":
+			exchanged++
+			if body["code"] != "cursor-code-1" {
+				t.Errorf("code = %q", body["code"])
+			}
+			if body["redirect_uri"] != "http://127.0.0.1:4545/callback" {
+				t.Errorf("redirect_uri = %q", body["redirect_uri"])
+			}
+			if len(body["code_verifier"]) < 43 {
+				t.Errorf("code_verifier = %q, want an RFC 7636 verifier", body["code_verifier"])
+			}
+			if body["client_id"] != "" || body["client_secret"] != "" {
+				t.Errorf("client credentials must ride the Basic header, not the body: %v", body)
+			}
+			writeJSONToken(t, w, map[string]any{
+				"access_token": "cursor-at-1", "refresh_token": "cursor-rt-1",
+				"token_type": "Bearer", "expires_in": 3600, "scope": cursorScope,
+			})
+		case "refresh_token":
+			refreshed++
+			if body["refresh_token"] != "cursor-rt-1" {
+				t.Errorf("refresh_token = %q, want the stored one", body["refresh_token"])
+			}
+			writeJSONToken(t, w, map[string]any{
+				"access_token": "cursor-at-2", "refresh_token": "cursor-rt-2",
+				"token_type": "Bearer", "expires_in": 3600,
+			})
+		default:
+			t.Errorf("unexpected grant_type %q", body["grant_type"])
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	SetEndpointsForTest(t, "cursor", map[string]string{
+		"auth":  srv.URL + "/oauth/authorize",
+		"token": srv.URL + "/oauth/applications/token",
+	})
+
+	h, err := Get("cursor")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	state, authURL, verifier, err := h.StartAuthorization("http://127.0.0.1:4545/callback")
+	if err != nil {
+		t.Fatalf("StartAuthorization: %v", err)
+	}
+	u, err := url.Parse(authURL)
+	if err != nil {
+		t.Fatalf("authorize URL: %v", err)
+	}
+	q := u.Query()
+	if q.Get("response_type") != "code" || q.Get("client_id") != "oauth_client_cursor-1" ||
+		q.Get("redirect_uri") != "http://127.0.0.1:4545/callback" ||
+		q.Get("state") != state || q.Get("code_challenge_method") != "S256" ||
+		q.Get("code_challenge") != s256(verifier) || q.Get("scope") != cursorScope {
+		t.Errorf("authorize params = %v (state=%s verifier=%s)", q, state, verifier)
+	}
+
+	tr, err := h.ExchangeCode(e2eCtx, srv.Client(), "cursor-code-1", "http://127.0.0.1:4545/callback", verifier)
+	if err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+	if tr.AccessToken != "cursor-at-1" || tr.RefreshToken != "cursor-rt-1" || tr.ExpiresIn != 3600 {
+		t.Errorf("exchange result = %+v", tr)
+	}
+	if tr.TokenURL == "" {
+		t.Errorf("exchange result carries no refresh TokenURL")
+	}
+
+	tr2, err := h.Refresh(e2eCtx, srv.Client(), tr.RefreshToken)
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	// Cursor's documented rotation: a new refresh token every refresh.
+	if tr2.AccessToken != "cursor-at-2" || tr2.RefreshToken != "cursor-rt-2" {
+		t.Errorf("refresh result = %+v, want the rotated pair", tr2)
+	}
+	if exchanged != 1 || refreshed != 1 {
+		t.Errorf("mock hits: exchange=%d refresh=%d, want 1/1", exchanged, refreshed)
+	}
+}
+
+// TestCursorUnconfiguredClientRefused — no invented client: without the
+// operator's dashboard application credentials the flow refuses.
+func TestCursorUnconfiguredClientRefused(t *testing.T) {
+	t.Setenv(cursorClientIDEnv, "")
+	t.Setenv(cursorClientSecretEnv, "")
+	h, err := Get("cursor")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, _, _, err := h.StartAuthorization("http://127.0.0.1/cb"); err == nil ||
+		!strings.Contains(err.Error(), cursorClientIDEnv) {
+		t.Errorf("StartAuthorization error = %v, want it to name %s", err, cursorClientIDEnv)
+	}
+	if _, err := h.ExchangeCode(e2eCtx, nil, "c", "u", "v"); err == nil {
+		t.Errorf("ExchangeCode without configured client: want refusal, got nil")
+	}
+	if _, err := h.Refresh(e2eCtx, nil, "r"); err == nil {
+		t.Errorf("Refresh without configured client: want refusal, got nil")
+	}
+}
+
+// TestGHECopilotHandlerE2E — the Enterprise Cloud data-residency device
+// flow: device start and poll on the operator's SUBDOMAIN.ghe.com host,
+// Copilot API-token exchange at api.<host>, refresh via re-exchange.
+func TestGHECopilotHandlerE2E(t *testing.T) {
+	t.Setenv(gheHostEnv, "octocorp.ghe.com")
+	polls := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("/login/device/code", func(w http.ResponseWriter, r *http.Request) {
+		form := readBody(t, r)
+		if form["client_id"] != copilotClientID || form["scope"] != "read:user" {
+			t.Errorf("device request = %v", form)
+		}
+		writeJSONToken(t, w, map[string]any{
+			"device_code": "dc-ghe-1", "user_code": "GHEX-1234",
+			"verification_uri": "https://octocorp.ghe.com/login/device", "interval": 5, "expires_in": 899,
+		})
+	})
+	mux.HandleFunc("/login/oauth/access_token", func(w http.ResponseWriter, r *http.Request) {
+		form := readBody(t, r)
+		polls++
+		if form["grant_type"] != "urn:ietf:params:oauth:grant-type:device_code" ||
+			form["device_code"] != "dc-ghe-1" || form["client_id"] != copilotClientID {
+			t.Errorf("device poll = %v", form)
+		}
+		if polls == 1 {
+			w.WriteHeader(http.StatusForbidden)
+			writeJSONToken(t, w, map[string]any{"error": "authorization_pending"})
+			return
+		}
+		writeJSONToken(t, w, map[string]any{"access_token": "gho-ghe-1", "token_type": "bearer"})
+	})
+	mux.HandleFunc("/copilot_internal/v2/token", func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "token gho-ghe-1" {
+			t.Errorf("Authorization = %q, want the GitHub OAuth token", got)
+		}
+		if r.Header.Get("Editor-Version") == "" || r.Header.Get("Editor-Plugin-Version") == "" {
+			t.Errorf("editor headers missing: %v", r.Header)
+		}
+		writeJSONToken(t, w, map[string]any{"token": "ghe-copilot-jwt-1", "expires_in": 1800})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	SetEndpointsForTest(t, "ghe-copilot", map[string]string{
+		"device":   srv.URL + "/login/device/code",
+		"token":    srv.URL + "/login/oauth/access_token",
+		"exchange": srv.URL + "/copilot_internal/v2/token",
+	})
+
+	h, err := Get("ghe-copilot")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, _, _, err := h.StartAuthorization("http://127.0.0.1/x"); !errIs(err, ErrNotCodeFlow) {
+		t.Errorf("StartAuthorization error = %v, want ErrNotCodeFlow", err)
+	}
+	dc, err := h.StartDevice(e2eCtx, srv.Client())
+	if err != nil {
+		t.Fatalf("StartDevice: %v", err)
+	}
+	if dc.UserCode != "GHEX-1234" || dc.VerificationURI == "" {
+		t.Errorf("device offer = %+v", dc)
+	}
+	if _, err := h.PollDevice(e2eCtx, srv.Client(), dc); !errIs(err, ErrAuthorizationPending) {
+		t.Errorf("first poll error = %v, want ErrAuthorizationPending", err)
+	}
+	tr, err := h.PollDevice(e2eCtx, srv.Client(), dc)
+	if err != nil {
+		t.Fatalf("second poll: %v", err)
+	}
+	if tr.AccessToken != "ghe-copilot-jwt-1" || tr.RefreshToken != "gho-ghe-1" || tr.ExpiresIn != 1800 {
+		t.Errorf("poll result = %+v", tr)
+	}
+	tr2, err := h.Refresh(e2eCtx, srv.Client(), tr.RefreshToken)
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if tr2.AccessToken != "ghe-copilot-jwt-1" || tr2.RefreshToken != "gho-ghe-1" {
+		t.Errorf("refresh result = %+v, want the same GitHub credential kept", tr2)
+	}
+	if polls != 2 {
+		t.Errorf("mock polls = %d, want 2", polls)
+	}
+}
+
+// TestGHECopilotUnconfiguredHostRefused — no invented host: without the
+// operator's Enterprise Cloud host the flow refuses instead of falling
+// back to github.com.
+func TestGHECopilotUnconfiguredHostRefused(t *testing.T) {
+	t.Setenv(gheHostEnv, "")
+	h, err := Get("ghe-copilot")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, err := h.StartDevice(e2eCtx, nil); err == nil || !strings.Contains(err.Error(), gheHostEnv) {
+		t.Errorf("StartDevice error = %v, want it to name %s", err, gheHostEnv)
+	}
+	if _, err := h.PollDevice(e2eCtx, nil, &DeviceCode{state: map[string]string{"device_code": "x"}}); err == nil {
+		t.Errorf("PollDevice without configured host: want refusal, got nil")
+	}
+	if _, err := h.Refresh(e2eCtx, nil, "r"); err == nil {
+		t.Errorf("Refresh without configured host: want refusal, got nil")
+	}
+}
+
 func errIs(err error, target error) bool {
 	if err == nil {
 		return false

@@ -635,9 +635,11 @@ func TestBridgePasteImportE2E(t *testing.T) {
 // missing connection; import-only providers point at the import path.
 func TestBridgeRefusals(t *testing.T) {
 	srv, _ := newBridgeServer(t)
-	_, err := srv.OAuthProviderAccessToken("cursor")
+	// "cursor" is implemented now (the OAuth handler landed); "qoder"
+	// is the unimplemented-refusal example instead.
+	_, err := srv.OAuthProviderAccessToken("qoder")
 	if err == nil || !strings.Contains(err.Error(), "not implemented") {
-		t.Errorf("cursor resolution error = %v, want the honest unimplemented refusal", err)
+		t.Errorf("qoder resolution error = %v, want the honest unimplemented refusal", err)
 	}
 	if _, err := srv.OAuthProviderAccessToken("claude"); err == nil || !strings.Contains(err.Error(), "no connection") {
 		t.Errorf("unconnected claude error = %v, want a no-connection error", err)
