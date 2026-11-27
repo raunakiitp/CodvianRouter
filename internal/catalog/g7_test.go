@@ -201,8 +201,8 @@ func TestFreeTierPoolsAndRanking(t *testing.T) {
 	// VerifiedDocs moved 18 -> 24 with the A1 batch-1 fills (six
 	// entries became docs-verified; their free-tier notes were
 	// already present and unchanged).
-	if s.Total != 162 || s.Pools != 7 || s.VerifiedDocs != 36 || s.WithNote != 145 {
-		t.Fatalf("free-tier summary = %+v, want {Total 162, VerifiedDocs 36, WithNote 145, Pools 7} (CT-3 retired 3 free-tier entries, all with notes; A1 batches added 18 docs-verified)", s)
+	if s.Total != 162 || s.Pools != 7 || s.VerifiedDocs != 38 || s.WithNote != 145 {
+		t.Fatalf("free-tier summary = %+v, want {Total 162, VerifiedDocs 38, WithNote 145, Pools 7} (CT-3 retired 3 free-tier entries, all with notes; A1 batches added 20 docs-verified)", s)
 	}
 	ranked := FreeTierRanking()
 	if len(ranked) != FreeTierCount() {
