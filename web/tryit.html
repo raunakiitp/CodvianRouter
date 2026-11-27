@@ -1166,6 +1166,18 @@ const ROUTES = [
     "bootstrap": false
   },
   {
+    "method": "POST",
+    "path": "/api/providers/{id}/risk-acknowledgement",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Records the operator\u2019s explicit acknowledgement of the ToS risk of a ToS-grey catalog provider (who, which provider, when; persisted and audit-logged). The add, config-load and request-time gates refuse the provider until this is done. Auth always required \u2014 an unauthenticated caller must never open the risk gate.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
     "method": "GET",
     "path": "/api/catalog",
     "tier": "MANAGEMENT",

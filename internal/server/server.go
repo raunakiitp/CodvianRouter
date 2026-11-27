@@ -568,6 +568,11 @@ type Server struct {
 	// oauthStore is the lazy dashboard OAuth connection store (PR #52):
 	// created on first OAuth use from cfg.DataDir. Guarded by dashAuthMu.
 	oauthStore *oauthConnStore
+	// tosGate is the lazy ToS risk-acknowledgement store (A3 item 6,
+	// tos_gate.go): WHO acknowledged WHICH ToS-grey provider WHEN.
+	// The provider registry's gate reads it through ToSAcknowledged.
+	tosGate   *tosGateStore
+	tosGateMu sync.Mutex
 	// ipControl is the lazy IP allowlist/blocklist store (PR #53):
 	// created on first IP-control use. Guarded by dashAuthMu.
 	ipControl *ipControlStore
@@ -1043,6 +1048,12 @@ func WithProviderRegistry(r *provider.Registry) Option {
 		// (GET /dashboard/pools): live per-(provider, key) pool
 		// state plus the sizing config in force.
 		s.poolStats = r
+		// A3 item 6: wire the ToS risk-acknowledgement store into
+		// the registry's gate, so the add-time, config-load and
+		// request-time checks pass only for providers whose risk
+		// was acknowledged via POST
+		// /api/providers/{id}/risk-acknowledgement (tos_gate.go).
+		r.SetToSAcknowledgement(s.ToSAcknowledged)
 	}
 }
 
@@ -1782,6 +1793,11 @@ func New(engine Engine, opts ...Option) *Server {
 	s.register(mux, "GET", "/openapi.json", s.handleOpenAPI)
 	s.register(mux, "GET", "/api/providers", s.handleAPIProviders)
 	s.register(mux, "POST", "/api/providers", s.handleAddProvider)
+	// A3 item 6: record the operator's explicit acknowledgement of
+	// the ToS risk of a ToS-grey catalog provider (web-cookie /
+	// subscription auth). Tier 2 always-protected + admin scope, so
+	// an unauthenticated caller can never open the gate.
+	s.register(mux, "POST", "/api/providers/{id}/risk-acknowledgement", s.handleRiskAcknowledgement)
 	s.register(mux, "DELETE", "/api/providers/{id}", s.handleDeleteProvider)
 	s.register(mux, "POST", "/api/providers/{id}/keys", s.handleAddProviderKey)
 	s.register(mux, "GET", "/api/capabilities", s.handleCapabilities)
