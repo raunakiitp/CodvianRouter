@@ -295,6 +295,17 @@ func (r *Registry) SetOAuthTokenResolver(fn func(catalogProviderID string) (stri
 	r.oauthTokenFn = fn
 }
 
+// OAuthTokenResolver returns the wired OAuth token resolver (nil when
+// none is wired). Wiring proof for tests: the production wiring must
+// install the handler-based resolver (server.InstallOAuthProviderResolver),
+// so a test can compare this against nil before/after the install and
+// drive the returned function end to end.
+func (r *Registry) OAuthTokenResolver() func(catalogProviderID string) (string, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.oauthTokenFn
+}
+
 // isOAuthExchangeKind reports whether an exchange kind is an OAuth
 // flow (device code, PKCE, or any kind naming oauth).
 func isOAuthExchangeKind(kind string) bool {
