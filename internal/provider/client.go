@@ -1505,6 +1505,11 @@ type openAIClient struct {
 	// vertex_client.go), anything else falls back to OpenAI wire
 	// (see WithWireFormat).
 	wireFormat string
+	// quirks carries the per-provider quirks resolved for this client's
+	// base URL (see quirks.go). Zero for hosts with no documented
+	// quirks and for every native-wire wrapper (NewClient resolves
+	// quirks only on the generic OpenAI path, after wire selection).
+	quirks quirkSet
 	// providerID is the registry ID of the provider this client
 	// serves ("" for ad-hoc clients built outside the registry,
 	// e.g. probes). It is passed to httpAdapter so one func can
@@ -1576,6 +1581,13 @@ func NewClient(baseURL, apiKey string, opts ...ClientOption) (Client, error) {
 	if c.wireFormat == WireFormatVertex {
 		return &vertexClient{openAIClient: c}, nil
 	}
+	// Per-provider quirks (A1 gap 3): consult the quirk table after the
+	// wire selection. Only the generic OpenAI-compatible client applies
+	// quirks — the native-wire wrappers above returned already, and their
+	// URL builders never consult this table (see quirks.go).
+	if qs, ok := quirksForBaseURL(c.baseURL); ok {
+		c.quirks = qs
+	}
 	return c, nil
 }
 
@@ -1603,12 +1615,55 @@ func joinAPIPath(base, segment string) string {
 	return base + "/v1/" + strings.TrimPrefix(segment, "/")
 }
 
-// modelsURL is GET {base}/models (with the /v1 rule above).
-func (c *openAIClient) modelsURL() string { return joinAPIPath(c.baseURL, "models") }
+// apiPath joins the base with an API segment under this client's quirk
+// rules: a NoV1Insert surface (quirks.go) appends the segment verbatim —
+// inserting "/v1" would build a path the upstream does not serve — while
+// the default keeps joinAPIPath's /v1 rule.
+func (c *openAIClient) apiPath(base, segment string) string {
+	if c.quirks.NoV1Insert {
+		return joinRawPath(base, segment)
+	}
+	return joinAPIPath(base, segment)
+}
 
-// chatURL is POST {base}/chat/completions (with the /v1 rule above).
-func (c *openAIClient) chatURL() string {
-	return joinAPIPath(c.baseURL, "chat/completions")
+// modelsURL is GET {base}/models (with the /v1 rule above).
+func (c *openAIClient) modelsURL() string { return c.apiPath(c.baseURL, "models") }
+
+// chatURL is POST {base}/chat/completions without a model: the generic
+// URL (probes and quirks that do not scope by model). Chat requests use
+// chatURLForModel.
+func (c *openAIClient) chatURL() string { return c.chatURLForModel("") }
+
+// chatURLForModel is POST {base}/chat/completions, quirked: a
+// NoV1Insert surface appends the segment verbatim, and the legacy Azure
+// deployment path moves the model into the URL (model "" there falls
+// back to the generic path, so model-less callers keep it).
+func (c *openAIClient) chatURLForModel(model string) string {
+	if c.quirks.AzureLegacyDeploymentPath && model != "" {
+		return azureLegacyChatURL(c.baseURL, model)
+	}
+	return c.apiPath(c.baseURL, "chat/completions")
+}
+
+// chatPayloadForQuirks marshals the wire request under the client's
+// quirks: on the legacy Azure deployment path the deployment (the model)
+// rides in the URL, so the documented legacy request body carries no
+// "model" field and it is stripped here.
+// Source: https://learn.microsoft.com/en-us/azure/ai-services/openai/reference.
+func (c *openAIClient) chatPayloadForQuirks(wireReq *chatCompletionRequest) ([]byte, error) {
+	payload, err := json.Marshal(wireReq)
+	if err != nil {
+		return nil, err
+	}
+	if !c.quirks.AzureLegacyDeploymentPath {
+		return payload, nil
+	}
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &body); err != nil {
+		return nil, err
+	}
+	delete(body, "model")
+	return json.Marshal(body)
 }
 
 // maxErrorBody is how much of an error body we keep / read.
@@ -2309,11 +2364,11 @@ func (c *openAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	if err != nil {
 		return nil, err
 	}
-	payload, err := json.Marshal(wireReq)
+	payload, err := c.chatPayloadForQuirks(&wireReq)
 	if err != nil {
 		return nil, fmt.Errorf("encoding chat request: %w", err)
 	}
-	httpReq, err := c.newRequest(ctx, http.MethodPost, c.chatURL(), payload)
+	httpReq, err := c.newRequest(ctx, http.MethodPost, c.chatURLForModel(wireReq.Model), payload)
 	if err != nil {
 		return nil, err
 	}
@@ -2385,11 +2440,11 @@ func (c *openAIClient) ChatStreamChunks(ctx context.Context, req ChatRequest, on
 	if err != nil {
 		return nil, err
 	}
-	payload, err := json.Marshal(wireReq)
+	payload, err := c.chatPayloadForQuirks(&wireReq)
 	if err != nil {
 		return nil, fmt.Errorf("encoding chat request: %w", err)
 	}
-	httpReq, err := c.newRequest(ctx, http.MethodPost, c.chatURL(), payload)
+	httpReq, err := c.newRequest(ctx, http.MethodPost, c.chatURLForModel(wireReq.Model), payload)
 	if err != nil {
 		return nil, err
 	}
