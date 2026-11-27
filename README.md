@@ -161,6 +161,17 @@ The catalog is data, and it is explicit about what each entry can do:
 | Docs-verified | 159 |
 | By category | api-key 473 · oauth 31 · web-cookie 37 · search 21 · local 18 · audio 12 · no-auth 10 · cloud-agent 3 · upstream-proxy 2 |
 
+The ten no-auth entries carry their connection mechanisms in
+`internal/noauth` — keyless endpoints with the provider's own
+documented per-IP limits enforced locally (AI Horde's anonymous key
+`0000000000` with its documented 5/second and 300/minute chat-submit
+limits; uncloseai's key-free endpoints under its ToS IP throttling),
+and CLI-owned auth bridges (`auggie`, `codex app-server`, `devin acp`,
+`mcode`, `zcode`) that spawn the provider CLI and never see its
+credentials. Three web-only surfaces (DuckDuckGo AI Chat, Cloudflare's
+LLM Playground, veoaifree-web) have no documented anonymous endpoint
+and stay metadata-only.
+
 A catalog entry is a starting point, **not a promise**: nothing routes
 until you add the provider with your own key, and the router tests that
 key against the provider when you add it. Web-session-cookie providers
