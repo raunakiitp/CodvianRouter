@@ -728,10 +728,17 @@ func (r *Registry) addProvider(ctx context.Context, in addInput) (*Provider, err
 //     per-resource URL substituted into a templated catalog base
 //     (Azure {resource}, Vertex {LOCATION}), or a mock in tests.
 //     "" means the catalog base URL.
+//   - TemplateParams: values for the placeholders in a templated
+//     catalog base URL (Cloudflare {account_id}, AI Gateway
+//     {account_id}/{gateway_id}/{provider}, Snowflake
+//     ${SNOWFLAKE_ACCOUNT}). Resolution happens in
+//     catalog.ResolveBaseURLTemplate; missing names are listed in
+//     the error, and values are validated as URL path segments.
 type CatalogAddOptions struct {
-	Endpoint string
-	Variant  string
-	BaseURL  string
+	Endpoint       string
+	Variant        string
+	BaseURL        string
+	TemplateParams map[string]string
 }
 
 // AddCatalog adds a catalog provider by ID: its base URL, wire format
@@ -847,8 +854,20 @@ func (r *Registry) AddCatalogWithOptions(ctx context.Context, catalogID, apiKey 
 	if baseURL == "" {
 		return nil, fmt.Errorf("catalog provider %q (%s) has no known base URL; add it as a custom provider with an explicit base URL instead", entry.ID, entry.Name)
 	}
+	if catalog.IsTemplatedBaseURL(baseURL) {
+		// Templated catalog base (Cloudflare {account_id}, AI
+		// Gateway {account_id}/{gateway_id}/{provider}, Snowflake
+		// ${SNOWFLAKE_ACCOUNT}): resolve from the operator's
+		// template parameters instead of refusing. Missing names
+		// are listed so the operator knows exactly what to supply.
+		resolved, terr := catalog.ResolveBaseURLTemplate(baseURL, opts.TemplateParams)
+		if terr != nil {
+			return nil, fmt.Errorf("catalog provider %q (%s) has a templated base URL %q: %w", entry.ID, entry.Name, baseURL, terr)
+		}
+		baseURL = resolved
+	}
 	if strings.ContainsAny(baseURL, "{}") {
-		return nil, fmt.Errorf("catalog provider %q (%s) has a templated base URL %q; supply a concrete base URL (e.g. your resource URL) via the base-URL override", entry.ID, entry.Name, baseURL)
+		return nil, fmt.Errorf("catalog provider %q (%s) has an unresolved templated base URL %q; supply the template parameters or a concrete base URL via the base-URL override", entry.ID, entry.Name, baseURL)
 	}
 	// The endpoint's auth kind decides whether an empty key is OK
 	// (local / no-auth surfaces take no credential at all).

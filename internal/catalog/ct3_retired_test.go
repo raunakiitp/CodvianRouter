@@ -15,7 +15,10 @@ import (
 // of them — never invented (see the RetiredReason on each entry).
 
 // ct3RetiredIDs is the CT-3 retirement set, in catalog order.
-var ct3RetiredIDs = []string{"blackbox", "galadriel", "ai21", "bytez"}
+// A1 (2026-11-27, owner decision D2) added cheaperinference to the
+// retired set — same mechanism, separate reason, so the count pins
+// move 4 -> 5 and the live total 610 -> 609.
+var ct3RetiredIDs = []string{"blackbox", "galadriel", "ai21", "bytez", "cheaperinference"}
 
 func ct3RetiredSet(t *testing.T) map[string]Provider {
 	t.Helper()
