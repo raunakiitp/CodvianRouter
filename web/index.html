@@ -1173,6 +1173,79 @@ resp = client.chat.completions.create(
           </div>
         </div>
 
+        <!-- OAuth provider connect (A3 W1): the connect flow for the
+             catalog OAuth providers that ship a real handler (code /
+             browser-sign-in, device, or allowlisted paste import).
+             Everything here is server-truth driven: the provider list
+             comes from GET /dashboard/oauth/providers (the registry
+             feeds it — implemented handlers AND the honestly-
+             unimplemented ones with their reason, shown as such), and
+             the flow blocks render from the provider's own flow field.
+             The gateway key is typed fresh per call and never stored;
+             the access/refresh tokens land in the server's
+             Vault-sealed connection store and are never returned to
+             the browser. -->
+        <div class="card" id="oauthConnectCard" style="margin-bottom:16px">
+          <div class="card-head"><h3>OAuth provider connections</h3><div class="right"><span class="sub">Subscription / IDE sign-in — tokens stored sealed on this machine</span></div></div>
+          <div class="card-body">
+            <div class="field">
+              <label for="oauthProvSelect">OAuth provider</label>
+              <select class="sel" id="oauthProvSelect" style="width:100%"><option value="">Loading OAuth providers...</option></select>
+              <div id="oauthProvHint" style="font-size:12px; color:var(--text-3); margin-top:6px"></div>
+            </div>
+            <div class="field">
+              <label for="oauthGwKey">Gateway key <span style="color:var(--text-3); font-weight:500">— required, sent per call, never stored</span></label>
+              <input id="oauthGwKey" type="password" autocomplete="off" placeholder="crk_..." style="width:100%; height:40px; border:0; border-radius:13px; padding:0 13px; font-family:'JetBrains Mono',monospace; font-size:12.5px; background:var(--surface); color:var(--text); outline:none; box-shadow:inset 0 0 0 1px var(--ring)" />
+            </div>
+
+            <!-- Authorization-code / browser-sign-in flows -->
+            <div id="oauthCodeBlock" style="display:none">
+              <div class="field">
+                <label for="oauthRedirectURI">Redirect URI <span style="color:var(--text-3); font-weight:500">— optional; must match what you register with the provider</span></label>
+                <input id="oauthRedirectURI" type="text" autocomplete="off" spellcheck="false" placeholder="e.g. http://localhost:54545/callback" style="width:100%; height:40px; border:0; border-radius:13px; padding:0 13px; font-family:'JetBrains Mono',monospace; font-size:12.5px; background:var(--surface); color:var(--text); outline:none; box-shadow:inset 0 0 0 1px var(--ring)" />
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; margin:8px 0">
+                <button class="btn primary" id="oauthStartBtn">Open authorization page</button>
+                <a class="btn" id="oauthAuthorizeLink" href="#" target="_blank" rel="noopener" style="display:none">Open authorization URL</a>
+              </div>
+              <div class="field">
+                <label for="oauthCodeInput">Callback code <span style="color:var(--text-3); font-weight:500">— paste the code the provider redirected back with</span></label>
+                <input id="oauthCodeInput" type="text" autocomplete="off" spellcheck="false" style="width:100%; height:40px; border:0; border-radius:13px; padding:0 13px; font-family:'JetBrains Mono',monospace; font-size:12.5px; background:var(--surface); color:var(--text); outline:none; box-shadow:inset 0 0 0 1px var(--ring)" />
+              </div>
+              <div style="display:flex; gap:8px; justify-content:flex-end">
+                <button class="btn primary" id="oauthCompleteBtn">Complete connection</button>
+              </div>
+            </div>
+
+            <!-- Device flows -->
+            <div id="oauthDeviceBlock" style="display:none">
+              <div style="display:flex; gap:8px; flex-wrap:wrap; margin:8px 0">
+                <button class="btn primary" id="oauthDeviceStartBtn">Start device sign-in</button>
+              </div>
+              <div id="oauthDevicePanel" style="display:none; margin:8px 0">
+                <p style="margin:4px 0; font-size:13px; color:var(--text-2)">Open <a id="oauthDeviceURI" href="#" target="_blank" rel="noopener" class="mono" style="color:var(--accent)"></a> and enter the code:</p>
+                <p class="mono" id="oauthDeviceUserCode" style="margin:4px 0; font-size:15px; font-weight:600; letter-spacing:2px"></p>
+                <div style="display:flex; gap:8px; margin-top:8px">
+                  <button class="btn" id="oauthDeviceCheckBtn">Check approval</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Allowlisted paste-token import (antigravity, agy) -->
+            <div id="oauthImportBlock" style="display:none">
+              <div class="field">
+                <label for="oauthImportBlob">Credential blob <span style="color:var(--text-3); font-weight:500">— paste the blob exported by the provider's own tooling</span></label>
+                <textarea id="oauthImportBlob" rows="4" spellcheck="false" style="width:100%; border:0; border-radius:13px; padding:10px 13px; font-family:'JetBrains Mono',monospace; font-size:12px; background:var(--surface); color:var(--text); outline:none; box-shadow:inset 0 0 0 1px var(--ring); resize:vertical"></textarea>
+              </div>
+              <div style="display:flex; gap:8px; justify-content:flex-end">
+                <button class="btn primary" id="oauthImportBtn">Import credential</button>
+              </div>
+            </div>
+
+            <p id="oauthConnectStatus" style="display:none; margin:12px 0 0; font-size:13px"></p>
+          </div>
+        </div>
+
         <!-- Free Tier Providers (M10-2, Q20): the catalog entries
              whose feed record carries a free tier, as a visible
              addable group of their own. The live feed
@@ -5580,6 +5653,192 @@ function go(view){
   });
   loadCatalog();
   addProvSyncMode();
+
+  /* ---------- OAuth provider connections (A3 W1) ----------
+     Server-truth driven: the provider list comes from
+     GET /dashboard/oauth/providers (the per-provider OAuth handler
+     registry — implemented flows and the honestly-unimplemented ones
+     with their reason), and the flow blocks render from each
+     provider's own flow field. The gateway key is typed fresh per
+     connect session and cleared when the flow completes; the routes
+     never return access or refresh tokens, so nothing here can leak
+     a credential into the page. */
+  var oauthProvidersList = [];
+  var oauthPending = null; /* code flow in flight: { id, state, verifier, redirect_uri } */
+  var oauthDevice = null;  /* device flow in flight: { id, device_code } */
+  function oauthShowStatus(msg, isErr){
+    var el = $("#oauthConnectStatus");
+    el.style.display = "block";
+    el.style.color = isErr ? "var(--red)" : "var(--text-2)";
+    el.textContent = msg;
+  }
+  function oauthErrMsg(res, fallback){
+    return (res && res.body && res.body.error && res.body.error.message) ? res.body.error.message : fallback;
+  }
+  function oauthFetch(path, body){
+    var gwKey = $("#oauthGwKey").value.trim();
+    if(!gwKey){ return Promise.reject(new Error("Paste your gateway key first — the connect routes require gateway-key auth.")); }
+    return fetch(path, {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "Authorization": "Bearer " + gwKey},
+      body: JSON.stringify(body || {})
+    }).then(function(r){
+      return r.json().then(function(d){ return {ok: r.ok, status: r.status, body: d}; }, function(){ return {ok: r.ok, status: r.status, body: null}; });
+    });
+  }
+  function loadOAuthProviders(){
+    fetch("/dashboard/oauth/providers").then(function(r){
+      return r.json().then(function(d){ return {ok: r.ok, body: d}; }, function(){ return {ok: r.ok, body: null}; });
+    }).then(function(res){
+      var sel = $("#oauthProvSelect");
+      sel.innerHTML = "";
+      if(!res.ok || !res.body || !res.body.providers || !res.body.providers.length){
+        sel.innerHTML = '<option value="">OAuth provider feed unavailable</option>';
+        $("#oauthProvHint").textContent = res.ok ? "" : "GET /dashboard/oauth/providers needs gateway-key auth — paste a key below and reload, or run without headless mode.";
+        return;
+      }
+      oauthProvidersList = res.body.providers;
+      oauthProvidersList.forEach(function(p){
+        var o = document.createElement("option");
+        o.value = p.implemented ? p.id : "";
+        if(!p.implemented){ o.disabled = true; }
+        o.textContent = p.implemented
+          ? (p.name + " (" + p.id + " · " + p.flow + ")")
+          : (p.name + " — unavailable: no documented OAuth flow");
+        sel.appendChild(o);
+      });
+      oauthSyncFlow();
+    }).catch(function(err){
+      $("#oauthProvSelect").innerHTML = '<option value="">OAuth provider feed unavailable</option>';
+      $("#oauthProvHint").textContent = "Feed error: " + err.message;
+    });
+  }
+  function oauthSyncFlow(){
+    var id = $("#oauthProvSelect").value;
+    var p = oauthProvidersList.find(function(x){ return x.id === id; });
+    $("#oauthCodeBlock").style.display = (p && (p.flow === "pkce" || p.flow === "browser_sign_in")) ? "block" : "none";
+    $("#oauthDeviceBlock").style.display = (p && p.flow === "device_code") ? "block" : "none";
+    $("#oauthImportBlock").style.display = (p && p.flow === "paste_import") ? "block" : "none";
+    var hint = $("#oauthProvHint");
+    if(p && !p.implemented){
+      hint.textContent = p.reason;
+    } else if(p && p.docs_url){
+      hint.textContent = "Flow endpoints documented at: " + p.docs_url;
+    } else {
+      hint.textContent = "";
+    }
+  }
+  $("#oauthProvSelect").addEventListener("change", function(){
+    oauthPending = null; oauthDevice = null;
+    $("#oauthDevicePanel").style.display = "none";
+    $("#oauthAuthorizeLink").style.display = "none";
+    $("#oauthConnectStatus").style.display = "none";
+    oauthSyncFlow();
+  });
+  $("#oauthStartBtn").addEventListener("click", function(){
+    var sel = $("#oauthProvSelect");
+    var id = sel.value;
+    if(!id){ oauthShowStatus("Pick an implemented OAuth provider first.", true); return; }
+    var btn = this;
+    btn.disabled = true;
+    oauthFetch("/dashboard/oauth/providers/" + encodeURIComponent(id) + "/start",
+      {redirect_uri: $("#oauthRedirectURI").value.trim()})
+      .then(function(res){
+        btn.disabled = false;
+        if(!res.ok){ oauthShowStatus(oauthErrMsg(res, "Start failed (HTTP " + res.status + ")"), true); return; }
+        oauthPending = {id: id, state: res.body.state, verifier: res.body.verifier, redirect_uri: $("#oauthRedirectURI").value.trim()};
+        var link = $("#oauthAuthorizeLink");
+        link.href = res.body.authorize_url;
+        link.style.display = "inline-flex";
+        window.open(res.body.authorize_url, "_blank", "noopener");
+        oauthShowStatus("Authorization page opened — approve the request, then paste the callback code below. Keep this tab open: the verifier stays in memory until the connection completes.");
+      })
+      .catch(function(err){ btn.disabled = false; oauthShowStatus(err.message, true); });
+  });
+  $("#oauthCompleteBtn").addEventListener("click", function(){
+    if(!oauthPending){ oauthShowStatus("Start the authorization flow first — the verifier is only held in memory from the start call.", true); return; }
+    var code = $("#oauthCodeInput").value.trim();
+    if(!code){ oauthShowStatus("Paste the callback code the provider redirected back with.", true); return; }
+    var btn = this;
+    btn.disabled = true;
+    oauthFetch("/dashboard/oauth/providers/" + encodeURIComponent(oauthPending.id) + "/complete",
+      {code: code, redirect_uri: oauthPending.redirect_uri, verifier: oauthPending.verifier})
+      .then(function(res){
+        btn.disabled = false;
+        if(!res.ok){ oauthShowStatus(oauthErrMsg(res, "Complete failed (HTTP " + res.status + ")"), true); return; }
+        $("#oauthGwKey").value = "";
+        $("#oauthCodeInput").value = "";
+        oauthPending = null;
+        $("#oauthAuthorizeLink").style.display = "none";
+        oauthShowStatus("");
+        toast("Connected " + (res.body.provider || "provider") + " — requests to it now use the OAuth connection.");
+        loadProviders();
+      })
+      .catch(function(err){ btn.disabled = false; oauthShowStatus(err.message, true); });
+  });
+  $("#oauthDeviceStartBtn").addEventListener("click", function(){
+    var sel = $("#oauthProvSelect");
+    var id = sel.value;
+    if(!id){ oauthShowStatus("Pick an implemented OAuth provider first.", true); return; }
+    var btn = this;
+    btn.disabled = true;
+    oauthFetch("/dashboard/oauth/providers/" + encodeURIComponent(id) + "/device/start")
+      .then(function(res){
+        btn.disabled = false;
+        if(!res.ok){ oauthShowStatus(oauthErrMsg(res, "Device start failed (HTTP " + res.status + ")"), true); return; }
+        oauthDevice = {id: id, device_code: res.body.device_code};
+        $("#oauthDevicePanel").style.display = "block";
+        var uri = $("#oauthDeviceURI");
+        uri.href = res.body.verification_uri || res.body.verification_uri_complete || "#";
+        uri.textContent = res.body.verification_uri || res.body.verification_uri_complete || "(no verification URI returned)";
+        $("#oauthDeviceUserCode").textContent = res.body.user_code || "";
+        oauthShowStatus("Device flow started — approve at the provider, then check approval.");
+      })
+      .catch(function(err){ btn.disabled = false; oauthShowStatus(err.message, true); });
+  });
+  $("#oauthDeviceCheckBtn").addEventListener("click", function(){
+    if(!oauthDevice){ oauthShowStatus("Start the device flow first.", true); return; }
+    var btn = this;
+    btn.disabled = true;
+    oauthFetch("/dashboard/oauth/providers/" + encodeURIComponent(oauthDevice.id) + "/device/complete",
+      {device_code: oauthDevice.device_code})
+      .then(function(res){
+        btn.disabled = false;
+        if(!res.ok){ oauthShowStatus(oauthErrMsg(res, "Device check failed (HTTP " + res.status + ")"), true); return; }
+        if(res.body.status === "pending"){
+          oauthShowStatus("Not approved yet — approve at the provider, then check again.");
+          return;
+        }
+        $("#oauthGwKey").value = "";
+        oauthDevice = null;
+        $("#oauthDevicePanel").style.display = "none";
+        oauthShowStatus("");
+        toast("Connected " + (res.body.provider || "provider") + " via device sign-in.");
+        loadProviders();
+      })
+      .catch(function(err){ btn.disabled = false; oauthShowStatus(err.message, true); });
+  });
+  $("#oauthImportBtn").addEventListener("click", function(){
+    var sel = $("#oauthProvSelect");
+    var id = sel.value;
+    if(!id){ oauthShowStatus("Pick an import-only OAuth provider first.", true); return; }
+    var blob = $("#oauthImportBlob").value;
+    if(!blob.trim()){ oauthShowStatus("Paste the credential blob exported by the provider's own tooling.", true); return; }
+    var btn = this;
+    btn.disabled = true;
+    oauthFetch("/dashboard/oauth/providers/" + encodeURIComponent(id) + "/import", {blob: blob})
+      .then(function(res){
+        btn.disabled = false;
+        if(!res.ok){ oauthShowStatus(oauthErrMsg(res, "Import failed (HTTP " + res.status + ")"), true); return; }
+        $("#oauthGwKey").value = "";
+        $("#oauthImportBlob").value = "";
+        oauthShowStatus("");
+        toast("Imported the " + (res.body.provider || id) + " credential — requests to it now use the imported token.");
+        loadProviders();
+      })
+      .catch(function(err){ btn.disabled = false; oauthShowStatus(err.message, true); });
+  });
+  loadOAuthProviders();
 
   /* ---------- Models: live catalog only ---------- */
   /* Every row comes from GET /dashboard/models — the registry's live

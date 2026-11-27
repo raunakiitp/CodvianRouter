@@ -331,6 +331,78 @@ const ROUTES = [
   },
   {
     "method": "GET",
+    "path": "/dashboard/oauth/providers",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Lists every catalog OAuth provider's registry entry (id, flow, implemented, import-only, docs URL \u2014 and the documented reason for the honestly-unimplemented ones). No tokens, no secrets.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/oauth/providers/{provider}/start",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Starts a catalog OAuth provider's authorization-code / browser-sign-in flow: returns state, authorize_url and the PKCE verifier (never stored server-side). Requires a session or gateway key.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/oauth/providers/{provider}/complete",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Exchanges the authorization code (same redirect URI + verifier the start call returned) for tokens and stores the Vault-sealed connection. Tokens never appear in the response.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/oauth/providers/{provider}/device/start",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Begins a catalog OAuth provider's device authorization grant: returns device_code, user_code and verification_uri for the operator to approve.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/oauth/providers/{provider}/device/complete",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Polls the device flow once with the device code: status pending (poll again after the interval) or connected (tokens stored, never returned).",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "POST",
+    "path": "/dashboard/oauth/providers/{provider}/import",
+    "tier": "MANAGEMENT",
+    "spawn_capable": false,
+    "description": "Stores an allowlisted paste-token credential blob (antigravity, agy only; the blob's embedded provider must match the route). The raw blob is never logged or returned.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
+    "method": "GET",
     "path": "/dashboard/providers",
     "tier": "MANAGEMENT",
     "spawn_capable": false,

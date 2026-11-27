@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/raunakiitp/codvian-router/internal/catalog"
 	"github.com/raunakiitp/codvian-router/internal/crypto"
+	"github.com/raunakiitp/codvian-router/internal/oauth/providers"
 )
 
 // recordingUpstream serves /v1/models, /v1/chat/completions,
@@ -388,15 +390,18 @@ func TestRegistryAddCatalogRefusals(t *testing.T) {
 	}{
 		{"tos-grey oauth", "claude", CatalogAddOptions{BaseURL: srv.URL}, "ToS-grey"},
 		{"tos-grey reference", "chatgpt-web-codex", CatalogAddOptions{BaseURL: srv.URL}, "ToS-grey"},
-		// Subscription/IDE OAuth flows that are NOT ToS-grey-flagged
-		// still have no permitted credential exchange: they must be
-		// refused at add time, never silently turned into a static
-		// key or a faked token (P1-08 OAuth audit, 2026-11-21).
-		{"subscription oauth copilot", "github-copilot", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
-		{"subscription oauth codex", "codex", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
-		{"subscription oauth cursor", "cursor", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
-		{"subscription oauth kiro", "kiro", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
-		{"subscription oauth xai", "xai-oauth", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
+		// A3 W2: OAuth connect-first / honest-refusal branch. The
+		// implemented catalog OAuth handlers (claude, github-copilot,
+		// codex, chatgpt, kimi-coding, gitlab-duo, cline, clinepass,
+		// kiro, amazon-q + the import-only pair) are no longer
+		// refused at add time — they are added connect-first
+		// (TestRegistryAddCatalogOAuthConnectFirst below). The 19
+		// honestly-unimplemented ones keep refusing, now with the
+		// registry's documented reason instead of a generic exchange
+		// error — the refusal is specific, never silent (P1-08 OAuth
+		// audit, 2026-11-21).
+		{"subscription oauth cursor", "cursor", CatalogAddOptions{BaseURL: srv.URL}, "OAuth connect is not implemented"},
+		{"subscription oauth xai", "xai-oauth", CatalogAddOptions{BaseURL: srv.URL}, "OAuth connect is not implemented"},
 		{"vertex exchange", "vertex", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
 		{"bedrock exchange", "bedrock", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
 		{"azure entra exchange", "azure-openai", CatalogAddOptions{BaseURL: srv.URL}, "exchange"},
@@ -420,6 +425,98 @@ func TestRegistryAddCatalogRefusals(t *testing.T) {
 		})
 	}
 }
+
+// TestRegistryAddCatalogOAuthConnectFirst — A3 W2: the implemented
+// catalog OAuth providers (codex, github-copilot, kiro here; the other
+// implemented handlers share the same branch) are added CONNECT-FIRST:
+//
+//   - the add succeeds with an EMPTY key (the OAuth connection is the
+//     credential, not a static key);
+//   - no add-time key test fires (no upstream request, no faked auth —
+//     there is no credential to test);
+//   - request-time resolution errors honestly ("no connection") until
+//     the operator connects, then resolves through the wired resolver.
+//
+// The pin still fails if the OAuth branch is removed: without it these
+// adds refuse with the generic exchange error, so every assertion here
+// fails.
+func TestRegistryAddCatalogOAuthConnectFirst(t *testing.T) {
+	for _, id := range []string{"codex", "github-copilot", "kiro"} {
+		t.Run(id, func(t *testing.T) {
+			srv, mock := newRecordingServer(t)
+			defer srv.Close()
+			reg, _ := newCatalogTestRegistry(t)
+
+			// Empty key: a connect-first OAuth add takes no credential.
+			p, err := reg.AddCatalogWithOptions(context.Background(), id, "", CatalogAddOptions{BaseURL: srv.URL})
+			if err != nil {
+				t.Fatalf("AddCatalog %q (connect-first): %v", id, err)
+			}
+			if p.CatalogID != id {
+				t.Errorf("CatalogID = %q, want %q", p.CatalogID, id)
+			}
+			if len(mock.requests()) != 0 {
+				t.Errorf("connect-first add hit the upstream %d time(s); no key test may run when no credential exists", len(mock.requests()))
+			}
+
+			// Request time, no connection yet: the resolver (the
+			// production wiring points it at the OAuth connection
+			// store) reports the missing connection, and the registry
+			// refuses honestly — never a fabricated header.
+			reg.SetOAuthTokenResolver(func(cid string) (string, error) {
+				return "", fmt.Errorf("oauth: no connection for %q", cid)
+			})
+			_, _, _, err = reg.resolveAuthHeadersUncached(p, "")
+			if err == nil {
+				t.Fatalf("resolution without a connection succeeded; want an honest error")
+			}
+			if !strings.Contains(err.Error(), "no connection") {
+				t.Errorf("error %q does not name the missing connection", err.Error())
+			}
+
+			// Connected (the resolver serves the stored token): Bearer.
+			reg.SetOAuthTokenResolver(func(string) (string, error) { return "tok-123", nil })
+			headers, _, _, err := reg.resolveAuthHeadersUncached(p, "")
+			if err != nil {
+				t.Fatalf("resolution with a connection: %v", err)
+			}
+			if got := headers["Authorization"]; got != "Bearer tok-123" {
+				t.Errorf("Authorization = %q, want Bearer tok-123", got)
+			}
+		})
+	}
+}
+
+// TestRegistryAddCatalogOAuthRefusalCarriesReason — A3 W2: the
+// honestly-unimplemented OAuth providers refuse at add time with the
+// registry's documented reason (specific and explainable, not a
+// generic exchange error).
+func TestRegistryAddCatalogOAuthRefusalCarriesReason(t *testing.T) {
+	srv, _ := newRecordingServer(t)
+	defer srv.Close()
+	reg, _ := newCatalogTestRegistry(t)
+
+	_, err := reg.AddCatalogWithOptions(context.Background(), "cursor", "", CatalogAddOptions{BaseURL: srv.URL})
+	if err == nil {
+		t.Fatalf("AddCatalog cursor: expected refusal, got nil")
+	}
+	wantReason := ""
+	for _, in := range oauthRegistryInfos() {
+		if in.ID == "cursor" {
+			wantReason = in.Reason
+		}
+	}
+	if wantReason == "" {
+		t.Fatalf("cursor has no registry entry to reason from")
+	}
+	if !strings.Contains(err.Error(), wantReason) {
+		t.Errorf("refusal %q does not carry the registry's documented reason %q", err.Error(), wantReason)
+	}
+}
+
+// oauthRegistryInfos mirrors oauthRegistryInfo for tests (the providers
+// registry's All() list).
+func oauthRegistryInfos() []providers.Info { return providers.All() }
 
 // TestCT3AddCatalogRefusesRetiredIDs — CT-3 registry half: adding a
 // retired catalog ID fails with the retirement reason, not a generic
