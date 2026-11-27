@@ -1508,4 +1508,39 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://predibaseinc.mintlify.app/inference/querying-models/text-generation",
 		Notes:        "TEMPLATED base: https://serving.app.predibase.com/{tenant_id}/deployments/v2/llms/{model}/v1 - the operator's tenant ID and deployment name complete it; Bearer PREDIBASE_API_TOKEN; adapter routing via the model field.",
 	},
+	{
+		// Verified 2026-11-27 against SEA-LION's own docs: the
+		// OpenAI-compatible API lives at api.sea-lion.ai/v1
+		// (chat/completions, embeddings, models; Bearer).
+		ID:          "sealion",
+		Name:        "SEA-LION",
+		Website:     "https://sea-lion.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.sea-lion.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointEmbeddings, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.sea-lion.ai/guides/inferencing/api",
+		Notes:        "OpenAI-compatible chat/embeddings/models at api.sea-lion.ai/v1; Bearer key from the SEA-LION Playground; rate-limited 10 requests per minute per user.",
+	},
+	{
+		// Verified 2026-11-27 against Mixedbread's own API reference:
+		// the base api.mixedbread.com with Bearer auth.
+		ID:          "mixedbread",
+		Name:        "Mixedbread AI",
+		Website:     "https://www.mixedbread.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.mixedbread.com"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointEmbeddings, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://www.mixedbread.com/api-reference",
+		Notes:        "Semantic search / embeddings API at api.mixedbread.com (stores, embeddings); Bearer key from platform.mixedbread.com.",
+	},
 }

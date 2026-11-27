@@ -79,13 +79,13 @@ func TestBaseURLCoverage(t *testing.T) {
 	if cov.Total != 609 {
 		t.Fatalf("catalog total = %d, want 609 (614 at triage round 5, minus 4 CT-3 retirements and the D2 cheaperinference retirement)", cov.Total)
 	}
-	// A1 batches 1-7 (2026-11-27): thirty-three API-key entries gained a
+	// A1 batches 1-8 (2026-11-27): thirty-five API-key entries gained a
 	// docs-verified base URL (deepinfra, hyperbolic, nscale, lambda-ai, featherless-ai, moonshot, yi, qianfan, heroku,
 	// voyage-ai, llm7, jina-ai), all concrete — with 385 / routable
 	// 376 / template-only 9. The 610 total is unchanged because each
 	// fill overlays an existing reference ID.
-	if cov.WithBaseURL != 412 || cov.Routable != 401 || cov.TemplateOnly != 11 {
-		t.Fatalf("coverage = with %d / routable %d / template-only %d, want 412 / 401 / 11 (408 / 398 / 10 after A1 batches 1-6; 379 / 370 / 9 originally)",
+	if cov.WithBaseURL != 414 || cov.Routable != 403 || cov.TemplateOnly != 11 {
+		t.Fatalf("coverage = with %d / routable %d / template-only %d, want 414 / 403 / 11 (412 / 401 / 11 after A1 batches 1-7; 379 / 370 / 9 originally)",
 			cov.WithBaseURL, cov.Routable, cov.TemplateOnly)
 	}
 	if cov.WithBaseURL+cov.WithoutByCategory[CategoryAPIKey]+cov.WithoutByCategory[CategoryAudio]+
@@ -101,11 +101,11 @@ func TestBaseURLCoverage(t *testing.T) {
 	// A1 batch 1 filled six of the 105 api-key entries, so the
 	// API-capable-without-base-URL figure drops 138 -> 132 and the
 	// api-key slice drops 105 -> 99 (99 + audio 12 + search 21).
-	if cov.APICapableWithout != 104 {
-		t.Fatalf("API-capable without base URL = %d, want 104 (api-key 71 + audio 12 + search 21; 138 originally)", cov.APICapableWithout)
+	if cov.APICapableWithout != 102 {
+		t.Fatalf("API-capable without base URL = %d, want 102 (api-key 69 + audio 12 + search 21; 138 originally)", cov.APICapableWithout)
 	}
-	if cov.WithoutByCategory[CategoryAPIKey] != 71 {
-		t.Fatalf("api-key without base URL = %d, want 71 (105 originally; 99 after batch 1; 98 after D2; 92 after batch 2; 87 after batch 3; 84 after batch 4; 79 after batch 5; 75 after batch 6; 71 after batch 7)", cov.WithoutByCategory[CategoryAPIKey])
+	if cov.WithoutByCategory[CategoryAPIKey] != 69 {
+		t.Fatalf("api-key without base URL = %d, want 69 (105 originally; 99 after batch 1; 98 after D2; 92 after batch 2; 87 after batch 3; 84 after batch 4; 79 after batch 5; 75 after batch 6; 71 after batch 7; 69 after batch 8)", cov.WithoutByCategory[CategoryAPIKey])
 	}
 }
 
@@ -201,8 +201,8 @@ func TestFreeTierPoolsAndRanking(t *testing.T) {
 	// VerifiedDocs moved 18 -> 24 with the A1 batch-1 fills (six
 	// entries became docs-verified; their free-tier notes were
 	// already present and unchanged).
-	if s.Total != 162 || s.Pools != 7 || s.VerifiedDocs != 30 || s.WithNote != 145 {
-		t.Fatalf("free-tier summary = %+v, want {Total 162, VerifiedDocs 30, WithNote 145, Pools 7} (CT-3 retired 3 free-tier entries, all with notes; A1 batches added 12 docs-verified)", s)
+	if s.Total != 162 || s.Pools != 7 || s.VerifiedDocs != 32 || s.WithNote != 145 {
+		t.Fatalf("free-tier summary = %+v, want {Total 162, VerifiedDocs 32, WithNote 145, Pools 7} (CT-3 retired 3 free-tier entries, all with notes; A1 batches added 14 docs-verified)", s)
 	}
 	ranked := FreeTierRanking()
 	if len(ranked) != FreeTierCount() {
