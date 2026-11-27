@@ -103,6 +103,9 @@ func deviceStartMock(t *testing.T) *httptest.Server {
 			"clientId": "mock-client-1", "client_id": "mock-client-1",
 			"clientSecret": "mock-secret-1", "client_secret": "mock-secret-1",
 			"clientSecretExpiresAt": 1893456000, "client_secret_expires_at": 1893456000,
+			// freebuff's login-code offer (loginUrl + fingerprint continuity)
+			"loginUrl": "https://example.com/login?auth_code=mock", "fingerprintHash": "mock-fingerprint-hash",
+			"expiresAt": 1893456000,
 		}
 	}
 	mux.HandleFunc("/device", func(w http.ResponseWriter, r *http.Request) {
@@ -182,10 +185,11 @@ func TestEveryImplementedOAuthHandlerIsRouteCovered(t *testing.T) {
 				continue
 			}
 			var start struct {
-				DeviceCode string `json:"device_code"`
+				DeviceCode      string `json:"device_code"`
+				VerificationURI string `json:"verification_uri"`
 			}
-			if err := json.Unmarshal(rec.Body.Bytes(), &start); err != nil || start.DeviceCode == "" {
-				t.Errorf("implemented device-flow handler %q: device/start response %q has no device_code", in.ID, rec.Body.String())
+			if err := json.Unmarshal(rec.Body.Bytes(), &start); err != nil || (start.DeviceCode == "" && start.VerificationURI == "") {
+				t.Errorf("implemented device-flow handler %q: device/start response %q carries neither device_code nor verification_uri", in.ID, rec.Body.String())
 				continue
 			}
 			covered["device/start"]++
