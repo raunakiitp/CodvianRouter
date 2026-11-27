@@ -134,27 +134,40 @@ func TestOAuthProviderResolverIdentityFallback(t *testing.T) {
 // unimplemented catalog OAuth provider is refused with its documented
 // reason — the wiring never falls back to the plain store for a
 // provider the registry refuses (a stale key must not sneak through).
+// The provider is picked from the live registry: the unimplemented set
+// shrinks as handlers land, and the behaviour is what is pinned.
 func TestOAuthProviderResolverRefusesUnimplemented(t *testing.T) {
 	srv, st := newBridgeServer(t)
 	reg := newWiringTestRegistry(t)
 	InstallOAuthProviderResolver(reg, srv)
 	fn := reg.OAuthTokenResolver()
 
+	var unimpl providers.Info
+	for _, in := range providers.All() {
+		if !in.Implemented && !in.ImportOnly && in.Reason != "" {
+			unimpl = in
+			break
+		}
+	}
+	if unimpl.ID == "" {
+		t.Skip("every catalog OAuth provider is implemented; nothing to refuse")
+	}
+
 	// Seed a plain store connection under the catalog ID anyway: the
 	// refusal must hold even when a connection exists, because the
 	// connection could only have come from an unimplemented path.
 	st.mu.Lock()
-	st.conns["cursor"] = &oauthConn{
-		Provider:    "cursor",
+	st.conns[unimpl.ID] = &oauthConn{
+		Provider:    unimpl.ID,
 		AccessToken: "sneaky",
 		ExpiresAt:   time.Now().Add(time.Hour),
 		UpdatedAt:   time.Now(),
 	}
 	st.mu.Unlock()
 
-	_, err := fn("cursor")
+	_, err := fn(unimpl.ID)
 	if err == nil {
-		t.Fatalf("unimplemented provider resolved despite the registry refusal")
+		t.Fatalf("unimplemented provider %q resolved despite the registry refusal", unimpl.ID)
 	}
 	if !strings.Contains(err.Error(), "not implemented") {
 		t.Errorf("error %q does not name the honest refusal", err.Error())

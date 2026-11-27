@@ -268,13 +268,22 @@ func TestProviderOAuthRoutesTypedRefusals(t *testing.T) {
 	if rec := providerRoutePost(t, srv, "/dashboard/oauth/providers/no-such/start", "{}", key); rec.Code != http.StatusNotFound {
 		t.Errorf("unknown provider: status %d, want 404", rec.Code)
 	}
-	// Honestly-unimplemented → 501 with the registry's documented reason.
-	rec := providerRoutePost(t, srv, "/dashboard/oauth/providers/cursor/start", "{}", key)
-	if rec.Code != http.StatusNotImplemented {
-		t.Errorf("unimplemented provider: status %d, want 501", rec.Code)
-	}
+	// Honestly-unimplemented → 501 with the registry's documented
+	// reason. Picked from the live registry (the unimplemented set
+	// shrinks as handlers land).
+	var unimpl providers.Info
 	for _, in := range providers.All() {
-		if in.ID == "cursor" && !strings.Contains(rec.Body.String(), in.Reason) {
+		if !in.Implemented && !in.ImportOnly && in.Reason != "" {
+			unimpl = in
+			break
+		}
+	}
+	if unimpl.ID != "" {
+		rec := providerRoutePost(t, srv, "/dashboard/oauth/providers/"+unimpl.ID+"/start", "{}", key)
+		if rec.Code != http.StatusNotImplemented {
+			t.Errorf("unimplemented provider %q: status %d, want 501", unimpl.ID, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), unimpl.Reason) {
 			t.Errorf("501 body %q does not carry the documented reason", rec.Body.String())
 		}
 	}
@@ -324,19 +333,22 @@ func TestProviderOAuthRoutesList(t *testing.T) {
 	if out.Total != len(providers.All()) || len(out.Providers) != len(providers.All()) {
 		t.Fatalf("list total = %d, want %d (every catalog OAuth provider, implemented or not)", out.Total, len(providers.All()))
 	}
-	seenClaude, seenCursor := false, false
+	seenClaude, seenUnimplementedReason := false, false
 	for _, p := range out.Providers {
 		if p.ID == "claude" && p.Implemented {
 			seenClaude = true
 		}
-		if p.ID == "cursor" && !p.Implemented && p.Reason == "" {
-			t.Errorf("cursor listed without its documented refusal reason")
+		if !p.Implemented && p.Reason != "" {
+			seenUnimplementedReason = true
 		}
-		if p.ID == "cursor" {
-			seenCursor = true
+		if !p.Implemented && p.Reason == "" {
+			t.Errorf("%q listed without its documented refusal reason", p.ID)
 		}
 	}
-	if !seenClaude || !seenCursor {
-		t.Errorf("list missing claude (%v) or cursor (%v)", seenClaude, seenCursor)
+	if !seenClaude {
+		t.Errorf("list missing the implemented claude entry")
+	}
+	if !seenUnimplementedReason && len(out.Providers) > 0 {
+		t.Logf("no honestly-unimplemented OAuth providers remain; reason rendering not exercised")
 	}
 }
