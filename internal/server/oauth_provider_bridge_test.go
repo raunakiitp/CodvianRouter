@@ -212,6 +212,46 @@ func clineMock(t *testing.T) *httptest.Server {
 	return httptest.NewServer(mux)
 }
 
+// awsMock serves the AWS SSO OIDC register -> device -> token chain.
+func awsMock(t *testing.T, id string) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
+		writeBridgeJSON(t, w, map[string]any{
+			"clientId": "oidc-" + id, "clientSecret": "secret-" + id,
+			"clientSecretExpiresAt": time.Now().Add(90 * 24 * time.Hour).Unix(),
+		})
+	})
+	mux.HandleFunc("/deviceauth", func(w http.ResponseWriter, r *http.Request) {
+		writeBridgeJSON(t, w, map[string]any{
+			"deviceCode": "dc-" + id, "userCode": "AWS-" + strings.ToUpper(id),
+			"verificationUri": "https://view.awsapps.com/start#/device", "expiresIn": 600, "interval": 5,
+		})
+	})
+	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+		body := readBridgeBody(t, r)
+		if body["clientId"] != "oidc-"+id || body["clientSecret"] != "secret-"+id {
+			t.Errorf("token body client = %v", body)
+		}
+		switch body["grantType"] {
+		case "urn:ietf:params:oauth:grant-type:device_code":
+			writeBridgeJSON(t, w, map[string]any{
+				"accessToken": id + "-at-1", "refreshToken": id + "-rt-1",
+				"tokenType": "bearer", "expiresIn": 3600,
+			})
+		case "refresh_token":
+			writeBridgeJSON(t, w, map[string]any{
+				"accessToken": id + "-at-2", "refreshToken": id + "-rt-2",
+				"tokenType": "bearer", "expiresIn": 3600,
+			})
+		default:
+			t.Errorf("unexpected grantType %q", body["grantType"])
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	})
+	return httptest.NewServer(mux)
+}
+
 func writeBridgeJSON(t *testing.T, w http.ResponseWriter, fields map[string]any) {
 	t.Helper()
 	w.Header().Set("Content-Type", "application/json")
@@ -288,8 +328,10 @@ func TestBridgeDeviceFlowProvidersE2E(t *testing.T) {
 			m := &tokenMock{}
 			return m.mockServer(t, "kimi-coding")
 		}, pending: false}, // tokenMock also serves /device for the device start
+		"kiro":     {setup: func(t *testing.T) *httptest.Server { return awsMock(t, "kiro") }},
+		"amazon-q": {setup: func(t *testing.T) *httptest.Server { return awsMock(t, "amazon-q") }},
 	}
-	for _, id := range []string{"github-copilot", "cline", "clinepass", "kimi-coding"} {
+	for _, id := range []string{"github-copilot", "cline", "clinepass", "kimi-coding", "kiro", "amazon-q"} {
 		t.Run(id, func(t *testing.T) {
 			fx := fixtures[id]
 			mock := fx.setup(t)
@@ -307,6 +349,10 @@ func TestBridgeDeviceFlowProvidersE2E(t *testing.T) {
 			case "kimi-coding":
 				providers.SetEndpointsForTest(t, id, map[string]string{
 					"device": mock.URL + "/device", "token": mock.URL + "/token",
+				})
+			case "kiro", "amazon-q":
+				providers.SetEndpointsForTest(t, id, map[string]string{
+					"register": mock.URL + "/register", "deviceauth": mock.URL + "/deviceauth", "token": mock.URL + "/token",
 				})
 			}
 

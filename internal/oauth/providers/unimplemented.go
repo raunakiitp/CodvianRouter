@@ -19,18 +19,6 @@ type unimplementedInfo struct {
 // docs (or an official open-source client) publish the surface.
 var unimplemented = []unimplementedInfo{
 	{
-		id:     "kiro",
-		name:   "Kiro AI",
-		alias:  "kr",
-		reason: "handler lands in the final PR of this same stack (area/a3-oauth-handlers-3); the documented AWS SSO OIDC device flow ships there.",
-	},
-	{
-		id:     "amazon-q",
-		name:   "Amazon Q",
-		alias:  "aq",
-		reason: "handler lands in the final PR of this same stack (area/a3-oauth-handlers-3); the documented AWS SSO OIDC device flow ships there.",
-	},
-	{
 		id:   "ghe-copilot",
 		name: "GitHub Enterprise Copilot",
 		reason: "GitHub documents the Copilot device flow for GitHub.com; on GitHub Enterprise the flow needs the operator's GHE host and an instance-registered OAuth app, " +
