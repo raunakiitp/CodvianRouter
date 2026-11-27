@@ -87,6 +87,10 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 		// PR #52 OAuth provider connections
 		"GET /dashboard/oauth/connect/{provider}", "GET /dashboard/oauth/callback/{provider}",
 		"GET /dashboard/oauth/connections", "POST /dashboard/oauth/disconnect/{provider}",
+		// A3 W1 provider OAuth connect routes
+		"GET /dashboard/oauth/providers", "POST /dashboard/oauth/providers/{provider}/start",
+		"POST /dashboard/oauth/providers/{provider}/complete", "POST /dashboard/oauth/providers/{provider}/device/start",
+		"POST /dashboard/oauth/providers/{provider}/device/complete", "POST /dashboard/oauth/providers/{provider}/import",
 		"GET /dashboard/guardrails",
 		"POST /dashboard/guardrails", "GET /dashboard/strategies",
 		"POST /dashboard/strategies", "GET /dashboard/cooldown",
@@ -236,8 +240,8 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 	for _, r := range table {
 		counts[r.Tier]++
 	}
-	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 59 || counts[TierManagement] != 281 {
-		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/59/281, the two extra always-protected routes being the admin file-reclaim pair added for AUD-SEC-010, and /readyz added for AUD-CFG-004)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
+	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 59 || counts[TierManagement] != 287 {
+		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/59/287, the two extra always-protected routes being the admin file-reclaim pair added for AUD-SEC-010, /readyz added for AUD-CFG-004, and the six A3 W1 provider OAuth connect routes as MANAGEMENT)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
 	}
 }
 

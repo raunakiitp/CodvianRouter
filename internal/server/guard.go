@@ -125,6 +125,17 @@ var guardRouteTable = []GuardRoute{
 	{Method: "GET", Path: "/dashboard/oauth/callback/{provider}", Tier: TierManagement, Description: "OAuth callback: exchanges the authorization code for tokens and stores the encrypted connection. Requires a valid state cookie (CSRF protection).", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/dashboard/oauth/connections", Tier: TierManagement, Description: "Lists connected OAuth accounts (provider, connected, expires_at, scopes — no tokens).", Scopes: []string{"admin"}},
 	{Method: "POST", Path: "/dashboard/oauth/disconnect/{provider}", Tier: TierManagement, Description: "Revokes and deletes the OAuth connection for the given provider.", Scopes: []string{"admin"}},
+	// A3 W1 provider OAuth connect routes: the five bridge methods plus
+	// the registry listing the dashboard connect flow renders from.
+	// Provider-agnostic (the provider ID is a path value) and Tier-2
+	// admin auth exactly like the PR #52 routes above; the handlers
+	// also enforce session-or-key themselves.
+	{Method: "GET", Path: "/dashboard/oauth/providers", Tier: TierManagement, Description: "Lists every catalog OAuth provider's registry entry (id, flow, implemented, import-only, docs URL — and the documented reason for the honestly-unimplemented ones). No tokens, no secrets.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/dashboard/oauth/providers/{provider}/start", Tier: TierManagement, Description: "Starts a catalog OAuth provider's authorization-code / browser-sign-in flow: returns state, authorize_url and the PKCE verifier (never stored server-side). Requires a session or gateway key.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/dashboard/oauth/providers/{provider}/complete", Tier: TierManagement, Description: "Exchanges the authorization code (same redirect URI + verifier the start call returned) for tokens and stores the Vault-sealed connection. Tokens never appear in the response.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/dashboard/oauth/providers/{provider}/device/start", Tier: TierManagement, Description: "Begins a catalog OAuth provider's device authorization grant: returns device_code, user_code and verification_uri for the operator to approve.", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/dashboard/oauth/providers/{provider}/device/complete", Tier: TierManagement, Description: "Polls the device flow once with the device code: status pending (poll again after the interval) or connected (tokens stored, never returned).", Scopes: []string{"admin"}},
+	{Method: "POST", Path: "/dashboard/oauth/providers/{provider}/import", Tier: TierManagement, Description: "Stores an allowlisted paste-token credential blob (antigravity, agy only; the blob's embedded provider must match the route). The raw blob is never logged or returned.", Scopes: []string{"admin"}},
 	{Method: "GET", Path: "/dashboard/providers", Tier: TierManagement, Description: "Live provider facts (verification, wire, health) — no keys, no base URLs.", AuthExempt: true},
 	{Method: "GET", Path: "/dashboard/overview", Tier: TierManagement, Description: "Live overview KPIs + traffic buckets from the ledger/recorder — counts and totals only, no message content.", AuthExempt: true},
 	{Method: "GET", Path: "/dashboard/models", Tier: TierManagement, Description: "Live model catalog from the registry + per-model request counts — no keys, no base URLs.", AuthExempt: true},
