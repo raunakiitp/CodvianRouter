@@ -1278,4 +1278,92 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://docs.arcee.ai/api-reference/your-first-api-call",
 		Notes:        "OpenAI-compatible chat completions at api.arcee.ai/api/v1/chat/completions; Bearer; reasoning field surfaced on assistant messages per the docs.",
 	},
+	{
+		// Verified 2026-11-27 against Stability's own API reference:
+		// every request goes to api.stability.ai with current
+		// endpoints under /v2beta (stable-image generate/edit,
+		// audio, 3D), Bearer auth.
+		ID:          "stability-ai",
+		Name:        "Stability AI",
+		Website:     "https://stability.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.stability.ai/v2beta", "https://api.stability.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointImages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointNative, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.stability.ai/api-reference",
+		Notes:        "REST base api.stability.ai: v2beta hosts stable-image generate/edit (multipart, image/* or JSON base64 responses) and audio; some services are async (submit, then poll the results endpoint).",
+	},
+	{
+		// Verified 2026-11-27 against Recraft's own quickstart: the
+		// external API base external.api.recraft.ai/v1 with an
+		// OpenAI-SDK-compatible images surface, Bearer token.
+		ID:          "recraft",
+		Name:        "Recraft",
+		Website:     "https://recraft.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://external.api.recraft.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointImages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointEmbeddings, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://www.recraft.ai/docs/api-reference/getting-started",
+		Notes:        "OpenAI-SDK-compatible image generation at external.api.recraft.ai/v1/images/generations (the quickstart uses the OpenAI SDK against this base); Bearer RECRAFT_API_TOKEN.",
+	},
+	{
+		// Verified 2026-11-27 against Nomic's own platform docs: the
+		// Atlas embedding endpoints live under api-atlas.nomic.ai/v1.
+		ID:          "nomic",
+		Name:        "Nomic",
+		Website:     "https://nomic.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api-atlas.nomic.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointEmbeddings, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.nomic.ai/reference/api/embed-text-v-1-embedding-text-post",
+		Notes:        "Embeddings at api-atlas.nomic.ai/v1/embedding/text and /embedding/image; Bearer.",
+	},
+	{
+		// Verified 2026-11-27 against Black Forest Labs' own docs and
+		// official endpoint reference: api.bfl.ai/v1 hosts the FLUX
+		// generation submit + result-polling endpoints.
+		ID:          "black-forest-labs",
+		Name:        "Black Forest Labs",
+		Website:     "https://blackforestlabs.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.bfl.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointImages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.bfl.ai/api-reference/utility/get-result",
+		Notes:        "FLUX generation is async: submit to a generation endpoint, poll GET api.bfl.ai/v1/get_result with the id; API-key auth via header; region variants documented in the official endpoint reference.",
+	},
+	{
+		// Verified 2026-11-27 against fal's own docs: the sync API at
+		// fal.run and the queue API at queue.fal.run, model-scoped
+		// paths under fal-ai/<model>.
+		ID:          "fal-ai",
+		Name:        "Fal.ai",
+		Website:     "https://fal.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://fal.run", "https://queue.fal.run"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointImages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointNative, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://fal.ai/docs/api-reference/inference-api",
+		Notes:        "Inference over HTTP: synchronous POST https://fal.run/<model-path> or the queue API at https://queue.fal.run (submit, then poll/stream status); Key-based auth.",
+	},
 }
