@@ -1832,4 +1832,41 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://docs.magnific.com/api-reference/image-upscaler-precision-v2/post-image-upscaler-precision-v2",
 		Notes:        "Magnific API at api.magnific.com (/v1/ai/... upscaler endpoints; task_id returned for async fetch); x-magnific-api-key header per the OpenAPI security scheme.",
 	},
+	{
+		// Verified 2026-11-27 against Meta's own developer docs
+		// (dev.meta.ai): the Model API base api.meta.ai/v1 speaks all
+		// three request formats - Responses, Chat Completions and
+		// Anthropic Messages - with the same bearer-token auth.
+		ID:          "meta-llama",
+		Name:        "Meta Llama API",
+		Website:     "https://llama.developer.meta.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.meta.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointMessages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://dev.meta.ai/docs/quickstart",
+		Notes:        "Meta Model API (drop-in OpenAI/Anthropic SDK base api.meta.ai/v1): /v1/responses, /v1/chat/completions, /v1/messages all served with the same bearer token per the protocols doc.",
+	},
+	{
+		// Verified 2026-11-27 against OpenCode's own console docs: the
+		// OpenAI-compatible inference base opencode.ai/inference/v1.
+		ID:          "opencode-zen",
+		Name:        "OpenCode Zen",
+		Website:     "https://opencode.ai/zen",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://opencode.ai/inference/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://opencode.ai/docs/console/models",
+		Notes:        "OpenCode's model gateway: OpenAI-compatible inference at opencode.ai/inference/v1 (models list, chat completions; embeddings under the openai-prefixed surface).",
+	},
 }
