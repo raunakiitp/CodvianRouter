@@ -60,6 +60,24 @@ var sweepAllowList = map[string]string{
 	"github-copilot": "wire format unknown: no documented request shape to build a request from",
 	"clinepass":      "wire format unknown: no documented request shape to build a request from",
 	"lm-studio":      "wire format unknown: no documented request shape to build a request from",
+
+	// A3 item 7 fills (2026-11-27): docs-verified bases whose provider
+	// documents a non-chat surface — the base URL is real and
+	// provider-documented, but no chat wire exists to build a request
+	// in (the request would be invented, and the honesty rules forbid
+	// inventing). If one of these providers later documents a chat
+	// wire and the entry declares it, sweepAllowListStale fails the
+	// build and the entry must leave this list.
+	"qoder":           "wire format unknown: the documented surface is the Cloud Agents management API, not chat completions",
+	"devin-cli":       "wire format unknown: the documented surface is the Devin sessions API, not chat completions",
+	"amazon-q":        "wire format unknown: the documented surface is the Amazon Q / CodeWhisperer protocol, not chat completions",
+	"kiro":            "wire format unknown: the documented surface is the Kiro / CodeWhisperer protocol, not chat completions",
+	"cursor":          "wire format unknown: the documented surface is Cursor's Connect protocol, not chat completions",
+	"ghe-copilot":     "wire format unknown: the documented enterprise Copilot domains carry GitHub's own protocol, not a documented chat-completions shape",
+	"renderhour":      "wire format unknown: the documented surface is an MCP server over streamable HTTP, not chat completions",
+	"opencode-server": "wire format unknown: the documented surface is opencode's own REST/SSE API, not chat completions",
+	"sdwebui":         "wire format unknown: the documented surface is the /sdapi image-generation REST API, not chat completions",
+	"comfyui":         "wire format unknown: the documented surface is the workflow-graph API (/prompt), not chat completions",
 }
 
 // sweepAllowListStale reports whether the allow-list entry for id is

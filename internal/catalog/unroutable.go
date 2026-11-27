@@ -15,7 +15,11 @@ func (p Provider) UnroutableReason() string {
 	}
 	if len(p.BaseURLs) > 0 {
 		// It has URLs but none dialable: they are templates.
-		return "base URL is a template that must be completed with the operator's own identifiers (account, region or resource) before the provider can be added."
+		reason := "base URL is a template that must be completed with the operator's own identifiers (account, region or resource) before the provider can be added."
+		if p.Category == CategoryOAuth {
+			reason += " The OAuth subscription surface is not connectable until the template is completed."
+		}
+		return reason
 	}
 	switch p.Category {
 	case CategoryWebCookie:

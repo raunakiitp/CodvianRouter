@@ -91,10 +91,53 @@ func TestCategoryOAuthInventoryPinsTheTruth(t *testing.T) {
 		}
 	}
 
-	// 3. everything else — pure metadata stubs.
+	// 3. A3 fills (2026-11-27): docs-verified base URLs from each
+	// provider's own docs. Each filled entry carries a concrete or
+	// documented-templated base, a declared wire format (WireUnknown
+	// honestly for the non-chat surfaces), and endpoints only where
+	// the docs describe the surface's auth.
+	filledOAuthA3 := map[string]bool{
+		"codex": true, "kimi-coding": true, "kilocode": true, "cline": true,
+		"openference": true, "qoder": true, "devin-cli": true, "amazon-q": true,
+		"kiro": true, "cursor": true, "ghe-copilot": true, "gitlab-duo": true,
+		"renderhour": true,
+	}
+	filled := 0
+	for _, p := range oauth {
+		if !filledOAuthA3[p.ID] {
+			continue
+		}
+		filled++
+		if len(p.BaseURLs) == 0 {
+			t.Errorf("filled OAuth entry %q lost its base URL — inventory drift", p.ID)
+		}
+		if p.Verification != VerificationDocs {
+			t.Errorf("filled OAuth entry %q verification = %q, want docs-verified (base URL checked against the provider's own docs)", p.ID, p.Verification)
+		}
+		if !strings.HasPrefix(p.SourceURL, "https://") {
+			t.Errorf("filled OAuth entry %q SourceURL = %q, want the provider's own docs", p.ID, p.SourceURL)
+		}
+		if len(p.WireFormats) == 0 {
+			t.Errorf("filled OAuth entry %q declares no wire format", p.ID)
+		}
+		// Endpoints may only be declared where the docs describe the
+		// surface: every declared endpoint must state an auth kind,
+		// and OAuth surfaces must carry their exchange description.
+		for _, e := range p.Endpoints {
+			if e.AuthKind == "" {
+				t.Errorf("filled OAuth entry %q endpoint %q has no auth kind", p.ID, e.Endpoint)
+			}
+			if e.AuthKind == AuthOAuth && e.Exchange == nil {
+				t.Errorf("filled OAuth entry %q endpoint %q declares OAuth auth without an exchange description", p.ID, e.Endpoint)
+			}
+		}
+	}
+
+	// 4. everything still a pure metadata stub (no documented base
+	// URL in the provider's own docs as of the A3 pass).
 	stubs := 0
 	for _, p := range oauth {
-		if p.ID == "claude" || p.ID == "github-copilot" || p.ID == "clinepass" {
+		if p.ID == "claude" || p.ID == "github-copilot" || p.ID == "clinepass" || filledOAuthA3[p.ID] {
 			continue
 		}
 		stubs++
@@ -110,8 +153,11 @@ func TestCategoryOAuthInventoryPinsTheTruth(t *testing.T) {
 			t.Errorf("stub %q claims docs-verified — the router never exercised its flow", p.ID)
 		}
 	}
-	if stubs != 28 {
-		t.Fatalf("metadata stubs = %d, want 28 (31 - claude - github-copilot - clinepass); the classification drifted", stubs)
+	if filled != 13 {
+		t.Errorf("docs-verified OAuth fills = %d, want 13 (the A3 item 7 batch)", filled)
+	}
+	if stubs != 15 {
+		t.Fatalf("metadata stubs = %d, want 15 (31 - claude - github-copilot - clinepass - 13 A3 fills); the classification drifted", stubs)
 	}
 
 	// The one in-router provider OAuth flow stays OpenRouter (a

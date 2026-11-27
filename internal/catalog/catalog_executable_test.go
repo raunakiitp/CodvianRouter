@@ -203,7 +203,17 @@ func TestCatalogExecutableMatrix(t *testing.T) {
 
 		if !ec.HasClient {
 			if p.Verification == VerificationDocs {
-				missingWire = append(missingWire, p.ID+" (wire format "+ec.WireFormat+" has no client)")
+				// A3 item 7 (2026-11-27): WireUnknown entries are the
+				// docs-verified NON-chat fills (sessions APIs,
+				// CodeWhisperer protocol, Connect protocol, MCP,
+				// image/workflow APIs) — no wire client exists by
+				// design, none is invented, and TestCatalogSweep
+				// holds each to a written allow-list reason. Only an
+				// entry claiming a REAL wire it has no client for
+				// fails here.
+				if p.DefaultWireFormat() != WireUnknown {
+					missingWire = append(missingWire, p.ID+" (wire format "+ec.WireFormat+" has no client)")
+				}
 			}
 			continue
 		}
@@ -300,7 +310,18 @@ func TestCatalogExecutableMatrixCounts(t *testing.T) {
 		if p.Retired {
 			continue
 		}
-		if p.Verification == VerificationDocs && !execMap[p.ID] && !p.ToSGrey && !p.ToSAvoid {
+		// A3 item 7 (2026-11-27): docs-verified fills whose provider
+		// documents a NON-chat surface (Devin sessions, Qoder Cloud
+		// Agents, Amazon Q/Kiro CodeWhisperer protocol, Cursor Connect,
+		// GitHub enterprise Copilot, MCP servers, image/workflow APIs)
+		// carry WireUnknown honestly — verified facts, no executable
+		// chat client, and no invented wire. The gate exempts exactly
+		// these: a docs-verified WireUnknown entry is verified but
+		// deliberately not chat-dialable, and TestCatalogSweep still
+		// holds every unknown-wire routable entry to a written
+		// allow-list reason.
+		if p.Verification == VerificationDocs && !execMap[p.ID] && !p.ToSGrey && !p.ToSAvoid &&
+			p.DefaultWireFormat() != WireUnknown {
 			t.Errorf("Verified provider %s has no executable client", p.ID)
 		}
 	}

@@ -156,9 +156,9 @@ The catalog is data, and it is explicit about what each entry can do:
 | Metric | Count (audit 2026-11-21; A1 base-URL batches 1-17, 2026-11-27) |
 |---|---|
 | Active catalog entries | **607** (7 retired — cheaperinference by owner decision plus the Item-6 anyscale/kluster shutdown retirements, 2026-11-27) |
-| With a base URL the router can call | **469** (456 routable + 13 template-only) |
-| Metadata-only (no base URL) | **138** |
-| Docs-verified | 159 |
+| With a base URL the router can call | **474** (460 routable + 14 template-only) |
+| Metadata-only (no base URL) | **120** |
+| Docs-verified | 172 |
 | By category | api-key 473 · oauth 31 · web-cookie 37 · search 21 · local 18 · audio 12 · no-auth 10 · cloud-agent 3 · upstream-proxy 2 |
 
 The ten no-auth entries carry their connection mechanisms in
@@ -207,7 +207,8 @@ Provider account login, classified honestly:
 | Azure OpenAI | Microsoft Entra ID client credentials (`{tenant_id, client_id, client_secret}`); the router mints the Bearer token and re-mints it on expiry | Implemented |
 | Claude | Docs-verified endpoint with an `oauth-pkce` exchange description: you obtain the subscription token (`claude setup-token` or a PKCE client) and the router dials with it — **the router does not perform the login** | Supported with external login |
 | GitHub Copilot, ClinePass | Base URL known; no auth surface declared | Partially documented |
-| Other 28 `CategoryOAuth` entries | Metadata stubs (no base URL, no endpoints) | Metadata only |
+| 13 `CategoryOAuth` entries (codex, kimi-coding, kilocode, cline, openference, qoder, devin-cli, amazon-q, kiro, cursor, ghe-copilot, gitlab-duo, renderhour) | Docs-verified base URL from the provider's own docs; the login itself is not performed in-router | Partially documented |
+| Remaining 15 `CategoryOAuth` entries | Metadata stubs (no base URL, no endpoints) | Metadata only |
 
 Interactive subscription sign-in (device code / browser cookie) is **not
 built**; those entries are not usable through a login. Details:
@@ -218,27 +219,10 @@ Azure Entra ID client credentials, Vertex service-account JWT and Bedrock
 SigV4. All are deterministic-mock-tested; only the flows you configure
 with real keys touch the network.
 
-### ToS-grey providers: explicit risk acknowledgement
-
-Some catalog entries are marked **ToS-grey** (web-cookie /
-subscription auth). Connecting one means handing over **your own**
-session or subscription account, by your own choice — the router
-performs no interception, no certificate trickery, and nothing
-covert. That path carries real risk: the provider's terms of service
-may forbid this kind of use, and the account you connect can be
-suspended or banned. These paths therefore run only after your
-explicit acknowledgement: add time, config load and every request
-refuse an unacknowledged ToS-grey provider with a plain-words notice,
-and the gate opens only once you acknowledge the risk in the
-dashboard (the "Terms-of-service risk" dialog on the Providers page)
-or via `POST /api/providers/{id}/risk-acknowledgement`, which records
-who acknowledged, for which provider, and when — persisted locally
-and written to the audit log.
-
 ## API compatibility
 
-**351 registered routes** (183 GET · 119 POST · 22 DELETE · 22 PATCH ·
-5 PUT), tiered as 11 local-only, 59 always-protected and 281 management.
+**350 registered routes** (183 GET · 118 POST · 22 DELETE · 22 PATCH ·
+5 PUT), tiered as 11 local-only, 58 always-protected and 281 management.
 The full list with request/response shapes is generated into
 [docs/API_REFERENCE.md](docs/API_REFERENCE.md) (regeneration is
 reproducible and checked).
@@ -519,7 +503,7 @@ Browse what the catalog offers with `./codvian-router catalog`.
 | Implemented and verified (tests + local run) | OpenAI-compatible chat, models, embeddings, rerank, Responses; the 40 routing strategies and combos; failover, hedging, health checks, cooldowns; exact and semantic cache; compression; ledger, cost tracking, reservations, per-key budgets and quota pools; guardrails; gateway keys and OAuth/JWT clients; `/admin/restart` (real relaunch); `/admin/update` (release check only); SSRF-safe `/v1/web/fetch`; OpenRouter OAuth PKCE and Azure Entra ID login (deterministic mock auth-host tests — see the auth matrix for evidence tiers) |
 | Implemented, mock-tested upstream | Provider-specific wires (Anthropic, Gemini, Vertex, Bedrock, Cohere), audio, images, video, music, OCR and search passthroughs |
 | Supported with external login | Claude — you obtain the subscription token; the router dials with it and does not perform the login |
-| Metadata only | 138 catalog entries without a base URL, web-cookie entries, and subscription-OAuth entries that would need an unbuilt sign-in flow |
+| Metadata only | 120 catalog entries without a base URL, web-cookie entries, and subscription-OAuth entries that would need an unbuilt sign-in flow |
 | Unsupported or deferred (`501 feature_unavailable`) | System service install, dynamic plugin loading, and 63 dashboard-era routes whose settings were never applied |
 
 `scripts/audit-fake.sh` enforces this contract statically: a canned
