@@ -3,6 +3,7 @@ package translate
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/raunakiitp/codvian-router/internal/wire"
@@ -307,4 +308,21 @@ func appendGeminiContent(contents []wire.GeminiContent, c wire.GeminiContent) []
 		return contents
 	}
 	return append(contents, c)
+}
+
+// TranslateClaudeToGeminiStream is the streaming half of the
+// claude->gemini pair: a Claude-format client served by a Gemini
+// provider. The provider's response is the documented Gemini SSE
+// stream (data frames carrying Gemini candidates), and the router
+// reassembles it into the canonical ChatChunk stream + StreamResult
+// exactly as the other translated pairs do for their providers.
+//
+// Both wires involved here are native wires, so the SSE parser is
+// already owned by internal/wire (wire.TranslateGeminiStream) — this
+// function is the PAIR's contract surface (provider-side ingestion,
+// honest error propagation, empty-stream refusal) and delegates
+// rather than duplicating a parser, so the pair can never drift from
+// the wire's own streaming behavior.
+func TranslateClaudeToGeminiStream(r io.Reader, emit func(wire.ChatChunk) error) (wire.StreamResult, error) {
+	return wire.TranslateGeminiStream(r, emit)
 }

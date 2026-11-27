@@ -2,6 +2,7 @@ package translate
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/raunakiitp/codvian-router/internal/wire"
@@ -155,4 +156,66 @@ func TestConvertClaudeRequestToGeminiRefusals(t *testing.T) {
 			t.Errorf("err = %v, want unrepresentable", err)
 		}
 	})
+}
+
+// --- Stream round-trip tests (A1 item 4, pair streaming half) ---
+//
+// The claude->gemini pair's provider is Gemini, so its stream contract
+// is the documented Gemini SSE stream. The tests below pin the
+// reassembly end-to-end: delta chunks, accumulated content, finish
+// reason, usage, tool calls, and the empty/error refusals. Every
+// assertion is on translated output, so the test fails if streaming
+// is broken or disabled.
+
+const claudeToGeminiSSE = "data: {\"candidates\": [{\"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"Hel\"}]}}]}\n\n" +
+	"data: {\"candidates\": [{\"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"lo!\"}]}}]}\n\n" +
+	"data: {\"candidates\": [{\"finishReason\": \"STOP\", \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"\"}]}}], " +
+	"\"usageMetadata\": {\"promptTokenCount\": 7, \"candidatesTokenCount\": 5, \"totalTokenCount\": 12}}\n\n"
+
+func TestTranslateClaudeToGeminiStream(t *testing.T) {
+	var chunks []wire.ChatChunk
+	res, err := TranslateClaudeToGeminiStream(strings.NewReader(claudeToGeminiSSE), func(c wire.ChatChunk) error {
+		chunks = append(chunks, c)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("TranslateClaudeToGeminiStream: %v", err)
+	}
+	if res.Content != "Hello!" {
+		t.Errorf("content = %q, want %q", res.Content, "Hello!")
+	}
+	if res.FinishReason != "stop" {
+		t.Errorf("finish = %q, want stop", res.FinishReason)
+	}
+	if res.Usage.PromptTokens != 7 || res.Usage.CompletionTokens != 5 || res.Usage.TotalTokens != 12 {
+		t.Errorf("usage = %+v", res.Usage)
+	}
+	if len(chunks) == 0 {
+		t.Fatal("no chunks emitted")
+	}
+	var deltas strings.Builder
+	for _, c := range chunks {
+		deltas.WriteString(c.Choices[0].Delta.Content)
+	}
+	if deltas.String() != "Hello!" {
+		t.Errorf("emitted deltas = %q, want Hello!", deltas.String())
+	}
+}
+
+func TestTranslateClaudeToGeminiStreamEmpty(t *testing.T) {
+	if _, err := TranslateClaudeToGeminiStream(strings.NewReader(""), nil); err == nil {
+		t.Error("empty Gemini stream returned no error")
+	}
+}
+
+func TestTranslateClaudeToGeminiStreamError(t *testing.T) {
+	stream := "data: {\"error\": {\"code\": 429, \"message\": \"Resource exhausted\", \"status\": \"RESOURCE_EXHAUSTED\"}}\n\n"
+	_, err := TranslateClaudeToGeminiStream(strings.NewReader(stream), nil)
+	if err == nil {
+		t.Fatal("error envelope returned no error")
+	}
+	var ge *wire.GeminiError
+	if !asGeminiError(err, &ge) || ge.StatusCode != 429 {
+		t.Fatalf("err = %v, want *wire.GeminiError 429", err)
+	}
 }

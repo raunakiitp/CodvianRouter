@@ -224,3 +224,109 @@ func TestConvertGeminiRequestToClaudeToolConfig(t *testing.T) {
 		t.Errorf("toolChoice = %+v", outAny.ToolChoice)
 	}
 }
+
+// --- Stream round-trip tests (A1 item 4, pair streaming half) ---
+//
+// The gemini->claude pair's provider is Claude, so its stream contract
+// is the documented Anthropic SSE event stream (message_start /
+// content_block_start / content_block_delta / content_block_stop /
+// message_delta / message_stop). The tests pin the reassembly
+// end-to-end — text deltas, the tool-call block, stop_reason mapping,
+// usage, and the empty/error refusals — so they fail if streaming is
+// broken or disabled.
+
+const geminiToClaudeSSE = "event: message_start\n" +
+	"data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"model\":\"claude-sonnet-4-6\",\"role\":\"assistant\",\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}\n\n" +
+	"event: content_block_start\n" +
+	"data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n" +
+	"event: content_block_delta\n" +
+	"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hel\"}}\n\n" +
+	"event: content_block_delta\n" +
+	"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"lo!\"}}\n\n" +
+	"event: content_block_stop\n" +
+	"data: {\"type\":\"content_block_stop\",\"index\":0}\n\n" +
+	"event: message_delta\n" +
+	"data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":5}}\n\n" +
+	"event: message_stop\n" +
+	"data: {\"type\":\"message_stop\"}\n\n"
+
+const geminiToClaudeToolSSE = "event: message_start\n" +
+	"data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_02\",\"model\":\"claude-sonnet-4-6\",\"role\":\"assistant\",\"usage\":{\"input_tokens\":12,\"output_tokens\":1}}}\n\n" +
+	"event: content_block_start\n" +
+	"data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"get_weather\",\"input\":{}}}\n\n" +
+	"event: content_block_delta\n" +
+	"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\\\"Seoul\\\"}\"}}\n\n" +
+	"event: content_block_stop\n" +
+	"data: {\"type\":\"content_block_stop\",\"index\":0}\n\n" +
+	"event: message_delta\n" +
+	"data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":3}}\n\n" +
+	"event: message_stop\n" +
+	"data: {\"type\":\"message_stop\"}\n\n"
+
+func TestTranslateGeminiToClaudeStream(t *testing.T) {
+	var chunks []wire.ChatChunk
+	res, err := TranslateGeminiToClaudeStream(strings.NewReader(geminiToClaudeSSE), func(c wire.ChatChunk) error {
+		chunks = append(chunks, c)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("TranslateGeminiToClaudeStream: %v", err)
+	}
+	if res.Content != "Hello!" {
+		t.Errorf("content = %q, want %q", res.Content, "Hello!")
+	}
+	if res.FinishReason != "stop" {
+		t.Errorf("finish = %q, want stop (end_turn maps to stop)", res.FinishReason)
+	}
+	if res.Usage.PromptTokens != 10 || res.Usage.CompletionTokens != 5 {
+		t.Errorf("usage = %+v, want prompt 10 / completion 5", res.Usage)
+	}
+	if len(chunks) == 0 {
+		t.Fatal("no chunks emitted")
+	}
+	var deltas strings.Builder
+	for _, c := range chunks {
+		deltas.WriteString(c.Choices[0].Delta.Content)
+	}
+	if deltas.String() != "Hello!" {
+		t.Errorf("emitted deltas = %q, want Hello!", deltas.String())
+	}
+}
+
+func TestTranslateGeminiToClaudeStreamToolCalls(t *testing.T) {
+	res, err := TranslateGeminiToClaudeStream(strings.NewReader(geminiToClaudeToolSSE), nil)
+	if err != nil {
+		t.Fatalf("TranslateGeminiToClaudeStream: %v", err)
+	}
+	if len(res.ToolCalls) != 1 {
+		t.Fatalf("tool calls = %d, want 1", len(res.ToolCalls))
+	}
+	tc := res.ToolCalls[0]
+	if tc.Function.Name != "get_weather" {
+		t.Errorf("tool name = %q, want get_weather", tc.Function.Name)
+	}
+	var args map[string]any
+	if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+		t.Fatalf("tool arguments are not JSON: %q (%v)", tc.Function.Arguments, err)
+	}
+	if args["city"] != "Seoul" {
+		t.Errorf("tool args = %v, want city Seoul", args)
+	}
+	if res.FinishReason != "tool_calls" {
+		t.Errorf("finish = %q, want tool_calls (tool_use maps to tool_calls)", res.FinishReason)
+	}
+}
+
+func TestTranslateGeminiToClaudeStreamEmpty(t *testing.T) {
+	if _, err := TranslateGeminiToClaudeStream(strings.NewReader(""), nil); err == nil {
+		t.Error("empty Claude stream returned no error")
+	}
+}
+
+func TestTranslateGeminiToClaudeStreamError(t *testing.T) {
+	stream := "event: error\n" +
+		"data: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}\n\n"
+	if _, err := TranslateGeminiToClaudeStream(strings.NewReader(stream), nil); err == nil {
+		t.Fatal("error event returned no error")
+	}
+}
