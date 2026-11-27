@@ -1437,4 +1437,75 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://piapi.ai/llms.txt",
 		Notes:        "Unified gateway for image/video/audio/music/3D/language models at api.piapi.ai; X-API-Key header auth (not Bearer) per the docs.",
 	},
+	{
+		// Verified 2026-11-27 against Alibaba Cloud's own Model Studio
+		// docs: the OpenAI-compatible DashScope surface lives at
+		// dashscope.aliyuncs.com/compatible-mode/v1 (Beijing region;
+		// Singapore documents its own regional base).
+		ID:          "qwen-cloud",
+		Name:        "Qwen Cloud",
+		Website:     "https://www.qwencloud.com/",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://dashscope.aliyuncs.com/compatible-mode/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointEmbeddings, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://help.aliyun.com/en/model-studio/base-url",
+		Notes:        "OpenAI-compatible chat/embeddings for the Qwen family at dashscope.aliyuncs.com/compatible-mode/v1 (Beijing); region-specific bases are documented per plan.",
+	},
+	{
+		// Verified 2026-11-27 against Venice's own docs: the API is
+		// OpenAI-compatible at api.venice.ai/api/v1 with Bearer auth.
+		ID:          "venice",
+		Name:        "Venice.ai",
+		Website:     "https://venice.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.venice.ai/api/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointImages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.venice.ai/api-reference/api-spec",
+		Notes:        "OpenAI-compatible chat/images at api.venice.ai/api/v1; Bearer Venice API key; private/pro-deployed models per the docs.",
+	},
+	{
+		// Verified 2026-11-27 against Tencent Cloud's own Hunyuan doc
+		// (OpenAI-compatible interface): base api.hunyuan.cloud.tencent.com/v1.
+		ID:          "tencent",
+		Name:        "Tencent Hunyuan",
+		Website:     "https://hunyuan.tencent.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.hunyuan.cloud.tencent.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointEmbeddings, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://cloud.tencent.com/document/product/1729/111007",
+		Notes:        "Hunyuan OpenAI-compatible surface at api.hunyuan.cloud.tencent.com/v1 (chat/completions, embeddings); swap base_url and api_key per the doc.",
+	},
+	{
+		// Verified 2026-11-27 against Predibase's own docs: the
+		// OpenAI-compatible surface is tenant- and deployment-scoped -
+		// a templated base the operator completes.
+		ID:          "predibase",
+		Name:        "Predibase",
+		Website:     "https://predibase.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://serving.app.predibase.com/{tenant_id}/deployments/v2/llms/{model}/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://predibaseinc.mintlify.app/inference/querying-models/text-generation",
+		Notes:        "TEMPLATED base: https://serving.app.predibase.com/{tenant_id}/deployments/v2/llms/{model}/v1 - the operator's tenant ID and deployment name complete it; Bearer PREDIBASE_API_TOKEN; adapter routing via the model field.",
+	},
 }
