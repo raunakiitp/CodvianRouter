@@ -27,18 +27,19 @@ import (
 )
 
 // embeddingsURL is POST {base}/v1/embeddings (with the /v1 rule
-// from joinAPIPath).
+// from joinAPIPath; a NoV1Insert quirk surface appends verbatim).
 func (c *openAIClient) embeddingsURL() string {
-	return joinAPIPath(c.baseURL, "embeddings")
+	return c.apiPath(c.baseURL, "embeddings")
 }
 
 // rerankURL is POST {base}/v1/rerank (with the /v1 rule from
-// joinAPIPath). OpenAI itself has no /v1/rerank; OpenAI-compatible
+// joinAPIPath; a NoV1Insert quirk surface appends verbatim).
+// OpenAI itself has no /v1/rerank; OpenAI-compatible
 // providers that offer reranking (Cohere's compatibility surface,
 // Voyage, Jina, mixedbread, LiteLLM-fronted providers) serve it
 // here, in the Cohere shape.
 func (c *openAIClient) rerankURL() string {
-	return joinAPIPath(c.baseURL, "rerank")
+	return c.apiPath(c.baseURL, "rerank")
 }
 
 // embeddingWireRequest is the wire shape sent upstream for one

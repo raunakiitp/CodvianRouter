@@ -212,9 +212,9 @@ type AudioResponse struct {
 const audioMaxResponseBody = mediaMaxResponseBody
 
 // audioURL is POST {base}/v1/audio/<operation> (with the /v1
-// rule from joinAPIPath).
+// rule from joinAPIPath; a NoV1Insert quirk surface appends verbatim).
 func (c *openAIClient) audioURL(op AudioOperation) string {
-	return joinAPIPath(c.baseURL, "audio/"+string(op))
+	return c.apiPath(c.baseURL, "audio/"+string(op))
 }
 
 // PostAudio performs one non-streaming audio call: the raw body
