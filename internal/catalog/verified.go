@@ -2287,4 +2287,242 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://docs.cloud.google.com/vertex-ai/generative-ai/docs/partner-models/use-partner-models",
 		Notes:        "Partner models (MaaS: Claude, Mistral, GPT-OSS and friends) keep using Vertex AI endpoints per Google's docs — the {LOCATION}-aiplatform.googleapis.com request shape of the vertex entry applies; the Anthropic partner surface (ANTHROPIC_VERTEX against the regional endpoint) is the documented serving wire for the Claude-class partner models.",
 	},
+	{
+		// Verified 2026-11-27 against Fish Audio's own OpenAI-compatibility
+		// guide: base api.fish.audio/compat/v1, Bearer, /v1/audio/speech.
+		ID:          "fishaudio",
+		Name:        "Fish Audio",
+		Website:     "https://fish.audio",
+		Category:    CategoryAudio,
+		BaseURLs:    []string{"https://api.fish.audio/compat/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointNative, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.fish.audio/developer-guide/compat/migrate-from-openai",
+		Notes:        "OpenAI-compatible TTS/STT surface at api.fish.audio/compat/v1 (POST /v1/audio/speech, speech-to-text, chat-modality audio) with Bearer FISH_API_KEY; response_format defaults to pcm here, not mp3.",
+	},
+	{
+		// Verified 2026-11-27 against Inworld's own OpenAI-compatibility doc:
+		// base api.inworld.ai/v1 serves POST /v1/audio/speech.
+		ID:          "inworld",
+		Name:        "Inworld",
+		Website:     "https://inworld.ai",
+		Category:    CategoryAudio,
+		BaseURLs:    []string{"https://api.inworld.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointNative, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.inworld.ai/tts/openai-compatibility",
+		Notes:        "Inworld TTS serves POST /v1/audio/speech in OpenAI's request/response format at api.inworld.ai/v1 (Bearer Inworld key; Basic also accepted); the US base also serves the LLM Router; EU/IN regional bases documented separately.",
+	},
+	{
+		// Verified 2026-11-27 against Exa's own OpenAI-SDK integration doc:
+		// base api.exa.ai, chat/responses + native /search and /answer.
+		ID:          "exa-search",
+		Name:        "Exa Search",
+		Website:     "https://exa.ai",
+		Category:    CategorySearch,
+		BaseURLs:    []string{"https://api.exa.ai"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointNative, AuthKind: AuthXAPIKey, HeaderName: "x-api-key"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://exa.ai/docs/integrations/openai-sdk",
+		Notes:        "Exa serves OpenAI-compatible /chat/completions (model exa -> /answer) and /responses (exa-agent) at api.exa.ai; the native /search and /answer endpoints live on the same base and take the key in x-api-key.",
+	},
+	{
+		// Verified 2026-11-27 against xAI's own Web Search tool doc: the
+		// server-side web_search tool runs on the OpenAI-compatible base.
+		ID:          "x-search",
+		Name:        "X Search (Grok)",
+		Website:     "https://docs.x.ai/developers/tools/x-search",
+		Category:    CategorySearch,
+		BaseURLs:    []string{"https://api.x.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.x.ai/developers/tools/web-search",
+		Notes:        "xAI web search is a server-side tool ({\"type\":\"web_search\"}) on the OpenAI-compatible api.x.ai/v1 chat/responses surface; Bearer XAI_API_KEY.",
+	},
+	{
+		// Verified 2026-11-27 against Perplexity's own docs: the Search API
+		// is POST api.perplexity.ai/search; the Orchestrator serves OpenAI
+		// and Anthropic formats on the same host.
+		ID:          "perplexity-search",
+		Name:        "Perplexity Search",
+		Website:     "https://docs.perplexity.ai/guides/search-quickstart",
+		Category:    CategorySearch,
+		BaseURLs:    []string{"https://api.perplexity.ai"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointNative, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization", BaseURL: "https://api.perplexity.ai/orchestrator/v1"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization", BaseURL: "https://api.perplexity.ai/orchestrator/v1"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.perplexity.ai/docs/search/quickstart",
+		Notes:        "Search API: POST https://api.perplexity.ai/search (ranked results, JSON, Bearer). The same host serves the OpenAI- and Anthropic-format Orchestrator (base https://api.perplexity.ai/orchestrator/v1) per its quickstart.",
+	},
+	{
+		// Verified 2026-11-27 against Moonshot's own tools-search reference:
+		// POST api.moonshot.ai/v1/tools/search, Bearer; same base as the
+		// OpenAI-compatible Kimi API.
+		ID:          "kimi-search",
+		Name:        "Kimi Search",
+		Website:     "https://platform.kimi.ai/docs/api/tools-search",
+		Category:    CategorySearch,
+		BaseURLs:    []string{"https://api.moonshot.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointNative, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://platform.kimi.ai/docs/api/tools-search",
+		Notes:        "Kimi Web Search: POST https://api.moonshot.ai/v1/tools/search with {\"text_query\"} and Bearer key; the same /v1 base also serves the OpenAI-compatible chat API the kimi entry documents.",
+	},
+	{
+		// Verified 2026-11-27 against vLLM's own OpenAI-compatible server
+		// docs: localhost:8000/v1 is the documented SDK base.
+		ID:          "vllm",
+		Name:        "vLLM",
+		Website:     "https://github.com/vllm-project/vllm",
+		Category:    CategoryLocal,
+		BaseURLs:    []string{"http://localhost:8000/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthNone},
+			{Endpoint: EndpointModels, AuthKind: AuthNone},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.vllm.ai/en/stable/serving/online_serving/openai_compatible_server/",
+		Notes:        "Self-hosted: `vllm serve` binds 8000 by default and the docs' SDK example uses base_url=http://localhost:8000/v1 (chat/completions, completions, models, embeddings); --api-key is optional and only gates /v1, /v2, /inference, /cohere paths.",
+	},
+	{
+		// Verified 2026-11-27 against llama.cpp's own server README: OpenAI
+		// chat/responses + Anthropic Messages on the default local port.
+		ID:          "llama-cpp",
+		Name:        "llama.cpp",
+		Website:     "https://github.com/ggml-org/llama.cpp",
+		Category:    CategoryLocal,
+		BaseURLs:    []string{"http://localhost:8080"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthNone},
+			{Endpoint: EndpointResponses, AuthKind: AuthNone},
+			{Endpoint: EndpointAnthropic, AuthKind: AuthNone},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md",
+		Notes:        "llama-server: OpenAI-compatible chat completions/responses/embeddings and Anthropic-Messages-compatible chat; default bind 127.0.0.1:8080, no auth unless --api-key is set.",
+	},
+	{
+		// Verified 2026-11-27 against Xinference's own docs: local REST base
+		// 127.0.0.1:9997 with /v1 (OpenAI) and /anthropic surfaces.
+		ID:          "xinference",
+		Name:        "XInference",
+		Website:     "https://inference.readthedocs.io",
+		Category:    CategoryLocal,
+		BaseURLs:    []string{"http://127.0.0.1:9997/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthNone},
+			{Endpoint: EndpointAnthropic, AuthKind: AuthNone, BaseURL: "http://127.0.0.1:9997/anthropic"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://inference.readthedocs.io/en/latest/getting_started/using_xinference.html",
+		Notes:        "Self-hosted: docs show OpenAI(base_url=\"http://127.0.0.1:9997/v1\") and an Anthropic-compatible base at http://127.0.0.1:9997/anthropic; no key required locally (the hosted cloud.xinference.co base is separate).",
+	},
+	{
+		// Verified 2026-11-27 against Docker's own Model Runner API reference:
+		// OpenAI SDK base http://localhost:12434/engines/v1.
+		ID:          "docker-model-runner",
+		Name:        "Docker Model Runner",
+		Website:     "https://docs.docker.com/ai/model-runner/",
+		Category:    CategoryLocal,
+		BaseURLs:    []string{"http://localhost:12434/engines/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthNone},
+			{Endpoint: EndpointAnthropic, AuthKind: AuthNone, BaseURL: "http://localhost:12434"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.docker.com/ai/model-runner/api-reference/",
+		Notes:        "Docker Model Runner speaks OpenAI (base http://localhost:12434/engines/v1), Anthropic (http://localhost:12434) and Ollama formats; host TCP access must be enabled, no API key by default.",
+	},
+	{
+		// Verified 2026-11-27 against Lemonade's own endpoints spec: the
+		// OpenAI-compatible surface is http://localhost:13305/v1.
+		ID:          "lemonade",
+		Name:        "Lemonade Server",
+		Website:     "https://lemonade-server.ai",
+		Category:    CategoryLocal,
+		BaseURLs:    []string{"http://localhost:13305/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthNone},
+			{Endpoint: EndpointModels, AuthKind: AuthNone},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://lemonade-server.ai/docs/api/",
+		Notes:        "Local server: OpenAI-compatible /v1 (chat, completions, responses, embeddings, images, audio; docs' example uses http://localhost:13305/v1); an optional LEMONADE_API_KEY is sent as Bearer when set.",
+	},
+	{
+		// Verified 2026-11-27 against text-generation-webui's own OpenAI API
+		// doc: 127.0.0.1:5000 by default, OpenAI + Anthropic compatible.
+		ID:          "oobabooga",
+		Name:        "oobabooga",
+		Website:     "https://github.com/oobabooga/text-generation-webui",
+		Category:    CategoryLocal,
+		BaseURLs:    []string{"http://127.0.0.1:5000/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthNone},
+			{Endpoint: EndpointAnthropic, AuthKind: AuthNone, BaseURL: "http://127.0.0.1:5000"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://github.com/oobabooga/text-generation-webui/blob/main/docs/12%20-%20OpenAI%20API.md",
+		Notes:        "Start with --api; API defaults to 127.0.0.1:5000 (`--api-port`, `--listen`), serving OpenAI chat/completions plus Anthropic Messages; pass --api-key to require a Bearer key (none by default).",
+	},
+	{
+		// Verified 2026-11-27 against mlx-lm's own server doc: mlx_lm.server
+		// listens on localhost:8080 with an OpenAI-style chat API.
+		ID:          "mlx-gemma",
+		Name:        "MLX Gemma 26B",
+		Website:     "https://github.com/ml-explore/mlx",
+		Category:    CategoryLocal,
+		BaseURLs:    []string{"http://localhost:8080"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthNone},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/SERVER.md",
+		Notes:        "Model-served-locally row: mlx_lm.server serves an OpenAI-style chat API on port 8080 of localhost (curl localhost:8080/v1/chat/completions per the docs); no auth.",
+	},
+	{
+		// Verified 2026-11-27 against mlx-lm's own server doc (same server as
+		// the mlx-gemma row): localhost:8080, OpenAI-style chat API.
+		ID:          "mlx-qwen",
+		Name:        "MLX Qwen 3.8 27B",
+		Website:     "https://github.com/ml-explore/mlx",
+		Category:    CategoryLocal,
+		BaseURLs:    []string{"http://localhost:8080"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthNone},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/SERVER.md",
+		Notes:        "Model-served-locally row: mlx_lm.server serves an OpenAI-style chat API on port 8080 of localhost; no auth.",
+	},
 }
