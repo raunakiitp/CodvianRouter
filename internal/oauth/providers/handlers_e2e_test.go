@@ -349,7 +349,271 @@ func TestClineHandlerE2E(t *testing.T) {
 	}
 }
 
-// TestPendingClassification pins the RFC 8628 pending/slow_down
+// TestOpenAIHandlersE2E covers codex AND chatgpt — same auth.openai.com
+// PKCE flow.
+func TestOpenAIHandlersE2E(t *testing.T) {
+	for _, id := range []string{"codex", "chatgpt"} {
+		t.Run(id, func(t *testing.T) {
+			var exchanged, refreshed int
+			mux := http.NewServeMux()
+			mux.HandleFunc("/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+				form := readBody(t, r)
+				switch form["grant_type"] {
+				case "authorization_code":
+					exchanged++
+					if form["client_id"] != openaiClientID || form["code"] != "codex-code-1" {
+						t.Errorf("exchange form = %v", form)
+					}
+					if len(form["code_verifier"]) < 43 {
+						t.Errorf("code_verifier = %q", form["code_verifier"])
+					}
+					if form["redirect_uri"] != "http://localhost:1455/auth/callback" {
+						t.Errorf("redirect_uri = %q, want the documented localhost callback", form["redirect_uri"])
+					}
+					writeJSONToken(t, w, map[string]any{
+						"access_token": "codex-at-1", "refresh_token": "codex-rt-1",
+						"token_type": "bearer", "expires_in": 3600, "scope": openaiScopes,
+					})
+				case "refresh_token":
+					refreshed++
+					if form["client_id"] != openaiClientID || form["refresh_token"] != "codex-rt-1" {
+						t.Errorf("refresh form = %v", form)
+					}
+					writeJSONToken(t, w, map[string]any{
+						"access_token": "codex-at-2", "refresh_token": "codex-rt-2",
+						"token_type": "bearer", "expires_in": 3600,
+					})
+				default:
+					t.Errorf("unexpected grant_type %q", form["grant_type"])
+					w.WriteHeader(http.StatusBadRequest)
+				}
+			})
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+			SetEndpointsForTest(t, id, map[string]string{
+				"auth":  srv.URL + "/oauth/authorize",
+				"token": srv.URL + "/oauth/token",
+			})
+
+			h, err := Get(id)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			state, authURL, verifier, err := h.StartAuthorization("")
+			if err != nil {
+				t.Fatalf("StartAuthorization: %v", err)
+			}
+			u, _ := url.Parse(authURL)
+			q := u.Query()
+			if q.Get("client_id") != openaiClientID || q.Get("response_type") != "code" ||
+				q.Get("state") != state || q.Get("code_challenge_method") != "S256" ||
+				q.Get("code_challenge") != s256(verifier) ||
+				q.Get("codex_cli_simplified_flow") != "true" {
+				t.Errorf("authorize params = %v", q)
+			}
+			tr, err := h.ExchangeCode(e2eCtx, srv.Client(), "codex-code-1", "", verifier)
+			if err != nil {
+				t.Fatalf("ExchangeCode: %v", err)
+			}
+			if tr.AccessToken != "codex-at-1" || tr.ExpiresIn != 3600 {
+				t.Errorf("exchange result = %+v", tr)
+			}
+			tr2, err := h.Refresh(e2eCtx, srv.Client(), tr.RefreshToken)
+			if err != nil {
+				t.Fatalf("Refresh: %v", err)
+			}
+			if tr2.AccessToken != "codex-at-2" {
+				t.Errorf("refresh result = %+v", tr2)
+			}
+			if exchanged != 1 || refreshed != 1 {
+				t.Errorf("mock hits: exchange=%d refresh=%d", exchanged, refreshed)
+			}
+		})
+	}
+}
+
+// TestKimiHandlerE2E — device flow with the required X-Msh-* headers.
+func TestKimiHandlerE2E(t *testing.T) {
+	var polls int
+	mux := http.NewServeMux()
+	checkHeaders := func(r *http.Request) {
+		if r.Header.Get("X-Msh-Platform") != "kimi_cli" {
+			t.Errorf("X-Msh-Platform = %q, want kimi_cli (the backend requires the device headers)", r.Header.Get("X-Msh-Platform"))
+		}
+	}
+	mux.HandleFunc("/api/oauth/device_authorization", func(w http.ResponseWriter, r *http.Request) {
+		checkHeaders(r)
+		form := readBody(t, r)
+		if form["client_id"] != kimiClientID {
+			t.Errorf("device request = %v", form)
+		}
+		writeJSONToken(t, w, map[string]any{
+			"device_code": "dc-kimi-1", "user_code": "KIMI-1234",
+			"verification_uri": "https://auth.kimi.com/device", "interval": 5, "expires_in": 300,
+		})
+	})
+	mux.HandleFunc("/api/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+		checkHeaders(r)
+		form := readBody(t, r)
+		switch form["grant_type"] {
+		case "urn:ietf:params:oauth:grant-type:device_code":
+			polls++
+			if polls == 1 {
+				w.WriteHeader(http.StatusBadRequest)
+				writeJSONToken(t, w, map[string]any{"error": "authorization_pending"})
+				return
+			}
+			if form["client_id"] != kimiClientID || form["device_code"] != "dc-kimi-1" {
+				t.Errorf("device poll = %v", form)
+			}
+			writeJSONToken(t, w, map[string]any{
+				"access_token": "kimi-at-1", "refresh_token": "kimi-rt-1",
+				"token_type": "bearer", "expires_in": 3600,
+			})
+		case "refresh_token":
+			if form["client_id"] != kimiClientID || form["refresh_token"] != "kimi-rt-1" {
+				t.Errorf("refresh form = %v", form)
+			}
+			writeJSONToken(t, w, map[string]any{
+				"access_token": "kimi-at-2", "refresh_token": "kimi-rt-2",
+				"token_type": "bearer", "expires_in": 3600,
+			})
+		default:
+			t.Errorf("unexpected grant_type %q", form["grant_type"])
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	SetEndpointsForTest(t, "kimi-coding", map[string]string{
+		"device": srv.URL + "/api/oauth/device_authorization",
+		"token":  srv.URL + "/api/oauth/token",
+	})
+
+	h, err := Get("kimi-coding")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	dc, err := h.StartDevice(e2eCtx, srv.Client())
+	if err != nil {
+		t.Fatalf("StartDevice: %v", err)
+	}
+	if dc.UserCode != "KIMI-1234" {
+		t.Errorf("device offer = %+v", dc)
+	}
+	if _, err := h.PollDevice(e2eCtx, srv.Client(), dc); !errIs(err, ErrAuthorizationPending) {
+		t.Errorf("first poll error = %v, want pending", err)
+	}
+	tr, err := h.PollDevice(e2eCtx, srv.Client(), dc)
+	if err != nil {
+		t.Fatalf("second poll: %v", err)
+	}
+	if tr.AccessToken != "kimi-at-1" {
+		t.Errorf("poll result = %+v", tr)
+	}
+	tr2, err := h.Refresh(e2eCtx, srv.Client(), tr.RefreshToken)
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if tr2.AccessToken != "kimi-at-2" {
+		t.Errorf("refresh result = %+v", tr2)
+	}
+}
+
+// TestGitLabDuoHandlerE2E — operator-configured client, PKCE
+// authorize URL, exchange and refresh at the documented endpoints.
+func TestGitLabDuoHandlerE2E(t *testing.T) {
+	t.Setenv(gitlabClientIDEnv, "gitlab-app-42")
+	var exchanged, refreshed int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+		form := readBody(t, r)
+		switch form["grant_type"] {
+		case "authorization_code":
+			exchanged++
+			if form["client_id"] != "gitlab-app-42" || form["code"] != "gl-code-1" {
+				t.Errorf("exchange form = %v", form)
+			}
+			if len(form["code_verifier"]) < 43 {
+				t.Errorf("code_verifier = %q", form["code_verifier"])
+			}
+			writeJSONToken(t, w, map[string]any{
+				"access_token": "gl-at-1", "refresh_token": "gl-rt-1",
+				"token_type": "bearer", "expires_in": 7200, "scope": "api",
+			})
+		case "refresh_token":
+			refreshed++
+			if form["refresh_token"] != "gl-rt-1" || form["client_id"] != "gitlab-app-42" {
+				t.Errorf("refresh form = %v", form)
+			}
+			writeJSONToken(t, w, map[string]any{
+				"access_token": "gl-at-2", "refresh_token": "gl-rt-2",
+				"token_type": "bearer", "expires_in": 7200,
+			})
+		default:
+			t.Errorf("unexpected grant_type %q", form["grant_type"])
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	SetEndpointsForTest(t, "gitlab-duo", map[string]string{
+		"auth":  srv.URL + "/oauth/authorize",
+		"token": srv.URL + "/oauth/token",
+	})
+
+	h, err := Get("gitlab-duo")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	state, authURL, verifier, err := h.StartAuthorization("http://127.0.0.1:3000/callback")
+	if err != nil {
+		t.Fatalf("StartAuthorization: %v", err)
+	}
+	u, _ := url.Parse(authURL)
+	q := u.Query()
+	if q.Get("client_id") != "gitlab-app-42" || q.Get("response_type") != "code" ||
+		q.Get("state") != state || q.Get("code_challenge_method") != "S256" ||
+		q.Get("code_challenge") != s256(verifier) {
+		t.Errorf("authorize params = %v", q)
+	}
+	tr, err := h.ExchangeCode(e2eCtx, srv.Client(), "gl-code-1", "http://127.0.0.1:3000/callback", verifier)
+	if err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+	if tr.AccessToken != "gl-at-1" {
+		t.Errorf("exchange result = %+v", tr)
+	}
+	tr2, err := h.Refresh(e2eCtx, srv.Client(), tr.RefreshToken)
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if tr2.AccessToken != "gl-at-2" {
+		t.Errorf("refresh result = %+v", tr2)
+	}
+	if exchanged != 1 || refreshed != 1 {
+		t.Errorf("mock hits: exchange=%d refresh=%d", exchanged, refreshed)
+	}
+}
+
+// TestGitLabDuoUnconfiguredClientRefused — no invented client: without
+// the operator's application ID the flow refuses.
+func TestGitLabDuoUnconfiguredClientRefused(t *testing.T) {
+	t.Setenv(gitlabClientIDEnv, "")
+	h, err := Get("gitlab-duo")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, _, _, err := h.StartAuthorization("http://127.0.0.1/cb"); err == nil ||
+		!strings.Contains(err.Error(), gitlabClientIDEnv) {
+		t.Errorf("StartAuthorization error = %v, want it to name %s", err, gitlabClientIDEnv)
+	}
+	if _, err := h.ExchangeCode(e2eCtx, nil, "c", "u", "v"); err == nil {
+		t.Errorf("ExchangeCode without configured client: want refusal, got nil")
+	}
+}
+
+// TestPendingClassification pins the RFC 8628 pending/slow_down classification
 // classification shared by every device handler.
 func TestPendingClassification(t *testing.T) {
 	mux := http.NewServeMux()

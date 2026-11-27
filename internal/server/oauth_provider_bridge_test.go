@@ -223,7 +223,7 @@ func writeBridgeJSON(t *testing.T, w http.ResponseWriter, fields map[string]any)
 // TestBridgeCodeFlowProvidersE2E: authorize URL → code exchange →
 // stored → fresh served → expired REFRESHED (not served).
 func TestBridgeCodeFlowProvidersE2E(t *testing.T) {
-	for _, id := range []string{"claude"} {
+	for _, id := range []string{"claude", "codex", "chatgpt", "gitlab-duo"} {
 		t.Run(id, func(t *testing.T) {
 			if id == "gitlab-duo" {
 				t.Setenv("CODVIAN_OAUTH_GITLAB_DUO_CLIENT_ID", "bridge-gitlab-app")
@@ -284,8 +284,12 @@ func TestBridgeDeviceFlowProvidersE2E(t *testing.T) {
 		"github-copilot": {setup: func(t *testing.T) *httptest.Server { return copilotMock(t, &tokenMock{}) }, pending: false},
 		"cline":          {setup: func(t *testing.T) *httptest.Server { return clineMock(t) }, pending: false},
 		"clinepass":      {setup: func(t *testing.T) *httptest.Server { return clineMock(t) }, pending: false},
+		"kimi-coding": {setup: func(t *testing.T) *httptest.Server {
+			m := &tokenMock{}
+			return m.mockServer(t, "kimi-coding")
+		}, pending: false}, // tokenMock also serves /device for the device start
 	}
-	for _, id := range []string{"github-copilot", "cline", "clinepass"} {
+	for _, id := range []string{"github-copilot", "cline", "clinepass", "kimi-coding"} {
 		t.Run(id, func(t *testing.T) {
 			fx := fixtures[id]
 			mock := fx.setup(t)
@@ -299,6 +303,10 @@ func TestBridgeDeviceFlowProvidersE2E(t *testing.T) {
 				providers.SetEndpointsForTest(t, id, map[string]string{
 					"device": mock.URL + "/device", "poll": mock.URL + "/token",
 					"register": mock.URL + "/register", "refresh": mock.URL + "/refresh",
+				})
+			case "kimi-coding":
+				providers.SetEndpointsForTest(t, id, map[string]string{
+					"device": mock.URL + "/device", "token": mock.URL + "/token",
 				})
 			}
 
@@ -600,10 +608,7 @@ func TestBridgeRefusals(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "device") {
 		t.Errorf("claude device start error = %v, want ErrNotDeviceFlow", err)
 	}
-	_, err = srv.OAuthProviderAccessToken("codex")
-	if err == nil || !strings.Contains(err.Error(), "not implemented") {
-		t.Errorf("codex resolution error = %v, want the follow-up-PR pointer (not implemented in this PR)", err)
-	}
+
 	_, _, _, err = srv.StartProviderOAuth("github-copilot", "http://127.0.0.1/cb")
 	if err == nil || !strings.Contains(err.Error(), "authorization URL") {
 		t.Errorf("github-copilot StartProviderOAuth error = %v, want ErrNotCodeFlow", err)

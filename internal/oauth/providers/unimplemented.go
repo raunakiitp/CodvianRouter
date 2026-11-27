@@ -19,29 +19,6 @@ type unimplementedInfo struct {
 // docs (or an official open-source client) publish the surface.
 var unimplemented = []unimplementedInfo{
 	{
-		id:     "codex",
-		name:   "OpenAI Codex",
-		alias:  "cx",
-		reason: "handler lands in the follow-up PR of this same stack (area/a3-oauth-handlers-2); the documented auth.openai.com PKCE flow ships there.",
-	},
-	{
-		id:     "chatgpt",
-		name:   "ChatGPT",
-		reason: "handler lands in the follow-up PR of this same stack (area/a3-oauth-handlers-2); the documented ChatGPT-account PKCE sign-in ships there.",
-	},
-	{
-		id:     "kimi-coding",
-		name:   "Kimi Code CLI",
-		alias:  "kmc",
-		reason: "handler lands in the follow-up PR of this same stack (area/a3-oauth-handlers-2); the documented device flow ships there.",
-	},
-	{
-		id:     "gitlab-duo",
-		name:   "GitLab Duo",
-		alias:  "gitlab-duo",
-		reason: "handler lands in the follow-up PR of this same stack (area/a3-oauth-handlers-2); the documented GitLab OAuth endpoints ship there.",
-	},
-	{
 		id:     "kiro",
 		name:   "Kiro AI",
 		alias:  "kr",

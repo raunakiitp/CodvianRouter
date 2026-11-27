@@ -87,6 +87,10 @@ func init() {
 	register(&copilotHandler{})
 	register(&clineHandler{info: clineInfo()})
 	register(&clineHandler{info: clinePassInfo()})
+	register(&openaiPKCEHandler{info: codexInfo()})
+	register(&openaiPKCEHandler{info: chatgptInfo()})
+	register(&kimiHandler{})
+	register(&gitlabDuoHandler{})
 	registerImportOnly(Info{
 		ID:          "antigravity",
 		Name:        "Antigravity",
