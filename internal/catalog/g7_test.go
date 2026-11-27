@@ -76,8 +76,8 @@ func TestBaseURLCoverage(t *testing.T) {
 	}
 	// CT-8: the headline total is pinned so README/docs cannot drift
 	// silently again — 614 at triage round 5 minus 4 CT-3 retirements.
-	if cov.Total != 609 {
-		t.Fatalf("catalog total = %d, want 609 (614 at triage round 5, minus 4 CT-3 retirements and the D2 cheaperinference retirement)", cov.Total)
+	if cov.Total != 607 {
+		t.Fatalf("catalog total = %d, want 607 (614 at triage round 5, minus 4 CT-3 retirements, the D2 cheaperinference retirement and the Item-6 anyscale/kluster retirements)", cov.Total)
 	}
 	// A1 batches 1-16 (2026-11-27): seventy-eight API-key entries gained a
 	// docs-verified base URL (deepinfra, hyperbolic, nscale, lambda-ai, featherless-ai, moonshot, yi, qianfan, heroku,
@@ -88,10 +88,12 @@ func TestBaseURLCoverage(t *testing.T) {
 	// all concrete except vertex-partner's documented {LOCATION} template — with
 	// 457 / routable 444 / template-only 13; batch 16 added fourteen Item-2
 	// rows (two audio, four search, eight local), all loopback/concrete — with
-	// 471 / routable 458 / template-only 13. The 609 total is unchanged because
-	// each fill overlays an existing reference ID.
-	if cov.WithBaseURL != 471 || cov.Routable != 458 || cov.TemplateOnly != 13 {
-		t.Fatalf("coverage = with %d / routable %d / template-only %d, want 471 / 458 / 13 (457 / 444 / 13 after A1 batch 15; 379 / 370 / 9 originally)",
+	// 471 / routable 458 / template-only 13 (the 609 total was unchanged because
+	// each fill overlays an existing reference ID) — Item 6 then retired
+	// anyscale and kluster, both of which had bases, so coverage is
+	// 469 / routable 456 / template-only 13 against a 607 catalog.
+	if cov.WithBaseURL != 469 || cov.Routable != 456 || cov.TemplateOnly != 13 {
+		t.Fatalf("coverage = with %d / routable %d / template-only %d, want 469 / 456 / 13 (471 / 458 / 13 after A1 batch 16, before the Item-6 retirements; 379 / 370 / 9 originally)",
 			cov.WithBaseURL, cov.Routable, cov.TemplateOnly)
 	}
 	if cov.WithBaseURL+cov.WithoutByCategory[CategoryAPIKey]+cov.WithoutByCategory[CategoryAudio]+

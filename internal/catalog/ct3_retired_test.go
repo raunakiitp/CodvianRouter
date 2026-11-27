@@ -17,8 +17,11 @@ import (
 // ct3RetiredIDs is the CT-3 retirement set, in catalog order.
 // A1 (2026-11-27, owner decision D2) added cheaperinference to the
 // retired set — same mechanism, separate reason, so the count pins
-// move 4 -> 5 and the live total 610 -> 609.
-var ct3RetiredIDs = []string{"blackbox", "galadriel", "ai21", "bytez", "cheaperinference"}
+// move 4 -> 5 and the live total 610 -> 609. Item 6 (2026-11-27)
+// added anyscale and kluster: both inference platforms are shut down
+// and their own docs sites no longer document the API hosts, so the
+// unverified rows could only be retired — count 5 -> 7, total 609 -> 607.
+var ct3RetiredIDs = []string{"blackbox", "galadriel", "ai21", "bytez", "cheaperinference", "anyscale", "kluster"}
 
 func ct3RetiredSet(t *testing.T) map[string]Provider {
 	t.Helper()

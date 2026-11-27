@@ -153,13 +153,13 @@ Routing behaviour is pinned by tests across `internal/router`,
 
 The catalog is data, and it is explicit about what each entry can do:
 
-| Metric | Count (audit 2026-11-21; A1 base-URL batches 1-16, 2026-11-27) |
+| Metric | Count (audit 2026-11-21; A1 base-URL batches 1-17, 2026-11-27) |
 |---|---|
-| Active catalog entries | **609** (5 retired — including the cheaperinference removal, owner decision 2026-11-27) |
-| With a base URL the router can call | **471** (458 routable + 13 template-only) |
+| Active catalog entries | **607** (7 retired — cheaperinference by owner decision plus the Item-6 anyscale/kluster shutdown retirements, 2026-11-27) |
+| With a base URL the router can call | **469** (456 routable + 13 template-only) |
 | Metadata-only (no base URL) | **138** |
-| Docs-verified | 157 |
-| By category | api-key 475 · oauth 31 · web-cookie 37 · search 21 · local 18 · audio 12 · no-auth 10 · cloud-agent 3 · upstream-proxy 2 |
+| Docs-verified | 159 |
+| By category | api-key 473 · oauth 31 · web-cookie 37 · search 21 · local 18 · audio 12 · no-auth 10 · cloud-agent 3 · upstream-proxy 2 |
 
 A catalog entry is a starting point, **not a promise**: nothing routes
 until you add the provider with your own key, and the router tests that
