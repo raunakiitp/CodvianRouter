@@ -69,7 +69,7 @@ func TestCatalogShapePins(t *testing.T) {
 		CategorySearch:        17, // 21 originally; 17 after batch 16 (exa, x-search, perplexity, kimi-search)
 		CategoryLocal:         5,  // 13 originally; 5 after batch 16 (vllm, llama-cpp, xinference, docker-model-runner, lemonade, oobabooga, mlx-gemma, mlx-qwen)
 		CategoryAudio:         10, // 12 originally; 10 after batch 16 (fishaudio, inworld)
-		CategoryNoAuth:        10,
+		CategoryNoAuth:        10, // A3 item 5 (2026-11-27): all ten stay nil - the five CT-4 entry-403 rows must stay un-addable (ct4_test.go), the five CLI bridges own their endpoints (mechanisms in internal/noauth), and the three web surfaces have no documented endpoint
 		CategoryCloudAgent:    3,
 		CategoryUpstreamProxy: 2,
 	}
@@ -119,6 +119,39 @@ func TestFilledEntriesHaveDocsSource(t *testing.T) {
 		}
 		if len(p.BaseURLs) > 0 && len(p.WireFormats) == 0 {
 			t.Errorf("%s: has a base URL but declares no wire format", p.ID)
+		}
+	}
+}
+
+// A3 item 5 (2026-11-27) pins: the no-auth mechanisms behind the ten
+// CategoryNoAuth entries (internal/noauth), pinned here from the
+// catalog side so the rows cannot silently drift.
+
+// A3 item 5 (2026-11-27) pin: the ten no-auth mechanisms live in
+// internal/noauth (keyless endpoints, CLI bridges, documented limits);
+// the catalog rows deliberately stay base-URL-less: the five CT-4
+// entry-403 providers must remain un-addable (ct4_test.go), the five
+// CLI bridges own their endpoints, and three web surfaces have no
+// documented anonymous endpoint. This test pins the stay-nil shape so
+// a future fill must go through the CT-4 pin deliberately.
+func TestNoAuthRowsStayNilMechanismsInNoauthPkg(t *testing.T) {
+	for _, id := range []string{
+		"aihorde", "auggie", "cloudflare-playground", "codex-app-server",
+		"devin-cli-agentic", "duckduckgo-web", "minimax-code", "uncloseai",
+		"veoaifree-web", "zcode",
+	} {
+		p, ok := ByID(id)
+		if !ok {
+			t.Fatalf("%s: missing from the live catalog", id)
+		}
+		if len(p.BaseURLs) != 0 {
+			t.Errorf("%s: BaseURLs = %v, want nil — no-auth rows keep no base URL; the connection mechanism lives in internal/noauth", id, p.BaseURLs)
+		}
+		if p.DefaultAuthKind() != AuthNone {
+			t.Errorf("%s: DefaultAuthKind = %q, want none (the empty-key allowance the router applies)", id, p.DefaultAuthKind())
+		}
+		if reason := p.UnroutableReason(); !strings.Contains(reason, "not documented yet") && !strings.Contains(reason, "not yet") {
+			t.Errorf("%s: unroutable reason = %q, want the pending-verification statement", id, reason)
 		}
 	}
 }

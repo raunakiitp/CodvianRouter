@@ -26,7 +26,7 @@ func (p Provider) UnroutableReason() string {
 		}
 		return "OAuth subscription entry with no documented auth surface and no base URL: not connectable until a permitted OAuth flow is implemented."
 	case CategoryNoAuth:
-		return "no-auth provider whose anonymous endpoint base URL is not documented yet; the URL is never guessed — fill pending doc verification."
+		return "no-auth provider whose anonymous endpoint base URL is not documented yet; the connection mechanism (keyless endpoint or CLI bridge, with documented rate limits) lives in internal/noauth — the URL is never guessed — fill pending doc verification."
 	case CategoryLocal:
 		return "local provider whose local endpoint base URL is not documented yet (local surfaces depend on the operator's own installation); fill pending doc verification."
 	case CategorySearch:
