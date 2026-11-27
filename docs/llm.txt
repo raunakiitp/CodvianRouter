@@ -7,7 +7,7 @@
 # Scope `admin` implies every scope. LOCAL_ONLY = loopback-only
 # even with a valid key. Destructive routes need a typed
 # {"confirm": "<phrase>"} body in addition to the key.
-# Routes: 351
+# Routes: 357
 
 ## Auth
 header: Authorization: Bearer <gateway-key>
@@ -33,6 +33,12 @@ GET /dashboard/oauth/connect/{provider} | MANAGEMENT | scopes=admin | auth=key |
 GET /dashboard/oauth/callback/{provider} | MANAGEMENT | scopes=admin | auth=key | OAuth callback: exchanges the authorization code for tokens and stores the encrypted connection. Requires a valid state cookie (CSRF protection).
 GET /dashboard/oauth/connections | MANAGEMENT | scopes=admin | auth=key | Lists connected OAuth accounts (provider, connected, expires_at, scopes — no tokens).
 POST /dashboard/oauth/disconnect/{provider} | MANAGEMENT | scopes=admin | auth=key | Revokes and deletes the OAuth connection for the given provider.
+GET /dashboard/oauth/providers | MANAGEMENT | scopes=admin | auth=key | Lists every catalog OAuth provider's registry entry (id, flow, implemented, import-only, docs URL — and the documented reason for the honestly-unimplemented ones). No tokens, no secrets.
+POST /dashboard/oauth/providers/{provider}/start | MANAGEMENT | scopes=admin | auth=key | Starts a catalog OAuth provider's authorization-code / browser-sign-in flow: returns state, authorize_url and the PKCE verifier (never stored server-side). Requires a session or gateway key.
+POST /dashboard/oauth/providers/{provider}/complete | MANAGEMENT | scopes=admin | auth=key | Exchanges the authorization code (same redirect URI + verifier the start call returned) for tokens and stores the Vault-sealed connection. Tokens never appear in the response.
+POST /dashboard/oauth/providers/{provider}/device/start | MANAGEMENT | scopes=admin | auth=key | Begins a catalog OAuth provider's device authorization grant: returns device_code, user_code and verification_uri for the operator to approve.
+POST /dashboard/oauth/providers/{provider}/device/complete | MANAGEMENT | scopes=admin | auth=key | Polls the device flow once with the device code: status pending (poll again after the interval) or connected (tokens stored, never returned).
+POST /dashboard/oauth/providers/{provider}/import | MANAGEMENT | scopes=admin | auth=key | Stores an allowlisted paste-token credential blob (antigravity, agy only; the blob's embedded provider must match the route). The raw blob is never logged or returned.
 GET /dashboard/providers | MANAGEMENT | scopes=- | auth=exempt | Live provider facts (verification, wire, health) — no keys, no base URLs.
 GET /dashboard/overview | MANAGEMENT | scopes=- | auth=exempt | Live overview KPIs + traffic buckets from the ledger/recorder — counts and totals only, no message content.
 GET /dashboard/models | MANAGEMENT | scopes=- | auth=exempt | Live model catalog from the registry + per-model request counts — no keys, no base URLs.

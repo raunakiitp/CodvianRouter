@@ -5289,13 +5289,19 @@ func runServe(opts options) int {
 			return release.LatestTag(ctx, client, updateAPIBase(), release.DefaultRepo)
 		}),
 	)
-	// Workstream A2: wire the OAuth connection store into the provider
-	// registry's auth resolution, so an OAuth-connected catalog provider
-	// executes with its real stored OAuth access token (Bearer) instead
-	// of being refused as an unsupported exchange. The resolver is
-	// called lazily per client build; a missing connection surfaces as
-	// an honest error, never a fabricated header.
-	st.reg.SetOAuthTokenResolver(srv.OAuthAccessToken)
+	// Workstream A3 (W1): install the handler-based OAuth resolver
+	// (InstallOAuthProviderResolver). A catalog OAuth provider's
+	// requests now resolve through the per-provider OAuth handlers —
+	// real store, expiry-aware refresh through the provider's own
+	// documented refresh grant, SSRF-guarded egress — instead of the
+	// plain store read. The dashboard identity providers (github,
+	// google, microsoft) keep resolving through the same path: their
+	// store IDs are not catalog OAuth provider IDs, so the bridge
+	// falls back to the plain store read for them (see
+	// OAuthProviderAccessToken). The resolver is called lazily per
+	// client build; a missing connection surfaces as an honest error,
+	// never a fabricated header.
+	server.InstallOAuthProviderResolver(st.reg, srv)
 	// Responses transcripts (CHECKLIST 315–316): restore the
 	// persisted store before serving — a restart resumes the
 	// pre-restart conversations instead of 404ing them.

@@ -312,7 +312,16 @@ func (s *Server) OAuthProviderAccessToken(catalogID string) (string, error) {
 		if errors.Is(err, providers.ErrImportOnly) {
 			return s.oauthStoreFor().resolveImportedToken(catalogID)
 		}
-		return "", fmt.Errorf("oauth providers: %w", err)
+		if errors.Is(err, providers.ErrNotImplemented) {
+			return "", fmt.Errorf("oauth providers: %w", err)
+		}
+		// Not a catalog OAuth provider at all: the dashboard identity
+		// providers (github, google, microsoft) share this store under
+		// their own IDs. Resolve through the plain store read (vault
+		// unseal + expiry-aware refresh included) so the identity flows
+		// keep working through the same resolver the catalog OAuth
+		// surfaces use — one wiring, both credential kinds.
+		return s.oauthStoreFor().GetAccessToken(catalogID)
 	}
 	return s.oauthStoreFor().resolveProviderToken(h)
 }
