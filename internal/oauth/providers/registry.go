@@ -93,6 +93,8 @@ func init() {
 	register(&gitlabDuoHandler{})
 	register(&awsDeviceHandler{info: kiroInfo()})
 	register(&awsDeviceHandler{info: amazonQInfo()})
+	register(&cursorHandler{})
+	register(&gheCopilotHandler{})
 	registerImportOnly(Info{
 		ID:          "antigravity",
 		Name:        "Antigravity",
@@ -112,7 +114,7 @@ func init() {
 		DocsURL:     pasteImportDocsURL,
 		Reason:      "",
 	})
-	// The remaining 19 catalog OAuth providers have no publicly
+	// The remaining 17 catalog OAuth providers have no publicly
 	// documented OAuth surface; the registry lists them with the
 	// reason so the refusal is explainable, never silent.
 	for _, u := range unimplemented {
