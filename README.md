@@ -175,11 +175,34 @@ and stay metadata-only.
 A catalog entry is a starting point, **not a promise**: nothing routes
 until you add the provider with your own key, and the router tests that
 key against the provider when you add it. Web-session-cookie providers
-are catalogued but refused as routing targets. The OAuth-category entries
+are catalogued and connectable only through the ToS risk-acknowledgement
+gate ([ToS-grey providers](#tos-grey-providers-and-the-risk-acknowledgement-gate)).
+The OAuth-category entries
 are classified honestly (see
 [Authentication and OAuth](#authentication-and-oauth)), and the numbers
 above are pinned by tests (`TestCatalogExecutableMatrixCounts`,
 `TestCategoryOAuthInventoryPinsTheTruth`).
+
+### ToS-grey providers and the risk-acknowledgement gate
+
+Some catalog entries are marked ToS-grey: connecting one means handing
+over your own web-session cookie or subscription login for that
+provider. The provider's terms of service may forbid this kind of use.
+Because of that, the router does not connect a ToS-grey provider
+silently. Adding the provider, loading it from config and sending it a
+request all go through a gate that refuses until you have explicitly
+acknowledged the risk for that provider — in the dashboard
+(Providers — risk acknowledgement) or by
+`POST /api/providers/{id}/risk-acknowledgement`. The acknowledgement is
+stored locally with your other config; it is not sent anywhere.
+
+What the acknowledgement does **not** do: it is not permission from the
+provider, and it does not make the connection safe. The provider may
+still suspend or ban the connected account at any time, and you — the
+operator — remain fully responsible for how that account is used. The
+gate exists so this kind of connection can only happen knowingly: none
+of these paths run until you have said, explicitly and for that
+provider, that you accept the risk.
 
 Evidence: [docs/catalog-audit-2026-11-21.md](docs/catalog-audit-2026-11-21.md),
 [docs/PROVIDER_AUTH_MATRIX.md](docs/PROVIDER_AUTH_MATRIX.md).
