@@ -1543,4 +1543,89 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://www.mixedbread.com/api-reference",
 		Notes:        "Semantic search / embeddings API at api.mixedbread.com (stores, embeddings); Bearer key from platform.mixedbread.com.",
 	},
+	{
+		// Verified 2026-11-27 against Dify's own docs: the Service API
+		// base api.dify.ai/v1 with API-key (Bearer) auth.
+		ID:          "dify",
+		Name:        "Dify",
+		Website:     "https://dify.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.dify.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointNative, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.dify.ai/en/use-dify/publish/developing-with-apis",
+		Notes:        "Dify Service API at api.dify.ai/v1 (chat-messages, workflows; Authorization: Bearer app-API-key); native Dify application protocol, not an OpenAI-shaped model surface.",
+	},
+	{
+		// Verified 2026-11-27 against Jina AI's own docs: the Reader
+		// host r.jina.ai (prepend to any URL; Bearer API key).
+		ID:          "jina-reader",
+		Name:        "Jina Reader (r.jina.ai)",
+		Website:     "https://jina.ai/reader",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://r.jina.ai"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointNative, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.jina.ai/",
+		Notes:        "Reader converts any URL to LLM-friendly input by prepending r.jina.ai to the target URL; Bearer JINA_API_KEY. Search (s.jina.ai) and the foundation models (api.jina.ai) are separate hosts.",
+	},
+	{
+		// Verified 2026-11-27 against Vercel's own AI Gateway docs: the
+		// OpenAI Chat Completions surface at ai-gateway.vercel.sh/v1.
+		ID:          "vercel-ai-gateway",
+		Name:        "Vercel AI Gateway",
+		Website:     "https://vercel.com/docs/ai-gateway",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://ai-gateway.vercel.sh/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointMessages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions",
+		Notes:        "AI Gateway serves OpenAI Chat Completions / Responses and Anthropic-compatible surfaces at ai-gateway.vercel.sh/v1; Bearer AI-Gateway API key or OIDC token.",
+	},
+	{
+		// Verified 2026-11-27 against Cursor's own docs: the public
+		// API base api.cursor.com (v1, teams, agents surfaces; Bearer).
+		ID:          "cursor-api",
+		Name:        "Cursor API",
+		Website:     "https://cursor.com/dashboard/api",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.cursor.com"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointNative, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://cursor.com/docs/api",
+		Notes:        "Cursor public API at api.cursor.com (Cloud Agents, teams, v1/me management surfaces; Bearer); native agents protocol - no OpenAI-shaped model surface in the documented API.",
+	},
+	{
+		// Verified 2026-11-27 against IBM's own watsonx.ai docs: the
+		// inference surface is region-templated - {region}.ml.cloud.ibm.com
+		// (us-south, eu-de, ... per the docs) with /ml/v1 paths.
+		ID:          "watsonx",
+		Name:        "IBM watsonx.ai Gateway",
+		Website:     "https://www.ibm.com/products/watsonx-ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://{region}.ml.cloud.ibm.com/ml/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointEmbeddings, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://cloud.ibm.com/docs/apis/watsonx-ai",
+		Notes:        "TEMPLATED base: https://{region}.ml.cloud.ibm.com/ml/v1 - the operator's region (us-south, eu-de, ...) completes the host; Bearer IAM token; text chat/embeddings endpoints per the docs.",
+	},
 }
