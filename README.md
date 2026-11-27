@@ -218,10 +218,27 @@ Azure Entra ID client credentials, Vertex service-account JWT and Bedrock
 SigV4. All are deterministic-mock-tested; only the flows you configure
 with real keys touch the network.
 
+### ToS-grey providers: explicit risk acknowledgement
+
+Some catalog entries are marked **ToS-grey** (web-cookie /
+subscription auth). Connecting one means handing over **your own**
+session or subscription account, by your own choice — the router
+performs no interception, no certificate trickery, and nothing
+covert. That path carries real risk: the provider's terms of service
+may forbid this kind of use, and the account you connect can be
+suspended or banned. These paths therefore run only after your
+explicit acknowledgement: add time, config load and every request
+refuse an unacknowledged ToS-grey provider with a plain-words notice,
+and the gate opens only once you acknowledge the risk in the
+dashboard (the "Terms-of-service risk" dialog on the Providers page)
+or via `POST /api/providers/{id}/risk-acknowledgement`, which records
+who acknowledged, for which provider, and when — persisted locally
+and written to the audit log.
+
 ## API compatibility
 
-**350 registered routes** (183 GET · 118 POST · 22 DELETE · 22 PATCH ·
-5 PUT), tiered as 11 local-only, 58 always-protected and 281 management.
+**351 registered routes** (183 GET · 119 POST · 22 DELETE · 22 PATCH ·
+5 PUT), tiered as 11 local-only, 59 always-protected and 281 management.
 The full list with request/response shapes is generated into
 [docs/API_REFERENCE.md](docs/API_REFERENCE.md) (regeneration is
 reproducible and checked).

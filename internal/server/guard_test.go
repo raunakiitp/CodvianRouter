@@ -94,7 +94,7 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 		"GET /dashboard/benchmark", "GET /dashboard/benchmark/history", "GET /dashboard/release-verify", "GET /dashboard/readiness", "GET /dashboard/streaming", "GET /dashboard/key-budgets", "POST /dashboard/key-budgets", "GET /dashboard/quota-pools", "POST /dashboard/quota-pools", "GET /dashboard/quota-schedules", "POST /dashboard/quota-schedules", "GET /dashboard/internal-budgets", "POST /dashboard/internal-budgets", "GET /dashboard/teams", "POST /dashboard/teams", "POST /dashboard/teams/{id}/members", "GET /dashboard/request-budgets", "GET /dashboard/reasoning", "GET /dashboard/responses", "GET /dashboard/responses/tree", "GET /dashboard/groups", "GET /dashboard/stream-lifetime", "GET /dashboard/headless", "GET /dashboard/plugins", "GET /dashboard/verification", "GET /openapi.json",
 		"GET /dashboard/feedback", "POST /dashboard/feedback", "GET /dashboard/learned", "GET /dashboard/code-outcomes",
 		"GET /dashboard/intent-tiers", "POST /dashboard/intent-tiers", "GET /dashboard/suggestions", "POST /dashboard/suggestions",
-		"GET /api/providers", "POST /api/providers", "DELETE /api/providers/{id}", "POST /api/providers/{id}/keys", "DELETE /api/providers/{id}/keys/{keyId}", "POST /api/providers/{id}/keys/{keyId}/role", "POST /api/providers/{id}/keys/{keyId}/rotate", "POST /api/providers/{id}/enabled", "GET /api/catalog", "GET /api/usage/budget", "POST /api/usage/budget", "GET /api/usage/budget/forecast", "GET /api/usage/om-usage", "GET /api/cache/stats", "GET /api/telemetry/model-latency-stats", "GET /metrics",
+		"GET /api/providers", "POST /api/providers", "DELETE /api/providers/{id}", "POST /api/providers/{id}/keys", "DELETE /api/providers/{id}/keys/{keyId}", "POST /api/providers/{id}/keys/{keyId}/role", "POST /api/providers/{id}/keys/{keyId}/rotate", "POST /api/providers/{id}/enabled", "POST /api/providers/{id}/risk-acknowledgement", "GET /api/catalog", "GET /api/usage/budget", "POST /api/usage/budget", "GET /api/usage/budget/forecast", "GET /api/usage/om-usage", "GET /api/cache/stats", "GET /api/telemetry/model-latency-stats", "GET /metrics",
 		"GET /api/analytics/summary", "GET /api/analytics/by-provider", "GET /api/analytics/by-model", "GET /api/analytics/costs", "GET /api/analytics/compression", "GET /api/analytics/diversity", "GET /api/analytics/auto-routing", "GET /api/analytics/combo-health", "GET /api/resilience", "GET /api/resilience/settings", "PATCH /api/resilience/settings", "POST /api/resilience/breakers/reset", "POST /api/resilience/cooldowns", "DELETE /api/resilience/cooldowns/{model...}", "GET /api/logs", "POST /api/guardrails/test", "GET /api/fallback/chains", "POST /api/fallback/chains", "DELETE /api/fallback/chains",
 		"GET /api/teams", "POST /api/teams", "GET /api/teams/{id}", "PATCH /api/teams/{id}", "DELETE /api/teams/{id}", "GET /api/quota-pools", "POST /api/quota-pools", "GET /api/quota-pools/{id}", "PATCH /api/quota-pools/{id}", "DELETE /api/quota-pools/{id}",
 		"POST /api/webhooks", "GET /api/webhooks", "GET /api/webhooks/{id}", "PUT /api/webhooks/{id}", "DELETE /api/webhooks/{id}",
@@ -215,7 +215,10 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 	// /api/providers/{id}/enabled (critic fix 2026-11-19) + POST
 	// /api/providers/{id}/keys/{keyId}/rotate (critic fix 2026-11-19)
 	// + 4 OAuth routes (POST/GET/DELETE /oauth/clients + GET
-	// /oauth/authorize, B3-07).
+	// /oauth/authorize, B3-07) + POST
+	// /api/providers/{id}/risk-acknowledgement (A3 item 6: the ToS
+	// risk-acknowledgement gate — an unauthenticated caller must
+	// never open the risk gate, so it is always-protected).
 	// Phase 0 (2026-11-21): LOCAL_ONLY 9 -> 10 for POST
 	// /admin/restart (spawn-capable: it starts a replacement
 	// process). MANAGEMENT 250 -> 254 for POST
@@ -233,8 +236,8 @@ func TestRouteTableSpawnCapableAreLocalOnly(t *testing.T) {
 	for _, r := range table {
 		counts[r.Tier]++
 	}
-	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 58 || counts[TierManagement] != 281 {
-		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/58/281, the two extra always-protected routes being the admin file-reclaim pair added for AUD-SEC-010, and /readyz added for AUD-CFG-004)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
+	if counts[TierLocalOnly] != 11 || counts[TierAlwaysProtected] != 59 || counts[TierManagement] != 281 {
+		t.Errorf("tier counts = LOCAL_ONLY %d, ALWAYS_PROTECTED %d, MANAGEMENT %d (want 11/59/281, the two extra always-protected routes being the admin file-reclaim pair added for AUD-SEC-010, and /readyz added for AUD-CFG-004)", counts[TierLocalOnly], counts[TierAlwaysProtected], counts[TierManagement])
 	}
 }
 

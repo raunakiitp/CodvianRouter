@@ -8,9 +8,9 @@ the per-route sections; regenerate instead:
 python3 scripts/gen-api-docs.py
 ```
 
-Coverage: **350 routes** (183 GET, 118 POST, 22 DELETE, 22 PATCH, 5 PUT) —
-11 `LOCAL_ONLY`, 58 `ALWAYS_PROTECTED`,
-281 `MANAGEMENT`; 61 auth-exempt, 278 scope-gated, 11 key-only (gateway key, no scope).
+Coverage: **351 routes** (183 GET, 119 POST, 22 DELETE, 22 PATCH, 5 PUT) —
+11 `LOCAL_ONLY`, 59 `ALWAYS_PROTECTED`,
+281 `MANAGEMENT`; 61 auth-exempt, 279 scope-gated, 11 key-only (gateway key, no scope).
 Enforced by `TestAPIReferenceCoversEveryRoute`
 (`internal/server/api_reference_test.go`): the test reads the guard
 table and this doc and FAILS if any route is missing. That test is
@@ -1810,6 +1810,22 @@ its key field; the key is kept only in page memory, never stored.
 
   ```sh
   curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/api/providers/{id}/enabled
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `POST /api/providers/{id}/risk-acknowledgement`
+
+- **Tier:** `ALWAYS_PROTECTED`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
+- **Spawn-capable:** no
+- **Description:** Records the operator’s explicit acknowledgement of the ToS risk of a ToS-grey catalog provider (who, which provider, when; persisted and audit-logged). The add, config-load and request-time gates refuse the provider until this is done. Auth always required — an unauthenticated caller must never open the risk gate.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/api/providers/{id}/risk-acknowledgement
   ```
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
