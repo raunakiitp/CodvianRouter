@@ -20,6 +20,7 @@ import (
 
 	"github.com/raunakiitp/codvian-router/internal/catalog"
 	"github.com/raunakiitp/codvian-router/internal/crypto"
+	"github.com/raunakiitp/codvian-router/internal/oauth/providers"
 )
 
 // ErrProviderNotFound is returned when no provider with the given ID exists.
@@ -541,10 +542,16 @@ type addInput struct {
 	authHeaders   map[string]string
 	wireFormat    string
 	allowEmptyKey bool
-	catalogID     string
-	verification  string
-	authEndpoint  string
-	authVariant   string
+	// oauthConnect marks a connect-first OAuth add (A3 W2): skip the
+	// add-time key test and live model fetch — no credential exists
+	// yet to test; the OAuth connection is the credential and is
+	// established afterwards. Request-time auth resolution errors
+	// honestly until the operator connects.
+	oauthConnect bool
+	catalogID    string
+	verification string
+	authEndpoint string
+	authVariant  string
 	// staticModels is the catalog entry's static model list
 	// (entry.StaticModels()); catalog adds pass it, custom
 	// adds leave it nil. Used only as a fallback when the
@@ -637,11 +644,11 @@ func (r *Registry) addProvider(ctx context.Context, in addInput) (*Provider, err
 		return nil, err
 	}
 
-	// 1. Inline key test.
-	testErr := client.TestKey(ctx)
-	if wireFormat == "" {
-		wireFormat = WireFormatOpenAI
-	}
+	// 1. Inline key test. A connect-first OAuth add has NO credential
+	// to test — skip straight to storage with the catalog's static
+	// model list; the OAuth connection established afterwards is the
+	// credential, and request-time resolution errors honestly until
+	// it exists.
 	var models []Model
 	// fetchedAt stamps ModelsFetchedAt (CT-7): the add-time
 	// ListModels call is a fetch, so a provider added with a
@@ -650,44 +657,54 @@ func (r *Registry) addProvider(ctx context.Context, in addInput) (*Provider, err
 	// fetched — rather than claiming a fetch that never
 	// happened.
 	fetchedAt := time.Time{}
-	switch {
-	case testErr == nil:
-		// 2. Auto-fetch model list (second call, per the Phase 1 contract:
-		// TestKey verifies, ListModels fetches).
-		ids, err := client.ListModels(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("fetching model list for %s: %w", normalized, err)
-		}
-		models = modelsFromIDs(ids)
-		fetchedAt = time.Now().UTC()
-	case isNotFound(testErr):
-		// /v1/models 404s: maybe the gateway only exposes chat. Probe it.
-		// The probe only speaks OpenAI wire, so it may only override a
-		// wire format that was not prescribed by the catalog: a
-		// catalog-resolved Anthropic wire is never overwritten by an
-		// OpenAI probe.
-		detected, probeErr := DetectWireFormat(ctx, normalized, in.apiKey, in.authHeaders, r.newClient)
-		if probeErr != nil {
-			return nil, fmt.Errorf("key test failed for %s: %w", normalized, testErr)
-		}
-		if detected == WireFormatUnknown {
-			return nil, fmt.Errorf("key test failed for %s: %w", normalized, testErr)
-		}
-		if in.wireFormat == "" {
-			wireFormat = detected
-		}
-		// Chat endpoint exists but no model list: fall back to
-		// the catalog entry's static list when one is known
-		// (B4-02); a custom provider has none, so it keeps an
-		// empty list. The static list is not a fetch, so
-		// fetchedAt stays zero.
+	if in.oauthConnect {
 		if len(in.staticModels) > 0 {
 			models = modelsFromIDs(in.staticModels)
-		} else {
-			models = nil
 		}
-	default:
-		return nil, fmt.Errorf("key test failed for %s: %w", normalized, testErr)
+	} else {
+		testErr := client.TestKey(ctx)
+		if wireFormat == "" {
+			wireFormat = WireFormatOpenAI
+		}
+		switch {
+		case testErr == nil:
+			// 2. Auto-fetch model list (second call, per the Phase 1 contract:
+			// TestKey verifies, ListModels fetches).
+			ids, ferr := client.ListModels(ctx)
+			if ferr != nil {
+				return nil, fmt.Errorf("fetching model list for %s: %w", normalized, ferr)
+			}
+			models = modelsFromIDs(ids)
+			fetchedAt = time.Now().UTC()
+		case isNotFound(testErr):
+			// /v1/models 404s: maybe the gateway only exposes chat. Probe it.
+			// The probe only speaks OpenAI wire, so it may only override a
+			// wire format that was not prescribed by the catalog: a
+			// catalog-resolved Anthropic wire is never overwritten by an
+			// OpenAI probe.
+			detected, probeErr := DetectWireFormat(ctx, normalized, in.apiKey, in.authHeaders, r.newClient)
+			if probeErr != nil {
+				return nil, fmt.Errorf("key test failed for %s: %w", normalized, testErr)
+			}
+			if detected == WireFormatUnknown {
+				return nil, fmt.Errorf("key test failed for %s: %w", normalized, testErr)
+			}
+			if in.wireFormat == "" {
+				wireFormat = detected
+			}
+			// Chat endpoint exists but no model list: fall back to
+			// the catalog entry's static list when one is known
+			// (B4-02); a custom provider has none, so it keeps an
+			// empty list. The static list is not a fetch, so
+			// fetchedAt stays zero.
+			if len(in.staticModels) > 0 {
+				models = modelsFromIDs(in.staticModels)
+			} else {
+				models = nil
+			}
+		default:
+			return nil, fmt.Errorf("key test failed for %s: %w", normalized, testErr)
+		}
 	}
 
 	provider := &Provider{
@@ -757,6 +774,50 @@ type CatalogAddOptions struct {
 	Variant        string
 	BaseURL        string
 	TemplateParams map[string]string
+}
+
+// oauthRegistryInfo looks a catalog provider ID up in the per-provider
+// OAuth handler registry (internal/oauth/providers): ok=true means the
+// ID IS a catalog OAuth provider — implemented (a real documented
+// connect flow) or honestly-unimplemented (Info.Reason says why).
+func oauthRegistryInfo(id string) (providers.Info, bool) {
+	for _, in := range providers.All() {
+		if in.ID == id {
+			return in, true
+		}
+	}
+	return providers.Info{}, false
+}
+
+// oauthAddBranch decides the add-time treatment of a catalog surface
+// that cannot resolve a static credential (A3 W2). Keyed on the
+// ENDPOINT's AuthKind — a described OAuth exchange refuses with
+// ErrExchangeRequired while a bare AuthOAuth surface refuses with its
+// own "without an exchange description" message, so the error text
+// must not decide. connect=true: the entry has an implemented OAuth
+// handler → added connect-first. refusal != nil: the entry is an
+// honestly-unimplemented catalog OAuth provider → refused with the
+// registry's documented reason. Neither: the surface stays with the
+// exchange chain (sigv4 / vertex / entra / generic refusal).
+func oauthAddBranch(entry catalog.Provider, endpoint, variant string) (connect bool, refusal error) {
+	ep, ok := entry.Endpoint(endpoint, variant)
+	if !ok {
+		ep = entry.DefaultEndpointAuth()
+	}
+	if ep.AuthKind != catalog.AuthOAuth {
+		return false, nil
+	}
+	info, ok := oauthRegistryInfo(entry.ID)
+	if !ok {
+		// A catalog OAuth surface with no providers-registry entry:
+		// inventory drift — leave it to the exchange chain's honest
+		// refusal rather than guessing a flow.
+		return false, nil
+	}
+	if !info.Implemented {
+		return false, fmt.Errorf("catalog provider %q (%s): OAuth connect is not implemented — %s", entry.ID, entry.Name, info.Reason)
+	}
+	return true, nil
 }
 
 // AddCatalog adds a catalog provider by ID: its base URL, wire format
@@ -841,6 +902,11 @@ func (r *Registry) AddCatalogWithOptions(ctx context.Context, catalogID, apiKey 
 	// auth cache). Any other exchange, or an exchange surface whose
 	// key is not the right credential material, stays refused.
 	res, err := catalog.ResolveAuth(entry, endpoint, opts.Variant, apiKey)
+	// oauthConnect marks an implemented-OAuth connect-first add (A3
+	// W2): the provider is stored with no credential to test (the
+	// OAuth connection is the credential, established through the
+	// server's provider connect routes) and an empty key is OK.
+	oauthConnect := false
 	if err != nil {
 		// Gate-open web-cookie surface: the catalog refuses to
 		// resolve cookie auth (it is ToS-grey, auth.go); with the
@@ -851,6 +917,31 @@ func (r *Registry) AddCatalogWithOptions(ctx context.Context, catalogID, apiKey 
 			res.Headers = headers
 			res.Wire = catalog.WireFormat(wire)
 			err = nil
+		}
+	}
+	if err != nil {
+		// A3 W2: OAuth connect-first / honest-refusal branch, keyed on
+		// the ENDPOINT's AuthKind (not the error text): a described
+		// OAuth exchange refuses with ErrExchangeRequired, a bare
+		// AuthOAuth surface refuses with its own "without an exchange
+		// description" message — both route through the per-provider
+		// OAuth handler registry here. Implemented: the provider is
+		// added CONNECT-FIRST — no credential exists to test at add
+		// time, the OAuth connection IS the credential and is
+		// established afterwards through the server's provider connect
+		// routes; per-request resolution errors honestly until the
+		// operator connects. Unimplemented: refused with the
+		// registry's documented reason — a specific, explainable
+		// refusal instead of a generic exchange error. The ToS-grey
+		// gate above already fired for ToS-grey entries, unchanged.
+		connect, refusal := oauthAddBranch(entry, endpoint, opts.Variant)
+		switch {
+		case refusal != nil:
+			return nil, refusal
+		case connect:
+			res.Headers = map[string]string{}
+			err = nil
+			oauthConnect = true
 		}
 	}
 	if err != nil {
@@ -907,12 +998,16 @@ func (r *Registry) AddCatalogWithOptions(ctx context.Context, catalogID, apiKey 
 		return nil, fmt.Errorf("catalog provider %q (%s) has an unresolved templated base URL %q; supply the template parameters or a concrete base URL via the base-URL override", entry.ID, entry.Name, baseURL)
 	}
 	// The endpoint's auth kind decides whether an empty key is OK
-	// (local / no-auth surfaces take no credential at all).
-	allowEmptyKey := false
-	if ep, ok := entry.Endpoint(endpoint, opts.Variant); ok {
-		allowEmptyKey = ep.AuthKind == catalog.AuthNone
-	} else {
-		allowEmptyKey = entry.DefaultAuthKind() == catalog.AuthNone
+	// (local / no-auth surfaces take no credential at all). A
+	// connect-first OAuth add takes no credential either — the OAuth
+	// connection is the credential.
+	allowEmptyKey := oauthConnect
+	if !allowEmptyKey {
+		if ep, ok := entry.Endpoint(endpoint, opts.Variant); ok {
+			allowEmptyKey = ep.AuthKind == catalog.AuthNone
+		} else {
+			allowEmptyKey = entry.DefaultAuthKind() == catalog.AuthNone
+		}
 	}
 	return r.addProvider(ctx, addInput{
 		name:          entry.Name,
@@ -921,6 +1016,7 @@ func (r *Registry) AddCatalogWithOptions(ctx context.Context, catalogID, apiKey 
 		authHeaders:   res.Headers,
 		wireFormat:    string(res.Wire),
 		allowEmptyKey: allowEmptyKey,
+		oauthConnect:  oauthConnect,
 		catalogID:     entry.ID,
 		verification:  string(entry.Verification),
 		authEndpoint:  endpoint,
