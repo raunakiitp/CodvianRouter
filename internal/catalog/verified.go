@@ -1017,4 +1017,117 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://docs.jina.ai/",
 		Notes:        "Foundation API on api.jina.ai: embeddings, rerank, and chat (document OCR uses the chat-completions schema). Reader and Search are separate hosts (r.jina.ai, s.jina.ai).",
 	},
+	{
+		// Verified 2026-11-27 against Lambda's own inference-API docs:
+		// the OpenAI-compatible gateway base, plus the legacy host the
+		// same docs still reference.
+		ID:          "lambda-ai",
+		Name:        "Lambda AI",
+		Website:     "https://lambda.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.lambda.ai/v1", "https://api.lambdalabs.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.lambda.ai/public-cloud/lambda-inference-api/",
+		Notes:        "OpenAI-compatible chat/completions gateway; primary base api.lambda.ai/v1 with the legacy api.lambdalabs.com/v1 still serving the same surface.",
+	},
+	{
+		// Verified 2026-11-27 against Featherless's own getting-started
+		// and speech guides (chat + audio/speech on one base).
+		ID:          "featherless-ai",
+		Name:        "Featherless AI",
+		Website:     "https://featherless.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.featherless.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://featherless.ai/docs/api-overview-and-common-options",
+		Notes:        "OpenAI-compatible chat and audio/speech; Bearer FEATHERLESS_API_KEY.",
+	},
+	{
+		// Verified 2026-11-27 against the Kimi API platform docs: the
+		// OpenAI surface (chat + responses) shares one base, and an
+		// Anthropic-format surface lives at the /anthropic path.
+		ID:          "moonshot",
+		Name:        "Kimi",
+		Website:     "https://platform.kimi.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.moonshot.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointMessages, AuthKind: AuthBearer, HeaderName: "Authorization", BaseURL: "https://api.moonshot.ai/anthropic"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://platform.kimi.ai/docs/api/overview",
+		Notes:        "OpenAI chat/responses at api.moonshot.ai/v1; Anthropic Messages at api.moonshot.ai/anthropic/v1/messages; Bearer MOONSHOT_API_KEY.",
+	},
+	{
+		// Verified 2026-11-27 against 01.AI's own platform docs
+		// (api.01.ai) and the Lingyiwanwu platform docs (the same Yi
+		// family behind a second host) - both are the provider's own
+		// documentation, so both bases are recorded.
+		ID:          "yi",
+		Name:        "Yi (01.AI)",
+		Website:     "https://01.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.01.ai/v1", "https://api.lingyiwanwu.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://platform.01.ai/docs",
+		Notes:        "OpenAI-compatible chat for the Yi family; two documented bases (api.01.ai and the Lingyiwanwu platform).",
+	},
+	{
+		// Verified 2026-11-27 against Baidu's own Qianfan docs: the
+		// v2 OpenAI-compatible surface (chat + embeddings).
+		ID:          "qianfan",
+		Name:        "Baidu Qianfan",
+		Website:     "https://cloud.baidu.com/product-s/qianfan_home",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://qianfan.baidubce.com/v2"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointEmbeddings, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://intl.cloud.baidu.com/doc/qianfan/index.html",
+		Notes:        "OpenAI-compatible v2 surface hosting ERNIE and open models; Bearer QIANFAN_API_KEY.",
+	},
+	{
+		// Verified 2026-11-27 against Heroku's own dev center: the
+		// Managed Inference add-on exposes an INFERENCE_URL per add-on
+		// with us/eu regional hosts documented - recorded as both
+		// documented regions; the add-on's own INFERENCE_URL config
+		// var remains authoritative per app.
+		ID:          "heroku",
+		Name:        "Heroku AI",
+		Website:     "https://www.heroku.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://us.inference.heroku.com/v1", "https://eu.inference.heroku.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointEmbeddings, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointImages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointRerank, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://devcenter.heroku.com/articles/openai-compatibility-chat-completions",
+		Notes:        "Managed Inference add-on: OpenAI-compatible chat/embeddings/images/rerank; the app's INFERENCE_URL config var (us or eu) is authoritative - the recorded bases are the documented regions.",
+	},
 }

@@ -93,6 +93,12 @@ type addProviderRequest struct {
 	Variant   string   `json:"variant"`
 	Name      string   `json:"name"`
 	Models    []string `json:"models"`
+	// TemplateParams carries values for a templated catalog base
+	// URL (cloudflare-ai {account_id}, cloudflare-ai-gateway
+	// {account_id}/{gateway_id}/{provider}, snowflake-cortex
+	// ${SNOWFLAKE_ACCOUNT}). Values are validated as URL path
+	// segments by catalog.ResolveBaseURLTemplate.
+	TemplateParams map[string]string `json:"template_params,omitempty"`
 }
 
 // addedProviderResponse is the 201 payload for a created provider:
@@ -204,6 +210,7 @@ func (s *Server) handleAddProvider(w http.ResponseWriter, r *http.Request) {
 	if req.CatalogID != "" {
 		p, err = s.providerAdder.AddCatalogWithOptions(r.Context(), req.CatalogID, req.APIKey, provider.CatalogAddOptions{
 			Endpoint: req.Endpoint, Variant: req.Variant, BaseURL: req.BaseURL,
+			TemplateParams: req.TemplateParams,
 		})
 	} else {
 		p, err = s.providerAdder.AddContext(r.Context(), req.Name, req.BaseURL, req.APIKey)
@@ -351,6 +358,11 @@ type catalogEntryView struct {
 	Routable         bool   `json:"routable"`
 	HasFreeTier      bool   `json:"has_free_tier"`
 	Category         string `json:"category"`
+	// UnroutableReason is the honest, category-specific reason the
+	// entry cannot be dialed; empty exactly when Routable is true.
+	// Zero live entries are silently unroutable — the reason is
+	// pinned by TestEveryUnroutableEntryHasAReason.
+	UnroutableReason string `json:"unroutable_reason,omitempty"`
 }
 
 type catalogResponse struct {
@@ -446,6 +458,7 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
 			HasBaseURL: hasBase, TemplatedBaseURL: templated,
 			Routable:    e.Routable(),
 			HasFreeTier: e.HasFreeTier, Category: string(e.Category),
+			UnroutableReason: e.UnroutableReason(),
 		})
 	}
 	writeJSON(w, http.StatusOK, catalogResponse{Providers: out, Total: len(out), FreeTier: buildFreeTierView()})
