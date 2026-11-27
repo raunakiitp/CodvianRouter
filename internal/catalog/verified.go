@@ -1222,4 +1222,60 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://docs.volcengine.com/docs/ark/base-url-and-authentication?lang=zh",
 		Notes:        "Ark data plane at ark.cn-beijing.volces.com/api/v3 (chat/completions, responses, messages, image/video generation); API-Key auth; region hosts vary per deployment per the docs.",
 	},
+	{
+		// Verified 2026-11-27 against Z.ai's own devpack quick-start
+		// (GLM Coding Plan endpoint guide): Anthropic Messages at
+		// api.z.ai/api/anthropic, OpenAI chat completions at
+		// api.z.ai/api/coding/paas/v4, OpenAI Responses at api.z.ai/api/v1.
+		ID:          "glm",
+		Name:        "GLM Coding",
+		Website:     "https://z.ai/subscribe",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.z.ai/api/coding/paas/v4", "https://api.z.ai/api/anthropic", "https://api.z.ai/api/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization", BaseURL: "https://api.z.ai/api/v1"},
+			{Endpoint: EndpointAnthropic, AuthKind: AuthBearer, HeaderName: "Authorization", BaseURL: "https://api.z.ai/api/anthropic"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.z.ai/devpack/quick-start",
+		Notes:        "GLM Coding Plan serves all three protocols on dedicated bases (Anthropic Messages, OpenAI chat completions, OpenAI Responses); coding-plan API keys are separate from standard model-API keys per the docs.",
+	},
+	{
+		// Verified 2026-11-27 against the Kimi API platform's own docs
+		// (the platform doc set calls the service Kimi; the legacy
+		// Moonshot API base carries the OpenAI and Anthropic surfaces).
+		ID:          "kimi",
+		Name:        "Kimi (Legacy Moonshot API)",
+		Website:     "https://platform.kimi.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.moonshot.ai/v1", "https://api.moonshot.ai/anthropic"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointAnthropic, AuthKind: AuthBearer, HeaderName: "Authorization", BaseURL: "https://api.moonshot.ai/anthropic"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://platform.kimi.ai/docs/api/overview",
+		Notes:        "Kimi API platform: OpenAI chat/responses at api.moonshot.ai/v1, Anthropic Messages at api.moonshot.ai/anthropic; Bearer MOONSHOT_API_KEY (same platform the moonshot entry documents).",
+	},
+	{
+		// Verified 2026-11-27 against Arcee's own docs: the platform
+		// API is OpenAI-compatible at api.arcee.ai/api/v1.
+		ID:          "arcee-ai",
+		Name:        "Arcee AI",
+		Website:     "https://arcee.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.arcee.ai/api/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.arcee.ai/api-reference/your-first-api-call",
+		Notes:        "OpenAI-compatible chat completions at api.arcee.ai/api/v1/chat/completions; Bearer; reasoning field surfaced on assistant messages per the docs.",
+	},
 }

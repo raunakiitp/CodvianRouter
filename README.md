@@ -153,12 +153,12 @@ Routing behaviour is pinned by tests across `internal/router`,
 
 The catalog is data, and it is explicit about what each entry can do:
 
-| Metric | Count (audit 2026-11-21; A1 base-URL batches 1-3, 2026-11-27) |
+| Metric | Count (audit 2026-11-21; A1 base-URL batches 1-4, 2026-11-27) |
 |---|---|
 | Active catalog entries | **609** (5 retired — including the cheaperinference removal, owner decision 2026-11-27) |
-| With a base URL the router can call | **396** (387 routable + 9 template-only) |
-| Metadata-only (no base URL) | **213** |
-| Docs-verified | 82 |
+| With a base URL the router can call | **399** (390 routable + 9 template-only) |
+| Metadata-only (no base URL) | **210** |
+| Docs-verified | 85 |
 | By category | api-key 475 · oauth 31 · web-cookie 37 · search 21 · local 18 · audio 12 · no-auth 10 · cloud-agent 3 · upstream-proxy 2 |
 
 A catalog entry is a starting point, **not a promise**: nothing routes
@@ -491,7 +491,7 @@ Browse what the catalog offers with `./codvian-router catalog`.
 | Implemented and verified (tests + local run) | OpenAI-compatible chat, models, embeddings, rerank, Responses; the 40 routing strategies and combos; failover, hedging, health checks, cooldowns; exact and semantic cache; compression; ledger, cost tracking, reservations, per-key budgets and quota pools; guardrails; gateway keys and OAuth/JWT clients; `/admin/restart` (real relaunch); `/admin/update` (release check only); SSRF-safe `/v1/web/fetch`; OpenRouter OAuth PKCE and Azure Entra ID login (deterministic mock auth-host tests — see the auth matrix for evidence tiers) |
 | Implemented, mock-tested upstream | Provider-specific wires (Anthropic, Gemini, Vertex, Bedrock, Cohere), audio, images, video, music, OCR and search passthroughs |
 | Supported with external login | Claude — you obtain the subscription token; the router dials with it and does not perform the login |
-| Metadata only | 213 catalog entries without a base URL, web-cookie entries, and subscription-OAuth entries that would need an unbuilt sign-in flow |
+| Metadata only | 210 catalog entries without a base URL, web-cookie entries, and subscription-OAuth entries that would need an unbuilt sign-in flow |
 | Unsupported or deferred (`501 feature_unavailable`) | System service install, dynamic plugin loading, and 63 dashboard-era routes whose settings were never applied |
 
 `scripts/audit-fake.sh` enforces this contract statically: a canned
