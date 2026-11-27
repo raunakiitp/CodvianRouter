@@ -2382,7 +2382,7 @@ func DetectWireFormat(ctx context.Context, baseURL, apiKey string, authHeaders m
 		return WireFormatUnknown, nil
 	}
 	payload := []byte(`{"model":"__codvian_router_probe__","messages":[{"role":"user","content":"hi"}],"max_tokens":1,"stream":false}`)
-	httpReq, err := probeClient.newRequest(ctx, http.MethodPost, probeClient.chatURL(), payload)
+	httpReq, err := probeClient.newRequest(ctx, http.MethodPost, probeClient.chatURLForModel("__codvian_router_probe__"), payload)
 	if err != nil {
 		return "", err
 	}
