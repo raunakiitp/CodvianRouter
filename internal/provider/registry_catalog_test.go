@@ -523,13 +523,21 @@ func TestRegistryAddCatalogOAuthRefusalCarriesReason(t *testing.T) {
 
 	var target providers.Info
 	for _, in := range providers.All() {
-		if !in.Implemented && !in.ImportOnly && in.Reason != "" {
-			target = in
-			break
+		if in.Implemented || in.ImportOnly || in.Reason == "" {
+			continue
 		}
+		// Only an actually-OAuth catalog surface reaches the W2 branch;
+		// an unimplemented entry whose catalog surface is a static
+		// credential refuses through the ordinary auth resolution.
+		entry, err := lookupCatalog(in.ID)
+		if err != nil || entry.DefaultEndpointAuth().AuthKind != catalog.AuthOAuth {
+			continue
+		}
+		target = in
+		break
 	}
 	if target.ID == "" {
-		t.Skip("every catalog OAuth provider is implemented; nothing to refuse")
+		t.Skip("no unimplemented OAuth-surface provider remains; nothing to refuse")
 	}
 
 	_, err := reg.AddCatalogWithOptions(context.Background(), target.ID, "", CatalogAddOptions{BaseURL: srv.URL})
