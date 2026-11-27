@@ -9,7 +9,10 @@ package providers
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -741,6 +744,406 @@ func TestPendingClassification(t *testing.T) {
 	}
 	if _, err := h.PollDevice(e2eCtx, srv.Client(), nil); err == nil {
 		t.Errorf("poll without an offer: want error, got nil")
+	}
+}
+
+// TestCursorHandlerE2E — PKCE authorize URL with the operator's
+// dashboard-registered client, Basic-authenticated code exchange and
+// rotating refresh at the documented token endpoint.
+func TestCursorHandlerE2E(t *testing.T) {
+	t.Setenv(cursorClientIDEnv, "oauth_client_cursor-1")
+	t.Setenv(cursorClientSecretEnv, "cursor-secret-1")
+	wantBasic := "Basic " + base64.StdEncoding.EncodeToString([]byte("oauth_client_cursor-1:cursor-secret-1"))
+	var exchanged, refreshed int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/oauth/applications/token", func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != wantBasic {
+			t.Errorf("Authorization = %q, want HTTP Basic client auth", got)
+		}
+		body := readBody(t, r)
+		switch body["grant_type"] {
+		case "authorization_code":
+			exchanged++
+			if body["code"] != "cursor-code-1" {
+				t.Errorf("code = %q", body["code"])
+			}
+			if body["redirect_uri"] != "http://127.0.0.1:4545/callback" {
+				t.Errorf("redirect_uri = %q", body["redirect_uri"])
+			}
+			if len(body["code_verifier"]) < 43 {
+				t.Errorf("code_verifier = %q, want an RFC 7636 verifier", body["code_verifier"])
+			}
+			if body["client_id"] != "" || body["client_secret"] != "" {
+				t.Errorf("client credentials must ride the Basic header, not the body: %v", body)
+			}
+			writeJSONToken(t, w, map[string]any{
+				"access_token": "cursor-at-1", "refresh_token": "cursor-rt-1",
+				"token_type": "Bearer", "expires_in": 3600, "scope": cursorScope,
+			})
+		case "refresh_token":
+			refreshed++
+			if body["refresh_token"] != "cursor-rt-1" {
+				t.Errorf("refresh_token = %q, want the stored one", body["refresh_token"])
+			}
+			writeJSONToken(t, w, map[string]any{
+				"access_token": "cursor-at-2", "refresh_token": "cursor-rt-2",
+				"token_type": "Bearer", "expires_in": 3600,
+			})
+		default:
+			t.Errorf("unexpected grant_type %q", body["grant_type"])
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	SetEndpointsForTest(t, "cursor", map[string]string{
+		"auth":  srv.URL + "/oauth/authorize",
+		"token": srv.URL + "/oauth/applications/token",
+	})
+
+	h, err := Get("cursor")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	state, authURL, verifier, err := h.StartAuthorization("http://127.0.0.1:4545/callback")
+	if err != nil {
+		t.Fatalf("StartAuthorization: %v", err)
+	}
+	u, err := url.Parse(authURL)
+	if err != nil {
+		t.Fatalf("authorize URL: %v", err)
+	}
+	q := u.Query()
+	if q.Get("response_type") != "code" || q.Get("client_id") != "oauth_client_cursor-1" ||
+		q.Get("redirect_uri") != "http://127.0.0.1:4545/callback" ||
+		q.Get("state") != state || q.Get("code_challenge_method") != "S256" ||
+		q.Get("code_challenge") != s256(verifier) || q.Get("scope") != cursorScope {
+		t.Errorf("authorize params = %v (state=%s verifier=%s)", q, state, verifier)
+	}
+
+	tr, err := h.ExchangeCode(e2eCtx, srv.Client(), "cursor-code-1", "http://127.0.0.1:4545/callback", verifier)
+	if err != nil {
+		t.Fatalf("ExchangeCode: %v", err)
+	}
+	if tr.AccessToken != "cursor-at-1" || tr.RefreshToken != "cursor-rt-1" || tr.ExpiresIn != 3600 {
+		t.Errorf("exchange result = %+v", tr)
+	}
+	if tr.TokenURL == "" {
+		t.Errorf("exchange result carries no refresh TokenURL")
+	}
+
+	tr2, err := h.Refresh(e2eCtx, srv.Client(), tr.RefreshToken)
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	// Cursor's documented rotation: a new refresh token every refresh.
+	if tr2.AccessToken != "cursor-at-2" || tr2.RefreshToken != "cursor-rt-2" {
+		t.Errorf("refresh result = %+v, want the rotated pair", tr2)
+	}
+	if exchanged != 1 || refreshed != 1 {
+		t.Errorf("mock hits: exchange=%d refresh=%d, want 1/1", exchanged, refreshed)
+	}
+}
+
+// TestCursorUnconfiguredClientRefused — no invented client: without the
+// operator's dashboard application credentials the flow refuses.
+func TestCursorUnconfiguredClientRefused(t *testing.T) {
+	t.Setenv(cursorClientIDEnv, "")
+	t.Setenv(cursorClientSecretEnv, "")
+	h, err := Get("cursor")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, _, _, err := h.StartAuthorization("http://127.0.0.1/cb"); err == nil ||
+		!strings.Contains(err.Error(), cursorClientIDEnv) {
+		t.Errorf("StartAuthorization error = %v, want it to name %s", err, cursorClientIDEnv)
+	}
+	if _, err := h.ExchangeCode(e2eCtx, nil, "c", "u", "v"); err == nil {
+		t.Errorf("ExchangeCode without configured client: want refusal, got nil")
+	}
+	if _, err := h.Refresh(e2eCtx, nil, "r"); err == nil {
+		t.Errorf("Refresh without configured client: want refusal, got nil")
+	}
+}
+
+// TestGHECopilotHandlerE2E — the Enterprise Cloud data-residency device
+// flow: device start and poll on the operator's SUBDOMAIN.ghe.com host,
+// Copilot API-token exchange at api.<host>, refresh via re-exchange.
+func TestGHECopilotHandlerE2E(t *testing.T) {
+	t.Setenv(gheHostEnv, "octocorp.ghe.com")
+	polls := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("/login/device/code", func(w http.ResponseWriter, r *http.Request) {
+		form := readBody(t, r)
+		if form["client_id"] != copilotClientID || form["scope"] != "read:user" {
+			t.Errorf("device request = %v", form)
+		}
+		writeJSONToken(t, w, map[string]any{
+			"device_code": "dc-ghe-1", "user_code": "GHEX-1234",
+			"verification_uri": "https://octocorp.ghe.com/login/device", "interval": 5, "expires_in": 899,
+		})
+	})
+	mux.HandleFunc("/login/oauth/access_token", func(w http.ResponseWriter, r *http.Request) {
+		form := readBody(t, r)
+		polls++
+		if form["grant_type"] != "urn:ietf:params:oauth:grant-type:device_code" ||
+			form["device_code"] != "dc-ghe-1" || form["client_id"] != copilotClientID {
+			t.Errorf("device poll = %v", form)
+		}
+		if polls == 1 {
+			w.WriteHeader(http.StatusForbidden)
+			writeJSONToken(t, w, map[string]any{"error": "authorization_pending"})
+			return
+		}
+		writeJSONToken(t, w, map[string]any{"access_token": "gho-ghe-1", "token_type": "bearer"})
+	})
+	mux.HandleFunc("/copilot_internal/v2/token", func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "token gho-ghe-1" {
+			t.Errorf("Authorization = %q, want the GitHub OAuth token", got)
+		}
+		if r.Header.Get("Editor-Version") == "" || r.Header.Get("Editor-Plugin-Version") == "" {
+			t.Errorf("editor headers missing: %v", r.Header)
+		}
+		writeJSONToken(t, w, map[string]any{"token": "ghe-copilot-jwt-1", "expires_in": 1800})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	SetEndpointsForTest(t, "ghe-copilot", map[string]string{
+		"device":   srv.URL + "/login/device/code",
+		"token":    srv.URL + "/login/oauth/access_token",
+		"exchange": srv.URL + "/copilot_internal/v2/token",
+	})
+
+	h, err := Get("ghe-copilot")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, _, _, err := h.StartAuthorization("http://127.0.0.1/x"); !errIs(err, ErrNotCodeFlow) {
+		t.Errorf("StartAuthorization error = %v, want ErrNotCodeFlow", err)
+	}
+	dc, err := h.StartDevice(e2eCtx, srv.Client())
+	if err != nil {
+		t.Fatalf("StartDevice: %v", err)
+	}
+	if dc.UserCode != "GHEX-1234" || dc.VerificationURI == "" {
+		t.Errorf("device offer = %+v", dc)
+	}
+	if _, err := h.PollDevice(e2eCtx, srv.Client(), dc); !errIs(err, ErrAuthorizationPending) {
+		t.Errorf("first poll error = %v, want ErrAuthorizationPending", err)
+	}
+	tr, err := h.PollDevice(e2eCtx, srv.Client(), dc)
+	if err != nil {
+		t.Fatalf("second poll: %v", err)
+	}
+	if tr.AccessToken != "ghe-copilot-jwt-1" || tr.RefreshToken != "gho-ghe-1" || tr.ExpiresIn != 1800 {
+		t.Errorf("poll result = %+v", tr)
+	}
+	tr2, err := h.Refresh(e2eCtx, srv.Client(), tr.RefreshToken)
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if tr2.AccessToken != "ghe-copilot-jwt-1" || tr2.RefreshToken != "gho-ghe-1" {
+		t.Errorf("refresh result = %+v, want the same GitHub credential kept", tr2)
+	}
+	if polls != 2 {
+		t.Errorf("mock polls = %d, want 2", polls)
+	}
+}
+
+// TestGHECopilotUnconfiguredHostRefused — no invented host: without the
+// operator's Enterprise Cloud host the flow refuses instead of falling
+// back to github.com.
+func TestGHECopilotUnconfiguredHostRefused(t *testing.T) {
+	t.Setenv(gheHostEnv, "")
+	h, err := Get("ghe-copilot")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, err := h.StartDevice(e2eCtx, nil); err == nil || !strings.Contains(err.Error(), gheHostEnv) {
+		t.Errorf("StartDevice error = %v, want it to name %s", err, gheHostEnv)
+	}
+	if _, err := h.PollDevice(e2eCtx, nil, &DeviceCode{state: map[string]string{"device_code": "x"}}); err == nil {
+		t.Errorf("PollDevice without configured host: want refusal, got nil")
+	}
+	if _, err := h.Refresh(e2eCtx, nil, "r"); err == nil {
+		t.Errorf("Refresh without configured host: want refusal, got nil")
+	}
+}
+
+// TestXAIHandlersE2E covers xai-oauth AND grok-cli — the auth.x.ai
+// device flow from the official Grok Build CLI's published surface,
+// with the standard refresh_token grant.
+func TestXAIHandlersE2E(t *testing.T) {
+	for _, id := range []string{"xai-oauth", "grok-cli"} {
+		t.Run(id, func(t *testing.T) {
+			var polls, refreshed int
+			mux := http.NewServeMux()
+			mux.HandleFunc("/oauth2/device/code", func(w http.ResponseWriter, r *http.Request) {
+				form := readBody(t, r)
+				if form["client_id"] != xaiClientID || form["scope"] != xaiScope || form["referrer"] == "" {
+					t.Errorf("device request = %v", form)
+				}
+				writeJSONToken(t, w, map[string]any{
+					"device_code": "dc-xai-1", "user_code": "GROK-1234",
+					"verification_uri": "https://accounts.x.ai/device", "interval": 5, "expires_in": 300,
+				})
+			})
+			mux.HandleFunc("/oauth2/token", func(w http.ResponseWriter, r *http.Request) {
+				form := readBody(t, r)
+				switch form["grant_type"] {
+				case "urn:ietf:params:oauth:grant-type:device_code":
+					polls++
+					if form["client_id"] != xaiClientID || form["device_code"] != "dc-xai-1" {
+						t.Errorf("device poll = %v", form)
+					}
+					if polls == 1 {
+						w.WriteHeader(http.StatusBadRequest)
+						writeJSONToken(t, w, map[string]any{"error": "authorization_pending"})
+						return
+					}
+					writeJSONToken(t, w, map[string]any{
+						"access_token": "xai-at-1", "refresh_token": "xai-rt-1",
+						"token_type": "bearer", "expires_in": 3600,
+					})
+				case "refresh_token":
+					refreshed++
+					if form["client_id"] != xaiClientID || form["refresh_token"] != "xai-rt-1" {
+						t.Errorf("refresh form = %v", form)
+					}
+					writeJSONToken(t, w, map[string]any{
+						"access_token": "xai-at-2", "refresh_token": "xai-rt-2",
+						"token_type": "bearer", "expires_in": 3600,
+					})
+				default:
+					t.Errorf("unexpected grant_type %q", form["grant_type"])
+					w.WriteHeader(http.StatusBadRequest)
+				}
+			})
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+			SetEndpointsForTest(t, id, map[string]string{
+				"device": srv.URL + "/oauth2/device/code",
+				"token":  srv.URL + "/oauth2/token",
+			})
+
+			h, err := Get(id)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if _, _, _, err := h.StartAuthorization("http://127.0.0.1/x"); !errIs(err, ErrNotCodeFlow) {
+				t.Errorf("StartAuthorization error = %v, want ErrNotCodeFlow", err)
+			}
+			dc, err := h.StartDevice(e2eCtx, srv.Client())
+			if err != nil {
+				t.Fatalf("StartDevice: %v", err)
+			}
+			if dc.UserCode != "GROK-1234" || dc.VerificationURI == "" {
+				t.Errorf("device offer = %+v", dc)
+			}
+			if _, err := h.PollDevice(e2eCtx, srv.Client(), dc); !errIs(err, ErrAuthorizationPending) {
+				t.Errorf("first poll error = %v, want pending", err)
+			}
+			tr, err := h.PollDevice(e2eCtx, srv.Client(), dc)
+			if err != nil {
+				t.Fatalf("second poll: %v", err)
+			}
+			if tr.AccessToken != "xai-at-1" || tr.RefreshToken != "xai-rt-1" {
+				t.Errorf("poll result = %+v", tr)
+			}
+			if tr.TokenURL == "" {
+				t.Errorf("poll result carries no refresh TokenURL")
+			}
+			tr2, err := h.Refresh(e2eCtx, srv.Client(), tr.RefreshToken)
+			if err != nil {
+				t.Fatalf("Refresh: %v", err)
+			}
+			if tr2.AccessToken != "xai-at-2" {
+				t.Errorf("refresh result = %+v", tr2)
+			}
+			if polls != 2 || refreshed != 1 {
+				t.Errorf("mock hits: polls=%d refresh=%d, want 2/1", polls, refreshed)
+			}
+		})
+	}
+}
+
+// TestZedHandlersE2E covers zed AND zed-hosted — Zed's native-app
+// sign-in: the RSA public key rides the authorize URL, the callback's
+// access_token arrives encrypted to it (RSA-OAEP SHA-256), and there
+// is no refresh grant (documented: the token lasts until Zed refuses
+// it).
+func TestZedHandlersE2E(t *testing.T) {
+	for _, id := range []string{"zed", "zed-hosted"} {
+		t.Run(id, func(t *testing.T) {
+			h, err := Get(id)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			state, authURL, verifier, err := h.StartAuthorization("http://127.0.0.1:57575/zed/callback")
+			if err != nil {
+				t.Fatalf("StartAuthorization: %v", err)
+			}
+			u, err := url.Parse(authURL)
+			if err != nil {
+				t.Fatalf("authorize URL: %v", err)
+			}
+			if got := u.Scheme + "://" + u.Host + u.Path; got != "https://zed.dev/native_app_signin" {
+				t.Errorf("authorize URL = %q", got)
+			}
+			q := u.Query()
+			if q.Get("native_app_port") != "57575" || q.Get("system_id") == "" {
+				t.Errorf("authorize params = %v", q)
+			}
+			// Recover the public key the URL carries and encrypt a fake
+			// callback token to it, the way zed.dev does. Zed takes the
+			// key as URL-safe base64 WITH padding (Rust URL_SAFE).
+			pubDER, err := base64.URLEncoding.DecodeString(q.Get("native_app_public_key"))
+			if err != nil {
+				t.Fatalf("native_app_public_key: %v", err)
+			}
+			pub, err := x509.ParsePKCS1PublicKey(pubDER)
+			if err != nil {
+				t.Fatalf("parse public key: %v", err)
+			}
+			ct, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, pub, []byte("zed-access-token-1"), nil)
+			if err != nil {
+				t.Fatalf("encrypt: %v", err)
+			}
+			code := base64.RawURLEncoding.EncodeToString(ct)
+
+			tr, err := h.ExchangeCode(e2eCtx, http.DefaultClient, code, "http://127.0.0.1:57575/zed/callback", verifier)
+			if err != nil {
+				t.Fatalf("ExchangeCode: %v", err)
+			}
+			if tr.AccessToken != "zed-access-token-1" || tr.TokenType != "bearer" {
+				t.Errorf("exchange result = %+v", tr)
+			}
+			// No refresh grant: the honest refusal.
+			if _, err := h.Refresh(e2eCtx, http.DefaultClient, "whatever"); !errIs(err, ErrNoRefresh) {
+				t.Errorf("Refresh error = %v, want ErrNoRefresh", err)
+			}
+			// The verifier state must be bound to the session: a stale
+			// verifier cannot decrypt the callback.
+			if _, err := h.ExchangeCode(e2eCtx, http.DefaultClient, code, "", "{}"); err == nil {
+				t.Errorf("ExchangeCode with a foreign verifier: want refusal, got nil")
+			}
+			_ = state
+		})
+	}
+}
+
+// TestZedRedirectRequiresLoopbackPort — zed.dev sends the browser back
+// to the port, so a portless redirect URI is refused.
+func TestZedRedirectRequiresLoopbackPort(t *testing.T) {
+	h, err := Get("zed")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, _, _, err := h.StartAuthorization(""); err == nil {
+		t.Errorf("StartAuthorization with empty redirect: want refusal, got nil")
+	}
+	if _, _, _, err := h.StartAuthorization("https://app.example.com/callback"); err == nil {
+		t.Errorf("StartAuthorization without a port: want refusal, got nil")
 	}
 }
 

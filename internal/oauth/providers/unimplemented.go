@@ -19,19 +19,6 @@ type unimplementedInfo struct {
 // docs (or an official open-source client) publish the surface.
 var unimplemented = []unimplementedInfo{
 	{
-		id:   "ghe-copilot",
-		name: "GitHub Enterprise Copilot",
-		reason: "GitHub documents the Copilot device flow for GitHub.com; on GitHub Enterprise the flow needs the operator's GHE host and an instance-registered OAuth app, " +
-			"and GitHub.com's public Copilot client credentials are not valid there — no documented generic flow to implement.",
-	},
-	{
-		id:    "xai-oauth",
-		name:  "xAI OAuth (Grok)",
-		alias: "xao",
-		reason: "xAI's Grok CLI documents OAuth sign-in (auth.x.ai) and a device-code mode, but publishes no endpoint paths or client IDs (the CLI carries them internally); " +
-			"inventing them would fabricate the flow.",
-	},
-	{
 		id:     "openference",
 		name:   "Openference",
 		reason: "no public OAuth endpoint documentation found for Openference; the provider documents API-key access only.",
@@ -42,33 +29,10 @@ var unimplemented = []unimplementedInfo{
 		reason: "no public OAuth endpoint documentation found for RenderHour.",
 	},
 	{
-		id:     "grok-cli",
-		name:   "Grok Build",
-		alias:  "gc",
-		reason: "the Grok CLI documents OAuth sign-in at auth.x.ai plus a device-code mode, but publishes no endpoint paths or client IDs; refusing to invent endpoints.",
-	},
-	{
 		id:     "qoder",
 		name:   "Qoder",
 		alias:  "if",
 		reason: "no public OAuth endpoint documentation found for Qoder.",
-	},
-	{
-		id:     "cursor",
-		name:   "Cursor IDE",
-		alias:  "cu",
-		reason: "Cursor documents API keys for its API (cursor.com/dashboard/api); its IDE OAuth surface is undocumented.",
-	},
-	{
-		id:     "zed",
-		name:   "Zed IDE",
-		alias:  "zd",
-		reason: "Zed's hosted-model authentication is internal to the editor account; no OAuth endpoints are published.",
-	},
-	{
-		id:     "zed-hosted",
-		name:   "Zed Hosted Models",
-		reason: "Zed's hosted-model authentication is internal to the editor account; no OAuth endpoints are published.",
 	},
 	{
 		id:     "trae",
