@@ -19,13 +19,6 @@ type unimplementedInfo struct {
 // docs (or an official open-source client) publish the surface.
 var unimplemented = []unimplementedInfo{
 	{
-		id:    "xai-oauth",
-		name:  "xAI OAuth (Grok)",
-		alias: "xao",
-		reason: "xAI's Grok CLI documents OAuth sign-in (auth.x.ai) and a device-code mode, but publishes no endpoint paths or client IDs (the CLI carries them internally); " +
-			"inventing them would fabricate the flow.",
-	},
-	{
 		id:     "openference",
 		name:   "Openference",
 		reason: "no public OAuth endpoint documentation found for Openference; the provider documents API-key access only.",
@@ -36,27 +29,10 @@ var unimplemented = []unimplementedInfo{
 		reason: "no public OAuth endpoint documentation found for RenderHour.",
 	},
 	{
-		id:     "grok-cli",
-		name:   "Grok Build",
-		alias:  "gc",
-		reason: "the Grok CLI documents OAuth sign-in at auth.x.ai plus a device-code mode, but publishes no endpoint paths or client IDs; refusing to invent endpoints.",
-	},
-	{
 		id:     "qoder",
 		name:   "Qoder",
 		alias:  "if",
 		reason: "no public OAuth endpoint documentation found for Qoder.",
-	},
-	{
-		id:     "zed",
-		name:   "Zed IDE",
-		alias:  "zd",
-		reason: "Zed's hosted-model authentication is internal to the editor account; no OAuth endpoints are published.",
-	},
-	{
-		id:     "zed-hosted",
-		name:   "Zed Hosted Models",
-		reason: "Zed's hosted-model authentication is internal to the editor account; no OAuth endpoints are published.",
 	},
 	{
 		id:     "trae",

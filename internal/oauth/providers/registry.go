@@ -95,6 +95,10 @@ func init() {
 	register(&awsDeviceHandler{info: amazonQInfo()})
 	register(&cursorHandler{})
 	register(&gheCopilotHandler{})
+	register(&xaiDeviceHandler{info: xaiOAuthInfo()})
+	register(&xaiDeviceHandler{info: grokCLIInfo()})
+	register(&zedHandler{info: zedInfo()})
+	register(&zedHandler{info: zedHostedInfo()})
 	registerImportOnly(Info{
 		ID:          "antigravity",
 		Name:        "Antigravity",
@@ -114,7 +118,7 @@ func init() {
 		DocsURL:     pasteImportDocsURL,
 		Reason:      "",
 	})
-	// The remaining 17 catalog OAuth providers have no publicly
+	// The remaining 13 catalog OAuth providers have no publicly
 	// documented OAuth surface; the registry lists them with the
 	// reason so the refusal is explainable, never silent.
 	for _, u := range unimplemented {
