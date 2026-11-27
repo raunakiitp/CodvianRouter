@@ -1730,4 +1730,55 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://www.xfyun.cn/doc/spark/HTTP%E8%B0%83%E7%94%A8%E6%96%87%E6%A1%A3.html",
 		Notes:        "Spark HTTP API (Lite/Pro/Max/Ultra versions) at spark-api-open.xf-yun.com/v1/chat/completions; Bearer APIPassword from the console; system role and function calling supported on Ultra/Max.",
 	},
+	{
+		// Verified 2026-11-27 against Ideogram's own quickstart: the
+		// v2 generate endpoints live at api.ideogram.ai/v2 with the
+		// key sent in the Api-Key header.
+		ID:          "ideogram",
+		Name:        "Ideogram",
+		Website:     "https://ideogram.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.ideogram.ai/v2"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointImages, AuthKind: AuthXAPIKey, HeaderName: "Api-Key"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://developer.ideogram.ai/v2/ideogram-api/quickstart",
+		Notes:        "Image generation at api.ideogram.ai/v2/image/generate/{model} (sync, or async via generation_id + GET /v2/generations/{id}); key in the Api-Key header.",
+	},
+	{
+		// Verified 2026-11-27 against Topaz's own image quickstart: the
+		// image API base api.topazlabs.com/image/v1 (async
+		// enhance-gen/status/download protocol).
+		ID:          "topaz",
+		Name:        "Topaz",
+		Website:     "https://topazlabs.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.topazlabs.com/image/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointImages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://developer.topazlabs.com/getting-started/image-quickstart",
+		Notes:        "Topaz Labs image API at api.topazlabs.com/image/v1: POST /enhance-gen/async, then poll /status/{id} and fetch /download/{id}; API key from account.topazlabs.com (auth header per the OpenAPI reference).",
+	},
+	{
+		// Verified 2026-11-27 against DeepAI's own docs: simple HTTP
+		// endpoints at api.deepai.org authenticated by the api-key
+		// header (form POSTs, not an OpenAI-shaped surface).
+		ID:          "deepai",
+		Name:        "DeepAI",
+		Website:     "https://deepai.org",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.deepai.org"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointNative, AuthKind: AuthAPIKey, HeaderName: "api-key"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://api.deepai.org/docs",
+		Notes:        "DeepAI HTTP APIs (text generation, image APIs) as form POSTs to api.deepai.org/api/<tool> with the api-key header; native DeepAI protocol.",
+	},
 }
