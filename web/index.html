@@ -1151,6 +1151,28 @@ resp = client.chat.completions.create(
           </div>
         </div>
 
+        <!-- ToS risk-acknowledgement modal (A3 item 6): the plain-words
+             risk notice for ToS-grey catalog providers (web-cookie /
+             subscription auth). The server refuses those providers
+             until the operator acknowledges the risk; this dialog
+             states the substance of the risk, records the
+             acknowledgement (POST /api/providers/{id}/risk-
+             acknowledgement, gateway-key auth), and retries the add.
+             No new framework: the same danger-dialog pattern as the
+             typed-confirmation dialog above. -->
+        <div class="danger-dialog" id="tosRiskDialog" hidden>
+          <div class="card danger-dialog-card" role="alertdialog" aria-modal="true" aria-labelledby="tosRiskTitle">
+            <div class="card-head"><h3 id="tosRiskTitle">Terms-of-service risk</h3></div>
+            <div class="card-body">
+              <p id="tosRiskText" style="margin:0 0 14px; color:var(--text-2); font-size:13.5px"></p>
+              <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:18px">
+                <button class="btn" id="tosRiskCancelBtn">Cancel</button>
+                <button class="btn danger" id="tosRiskAckBtn">I understand the risk &mdash; acknowledge and add</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Free Tier Providers (M10-2, Q20): the catalog entries
              whose feed record carries a free tier, as a visible
              addable group of their own. The live feed
@@ -5177,7 +5199,7 @@ function go(view){
     var entry = addProvCatalogEntry($("#addProvCatalog").value);
     if(!entry){ hint.textContent = ""; return; }
     var text = verificationLabel(entry.verification) + ".";
-    if(entry.tos_grey) text += " ToS-grey (web-cookie / subscription auth) — cannot be added as a routing target.";
+    if(entry.tos_grey) text += " ToS-grey (web-cookie / subscription auth) — the provider's terms may forbid this use; acknowledging the risk is required before it can be added.";
     if(entry.templated_base_url) text += " Templated base URL — fill in the concrete base URL below.";
     else if(!entry.has_base_url) text += " No base URL on file — fill in the base URL below.";
     hint.textContent = text;
@@ -5210,10 +5232,9 @@ function go(view){
         opt.value = e.id;
         opt.textContent = e.name + " (" + e.id + ")" +
           (e.verification === "verified-from-docs" ? " · verified" : "") +
-          (e.tos_grey ? " · ToS-grey — cannot be added" : "") +
+          (e.tos_grey ? " · ToS-grey — needs risk acknowledgement" : "") +
           (!e.has_base_url ? " · no base URL on file" : "") +
           (e.templated_base_url ? " · needs base URL" : "");
-        if(e.tos_grey) opt.disabled = true;
         sel.appendChild(opt);
       });
       addProvSyncCatalogHint();
@@ -5247,7 +5268,7 @@ function go(view){
       action = '<button class="btn small" data-catalog-manage="' + escHtml(e.id) + '">Manage</button>';
     } else if(e.tos_grey){
       status = '<span class="status-chip off">ToS-grey</span>';
-      action = '<button class="btn small" disabled title="ToS-grey — cannot be added as a routing target">Add</button>';
+      action = '<button class="btn small" data-catalog-add="' + escHtml(e.id) + '" title="ToS-grey — acknowledging the ToS risk is required before this can be added">Add</button>';
     } else {
       status = '<span class="status-chip off">Not added</span>';
       action = '<button class="btn small primary" data-catalog-add="' + escHtml(e.id) + '">Add</button>';
@@ -5424,12 +5445,14 @@ function go(view){
     var gwKey = $("#addProvGwKey").value.trim();
     if(!gwKey){ addProvShowError("Paste your gateway key — adding a provider requires gateway-key auth."); return; }
     var mode = $("#addProvMode").value;
+    var catalogId = null, catalogName = null; /* set for catalog adds — the ToS risk modal names the provider */
     var body = {};
     if(mode === "catalog"){
       var id = $("#addProvCatalog").value;
       if(!id){ addProvShowError("Pick a catalog provider, or switch to Custom."); return; }
       var entry = addProvCatalogEntry(id);
-      if(entry && entry.tos_grey){ addProvShowError(entry.name + " is ToS-grey (web-cookie / subscription auth) and cannot be added as a routing target."); return; }
+      catalogId = id;
+      catalogName = entry ? entry.name : id;
       body.catalog_id = id;
       var ep = $("#addProvEndpoint").value.trim(); if(ep) body.endpoint = ep;
       var va = $("#addProvVariant").value.trim(); if(va) body.variant = va;
@@ -5460,6 +5483,15 @@ function go(view){
       if(!res.ok){
         var msg = (res.body && res.body.error && res.body.error.message) ? res.body.error.message : ("Request failed (HTTP " + res.status + ")");
         if(res.status === 401 && msg.indexOf("gateway key") !== -1) msg += " — use the gateway key issued by `init` (shown once).";
+        /* A3 item 6: the server's ToS risk-acknowledgement gate
+           refused a ToS-grey provider — show the plain-words risk
+           notice and offer to acknowledge, then retry the exact
+           request that was refused. The gate decision is always the
+           server's; the dashboard never predicts it. */
+        if(res.status === 403 && msg.indexOf("ToS-grey") !== -1 && msg.indexOf("acknowledge") !== -1 && catalogId){
+          tosRiskOpen({id: catalogId, name: catalogName, body: body, gwKey: gwKey}, msg);
+          return;
+        }
         addProvShowError(msg);
         return;
       }
@@ -5473,6 +5505,76 @@ function go(view){
       $("#addProvKey").value = "";
       $("#addProvGwKey").value = "";
       btn.disabled = false; btn.textContent = "Add provider";
+      addProvShowError("Request failed: " + err.message);
+    });
+  });
+  /* ---------- ToS risk-acknowledgement modal (A3 item 6) ----------
+     The server refuses a ToS-grey provider until its risk is
+     acknowledged. When the add comes back with that refusal, this
+     dialog states the risk in plain words, records the
+     acknowledgement with the gateway key already typed in the form,
+     and retries the exact request that was refused. Nothing is sent
+     before the operator accepts; cancelling sends nothing. */
+  var tosRiskPending = null; /* { id, name, body, gwKey } while the dialog is open */
+  function tosRiskOpen(pending, serverMsg){
+    tosRiskPending = pending;
+    $("#tosRiskText").innerHTML = "<b>" + escHtml(pending.name) + "</b> (" + escHtml(pending.id) + ") is a web-cookie / subscription provider: connecting it means handing over your own session or subscription account, by your choice. The provider's terms of service may forbid this kind of use, and the account you connect can be suspended or banned. Nothing has been sent yet."
+      + (serverMsg ? "<br/><br/><span class=\'mono\' style=\'font-size:12px\'>" + escHtml(serverMsg) + "</span>" : "");
+    var dlg = $("#tosRiskDialog");
+    dlg.hidden = false;
+    openModalWithFocus(dlg);
+  }
+  function tosRiskClose(){
+    var dlg = $("#tosRiskDialog");
+    if(dlg && !dlg.hidden) closeModalReturnFocus(dlg);
+    dlg.hidden = true;
+    tosRiskPending = null;
+  }
+  $("#tosRiskCancelBtn").addEventListener("click", function(){
+    tosRiskClose();
+    addProvShowError("Add cancelled — nothing was sent; the provider was not added.");
+  });
+  $("#tosRiskAckBtn").addEventListener("click", function(){
+    var pending = tosRiskPending;
+    if(!pending){ tosRiskClose(); return; }
+    var btn = $("#tosRiskAckBtn");
+    btn.disabled = true;
+    fetch("/api/providers/" + encodeURIComponent(pending.id) + "/risk-acknowledgement", {
+      method: "POST",
+      headers: {"Authorization": "Bearer " + pending.gwKey}
+    }).then(function(r){
+      return r.json().then(function(d){ return {ok: r.ok, status: r.status, body: d}; }, function(){ return {ok: r.ok, status: r.status, body: null}; });
+    }).then(function(res){
+      btn.disabled = false;
+      if(!res.ok){
+        tosRiskClose();
+        var msg = (res.body && res.body.error && res.body.error.message) ? res.body.error.message : ("Acknowledgement failed (HTTP " + res.status + ")");
+        addProvShowError(msg);
+        return;
+      }
+      tosRiskClose();
+      /* The gate is open now — retry the exact request that was refused. */
+      fetch("/api/providers", {
+        method: "POST",
+        headers: {"Content-Type": "application/json", "Authorization": "Bearer " + pending.gwKey},
+        body: JSON.stringify(pending.body)
+      }).then(function(r){
+        return r.json().then(function(d){ return {ok: r.ok, status: r.status, body: d}; }, function(){ return {ok: r.ok, status: r.status, body: null}; });
+      }).then(function(res2){
+        if(!res2.ok){
+          var msg2 = (res2.body && res2.body.error && res2.body.error.message) ? res2.body.error.message : ("Request failed (HTTP " + res2.status + ")");
+          addProvShowError(msg2);
+          return;
+        }
+        var p = res2.body || {};
+        var addedMsg = "Added " + (p.name || "provider") + " — " + ((p.models || []).length) + " model" + (((p.models || []).length) === 1 ? "" : "s") + ", " + (p.wire_format || "openai") + " wire";
+        if(p.routing_live === false) addedMsg += " — added and saved, but restart the router to route through it";
+        toast(addedMsg);
+        loadProviders();
+        loadModels();
+      }).catch(function(err){ addProvShowError("Request failed: " + err.message); });
+    }).catch(function(err){
+      btn.disabled = false;
       addProvShowError("Request failed: " + err.message);
     });
   });

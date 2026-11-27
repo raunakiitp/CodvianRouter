@@ -7,7 +7,7 @@
 # Scope `admin` implies every scope. LOCAL_ONLY = loopback-only
 # even with a valid key. Destructive routes need a typed
 # {"confirm": "<phrase>"} body in addition to the key.
-# Routes: 350
+# Routes: 351
 
 ## Auth
 header: Authorization: Bearer <gateway-key>
@@ -112,6 +112,7 @@ DELETE /api/providers/{id}/keys/{keyId} | ALWAYS_PROTECTED | scopes=admin | auth
 POST /api/providers/{id}/keys/{keyId}/role | ALWAYS_PROTECTED | scopes=admin | auth=key | Changes one provider key's role (preferred/reserve). Auth always required — it changes which credential routes.
 POST /api/providers/{id}/keys/{keyId}/rotate | ALWAYS_PROTECTED | scopes=admin | auth=key | Rotates one provider key's credential in place: tests the replacement key live against the upstream, then replaces the stored ciphertext keeping the key's ID and role. Auth always required — it plants a credential.
 POST /api/providers/{id}/enabled | ALWAYS_PROTECTED | scopes=admin | auth=key | Enables or disables a provider: a disabled provider stops routing (the dashboard shows it as Not connected) and re-enabling returns it to the pool with no restart. Auth always required — it changes what routes.
+POST /api/providers/{id}/risk-acknowledgement | ALWAYS_PROTECTED | scopes=admin | auth=key | Records the operator’s explicit acknowledgement of the ToS risk of a ToS-grey catalog provider (who, which provider, when; persisted and audit-logged). The add, config-load and request-time gates refuse the provider until this is done. Auth always required — an unauthenticated caller must never open the risk gate.
 GET /api/catalog | MANAGEMENT | scopes=- | auth=exempt | Live provider catalog for the add-provider selector (id, name, verification, ToS-grey flag, base-URL availability) — catalog facts only, no keys, no base URLs.
 GET /api/usage/budget | MANAGEMENT | scopes=admin | auth=key | Cost summary for one gateway key (apiKeyId query param): calendar limits, warning threshold, reset cadence, last/next reset, spend today / this month / this budget period, the active limit and the allow/warn/deny budget check, plus the rolling 5h cap. Management auth (admin scope) required.
 POST /api/usage/budget | MANAGEMENT | scopes=admin | auth=key | Set the calendar budget for one gateway key: daily/weekly/monthly limits, warning threshold, reset interval/time. Absent fields keep their stored values; the 5h cap and unpriced policy are untouched. Ledger-first, then config persist with rollback. Management auth (admin scope) required.
