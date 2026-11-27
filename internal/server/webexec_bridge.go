@@ -31,9 +31,11 @@
 package server
 
 import (
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/crypto"
 	"github.com/raunakiitp/codvian-router/internal/provider"
@@ -93,13 +95,46 @@ func (s *Server) WebExecImportSession(catalogID string, state *webexec.SessionSt
 	return s.WebExecSessionStore().Save(catalogID, state)
 }
 
-// WebExecClientFactory wraps a base provider.ClientFactory: requests
-// whose base URL matches a WebCookie surface's web origin resolve to a
-// webexec-backed provider.Client; everything else goes to the base
-// factory untouched. A nil base falls back to the provider default
-// (NewClient with plain auth headers).
+// WebExecClientFactory wraps a base provider.ClientFactory. Web-cookie
+// providers reach it two ways, both resolved to a webexec-backed
+// provider.Client:
+//
+//   - Dispatch base URLs (<origin>/webexec/<catalog-id>, see
+//     webexec.DispatchURLFor): the per-ID route used by registry adds
+//     through the ToS gate (CatalogAddOptions.BaseURL). On a loopback
+//     origin the executor runs the mock-surface contract (tests /
+//     simulated wiring); any other origin keeps the documented-
+//     endpoint-or-refusal rule — no invented URLs.
+//   - Plain base URLs matching one of the 37 WebCookie web origins
+//     (scheme+host compare): the per-origin route. Where two surfaces
+//     share a host (chatgpt-web / chatgpt-web-codex on chatgpt.com)
+//     the sorted-first ID wins, so per-ID routing for those goes
+//     through the dispatch route instead.
+//
+// Everything else goes to the base factory untouched. A nil base falls
+// back to the provider default (NewClient with plain auth headers).
 func WebExecClientFactory(base provider.ClientFactory, store *webexec.SessionStore) provider.ClientFactory {
 	return func(baseURL, apiKey string, authHeaders map[string]string, wireFormat string) (provider.Client, error) {
+		// Dispatch route: the base URL names its catalog ID exactly.
+		if id, ok := webexec.SurfaceIDForDispatchURL(baseURL); ok {
+			origin := webexec.DispatchOrigin(baseURL)
+			var opts []webexec.Option
+			if webexec.IsLoopbackOrigin(origin) {
+				// Loopback origin = mock web surface: run the
+				// mock-surface contract with a plain client (the
+				// SSRF guard would refuse loopback).
+				opts = append(opts,
+					webexec.WithBaseURL(origin),
+					webexec.WithMockContract(),
+					webexec.WithHTTPClient(&http.Client{Timeout: 60 * time.Second}),
+				)
+			}
+			// Non-loopback: production wiring — no base override, no
+			// mock contract; the executor uses the SSRF-guarded client
+			// and refuses surfaces without a documented endpoint.
+			return webexec.NewWebExecClient(id, store, opts...)
+		}
+		// Origin route: the base URL matches a WebCookie web origin.
 		if id := webexecSurfaceIDForBaseURL(baseURL); id != "" {
 			// The web origin match is by construction a WebCookie
 			// catalog entry; the executor validates the ID again.

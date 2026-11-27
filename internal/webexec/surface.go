@@ -2,7 +2,9 @@ package webexec
 
 import (
 	"fmt"
+	"net/url"
 	"sort"
+	"strings"
 )
 
 // WebSurface is the static per-provider description of one catalog
@@ -356,6 +358,84 @@ func CatalogIDsWithWebExec() []string {
 	}
 	sort.Strings(ids)
 	return ids
+}
+
+// ---------------------------------------------------------------------------
+// Dispatch URLs: how a registry add carries its catalog identity
+// ---------------------------------------------------------------------------
+
+// The provider registry's ClientFactory signature is
+// (baseURL, apiKey, authHeaders, wireFormat) — it does NOT name the
+// catalog provider being built. A web-cookie add through the ToS gate
+// (internal/provider/tos_gate.go) resolves auth itself and reaches the
+// factory with the operator's cookie string and no ID, so the factory
+// cannot tell WHICH of the 37 surfaces to serve. The bridge solves
+// this with a dispatch base URL: the operator (or the dashboard wiring)
+// adds the provider with CatalogAddOptions.BaseURL set to
+//
+//	<origin>/webexec/<catalog-id>
+//
+// and the factory parses the ID back out. The path segment is a
+// dispatch key only — the executor never sends a request to it; it
+// POSTs to the surface's chat endpoint on the origin (mock contract on
+// loopback origins, documented-endpoint-or-refusal elsewhere).
+
+// DispatchURLFor renders the dispatch base URL for a catalog ID against
+// a surface origin (a mock surface URL in tests, a real origin in
+// production wiring).
+func DispatchURLFor(origin, catalogID string) (string, error) {
+	if _, err := Surface(catalogID); err != nil {
+		return "", err
+	}
+	if _, err := url.Parse(origin); err != nil {
+		return "", fmt.Errorf("webexec: dispatch origin %q: %w", origin, err)
+	}
+	return strings.TrimSuffix(origin, "/") + "/webexec/" + catalogID, nil
+}
+
+// SurfaceIDForDispatchURL parses a dispatch base URL back to its
+// catalog ID. ok is false for anything that is not a dispatch URL.
+func SurfaceIDForDispatchURL(baseURL string) (string, bool) {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return "", false
+	}
+	const marker = "/webexec/"
+	if !strings.Contains(u.Path, marker) {
+		return "", false
+	}
+	id := strings.TrimPrefix(u.Path[strings.Index(u.Path, marker):], marker)
+	id = strings.Trim(id, "/")
+	if id == "" || strings.Contains(id, "/") {
+		return "", false
+	}
+	if _, err := Surface(id); err != nil {
+		return "", false
+	}
+	return id, true
+}
+
+// DispatchOrigin returns the scheme://host origin of a dispatch URL —
+// where the executor actually POSTs.
+func DispatchOrigin(baseURL string) string {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
+}
+
+// IsLoopbackOrigin reports whether an origin targets the local machine
+// (a mock web surface in tests / simulated wiring). Only loopback
+// origins may run the mock-surface contract: a live origin always goes
+// through the documented-endpoint-or-refusal path.
+func IsLoopbackOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	return host == "127.0.0.1" || host == "::1" || host == "localhost"
 }
 
 // Surface returns the descriptor for a catalog ID (ErrUnknownSurface
