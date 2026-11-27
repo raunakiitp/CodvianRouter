@@ -9,7 +9,10 @@ package providers
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -964,6 +967,183 @@ func TestGHECopilotUnconfiguredHostRefused(t *testing.T) {
 	}
 	if _, err := h.Refresh(e2eCtx, nil, "r"); err == nil {
 		t.Errorf("Refresh without configured host: want refusal, got nil")
+	}
+}
+
+// TestXAIHandlersE2E covers xai-oauth AND grok-cli — the auth.x.ai
+// device flow from the official Grok Build CLI's published surface,
+// with the standard refresh_token grant.
+func TestXAIHandlersE2E(t *testing.T) {
+	for _, id := range []string{"xai-oauth", "grok-cli"} {
+		t.Run(id, func(t *testing.T) {
+			var polls, refreshed int
+			mux := http.NewServeMux()
+			mux.HandleFunc("/oauth2/device/code", func(w http.ResponseWriter, r *http.Request) {
+				form := readBody(t, r)
+				if form["client_id"] != xaiClientID || form["scope"] != xaiScope || form["referrer"] == "" {
+					t.Errorf("device request = %v", form)
+				}
+				writeJSONToken(t, w, map[string]any{
+					"device_code": "dc-xai-1", "user_code": "GROK-1234",
+					"verification_uri": "https://accounts.x.ai/device", "interval": 5, "expires_in": 300,
+				})
+			})
+			mux.HandleFunc("/oauth2/token", func(w http.ResponseWriter, r *http.Request) {
+				form := readBody(t, r)
+				switch form["grant_type"] {
+				case "urn:ietf:params:oauth:grant-type:device_code":
+					polls++
+					if form["client_id"] != xaiClientID || form["device_code"] != "dc-xai-1" {
+						t.Errorf("device poll = %v", form)
+					}
+					if polls == 1 {
+						w.WriteHeader(http.StatusBadRequest)
+						writeJSONToken(t, w, map[string]any{"error": "authorization_pending"})
+						return
+					}
+					writeJSONToken(t, w, map[string]any{
+						"access_token": "xai-at-1", "refresh_token": "xai-rt-1",
+						"token_type": "bearer", "expires_in": 3600,
+					})
+				case "refresh_token":
+					refreshed++
+					if form["client_id"] != xaiClientID || form["refresh_token"] != "xai-rt-1" {
+						t.Errorf("refresh form = %v", form)
+					}
+					writeJSONToken(t, w, map[string]any{
+						"access_token": "xai-at-2", "refresh_token": "xai-rt-2",
+						"token_type": "bearer", "expires_in": 3600,
+					})
+				default:
+					t.Errorf("unexpected grant_type %q", form["grant_type"])
+					w.WriteHeader(http.StatusBadRequest)
+				}
+			})
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+			SetEndpointsForTest(t, id, map[string]string{
+				"device": srv.URL + "/oauth2/device/code",
+				"token":  srv.URL + "/oauth2/token",
+			})
+
+			h, err := Get(id)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			if _, _, _, err := h.StartAuthorization("http://127.0.0.1/x"); !errIs(err, ErrNotCodeFlow) {
+				t.Errorf("StartAuthorization error = %v, want ErrNotCodeFlow", err)
+			}
+			dc, err := h.StartDevice(e2eCtx, srv.Client())
+			if err != nil {
+				t.Fatalf("StartDevice: %v", err)
+			}
+			if dc.UserCode != "GROK-1234" || dc.VerificationURI == "" {
+				t.Errorf("device offer = %+v", dc)
+			}
+			if _, err := h.PollDevice(e2eCtx, srv.Client(), dc); !errIs(err, ErrAuthorizationPending) {
+				t.Errorf("first poll error = %v, want pending", err)
+			}
+			tr, err := h.PollDevice(e2eCtx, srv.Client(), dc)
+			if err != nil {
+				t.Fatalf("second poll: %v", err)
+			}
+			if tr.AccessToken != "xai-at-1" || tr.RefreshToken != "xai-rt-1" {
+				t.Errorf("poll result = %+v", tr)
+			}
+			if tr.TokenURL == "" {
+				t.Errorf("poll result carries no refresh TokenURL")
+			}
+			tr2, err := h.Refresh(e2eCtx, srv.Client(), tr.RefreshToken)
+			if err != nil {
+				t.Fatalf("Refresh: %v", err)
+			}
+			if tr2.AccessToken != "xai-at-2" {
+				t.Errorf("refresh result = %+v", tr2)
+			}
+			if polls != 2 || refreshed != 1 {
+				t.Errorf("mock hits: polls=%d refresh=%d, want 2/1", polls, refreshed)
+			}
+		})
+	}
+}
+
+// TestZedHandlersE2E covers zed AND zed-hosted — Zed's native-app
+// sign-in: the RSA public key rides the authorize URL, the callback's
+// access_token arrives encrypted to it (RSA-OAEP SHA-256), and there
+// is no refresh grant (documented: the token lasts until Zed refuses
+// it).
+func TestZedHandlersE2E(t *testing.T) {
+	for _, id := range []string{"zed", "zed-hosted"} {
+		t.Run(id, func(t *testing.T) {
+			h, err := Get(id)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			state, authURL, verifier, err := h.StartAuthorization("http://127.0.0.1:57575/zed/callback")
+			if err != nil {
+				t.Fatalf("StartAuthorization: %v", err)
+			}
+			u, err := url.Parse(authURL)
+			if err != nil {
+				t.Fatalf("authorize URL: %v", err)
+			}
+			if got := u.Scheme + "://" + u.Host + u.Path; got != "https://zed.dev/native_app_signin" {
+				t.Errorf("authorize URL = %q", got)
+			}
+			q := u.Query()
+			if q.Get("native_app_port") != "57575" || q.Get("system_id") == "" {
+				t.Errorf("authorize params = %v", q)
+			}
+			// Recover the public key the URL carries and encrypt a fake
+			// callback token to it, the way zed.dev does. Zed takes the
+			// key as URL-safe base64 WITH padding (Rust URL_SAFE).
+			pubDER, err := base64.URLEncoding.DecodeString(q.Get("native_app_public_key"))
+			if err != nil {
+				t.Fatalf("native_app_public_key: %v", err)
+			}
+			pub, err := x509.ParsePKCS1PublicKey(pubDER)
+			if err != nil {
+				t.Fatalf("parse public key: %v", err)
+			}
+			ct, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, pub, []byte("zed-access-token-1"), nil)
+			if err != nil {
+				t.Fatalf("encrypt: %v", err)
+			}
+			code := base64.RawURLEncoding.EncodeToString(ct)
+
+			tr, err := h.ExchangeCode(e2eCtx, http.DefaultClient, code, "http://127.0.0.1:57575/zed/callback", verifier)
+			if err != nil {
+				t.Fatalf("ExchangeCode: %v", err)
+			}
+			if tr.AccessToken != "zed-access-token-1" || tr.TokenType != "bearer" {
+				t.Errorf("exchange result = %+v", tr)
+			}
+			// No refresh grant: the honest refusal.
+			if _, err := h.Refresh(e2eCtx, http.DefaultClient, "whatever"); !errIs(err, ErrNoRefresh) {
+				t.Errorf("Refresh error = %v, want ErrNoRefresh", err)
+			}
+			// The verifier state must be bound to the session: a stale
+			// verifier cannot decrypt the callback.
+			if _, err := h.ExchangeCode(e2eCtx, http.DefaultClient, code, "", "{}"); err == nil {
+				t.Errorf("ExchangeCode with a foreign verifier: want refusal, got nil")
+			}
+			_ = state
+		})
+	}
+}
+
+// TestZedRedirectRequiresLoopbackPort — zed.dev sends the browser back
+// to the port, so a portless redirect URI is refused.
+func TestZedRedirectRequiresLoopbackPort(t *testing.T) {
+	h, err := Get("zed")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, _, _, err := h.StartAuthorization(""); err == nil {
+		t.Errorf("StartAuthorization with empty redirect: want refusal, got nil")
+	}
+	if _, _, _, err := h.StartAuthorization("https://app.example.com/callback"); err == nil {
+		t.Errorf("StartAuthorization without a port: want refusal, got nil")
 	}
 }
 
