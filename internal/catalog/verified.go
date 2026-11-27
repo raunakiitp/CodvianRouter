@@ -1781,4 +1781,55 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://api.deepai.org/docs",
 		Notes:        "DeepAI HTTP APIs (text generation, image APIs) as form POSTs to api.deepai.org/api/<tool> with the api-key header; native DeepAI protocol.",
 	},
+	{
+		// Verified 2026-11-27 against Grokified's own docs: the
+		// OpenAI-compatible base api.grokified.com/v1.
+		ID:          "grokified",
+		Name:        "Grokified",
+		Website:     "https://grokified.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.grokified.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://grokified.com/docs",
+		Notes:        "OpenAI-compatible Grok surface at api.grokified.com/v1 per the provider's quickstart.",
+	},
+	{
+		// Verified 2026-11-27 against LaoZhang's own docs: the OpenAI
+		// SDK base api.laozhang.ai/v1 (host root serves the Google
+		// Gen AI and Anthropic SDK surfaces).
+		ID:          "laozhang",
+		Name:        "LaoZhang AI",
+		Website:     "https://api.laozhang.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.laozhang.ai/v1", "https://api.laozhang.ai"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointMessages, AuthKind: AuthBearer, HeaderName: "Authorization", BaseURL: "https://api.laozhang.ai"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.laozhang.ai/en",
+		Notes:        "One key across OpenAI/GPT-Image, Google Nano Banana and xAI Grok Imagine via api.laozhang.ai: /v1 for the OpenAI SDK, host root for Google Gen AI and Anthropic SDKs.",
+	},
+	{
+		// Verified 2026-11-27 against Magnific's own OpenAPI spec:
+		// server api.magnific.com, key in the x-magnific-api-key
+		// header, /v1/ai/... endpoints.
+		ID:          "magnific",
+		Name:        "Magnific",
+		Website:     "https://www.magnific.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.magnific.com"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointImages, AuthKind: AuthXAPIKey, HeaderName: "x-magnific-api-key"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.magnific.com/api-reference/image-upscaler-precision-v2/post-image-upscaler-precision-v2",
+		Notes:        "Magnific API at api.magnific.com (/v1/ai/... upscaler endpoints; task_id returned for async fetch); x-magnific-api-key header per the OpenAPI security scheme.",
+	},
 }
