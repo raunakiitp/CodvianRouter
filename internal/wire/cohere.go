@@ -82,9 +82,13 @@ import (
 // CohereContentBlock is one typed block in a Cohere v2 message
 // content list. Only the fields for its Type are populated.
 type CohereContentBlock struct {
-	Type string `json:"type"` // "text" | "image_url" | "tool-call" | ...
+	Type string `json:"type"` // "text" | "thinking" | "image_url" | "tool-call" | ...
 	// Text blocks.
 	Text string `json:"text,omitempty"`
+	// Thinking blocks (assistant history on Cohere's reasoning
+	// models): the replayed reasoning rides the documented
+	// {"type":"thinking","thinking":...} form.
+	Thinking string `json:"thinking,omitempty"`
 	// Image blocks: same shape as OpenAI's image_url part.
 	ImageURL *ImageURLPart `json:"image_url,omitempty"`
 	// Tool-call blocks (assistant content).
@@ -331,11 +335,13 @@ func ConvertCohereRequest(req ChatCompletionRequest) (*CohereRequest, error) {
 	if len(req.Stop) > 5 {
 		return nil, unrep("Cohere accepts at most 5 stop sequences, got %d", len(req.Stop))
 	}
-	// Reasoning continuity (CHECKLIST 163): the Cohere Chat API
-	// v2 has no reasoning-replay field, so ANY restored reasoning
-	// state fails this hop honestly (the router fails over to a
-	// target that can carry it) rather than silently dropping
-	// the reasoning.
+	// Reasoning continuity: Cohere's Chat API v2 carries reasoning as
+	// unsigned thinking content blocks on its reasoning models
+	// (command-a-reasoning family, per docs.cohere.com). Check admits a
+	// text-bearing state for exactly those models and refuses it for any
+	// other model — and when it admits, convertCohereMessage below
+	// EMITS the thinking blocks into the assistant message so the
+	// state is carried, never silently dropped.
 	for i, m := range req.Messages {
 		if m.Reasoning != nil && !m.Reasoning.Empty() {
 			if _, _, err := reasoning.Check(m.Reasoning, reasoning.WireCohere, req.Model); err != nil {
@@ -513,6 +519,19 @@ func convertCohereMessage(m ChatMessage, index int) (CohereMessage, int, error) 
 		}
 		if n > 0 {
 			return CohereMessage{}, 0, unrep("messages[%d]: image content cannot appear in an assistant message", index)
+		}
+		// Reasoning replay: the restored thinking blocks ride the head
+		// of the assistant content list, in the documented
+		// {"type":"thinking","thinking":...} form (Cohere's reasoning
+		// models only — ConvertCohereRequest already admitted the state
+		// through reasoning.Check for this model). Order is preserved:
+		// thinking first, then the visible content.
+		if th := m.Reasoning.CohereThinkingBlocks(); len(th) > 0 {
+			reasoned := make([]CohereContentBlock, 0, len(th)+len(blocks))
+			for _, b := range th {
+				reasoned = append(reasoned, CohereContentBlock{Type: "thinking", Thinking: b.Thinking})
+			}
+			blocks = append(reasoned, blocks...)
 		}
 		out := CohereMessage{Role: "assistant", Content: mustJSONValue(blocks)}
 		for i, tc := range m.ToolCalls {
