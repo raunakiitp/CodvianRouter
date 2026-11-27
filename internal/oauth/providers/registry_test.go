@@ -80,14 +80,14 @@ func TestInfoHonesty(t *testing.T) {
 			}
 		}
 	}
-	if implemented != 10 {
-		t.Errorf("implemented interactive handlers = %d, want 10 (claude, github-copilot, cline, clinepass, codex, chatgpt, kimi-coding, gitlab-duo, kiro, amazon-q)", implemented)
+	if implemented != 12 {
+		t.Errorf("implemented interactive handlers = %d, want 12 (claude, github-copilot, ghe-copilot, cline, clinepass, codex, chatgpt, kimi-coding, gitlab-duo, kiro, amazon-q, cursor)", implemented)
 	}
 	if importOnly != 2 {
 		t.Errorf("import-only providers = %d, want 2 (antigravity, agy)", importOnly)
 	}
-	if unimpl != 19 {
-		t.Errorf("unimplemented providers = %d, want 19 (the honestly-documented gaps)", unimpl)
+	if unimpl != 17 {
+		t.Errorf("unimplemented providers = %d, want 17 (the honestly-documented gaps)", unimpl)
 	}
 }
 
@@ -102,9 +102,9 @@ func TestGetRefusals(t *testing.T) {
 	if !errors.Is(err, ErrImportOnly) {
 		t.Errorf("Get(agy) error = %v, want ErrImportOnly", err)
 	}
-	_, err = Get("cursor")
+	_, err = Get("qoder")
 	if !errors.Is(err, ErrNotImplemented) {
-		t.Errorf("Get(cursor) error = %v, want ErrNotImplemented", err)
+		t.Errorf("Get(qoder) error = %v, want ErrNotImplemented", err)
 	}
 	_, err = Get("not-a-provider")
 	if err == nil || errors.Is(err, ErrNotImplemented) || errors.Is(err, ErrImportOnly) {
@@ -119,12 +119,14 @@ func TestImplementedFlowTypes(t *testing.T) {
 		"codex":          FlowPKCE,
 		"chatgpt":        FlowPKCE,
 		"github-copilot": FlowDeviceCode,
+		"ghe-copilot":    FlowDeviceCode,
 		"cline":          FlowDeviceCode,
 		"clinepass":      FlowDeviceCode,
 		"kimi-coding":    FlowDeviceCode,
 		"gitlab-duo":     FlowBrowserSignIn,
 		"kiro":           FlowDeviceCode,
 		"amazon-q":       FlowDeviceCode,
+		"cursor":         FlowBrowserSignIn,
 	}
 	for _, in := range ImplementedInfos() {
 		if in.ImportOnly {

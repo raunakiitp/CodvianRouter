@@ -19,12 +19,6 @@ type unimplementedInfo struct {
 // docs (or an official open-source client) publish the surface.
 var unimplemented = []unimplementedInfo{
 	{
-		id:   "ghe-copilot",
-		name: "GitHub Enterprise Copilot",
-		reason: "GitHub documents the Copilot device flow for GitHub.com; on GitHub Enterprise the flow needs the operator's GHE host and an instance-registered OAuth app, " +
-			"and GitHub.com's public Copilot client credentials are not valid there — no documented generic flow to implement.",
-	},
-	{
 		id:    "xai-oauth",
 		name:  "xAI OAuth (Grok)",
 		alias: "xao",
@@ -52,12 +46,6 @@ var unimplemented = []unimplementedInfo{
 		name:   "Qoder",
 		alias:  "if",
 		reason: "no public OAuth endpoint documentation found for Qoder.",
-	},
-	{
-		id:     "cursor",
-		name:   "Cursor IDE",
-		alias:  "cu",
-		reason: "Cursor documents API keys for its API (cursor.com/dashboard/api); its IDE OAuth surface is undocumented.",
 	},
 	{
 		id:     "zed",
