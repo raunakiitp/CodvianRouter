@@ -1628,4 +1628,72 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://cloud.ibm.com/docs/apis/watsonx-ai",
 		Notes:        "TEMPLATED base: https://{region}.ml.cloud.ibm.com/ml/v1 - the operator's region (us-south, eu-de, ...) completes the host; Bearer IAM token; text chat/embeddings endpoints per the docs.",
 	},
+	{
+		// Verified 2026-11-27 against OpenTyphoon's own quickstart: the
+		// OpenAI-compatible API at api.opentyphoon.ai/v1 (Bearer).
+		ID:          "typhoon",
+		Name:        "Typhoon",
+		Website:     "https://docs.opentyphoon.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.opentyphoon.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.opentyphoon.ai/en/quickstart/",
+		Notes:        "OpenAI-compatible chat completions at api.opentyphoon.ai/v1 for the Typhoon Thai-language family; Bearer key from the Playground.",
+	},
+	{
+		// Verified 2026-11-27 against Maritaca's own OpenAI-compat docs:
+		// point the OpenAI client at https://chat.maritaca.ai/api.
+		ID:          "maritalk",
+		Name:        "Maritalk",
+		Website:     "https://www.maritaca.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://chat.maritaca.ai/api"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.maritaca.ai/en/api/openai-compatibility",
+		Notes:        "OpenAI-compatible client base https://chat.maritaca.ai/api for the Sabia family; Bearer MARITACA_API_KEY; Responses API and Chat Completions documented.",
+	},
+	{
+		// Verified 2026-11-27 against Ncloud's own CLOVA Studio docs:
+		// the API URL is clovastudio.stream.ntruss.com with the
+		// X-NCP-APIGW-API-KEY gateway header.
+		ID:          "clova-studio",
+		Name:        "Naver CLOVA Studio",
+		Website:     "https://api.ncloud-docs.com/docs/en/ai-naver-clovastudio-summary",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://clovastudio.stream.ntruss.com"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthXAPIKey, HeaderName: "X-NCP-APIGW-API-KEY"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://api.ncloud-docs.com/docs/en/ai-naver-clovastudio-summary",
+		Notes:        "CLOVA Studio chat completions (HCX models) at clovastudio.stream.ntruss.com; API-gateway key via the X-NCP-APIGW-API-KEY header; Classic and VPC deployments documented.",
+	},
+	{
+		// Verified 2026-11-27 against the Public AI Gateway's own
+		// developer portal: the endpoint base is api.publicai.co.
+		ID:          "publicai",
+		Name:        "PublicAI",
+		Website:     "https://publicai.co",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.publicai.co"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://platform.publicai.co/api/~endpoints",
+		Notes:        "Public AI Gateway at api.publicai.co (models list and OpenAI-style inference paths per the developer portal); agent documentation also mirrored in the forpublicai platform repo.",
+	},
 }
