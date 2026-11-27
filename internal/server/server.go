@@ -550,6 +550,15 @@ type Server struct {
 	oauthMu  sync.Mutex
 	oauth    *oauth.Issuer
 	oauthErr error
+	// providerDeviceFlows caches in-flight device flows (A3 W1
+	// provider connect routes): StartProviderDevice's DeviceCode
+	// carries per-flow state the poll needs, so it must survive
+	// between the start and complete HTTP calls. The state is kept
+	// server-side — never serialized to the operator — keyed by
+	// provider + device code, pruned on expiry (providerDeviceFlowsTTL
+	// in oauth_provider_routes.go).
+	providerDeviceFlowsMu sync.Mutex
+	providerDeviceFlows   map[string]providerDeviceFlowEntry
 	// dashAuth is the lazy dashboard password/session store
 	// (B3-04, dashauth.go): created on first dashboard-auth use
 	// from cfg.DataDir (in-memory only when cfg is nil or has no
@@ -1726,6 +1735,17 @@ func New(engine Engine, opts ...Option) *Server {
 	s.register(mux, "GET", "/dashboard/oauth/callback/{provider}", s.handleOAuthCallback)
 	s.register(mux, "GET", "/dashboard/oauth/connections", s.handleOAuthConnections)
 	s.register(mux, "POST", "/dashboard/oauth/disconnect/{provider}", s.handleOAuthDisconnect)
+	// A3 W1 provider OAuth connect routes: the five bridge methods
+	// (start/complete, device start/complete, paste import) plus the
+	// registry listing the dashboard connect flow renders from.
+	// Provider-agnostic — the provider ID is a path value, so every
+	// registered handler is reachable.
+	s.register(mux, "GET", "/dashboard/oauth/providers", s.handleProviderOAuthList)
+	s.register(mux, "POST", "/dashboard/oauth/providers/{provider}/start", s.handleProviderOAuthStart)
+	s.register(mux, "POST", "/dashboard/oauth/providers/{provider}/complete", s.handleProviderOAuthComplete)
+	s.register(mux, "POST", "/dashboard/oauth/providers/{provider}/device/start", s.handleProviderDeviceStart)
+	s.register(mux, "POST", "/dashboard/oauth/providers/{provider}/device/complete", s.handleProviderDeviceComplete)
+	s.register(mux, "POST", "/dashboard/oauth/providers/{provider}/import", s.handleProviderImport)
 	s.register(mux, "GET", "/dashboard/providers", s.handleDashboardProviders)
 	s.register(mux, "GET", "/dashboard/overview", s.handleOverview)
 	s.register(mux, "GET", "/dashboard/models", s.handleDashboardModels)
