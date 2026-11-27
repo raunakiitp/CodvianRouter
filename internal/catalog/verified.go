@@ -1130,4 +1130,96 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://devcenter.heroku.com/articles/openai-compatibility-chat-completions",
 		Notes:        "Managed Inference add-on: OpenAI-compatible chat/embeddings/images/rerank; the app's INFERENCE_URL config var (us or eu) is authoritative - the recorded bases are the documented regions.",
 	},
+	{
+		// Verified 2026-11-27 against Sber's own GigaChat API reference:
+		// REST base gigachat.devices.sberbank.ru/api/v1 (the same page
+		// documents the OpenAI-compatible message format).
+		ID:          "gigachat",
+		Name:        "GigaChat (Sber)",
+		Website:     "https://developers.sber.ru",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://gigachat.devices.sberbank.ru/api/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://developers.sber.ru/docs/en/gigachat/api/reference",
+		Notes:        "GigaChat REST API at gigachat.devices.sberbank.ru/api/v1; Bearer token from the OAuth service; message format documented as OpenAI-compatible.",
+	},
+	{
+		// Verified 2026-11-27 against Zhipu's own BigModel docs: the
+		// general API endpoint open.bigmodel.cn/api/paas/v4 (chat
+		// completions and the other model APIs live under it).
+		ID:          "bigmodel",
+		Name:        "BigModel.cn (Zhipu)",
+		Website:     "https://open.bigmodel.cn",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://open.bigmodel.cn/api/paas/v4"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointEmbeddings, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointImages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.bigmodel.cn/cn/guide/develop/http/introduction",
+		Notes:        "General API base https://open.bigmodel.cn/api/paas/v4 hosting the GLM family; Bearer; the Coding-plan variant uses its own dedicated endpoint per the docs.",
+	},
+	{
+		// Verified 2026-11-27 against InternLM's own puyu docs: the
+		// OpenAI-SDK-compatible chat surface lives at
+		// chat.intern-ai.org.cn/api/v1 (Bearer; the same site also
+		// documents a Claude-style /v1/messages surface).
+		ID:          "internlm",
+		Name:        "InternLM (Intern-S1)",
+		Website:     "https://internlm.intern-ai.org.cn/",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://chat.intern-ai.org.cn/api/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://internlm.intern-ai.org.cn/docEn/docs/Chat/",
+		Notes:        "Intern chat completions at chat.intern-ai.org.cn/api/v1 (LMDeploy-based, OpenAI-SDK compatible for chat/messages/tools/stream); 30 req/min default rate limit.",
+	},
+	{
+		// Verified 2026-11-27 against Pollinations' own API docs (the
+		// official APIDOCS in the pollinations repo and the gen-API
+		// docs): OpenAI-style POST at text.pollinations.ai/openai and
+		// the newer gen.pollinations.ai OpenAI-SDK base.
+		ID:          "pollinations",
+		Name:        "Pollinations AI",
+		Website:     "https://pollinations.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://text.pollinations.ai/openai", "https://gen.pollinations.ai"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://github.com/pollinations/pollinations/blob/master/APIDOCS.md",
+		Notes:        "OpenAI-compatible chat: classic POST https://text.pollinations.ai/openai (free tier, rate-limited) and the gen API base https://gen.pollinations.ai ('use an OpenAI SDK by changing its base URL').",
+	},
+	{
+		// Verified 2026-11-27 against Volcengine's own Ark docs: the
+		// data-plane base ark.cn-beijing.volces.com/api/v3 (chat,
+		// responses, messages, image and video APIs live under it).
+		ID:          "doubao",
+		Name:        "Doubao",
+		Website:     "https://doubao.com",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://ark.cn-beijing.volces.com/api/v3"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointImages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.volcengine.com/docs/ark/base-url-and-authentication?lang=zh",
+		Notes:        "Ark data plane at ark.cn-beijing.volces.com/api/v3 (chat/completions, responses, messages, image/video generation); API-Key auth; region hosts vary per deployment per the docs.",
+	},
 }

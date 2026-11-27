@@ -762,8 +762,11 @@ type CatalogAddOptions struct {
 //     providers are allowed when the key is the right credential
 //     material; a key that is not stays refused.
 //   - entries with no known base URL (name-only reference entries);
-//   - templated catalog base URLs (Azure {resource}, ...): pass a
-//     concrete BaseURL via AddCatalogWithOptions.
+//   - templated catalog base URLs (Azure {resource}, ...): the
+//     registry resolves them through the catalog's
+//     ResolveBaseURLTemplate once the operator's account/resource
+//     parameters are supplied; an unresolvable template still
+//     needs a concrete BaseURL.
 func (r *Registry) AddCatalog(ctx context.Context, catalogID, apiKey string) (*Provider, error) {
 	return r.AddCatalogWithOptions(ctx, catalogID, apiKey, CatalogAddOptions{})
 }

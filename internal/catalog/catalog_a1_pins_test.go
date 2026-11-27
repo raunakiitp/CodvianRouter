@@ -63,7 +63,7 @@ func TestA1Batch1EntriesFilled(t *testing.T) {
 func TestCatalogShapePins(t *testing.T) {
 	const wantTotal = 609
 	nilByCategory := map[Category]int{
-		CategoryAPIKey:        92, // 105 originally; 99 after A1 batch 1; 98 after D2; 92 after A1 batch 2
+		CategoryAPIKey:        87, // 105 originally; 99 after A1 batch 1; 98 after D2; 92 after batch 2; 87 after batch 3
 		CategoryWebCookie:     37,
 		CategoryOAuth:         28,
 		CategorySearch:        21,
