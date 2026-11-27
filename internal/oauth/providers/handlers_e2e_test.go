@@ -613,6 +613,104 @@ func TestGitLabDuoUnconfiguredClientRefused(t *testing.T) {
 	}
 }
 
+// TestAWSHandlersE2E covers kiro AND amazon-q — the AWS SSO OIDC
+// device flow (register -> device_authorization -> CreateToken) with
+// refresh via the refresh_token grant.
+func TestAWSHandlersE2E(t *testing.T) {
+	for _, id := range []string{"kiro", "amazon-q"} {
+		t.Run(id, func(t *testing.T) {
+			var registered bool
+			mux := http.NewServeMux()
+			mux.HandleFunc("/client/register", func(w http.ResponseWriter, r *http.Request) {
+				body := readBody(t, r)
+				if body["clientName"] == "" || body["clientType"] != "public" {
+					t.Errorf("register body = %v", body)
+				}
+				registered = true
+				writeJSONToken(t, w, map[string]any{
+					"clientId": "oidc-client-1", "clientSecret": "oidc-secret-1",
+					"clientSecretExpiresAt": time.Now().Add(90 * 24 * time.Hour).Unix(),
+				})
+			})
+			mux.HandleFunc("/device_authorization", func(w http.ResponseWriter, r *http.Request) {
+				if !registered {
+					t.Errorf("device_authorization called before client registration")
+				}
+				body := readBody(t, r)
+				if body["clientId"] != "oidc-client-1" || body["clientSecret"] != "oidc-secret-1" || body["startUrl"] != awsBuilderIDURL {
+					t.Errorf("device body = %v", body)
+				}
+				writeJSONToken(t, w, map[string]any{
+					"deviceCode": "aws-dc-1", "userCode": "AWSX-1234",
+					"verificationUri":         "https://view.awsapps.com/start#/device",
+					"verificationUriComplete": "https://view.awsapps.com/start#/device?user_code=AWSX-1234",
+					"expiresIn":               600, "interval": 5,
+				})
+			})
+			mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+				body := readBody(t, r)
+				if body["clientId"] != "oidc-client-1" || body["clientSecret"] != "oidc-secret-1" {
+					t.Errorf("token body client = %v", body)
+				}
+				switch body["grantType"] {
+				case "urn:ietf:params:oauth:grant-type:device_code":
+					if body["deviceCode"] != "aws-dc-1" {
+						t.Errorf("deviceCode = %q", body["deviceCode"])
+					}
+					writeJSONToken(t, w, map[string]any{
+						"accessToken": "aws-at-1", "refreshToken": "aws-rt-1",
+						"tokenType": "bearer", "expiresIn": 3600,
+					})
+				case "refresh_token":
+					if body["refreshToken"] != "aws-rt-1" {
+						t.Errorf("refreshToken = %q", body["refreshToken"])
+					}
+					writeJSONToken(t, w, map[string]any{
+						"accessToken": "aws-at-2", "refreshToken": "aws-rt-2",
+						"tokenType": "bearer", "expiresIn": 3600,
+					})
+				default:
+					t.Errorf("unexpected grantType %q", body["grantType"])
+					w.WriteHeader(http.StatusBadRequest)
+				}
+			})
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+			SetEndpointsForTest(t, id, map[string]string{
+				"register":   srv.URL + "/client/register",
+				"deviceauth": srv.URL + "/device_authorization",
+				"token":      srv.URL + "/token",
+			})
+
+			h, err := Get(id)
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			dc, err := h.StartDevice(e2eCtx, srv.Client())
+			if err != nil {
+				t.Fatalf("StartDevice: %v", err)
+			}
+			if dc.UserCode != "AWSX-1234" {
+				t.Errorf("device offer = %+v", dc)
+			}
+			tr, err := h.PollDevice(e2eCtx, srv.Client(), dc)
+			if err != nil {
+				t.Fatalf("PollDevice: %v", err)
+			}
+			if tr.AccessToken != "aws-at-1" || tr.RefreshToken != "aws-rt-1" {
+				t.Errorf("poll result = %+v", tr)
+			}
+			tr2, err := h.Refresh(e2eCtx, srv.Client(), tr.RefreshToken)
+			if err != nil {
+				t.Fatalf("Refresh: %v", err)
+			}
+			if tr2.AccessToken != "aws-at-2" {
+				t.Errorf("refresh result = %+v", tr2)
+			}
+		})
+	}
+}
+
 // TestPendingClassification pins the RFC 8628 pending/slow_down classification
 // classification shared by every device handler.
 func TestPendingClassification(t *testing.T) {

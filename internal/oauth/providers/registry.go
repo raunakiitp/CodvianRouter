@@ -91,6 +91,8 @@ func init() {
 	register(&openaiPKCEHandler{info: chatgptInfo()})
 	register(&kimiHandler{})
 	register(&gitlabDuoHandler{})
+	register(&awsDeviceHandler{info: kiroInfo()})
+	register(&awsDeviceHandler{info: amazonQInfo()})
 	registerImportOnly(Info{
 		ID:          "antigravity",
 		Name:        "Antigravity",
