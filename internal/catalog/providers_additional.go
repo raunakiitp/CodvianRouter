@@ -30,9 +30,12 @@ var additionalProviders = []Provider{
 		Endpoints: []EndpointAuth{
 			{Endpoint: "chat", AuthKind: AuthBearer, HeaderName: "Authorization"},
 		},
-		Verification: VerificationUnverified,
-		SourceURL:    "https://www.librechat.ai/docs/configuration/librechat_yaml/ai_endpoints/anyscale",
-		Notes:        "Base URL corroborated by LibreChat docs and LangChain reference; no current official Anyscale docs page for the shared Endpoints host was found — NOT verified from the provider's own docs.",
+		Verification:  VerificationUnverified,
+		SourceURL:     "https://www.librechat.ai/docs/configuration/librechat_yaml/ai_endpoints/anyscale",
+		Notes:         "Retired 2026-11-27 (Item 6): Anyscale Endpoints was discontinued and Anyscale's own docs site no longer documents the shared api.endpoints.anyscale.com host — the base could never be verified from the provider's own docs. The row is kept so an add-by-ID attempt is explained.",
+		Retired:       true,
+		RetiredReason: "Anyscale Endpoints is discontinued: docs.anyscale.com/endpoints/* now redirect to the docs root with no page for api.endpoints.anyscale.com, so the inference host is no longer documented by the provider. Retired rather than left unverified.",
+		RetiredOn:     "",
 	},
 	{
 		ID:          "avian",
@@ -44,9 +47,11 @@ var additionalProviders = []Provider{
 		Endpoints: []EndpointAuth{
 			{Endpoint: "chat", AuthKind: AuthBearer, HeaderName: "Authorization"},
 		},
-		Verification: VerificationUnverified,
-		SourceURL:    "http://avian.io/?ref=recursos.ai&via=recursosai",
-		Notes:        "Source is a referral link, not the provider's own docs — base URL NOT verified from official docs. Re-verify against avian.io docs before relying on it.",
+		// Verified 2026-11-27 against Avian's own API docs (avian.io/docs):
+		// base https://api.avian.io/v1, Bearer, OpenAI-compatible chat.
+		Verification: VerificationDocs,
+		SourceURL:    "https://avian.io/docs/",
+		Notes:        "Avian's own docs (avian.io/docs) state the single base URL https://api.avian.io/v1 with Authorization: Bearer avian- keys and OpenAI-compatible /v1/chat/completions.",
 	},
 	{
 		ID:          "io-intelligence",
@@ -283,9 +288,12 @@ var additionalProviders = []Provider{
 		Endpoints: []EndpointAuth{
 			{Endpoint: "chat", AuthKind: AuthBearer, HeaderName: "Authorization"},
 		},
-		Verification: VerificationUnverified,
-		SourceURL:    "https://aisharenet.com/en/klusteraidichengai/",
-		Notes:        "Base URL from a third-party article reproducing Kluster's official SDK example; no official Kluster docs page was found — NOT verified from the provider's own docs. Re-verify against docs.kluster.ai before relying on it.",
+		Verification:  VerificationUnverified,
+		SourceURL:     "https://docs.kluster.ai/",
+		Notes:         "Retired 2026-11-27 (Item 6): kluster.ai has joined MITO and shut the inference platform down; docs.kluster.ai now serves a farewell notice with no API reference, so api.kluster.ai/v1 cannot be verified from the provider's own docs.",
+		Retired:       true,
+		RetiredReason: "kluster.ai joined MITO and closed its inference platform: the provider's own docs site (docs.kluster.ai) is now a farewell notice with no API documentation, so the api.kluster.ai/v1 base is no longer documented by the provider. Retired rather than left unverified.",
+		RetiredOn:     "",
 	},
 	{
 		ID:          "localai",
@@ -361,9 +369,12 @@ var additionalProviders = []Provider{
 		Endpoints: []EndpointAuth{
 			{Endpoint: "chat", AuthKind: AuthBearer, HeaderName: "Authorization"},
 		},
-		Verification: VerificationUnverified,
-		SourceURL:    "https://www.anygen.io/showcase/mancer-ai/index.html",
-		Notes:        "Base URL from two independent third-party summaries of Mancer's official OpenAPI spec; NOT verified from the provider's own docs. Re-verify against mancer.tech docs before relying on it.",
+		// Verified 2026-11-27 against Mancer's own published OpenAPI spec
+		// (mancer.tech/resources/api-docs-webui.yml): server
+		// https://neuro.mancer.tech with /oai/v1 paths, OpenAI-style API.
+		Verification: VerificationDocs,
+		SourceURL:    "https://mancer.tech/resources/api-docs-webui.yml",
+		Notes:        "Mancer's own OpenAPI spec declares the server https://neuro.mancer.tech with /oai/v1/chat/completions, /oai/v1/completions and /oai/v1/models; Bearer API key.",
 	},
 	{
 		ID:          "kiomon",
