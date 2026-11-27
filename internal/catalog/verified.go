@@ -1366,4 +1366,75 @@ var verifiedProviders = []Provider{
 		SourceURL:    "https://fal.ai/docs/api-reference/inference-api",
 		Notes:        "Inference over HTTP: synchronous POST https://fal.run/<model-path> or the queue API at https://queue.fal.run (submit, then poll/stream status); Key-based auth.",
 	},
+	{
+		// Verified 2026-11-27 against Microsoft's own Foundry REST
+		// reference: the Azure OpenAI v1 surface is served at
+		// {endpoint}/openai/v1 where {endpoint} is the deployment's
+		// resource host - a templated base (the operator supplies the
+		// resource; the same docs document the api-key header and
+		// Bearer/Entra authentication).
+		ID:          "azure-ai",
+		Name:        "Azure AI Foundry",
+		Website:     "https://learn.microsoft.com/azure/ai-foundry",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://{resource}.openai.azure.com/openai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthAPIKey, HeaderName: "api-key"},
+			{Endpoint: EndpointEmbeddings, AuthKind: AuthAPIKey, HeaderName: "api-key"},
+			{Endpoint: EndpointImages, AuthKind: AuthAPIKey, HeaderName: "api-key"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/azureopenai/chat",
+		Notes:        "TEMPLATED base: https://{resource}.openai.azure.com/openai/v1 - the operator's Azure OpenAI resource name completes the host (deployment-scoped paths per the docs). Auth: api-key header, or Bearer with Entra tokens.",
+	},
+	{
+		// Verified 2026-11-27 against Haiper's own API reference: the
+		// generation jobs live under api.haiper.ai/v1 (Bearer).
+		ID:          "haiper",
+		Name:        "Haiper",
+		Website:     "https://haiper.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.haiper.ai/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointNative, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.haiper.ai/api-reference/endpoint/1-5-text-image-to-video",
+		Notes:        "Video generation jobs at api.haiper.ai/v1/jobs/generation-v2 (POST, Bearer); native Haiper job protocol (submit, then poll).",
+	},
+	{
+		// Verified 2026-11-27 against Leonardo.Ai's own REST docs: the
+		// public API base is cloud.leonardo.ai/api/rest/v1 (Bearer).
+		ID:          "leonardo",
+		Name:        "Leonardo AI",
+		Website:     "https://leonardo.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://cloud.leonardo.ai/api/rest/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointImages, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.leonardo.ai/v1.0/reference/creategeneration",
+		Notes:        "Image generations at cloud.leonardo.ai/api/rest/v1/generations (POST, Bearer); native Leonardo REST protocol with async generation fetch.",
+	},
+	{
+		// Verified 2026-11-27 against PiAPI's own llms.txt: the
+		// unified gateway base api.piapi.ai with X-API-Key auth.
+		ID:          "piapi",
+		Name:        "PiAPI",
+		Website:     "https://piapi.ai",
+		Category:    CategoryAPIKey,
+		BaseURLs:    []string{"https://api.piapi.ai"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointImages, AuthKind: AuthXAPIKey, HeaderName: "X-API-Key"},
+			{Endpoint: EndpointNative, AuthKind: AuthXAPIKey, HeaderName: "X-API-Key"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://piapi.ai/llms.txt",
+		Notes:        "Unified gateway for image/video/audio/music/3D/language models at api.piapi.ai; X-API-Key header auth (not Bearer) per the docs.",
+	},
 }
