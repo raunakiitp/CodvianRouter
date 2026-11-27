@@ -20,6 +20,18 @@ const AnthropicVersion = "2026-10-21"
 // Free-tier notes appear ONLY where the research verified one from the
 // provider's own docs. No aggregate free-token headline is computed
 // from this list.
+// kimiCodeExchange is the shared exchange description for the Kimi
+// Code surfaces (openai + anthropic, china + overseas): the credential
+// is the Kimi Code membership token the user obtains with Kimi's own
+// tooling; the router does not perform the login.
+func kimiCodeExchange() *ExchangeAuth {
+	return &ExchangeAuth{
+		Kind:        "kimi-code-membership",
+		Description: "Kimi Code membership credential obtained through the Kimi Code CLI's sign-in (or the membership API key); the router dials with the token the user supplies — it does not perform the login.",
+		DocURL:      "https://www.kimi.com/code/docs/en/",
+	}
+}
+
 var verifiedProviders = []Provider{
 	{
 		ID:          "openai",
@@ -2524,5 +2536,297 @@ var verifiedProviders = []Provider{
 		Verification: VerificationDocs,
 		SourceURL:    "https://github.com/ml-explore/mlx-lm/blob/main/mlx_lm/SERVER.md",
 		Notes:        "Model-served-locally row: mlx_lm.server serves an OpenAI-style chat API on port 8080 of localhost; no auth.",
+	},
+	{
+		// Verified 2026-11-27 against OpenAI's own Codex docs: with ChatGPT
+		// login the Codex CLI sends Responses requests to
+		// https://chatgpt.com/backend-api/codex/responses.
+		ID:          "codex",
+		Name:        "OpenAI Codex",
+		Website:     "https://developers.openai.com/codex/cli",
+		Category:    CategoryOAuth,
+		BaseURLs:    []string{"https://chatgpt.com/backend-api/codex"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{
+				Endpoint: EndpointResponses,
+				AuthKind: AuthOAuth,
+				Exchange: &ExchangeAuth{
+					Kind:        "chatgpt-oauth",
+					Description: "ChatGPT-plan OAuth token from Codex's sign-in with ChatGPT; the router dials the Responses surface with the token the user obtains — it does not perform the login.",
+					DocURL:      "https://developers.openai.com/codex/app-server",
+				},
+			},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://openai.com/index/unrolling-the-codex-agent-loop/",
+		Notes:        "Subscription path (not the platform API): Codex with ChatGPT login POSTs Responses requests to chatgpt.com/backend-api/codex/responses; the endpoint is configurable in ~/.codex/config.toml.",
+	},
+	{
+		// Verified 2026-11-27 against Kimi Code's own docs: coding-plan
+		// base URLs for the OpenAI and Anthropic protocols (China +
+		// overseas hosts).
+		ID:          "kimi-coding",
+		Name:        "Kimi Code CLI",
+		Website:     "https://www.kimi.ai/code",
+		Category:    CategoryOAuth,
+		BaseURLs:    []string{"https://api.kimi.com/coding/v1", "https://api.kimi.ai/coding/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{
+				Endpoint: EndpointChat,
+				AuthKind: AuthOAuth,
+				Exchange: kimiCodeExchange(),
+			},
+			{
+				Endpoint: EndpointAnthropic, Variant: "cn", BaseURL: "https://api.kimi.com/coding/",
+				AuthKind: AuthOAuth,
+				Exchange: kimiCodeExchange(),
+			},
+			{
+				Endpoint: EndpointAnthropic, Variant: "overseas", BaseURL: "https://api.kimi.ai/coding/",
+				AuthKind: AuthOAuth,
+				Exchange: kimiCodeExchange(),
+			},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://www.kimi.com/code/docs/en/",
+		Notes:        "Kimi Code Platform (membership subscription, rate-limited): OpenAI-compatible api.kimi.com/coding/v1 (China) / api.kimi.ai/coding/v1 (overseas) with chat/completions + responses, and Anthropic-compatible api.kimi.{com,ai}/coding/ (v1/messages).",
+	},
+	{
+		// Verified 2026-11-27 against Kilo Code's own gateway docs: the
+		// Kilo AI Gateway is OpenAI-compatible at ai-gateway.kilo.ai/api/v1.
+		ID:          "kilocode",
+		Name:        "Kilo Code",
+		Website:     "https://kilo.ai",
+		Category:    CategoryOAuth,
+		BaseURLs:    []string{"https://ai-gateway.kilo.ai/api/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://github.com/Kilo-Org/kilocode/blob/main/packages/kilo-docs/pages/gateway/api-reference.md",
+		Notes:        "Kilo AI Gateway: all endpoints use the base https://ai-gateway.kilo.ai/api/v1 (chat completions, FIM completions, models); auth is a Kilo API key as Bearer.",
+	},
+	{
+		// Verified 2026-11-27 against Cline's own API docs: OpenAI-compatible
+		// chat completions at api.cline.bot/api/v1, Bearer Cline API key.
+		ID:          "cline",
+		Name:        "Cline",
+		Website:     "https://cline.bot",
+		Category:    CategoryOAuth,
+		BaseURLs:    []string{"https://api.cline.bot/api/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.cline.bot/api/overview",
+		Notes:        "The Cline API is an OpenAI-compatible Chat Completions endpoint behind api.cline.bot; authenticate with a Cline API key as Bearer (account token also accepted). Send X-Response-Format: openai for standard-shaped non-streaming responses.",
+	},
+	{
+		// Verified 2026-11-27 against Openference's own API docs: one base,
+		// OpenAI + Anthropic surfaces, Bearer key.
+		ID:          "openference",
+		Name:        "Openference",
+		Website:     "https://openference.com",
+		Category:    CategoryOAuth,
+		BaseURLs:    []string{"https://api.openference.com/v1"},
+		WireFormats: []WireFormat{WireOpenAI, WireAnthropic},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointAnthropic, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointResponses, AuthKind: AuthBearer, HeaderName: "Authorization"},
+			{Endpoint: EndpointModels, AuthKind: AuthBearer, HeaderName: "Authorization"},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.openference.com/api-reference/overview",
+		Notes:        "All traffic goes through one base (https://api.openference.com/v1): chat/completions + responses (OpenAI), messages (Anthropic), embeddings, models — every request requires Authorization: Bearer.",
+	},
+	{
+		// Verified 2026-11-27 against Qoder's own Cloud Agents API docs:
+		// management surface https://api.qoder.com/api/v1/cloud.
+		ID:           "qoder",
+		Name:         "Qoder",
+		Website:      "https://qoder.com",
+		Category:     CategoryOAuth,
+		BaseURLs:     []string{"https://api.qoder.com/api/v1/cloud"},
+		WireFormats:  []WireFormat{WireUnknown},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.qoder.com/cloud-agents/api/conventions/overview",
+		Notes:        "Qoder Cloud Agents API (agents, environments, sessions, events, vaults) under https://api.qoder.com/api/v1/cloud with Bearer QODER_ACCESS_TOKEN / PAT — an agent-management surface, not a chat-completions wire, so no wire format is recorded.",
+	},
+	{
+		// Verified 2026-11-27 against Devin's own API docs: sessions API at
+		// api.devin.ai (v1 legacy keys; v3 organization-scoped).
+		ID:           "devin-cli",
+		Name:         "Devin CLI",
+		Website:      "https://cli.devin.ai",
+		Category:     CategoryOAuth,
+		BaseURLs:     []string{"https://api.devin.ai/v1"},
+		WireFormats:  []WireFormat{WireUnknown},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.devin.ai/api-reference/overview",
+		Notes:        "Devin API: POST /v1/sessions (legacy API keys) and /v3/organizations/{org_id}/... (service users) with Authorization: Bearer — a session-management surface, not a chat-completions wire, so no wire format is recorded.",
+	},
+	{
+		// Verified 2026-11-27 against AWS's own Amazon Q Developer docs:
+		// the Q API endpoints the CLI and IDE surfaces call.
+		ID:           "amazon-q",
+		Name:         "Amazon Q",
+		Website:      "https://aws.amazon.com/q/developer/",
+		Category:     CategoryOAuth,
+		BaseURLs:     []string{"https://q.us-east-1.amazonaws.com", "https://codewhisperer.us-east-1.amazonaws.com"},
+		WireFormats:  []WireFormat{WireUnknown},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/vpc-interface-endpoints.html",
+		Notes:        "Amazon Q Developer API endpoints (docs.aws.amazon.com: q.<region>.amazonaws.com, plus the us-east-1 CodeWhisperer endpoint; also listed for firewall allow-listing) — a CodeWhisperer-style protocol, not a chat-completions wire, so no wire format is recorded.",
+	},
+	{
+		// Verified 2026-11-27 against Kiro's own docs: the Kiro API
+		// endpoints (Q/CodeWhisperer + per-region runtime hosts).
+		ID:           "kiro",
+		Name:         "Kiro AI",
+		Website:      "https://kiro.dev",
+		Category:     CategoryOAuth,
+		BaseURLs:     []string{"https://q.us-east-1.amazonaws.com", "https://runtime.us-east-1.kiro.dev"},
+		WireFormats:  []WireFormat{WireUnknown},
+		Verification: VerificationDocs,
+		SourceURL:    "https://kiro.dev/docs/cli/privacy-and-security/vpc-endpoints/",
+		Notes:        "Kiro's docs name its API endpoints: q.<region>.amazonaws.com (Amazon Q/CodeWhisperer service) and runtime.<region>.kiro.dev (also management./telemetry. per region) — a CodeWhisperer-style protocol, not a chat-completions wire, so no wire format is recorded.",
+	},
+	{
+		// Verified 2026-11-27 against Cursor's own docs: api2.cursor.sh
+		// carries most API/agent requests (Connect protocol).
+		ID:           "cursor",
+		Name:         "Cursor IDE",
+		Website:      "https://cursor.com",
+		Category:     CategoryOAuth,
+		BaseURLs:     []string{"https://api2.cursor.sh", "https://api2direct.cursor.sh"},
+		WireFormats:  []WireFormat{WireUnknown},
+		Verification: VerificationDocs,
+		SourceURL:    "https://cursor.com/docs/enterprise/network-configuration",
+		Notes:        "Cursor's docs name api2.cursor.sh (most API requests), api2direct.cursor.sh and api3.cursor.sh (metrics) — the agent surface is a Connect/gRPC protocol, not a chat-completions wire, so no wire format is recorded. The admin/public REST API lives at api.cursor.com.",
+	},
+	{
+		// Verified 2026-11-27 against GitHub's own enterprise Copilot docs:
+		// GHES instances use api.enterprise.githubcopilot.com; GHE Cloud
+		// data-residency orgs use copilot-api.<org>.ghe.com (template).
+		ID:           "ghe-copilot",
+		Name:         "GitHub Enterprise Copilot",
+		Website:      "https://github.com/features/copilot",
+		Category:     CategoryOAuth,
+		BaseURLs:     []string{"https://api.enterprise.githubcopilot.com", "https://copilot-api.{ghe-org}.ghe.com"},
+		WireFormats:  []WireFormat{WireUnknown},
+		Verification: VerificationDocs,
+		SourceURL:    "https://github.com/github/gh-aw-firewall/blob/main/docs/enterprise-configuration.md",
+		Notes:        "GitHub's enterprise-configuration docs: Copilot API domains even on GHES use api.enterprise.githubcopilot.com; on GHE Cloud with data residency inference runs on the dedicated subdomain copilot-api.<org>.ghe.com (templated: supply your org's slug).",
+	},
+	{
+		// Verified 2026-11-27 against GitLab's own Flows API docs: the Duo
+		// Agent Platform surface lives on the user's own GitLab instance.
+		ID:           "gitlab-duo",
+		Name:         "GitLab Duo",
+		Website:      "https://docs.gitlab.com/user/duo_agent_platform/code_suggestions/",
+		Category:     CategoryOAuth,
+		BaseURLs:     []string{"https://{gitlab-instance}/api/v4"},
+		WireFormats:  []WireFormat{WireUnknown},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.gitlab.com/api/duo_agent_platform_flows/",
+		Notes:        "GitLab Duo Agent Platform Flows API on the user's own GitLab instance (templated): POST /ai/duo_workflows/workflows with a GitLab PAT (PRIVATE-TOKEN) or OAuth token; Premium/Ultimate tiers.",
+	},
+	{
+		// Verified 2026-11-27 against RenderHour's own docs: the MCP server
+		// endpoint over streamable HTTP.
+		ID:           "renderhour",
+		Name:         "RenderHour",
+		Website:      "https://renderhour.com",
+		Category:     CategoryOAuth,
+		BaseURLs:     []string{"https://renderhour.com/api/mcp"},
+		WireFormats:  []WireFormat{WireUnknown},
+		Verification: VerificationDocs,
+		SourceURL:    "https://renderhour.com/docs",
+		Notes:        "RenderHour exposes its image/video/TTS model tools as an MCP server at https://renderhour.com/api/mcp over streamable HTTP (assistant sign-in or an rh_ API key from renderhour.com/developers) — an MCP surface, not a chat-completions wire, so no wire format is recorded.",
+	},
+	{
+		// Verified 2026-11-27 against OpenCode's own server docs:
+		// opencode serve is a headless HTTP server on 127.0.0.1:4096.
+		ID:           "opencode-server",
+		Name:         "OpenCode CLI Server",
+		Website:      "https://opencode.ai/docs/server/",
+		Category:     CategoryLocal,
+		BaseURLs:     []string{"http://127.0.0.1:4096"},
+		WireFormats:  []WireFormat{WireUnknown},
+		Verification: VerificationDocs,
+		SourceURL:    "https://opencode.ai/docs/server/",
+		Notes:        "opencode serve runs a headless HTTP server (defaults 127.0.0.1:4096; --port/--hostname) exposing opencode's own REST/SSE API with an OpenAPI 3.1 spec at /doc; optional basic auth via OPENCODE_SERVER_PASSWORD. Not a chat-completions wire, so no wire format is recorded.",
+	},
+	{
+		// Verified 2026-11-27 against llamafile's own README: an
+		// OpenAI-compatible server on port 8080.
+		ID:          "llamafile",
+		Name:        "Llamafile",
+		Website:     "https://github.com/Mozilla-Ocho/llamafile",
+		Category:    CategoryLocal,
+		BaseURLs:    []string{"http://localhost:8080/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthNone},
+			{Endpoint: EndpointModels, AuthKind: AuthNone},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://github.com/Mozilla-Ocho/llamafile",
+		Notes:        "A llamafile embeds an OpenAI-compatible API server (chat/completions, embeddings) listening on http://localhost:8080 by default (--port); no authentication.",
+	},
+	{
+		// Verified 2026-11-27 against NVIDIA Triton's own docs: the
+		// OpenAI-compatible frontend serves /v1/chat/completions (port 9000
+		// in the documented launch).
+		ID:          "triton",
+		Name:        "NVIDIA Triton",
+		Website:     "https://developer.nvidia.com/triton-inference-server",
+		Category:    CategoryLocal,
+		BaseURLs:    []string{"http://localhost:9000/v1"},
+		WireFormats: []WireFormat{WireOpenAI},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointChat, AuthKind: AuthNone},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/client_guide/openai_readme.html",
+		Notes:        "Triton's OpenAI-Compatible Frontend (openai_frontend) serves POST /v1/chat/completions and /v1/completions on port 9000 in the documented launch; OpenAI clients point base_url at http://localhost:9000/v1 (api_key 'EMPTY').",
+	},
+	{
+		// Verified 2026-11-27 against stable-diffusion-webui's own API wiki:
+		// --api exposes the REST surface on 127.0.0.1:7860.
+		ID:          "sdwebui",
+		Name:        "SD WebUI",
+		Website:     "https://github.com/AUTOMATIC1111/stable-diffusion-webui",
+		Category:    CategoryLocal,
+		BaseURLs:    []string{"http://127.0.0.1:7860"},
+		WireFormats: []WireFormat{WireUnknown},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointImages, AuthKind: AuthNone},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/API",
+		Notes:        "Start with --api: the webui serves its REST API on 127.0.0.1:7860 (/sdapi/v1 txt2img, img2img, ...). An image-generation surface, not a chat-completions wire, so no wire format is recorded.",
+	},
+	{
+		// Verified 2026-11-27 against ComfyUI's own repo docs: the server
+		// listens on 127.0.0.1:8188 with its workflow API.
+		ID:          "comfyui",
+		Name:        "ComfyUI",
+		Website:     "https://github.com/comfyanonymous/ComfyUI",
+		Category:    CategoryLocal,
+		BaseURLs:    []string{"http://127.0.0.1:8188"},
+		WireFormats: []WireFormat{WireUnknown},
+		Endpoints: []EndpointAuth{
+			{Endpoint: EndpointNative, AuthKind: AuthNone},
+		},
+		Verification: VerificationDocs,
+		SourceURL:    "https://github.com/comfyanonymous/ComfyUI",
+		Notes:        "ComfyUI's server listens on 127.0.0.1:8188 and serves its workflow API (queue a workflow graph via /prompt, poll /history) — a graph-execution surface, not a chat-completions wire, so no wire format is recorded.",
 	},
 }

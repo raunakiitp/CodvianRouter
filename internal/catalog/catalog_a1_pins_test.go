@@ -65,9 +65,9 @@ func TestCatalogShapePins(t *testing.T) {
 	nilByCategory := map[Category]int{
 		CategoryAPIKey:        26, // 105 originally; 99 after A1 batch 1; 98 after D2; 92 after batch 2; 87 after batch 3; 84 after batch 4; 79 after batch 5; 75 after batch 6; 71 after batch 7; 69 after batch 8; 64 after batch 9; 60 after batch 10; 58 after batch 11; 55 after batch 12; 52 after batch 13; 50 after batch 14; 26 after batch 15
 		CategoryWebCookie:     37,
-		CategoryOAuth:         28,
+		CategoryOAuth:         15, // 28 originally; 15 after the A3 item 7 batch (13 docs-verified fills; the 15 that remain have no documented base in their own docs)
 		CategorySearch:        17, // 21 originally; 17 after batch 16 (exa, x-search, perplexity, kimi-search)
-		CategoryLocal:         5,  // 13 originally; 5 after batch 16 (vllm, llama-cpp, xinference, docker-model-runner, lemonade, oobabooga, mlx-gemma, mlx-qwen)
+		CategoryLocal:         0,  // 13 originally; 5 after batch 16 (vllm, llama-cpp, xinference, docker-model-runner, lemonade, oobabooga, mlx-gemma, mlx-qwen); 0 after the A3 item 7 batch (opencode-server, llamafile, triton, sdwebui, comfyui)
 		CategoryAudio:         10, // 12 originally; 10 after batch 16 (fishaudio, inworld)
 		CategoryNoAuth:        10, // A3 item 5 (2026-11-27): all ten stay nil - the five CT-4 entry-403 rows must stay un-addable (ct4_test.go), the five CLI bridges own their endpoints (mechanisms in internal/noauth), and the three web surfaces have no documented endpoint
 		CategoryCloudAgent:    3,
@@ -152,6 +152,63 @@ func TestNoAuthRowsStayNilMechanismsInNoauthPkg(t *testing.T) {
 		}
 		if reason := p.UnroutableReason(); !strings.Contains(reason, "not documented yet") && !strings.Contains(reason, "not yet") {
 			t.Errorf("%s: unroutable reason = %q, want the pending-verification statement", id, reason)
+		}
+	}
+}
+
+// A3 item 7 (2026-11-27) pins: the OAuth + Local base-URL fills, each
+// verified against the provider's own documentation.
+var filledA3OAuth = map[string]string{
+	"codex":       "https://chatgpt.com/backend-api/codex",
+	"kimi-coding": "https://api.kimi.com/coding/v1",
+	"kilocode":    "https://ai-gateway.kilo.ai/api/v1",
+	"cline":       "https://api.cline.bot/api/v1",
+	"openference": "https://api.openference.com/v1",
+	"qoder":       "https://api.qoder.com/api/v1/cloud",
+	"devin-cli":   "https://api.devin.ai/v1",
+	"amazon-q":    "https://q.us-east-1.amazonaws.com",
+	"kiro":        "https://q.us-east-1.amazonaws.com",
+	"cursor":      "https://api2.cursor.sh",
+	"ghe-copilot": "https://api.enterprise.githubcopilot.com",
+	"gitlab-duo":  "https://{gitlab-instance}/api/v4",
+	"renderhour":  "https://renderhour.com/api/mcp",
+}
+
+var filledA3Local = map[string]string{
+	"opencode-server": "http://127.0.0.1:4096",
+	"llamafile":       "http://localhost:8080/v1",
+	"triton":          "http://localhost:9000/v1",
+	"sdwebui":         "http://127.0.0.1:7860",
+	"comfyui":         "http://127.0.0.1:8188",
+}
+
+// TestA3FillsEntriesFilled proves every entry filled in the A3 item 7
+// batch kept its verified shape: the documented base URL, docs
+// verification, a real documentation SourceURL, and a declared wire
+// format.
+func TestA3FillsEntriesFilled(t *testing.T) {
+	for _, batch := range []map[string]string{filledA3OAuth, filledA3Local} {
+		for id, wantURL := range batch {
+			p, ok := ByID(id)
+			if !ok {
+				t.Errorf("%s: missing from the live catalog", id)
+				continue
+			}
+			if len(p.BaseURLs) == 0 || p.BaseURLs[0] != wantURL {
+				t.Errorf("%s: BaseURLs = %v, want first %s", id, p.BaseURLs, wantURL)
+			}
+			if p.Verification != VerificationDocs {
+				t.Errorf("%s: Verification = %q, want docs-verified", id, p.Verification)
+			}
+			if !strings.HasPrefix(p.SourceURL, "https://") {
+				t.Errorf("%s: SourceURL = %q, want the provider's own docs URL", id, p.SourceURL)
+			}
+			if len(p.WireFormats) == 0 {
+				t.Errorf("%s: has a base URL but declares no wire format", id)
+			}
+			if p.Category != CategoryOAuth && p.Category != CategoryLocal {
+				t.Errorf("%s: category = %q, want oauth or local", id, p.Category)
+			}
 		}
 	}
 }
