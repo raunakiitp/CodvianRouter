@@ -4474,6 +4474,18 @@ func openStack(opts options) (*stack, error) {
 		// included. Until now the hook was nil and hits recorded
 		// nothing to the ledger.
 		se.SetLedgerRecorder(asyncLed)
+
+		// Background exact-cache stale-entry sweep (A13 H6): drop expired
+		// in-memory entries every minute so they don't linger in memory
+		// (Size/Stats count tombstoned rows until accessed) and a restart
+		// never reloads them. Runs only while the process lives.
+		go func() {
+			t := time.NewTicker(time.Minute)
+			defer t.Stop()
+			for range t.C {
+				se.SweepExpired(context.Background())
+			}
+		}()
 	}
 
 	// Guardrails seeded from the config file (CHECKLIST 185):
