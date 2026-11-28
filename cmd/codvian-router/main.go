@@ -4725,7 +4725,17 @@ func webhookDispatcher(cfg *config.Config) *webhooks.Dispatcher {
 	for _, w := range cfg.Webhooks {
 		endpoints = append(endpoints, webhooks.Endpoint{ID: w.ID, URL: w.URL, Events: w.Events, Secret: w.Secret})
 	}
-	return webhooks.New(endpoints, nil, log.New(os.Stderr, "codvian-router: ", log.LstdFlags))
+	d := webhooks.New(endpoints, nil, log.New(os.Stderr, "codvian-router: ", log.LstdFlags))
+	// Durable delivery queue: pending/failed deliveries persist to the
+	// data dir and are redelivered once at startup, and delivery history
+	// is retained. Wire it before any event can fire.
+	if cfg.DataDir != "" {
+		if q, qerr := webhooks.OpenQueue(filepath.Join(cfg.DataDir, "webhook-queue.json")); qerr == nil {
+			d.SetQueue(q)
+			go d.RedeliverPending()
+		}
+	}
+	return d
 }
 
 // isLocalProvider reports whether a configured provider is a local

@@ -65,6 +65,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -249,6 +250,17 @@ func (s *Server) rebuildWebhookDispatcher() {
 	// nil client = the SSRF-safe egress client (production). Tests
 	// that deliver to a loopback httptest receiver set webhookClient.
 	s.webhooks = webhooks.New(endpoints, s.webhookClient, s.logger)
+	// Durable delivery queue (A4 item 5): pending/failed deliveries persist
+	// under the data dir so they can be redelivered after a restart, and a
+	// delivery history is retained. Startup redelivery is driven by main.go;
+	// this only keeps the live dispatcher queue-backed after a mutation.
+	if s.cfg != nil && s.cfg.DataDir != "" {
+		if q, err := webhooks.OpenQueue(filepath.Join(s.cfg.DataDir, "webhook-queue.json")); err == nil {
+			s.webhooks.SetQueue(q)
+		} else {
+			s.logger.Printf("webhooks: durable queue unavailable: %v", err)
+		}
+	}
 }
 
 // persistWebhooks saves the config file after a mutation, or
