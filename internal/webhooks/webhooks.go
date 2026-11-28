@@ -83,6 +83,48 @@ const (
 	ProviderRecoveredEvent = "provider.recovered"
 )
 
+// BudgetWarningEvent fires when an internal budget crosses its
+// warning threshold (the server's budget machinery edge-triggers it
+// via notifyBudgetWarning).
+const BudgetWarningEvent = "budget.warning"
+
+// Evaluation events, emitted by the eval scheduler when a scheduled
+// evaluation completes, fails, or regresses against its baseline.
+// They carry schedule_id + run_id and nothing else (no provider
+// credential, no prompt).
+const (
+	EvalCompletedEvent  = "eval.completed"
+	EvalRunFailedEvent  = "eval.run.failed"
+	EvalRegressionEvent = "eval.regression"
+)
+
+// KnownEvents returns the canonical set of webhook event names a
+// subscription may name. It is the SINGLE source of truth shared by
+// the config-file validator (internal/config) and the registration
+// API (internal/server), so the two sets can never drift: an event
+// that one accepts is accepted by the other, and the same unknown
+// name is rejected by both. The returned slice is a fresh copy, so a
+// caller cannot mutate the set for everyone else.
+//
+// Every name here has a real emit site in the gateway; do not add a
+// name without one (a subscribable-but-never-emitted event is a fake
+// capability).
+func KnownEvents() []string {
+	return []string{
+		QuotaExceededEvent,
+		BudgetWarningEvent,
+		ProviderDegradedEvent,
+		ProviderRecoveredEvent,
+		RequestCompletedEvent,
+		RequestFailedEvent,
+		ProviderExhaustedEvent,
+		EvalCompletedEvent,
+		EvalRunFailedEvent,
+		EvalRegressionEvent,
+		TestPingEvent,
+	}
+}
+
 // Endpoint is one subscribed webhook endpoint. Kind selects the
 // delivery payload shape: "" (or an unknown value, rejected at config
 // validation) is the generic signed JSON envelope; "slack" / "discord"
@@ -220,6 +262,36 @@ func (d *Dispatcher) Notify(event string, payload map[string]any) {
 		ep := ep
 		go d.safeDeliver(ep, event, body)
 	}
+}
+
+// NotifyEndpoint delivers event+payload to the single endpoint with
+// the given id, asynchronously, REGARDLESS of that endpoint's
+// subscription set. It is the test-send path: an operator asking for
+// a test delivery to an endpoint must get one even when the endpoint
+// does not (yet) subscribe to the event, otherwise the only way to
+// test connectivity would be to first subscribe — which is what the
+// test exists to validate. Returns false when the dispatcher is nil
+// or no endpoint with that id exists (nothing is delivered).
+func (d *Dispatcher) NotifyEndpoint(id, event string, payload map[string]any) bool {
+	if d == nil {
+		return false
+	}
+	body, err := json.Marshal(map[string]any{
+		"event":     event,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"data":      payload,
+	})
+	if err != nil {
+		return false
+	}
+	for _, ep := range d.endpoints {
+		if ep.ID == id {
+			ep := ep
+			go d.safeDeliver(ep, event, body)
+			return true
+		}
+	}
+	return false
 }
 
 // safeDeliver runs one endpoint delivery in its own goroutine and
