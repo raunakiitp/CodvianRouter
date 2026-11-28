@@ -9,7 +9,7 @@
 // JSONL lines — and NEVER rewrites prose, never cuts a line
 // mid-string, and never drops a failure or a summary line.
 //
-// What was studied (the reference router reference clone, study only — no
+// What was studied (the sector baseline reference clone, study only — no
 // code copied):
 //
 //   - docs/compression/RTK_COMPRESSION.md — the 3 intensity
@@ -19,16 +19,16 @@
 //     head/tail/maxLines pipeline, dedup threshold 3, and the
 //     rule that errors / stack traces / test failures are
 //     preserved at every level.
-//   - open-sse/services/compression/engines/rtk/commandDetector.ts
+//   - the earlier implementation
 //     (493 lines) — command-prefix + content-pattern detection,
 //     shell-tool-only gating.
-//   - open-sse/services/compression/engines/rtk/index.ts
+//   - the earlier implementation
 //     (756 lines) — engine pipeline, smartTruncate head/tail
 //     with priority (severity) patterns, engine-wide dedup.
-//   - open-sse/services/compression/engines/rtk/lineFilter.ts
+//   - the earlier implementation
 //     (244 lines) — stripAnsi, drop/include/collapse patterns,
 //     head/tail/maxLines per filter.
-//   - open-sse/services/compression/engines/rtk/filters/*.json
+//   - the earlier implementation*.json
 //     (56 files) — e.g. test-pytest.json, test-go.json,
 //     npm-install.json, json-output.json,
 //     error-stacktrace.json, generic-output.json.
@@ -36,7 +36,7 @@
 // Honest coverage: this file implements 18 packs, NOT 56.
 // RTKPackCount reports the real number, and every pack is
 // reachable through DetectRTKPack (proved by the detection
-// table test). The remaining 38 the reference router packs (aws, gcloud,
+// table test). The remaining 38 the sector baseline packs (aws, gcloud,
 // kubectl, gradle, turbo, nx, systemctl, terraform beyond
 // plan, and the rest) are NOT implemented; claiming 56 would
 // be fake. No savings percentage is claimed here either —
@@ -48,7 +48,7 @@
 //   - Whole lines only. A line is kept verbatim or dropped
 //     whole; no line is ever truncated mid-string, so a URL or
 //     JSON value is never cut mid-string and no spliced value
-//     is ever produced. (Deliberate divergence from the reference router's
+//     is ever produced. (Deliberate divergence from the sector-typical
 //     truncateLineAt: per-line truncation is NOT implemented.)
 //   - Fenced code blocks are kept byte-identical, ANSI and
 //     all: ANSI stripping and \r resolution run only outside
@@ -88,7 +88,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/provider"
 )
 
-// RTKLevel is an RTK intensity level, mirroring the reference router's
+// RTKLevel is an RTK intensity level, mirroring the sector-typical
 // minimal / standard / aggressive. The zero value ("") means
 // disabled: FilterRTKText returns its input unchanged.
 type RTKLevel string
@@ -715,7 +715,7 @@ func filterRTKLines(lines []string, pack RTKPack, hasPack, jsonl bool, cfg rtkLe
 			lastCollapse = -1
 		}
 
-		// Engine-wide dedup (the reference router threshold 3): a run of
+		// Engine-wide dedup (the sector baseline threshold 3): a run of
 		// >= 3 identical consecutive kept lines collapses —
 		// the first two are kept, the third and later dropped.
 		// (Keeping two, not one, is the conservative reading

@@ -1,14 +1,14 @@
-// Per-key token limits (M5.3, the reference router lib/db/tokenLimits.ts +
-// open-sse/services/tokenLimitCounter.ts, verified 2026-11-18).
+// Per-key token limits (M5.3, the sector baseline lib/db/tokenLimits.ts +
+// the earlier implementation, verified 2026-11-18).
 //
 // A token limit caps TOTAL tokens (prompt + completion, as recorded
 // in usage_events.total_tokens) inside one calendar reset window,
 // scoped to a model, a provider, or globally. The ledger IS the
 // counter: window usage is summed from usage_events, so no separate
 // counter table exists to drift — the same "ledger is the counter"
-// rule as the USD budgets (M5.1) and the reference router's seed-from-history.
+// rule as the USD budgets (M5.1) and the sector-typical seed-from-history.
 //
-// Pre-request gate (mirror of the reference router's checkTokenLimits): a
+// Pre-request gate (mirror of the sector-typical checkTokenLimits): a
 // limit is breached when the window's used tokens are already at
 // or over the limit — the request that would push usage over is
 // admitted and the NEXT one is refused. The most-restrictive

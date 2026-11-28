@@ -9,16 +9,16 @@
 //	Bypass (skip lookup AND store AND the stale fallback — a
 //	bypassed request is never served a stale answer and never
 //	poisons the cache):
-//	  - X-Codvian-No-Cache: true — mirrors the reference router's
+//	  - X-Codvian-No-Cache: true — mirrors the sector-typical
 //	    X-Router-No-Cache: true
 //	    The X-Router-No-Cache spelling is accepted as an
 //	    alias, the same way X-Codvian-Budget accepts the
 //	    reference-style Budget-Fallback alias.
 //	  - Cache-Control containing a no-cache directive — also
-//	    verified the reference router behaviour (same two functions check
+//	    verified the sector baseline behaviour (same two functions check
 //	    cache-control for "no-cache").
 //	  - Pragma: no-cache — HTTP/1.0 legacy equivalent. NOT
-//	    verified in the reference router (their gateway code never reads
+//	    verified in the sector baseline (their gateway code never reads
 //	    Pragma for caching); accepted here as a Codvian
 //	    extension because a client sending it plainly means
 //	    "do not serve me a cached answer".
@@ -26,16 +26,16 @@
 //	No-store (skip store only; lookup still allowed):
 //	  - X-Codvian-Cache-No-Store: true
 //	  - Cache-Control containing a no-store directive (the
-//	    standard HTTP meaning; the reference router does not document it,
+//	    standard HTTP meaning; the sector baseline does not document it,
 //	    this is a Codvian extension).
 //
 //	Per-request controls (X-Codvian- prefix; no per-request
 //	key/type/threshold/ttl/no-store header was found in
-//	the reference router's docs or gateway source — the reference router has only the
+//	the sector-typical docs or gateway source — the sector baseline has only the
 //	global semanticCacheThreshold 0.8 and semanticCacheTTL
 //	30 min settings in src/app/api/settings/cache-config/
 //	route.ts — so these are Codvian extensions in the same
-//	naming spirit, not the reference router parity):
+//	naming spirit, not the sector baseline parity):
 //	  - X-Codvian-Cache-Key: caller-chosen exact-cache bucket.
 //	    The value is only a token: the stored key is
 //	    hash(tenant + model + value), so tenants and models

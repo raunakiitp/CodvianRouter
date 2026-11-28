@@ -32,7 +32,7 @@ func TestModelLockoutLadder(t *testing.T) {
 	if d2 < 235*time.Second || d2 > 240*time.Second {
 		t.Fatalf("2nd lockout = %v, want ~240s", d2)
 	}
-	// A 500 is NOT a lockout code (the reference router's list has no 500):
+	// A 500 is NOT a lockout code (the sector-typical list has no 500):
 	// it neither locks nor climbs the ladder.
 	m2 := NewModelLockout(LockoutConfig{Enabled: true})
 	if locked, _ := m2.Record("a", "", "m", 500); locked {
@@ -152,7 +152,7 @@ func TestModelLockoutSkipsDeadModel(t *testing.T) {
 // (a lock that expired is gone; a success on the triple never
 // leaves a stale entry behind). Note the lock itself is what
 // prevents re-dialling while it runs: recovery is only observable
-// after expiry, exactly like the reference router's lockout.
+// after expiry, exactly like the sector-typical lockout.
 func TestModelLockoutSuccessClears(t *testing.T) {
 	ctx := context.Background()
 	dead404 := &provider.UpstreamError{StatusCode: 404, Retryable: true, Body: "model not found"}

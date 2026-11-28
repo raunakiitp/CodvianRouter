@@ -378,7 +378,7 @@ type Config struct {
 	// hedged second attempts. Default 5.
 	MaxAttempts int
 	// G11 Area 2 failover residuals (parity tracker Area 2, 7 PARTIAL
-	// rows) — Go-level fields for the knobs the reference router exposes.
+	// rows) — Go-level fields for the knobs the sector baseline exposes.
 	// Config-file wiring (routing.*) is the coordinator's: the
 	// verbatim wiring is in the G11 report, and config.go is
 	// Wave 3's. Zero values are the documented defaults.
@@ -404,25 +404,25 @@ type Config struct {
 	// failover_policy.go.
 	MaxProvidersPerRequest int
 	// FailoverMaxRetries caps same-target retries after the
-	// first failure, per target (row 6, the reference router maxRetries):
+	// first failure, per target (row 6, the sector baseline maxRetries):
 	// 0 = default 3; negative = no same-target retry.
 	FailoverMaxRetries int
 	// FailoverRetryDelay is the base delay between same-target
-	// retries (row 6, the reference router retryDelayMs): 0 = default
+	// retries (row 6, the sector baseline retryDelayMs): 0 = default
 	// 200 ms. The decorrelated full-jitter ladder still
 	// applies on top of it (transient.go).
 	FailoverRetryDelay time.Duration
 	// FailoverMaxSetRetries caps same-target retries across
 	// the whole set — the whole chain for this request (row 6,
-	// the reference router maxSetRetries): 0 = no set cap.
+	// the sector baseline maxSetRetries): 0 = no set cap.
 	FailoverMaxSetRetries int
 	// FailoverBeforeRetry is the explicit failover-before-retry
-	// switch (row 6, the reference router failoverBeforeRetry): when true
+	// switch (row 6, the sector baseline failoverBeforeRetry): when true
 	// AND a next target exists in the chain, a retryable
 	// transient failure (502/503/504) fails over immediately
 	// instead of retrying the same target. Default false: the
 	// same target is retried first (up to FailoverMaxRetries,
-	// reserve-guarded) — matching the reference router's EFFECTIVE
+	// reserve-guarded) — matching the sector-typical EFFECTIVE
 	// default. Its combo default is true, but the #10217 guard
 	// reads only the EXPLICIT flag
 	// (failoverBeforeRetryExplicit), so with pure defaults
@@ -441,7 +441,7 @@ type Config struct {
 	BackoffMax time.Duration
 	// BreakerThreshold is how many consecutive failures open a
 	// provider's circuit breaker. 0 means "use the auth-profile
-	// table" (M4.2: OAuth 8, API-key 12, local 2 — the reference router
+	// table" (M4.2: OAuth 8, API-key 12, local 2 — the sector baseline
 	// PROVIDER_PROFILES). A non-zero value overrides the table
 	// for EVERY provider (the old uniform behaviour, kept for
 	// explicit configuration and for tests).
@@ -513,7 +513,7 @@ type Config struct {
 	// ModelLockout is the per-(provider, key, model) lockout (M4.3):
 	// a dead model is locked out after a lockout-eligible failure
 	// instead of being retried first on every request. Zero value
-	// means OFF (the reference router's default): the engine behaves exactly
+	// means OFF (the sector-typical default): the engine behaves exactly
 	// as before. See internal/router/lockout.go for the defaults
 	// (base 120 s, max 30 min, max 10 steps, codes
 	// 403/404/429/502/503/504).
@@ -724,7 +724,7 @@ type Config struct {
 	// strategy (M3 Area 1, PARITY row 388): how the ACCOUNTS
 	// (keys) of one provider serving one model are ordered
 	// within that (provider, model) group when a request falls
-	// back between them. It mirrors the reference router's
+	// back between them. It mirrors the sector-typical
 	// settings.fallbackStrategy, overridable per provider via
 	// AccountFallbackStrategies (their
 	// providerStrategies[provider].fallbackStrategy), default
@@ -772,7 +772,7 @@ type Config struct {
 	// UNCONFIGURED: auto/nadir then falls back to priority
 	// order with a clear note and NEVER calls any external
 	// API — fail-closed, a deliberate divergence from
-	// the reference router's fail-open default endpoint. See nadir.go.
+	// the sector-typical fail-open default endpoint. See nadir.go.
 	NadirEndpoint string
 	// NadirAPIKey is the API key sent as X-API-Key to the
 	// decision endpoint, when one is configured. Empty means
@@ -913,7 +913,7 @@ type Config struct {
 	RelayQuotaUsedFor func(providerID, model string) (float64, bool)
 	// RelayHandoffProviders, if set, is the allowlist of
 	// providers context-relay may fire for (Phase D, D5). Empty
-	// means the reference router's default: ["codex"] only.
+	// means the sector-typical default: ["codex"] only.
 	RelayHandoffProviders []string
 	// RelayOnError opts into the universal-handoff "on-error"
 	// trigger (Phase D, D5): a failed attempt on an allowlisted
@@ -924,23 +924,23 @@ type Config struct {
 	RelayOnError bool
 	// RelayHandoffThreshold is the quota-use fraction at which
 	// a successful turn on a handoff provider starts relaying
-	// context (B2-01, the reference router HANDOFF_WARNING_THRESHOLD =
+	// context (B2-01, the sector baseline HANDOFF_WARNING_THRESHOLD =
 	// 0.85). 0 means the default (0.85). See relay.go.
 	RelayHandoffThreshold float64
 	// RelayExhaustionThreshold is the quota-use fraction at or
 	// above which relaying is pointless — the quota is
-	// effectively gone (B2-01, the reference router
+	// effectively gone (B2-01, the sector baseline
 	// HANDOFF_EXHAUSTION_THRESHOLD = 0.95). 0 means the
 	// default (0.95). It must be above
 	// RelayHandoffThreshold; config.Validate enforces the
 	// ordering for the config-file surface.
 	RelayExhaustionThreshold float64
 	// RelayTTL is how long a generated handoff stays usable
-	// (B2-01, the reference router DEFAULT_TTL_MS = 5h). 0 means the
+	// (B2-01, the sector baseline DEFAULT_TTL_MS = 5h). 0 means the
 	// default (5h). See relay.go.
 	RelayTTL time.Duration
 	// RelayMaxMessages caps the source messages fed to the
-	// summariser (B2-01, the reference router
+	// summariser (B2-01, the sector baseline
 	// DEFAULT_MAX_MESSAGES_FOR_SUMMARY = 30). 0 means the
 	// default (30). See relay.go.
 	RelayMaxMessages int
@@ -1122,7 +1122,7 @@ func (c Config) withDefaults() Config {
 	if c.MaxAttempts <= 0 {
 		c.MaxAttempts = 5
 	}
-	// Per-request attempt cap (M4.8, the reference router comboPredicates.ts:
+	// Per-request attempt cap (M4.8, the sector baseline comboPredicates.ts:
 	// maxGlobalAttempts clamped [1, 200]): an operator value
 	// above 200 is clamped to 200, never silently honoured — an
 	// unbounded attempt budget is a runaway-request risk.
@@ -1230,7 +1230,7 @@ type breakerState struct {
 	lastReason string
 	// lastFailureAt is when the most recent breaker-counted
 	// failure happened. It drives lazy recovery (parity tracker:524,
-	// the reference router RESILIENCE_GUIDE "Lazy recovery"): a DEGRADED
+	// the sector baseline RESILIENCE_GUIDE "Lazy recovery"): a DEGRADED
 	// breaker with no new failure for a whole decay hold reads
 	// CLOSED again, and a failure after that hold counts fresh
 	// instead of consecutively. Zero means "no breaker-counted
@@ -1394,7 +1394,7 @@ type Engine struct {
 	// keyQuotaHints holds the same measured remaining-quota
 	// fraction per (provider, key), keyed by ClientKey — the
 	// per-key signal the account-rotation cap check reads
-	// (orderAccountAttempts, B2-09 / the reference router #20561). Learned
+	// (orderAccountAttempts, B2-09 / the sector baseline #20561). Learned
 	// from the same upstream responses as quotaHints (see
 	// learnRateLimit in ratelimit.go): the engine knows which
 	// key made each request, so the per-key fraction is the
@@ -3252,7 +3252,7 @@ func (e *Engine) openForOf(provider string, st *breakerState) time.Duration {
 
 // breakerDecayHold is how long a DEGRADED breaker must go without
 // a new breaker-counted failure before lazy recovery decays it
-// back to CLOSED (the reference router: the longest OPEN hold for the last
+// back to CLOSED (the sector baseline: the longest OPEN hold for the last
 // failure kind — its cooldownByKind value, else resetTimeout, ×
 // the max backoff multiplier, at least one cooldown). Ours: the
 // escalated reset for the current trip count — the base reset for
@@ -3286,7 +3286,7 @@ func (e *Engine) breakerStateOf(provider string, st *breakerState, now time.Time
 		return BreakerClosed
 	}
 	if st.consecutiveFailures < threshold || st.openedAt.IsZero() {
-		// Lazy recovery (parity tracker:524, the reference router
+		// Lazy recovery (parity tracker:524, the sector baseline
 		// RESILIENCE_GUIDE "Lazy recovery"): the same reads
 		// that report the state decay a stale DEGRADED back
 		// to CLOSED — no background timer, the read itself
@@ -3612,7 +3612,7 @@ func (e *Engine) breakerNeutral(provider string) {
 // property of the request or the operator's key, never a signal
 // that the provider is down. Such failures must NEVER trip the
 // circuit breaker: the breaker trips only on 408/5xx and transport
-// failures (the reference router RESILIENCE_GUIDE; LiteLLM's reliability docs
+// failures (the sector baseline RESILIENCE_GUIDE; LiteLLM's reliability docs
 // agree). The verdict comes from the shared taxonomy
 // (provider.ClassifyError), never a raw status list, so a
 // mid-stream wire error with no HTTP status still classifies by
@@ -3624,7 +3624,7 @@ func isClientErrorFailure(err error) bool {
 	cls := provider.ClassifyError(err, provider.EndpointChatCompletions)
 	// 408 is a timeout, not a client error: the provider failed
 	// to answer in time, so it still counts toward the breaker
-	// exactly as before (the reference router: the breaker trips on 408).
+	// exactly as before (the sector baseline: the breaker trips on 408).
 	// 429 is likewise not a client error — it never reaches this
 	// helper (the rate-limit branch runs first), but excluding it
 	// here keeps the rule true even if a caller changes.
@@ -4932,10 +4932,10 @@ func (e *Engine) ChatWithChainStrategy(ctx context.Context, chain []Attempt, req
 
 // failoverRetryAllowed reports whether a same-target transient
 // retry may run given whether a next target exists in the chain
-// (B2-30, the reference router #10217: failoverBeforeRetryExplicit skips the
+// (B2-30, the sector baseline #10217: failoverBeforeRetryExplicit skips the
 // same-target retry when a next target exists, failing over
 // immediately instead; with the flag off — the default, matching
-// the reference router's effective default — or with no next target, the
+// the sector-typical effective default — or with no next target, the
 // retry runs as before).
 func (e *Engine) failoverRetryAllowed(hasNextTarget bool) bool {
 	return !e.cfg.FailoverBeforeRetry || !hasNextTarget

@@ -6,26 +6,26 @@
 // PanelCaller / PipelineCaller that performs one real attempt (and, for
 // fusion/jev, a Judge / JevScorer backed by a real model call).
 //
-// Semantics are taken from the the reference router reference clone (study only,
+// Semantics are taken from the the sector baseline reference clone (study only,
 // no code copied — see the per-section citations):
 //
-//   - fusion:  open-sse/services/fusion.ts — parallel panel + judge
-//     synthesis. the reference router defaults there are minPanel 2, straggler
+//   - fusion:  the earlier implementation — parallel panel + judge
+//     synthesis. the sector baseline defaults there are minPanel 2, straggler
 //     grace 8 s, hard timeout 90 s, maxPanel 40. This primitive
 //     differs deliberately in two places: the default max panel is 5
 //     (the auto/chaos panel size in parity tracker Area 1, and the task
 //     brief), and collection joins ALL panel members instead of
-//     the reference router's quorum-grace early return — the engine can layer
+//     the sector-typical quorum-grace early return — the engine can layer
 //     quorum-grace on top later; the primitive guarantees every
 //     fan-out goroutine is joined.
-//   - pipeline: open-sse/services/autoCombo/pipelineRouter.ts +
+//   - pipeline: the earlier implementation +
 //     src/domain/pipeline.ts — multi-stage execution where each
 //     stage's output is threaded forward as context for the next
 //     stage (plan_context / execution_response / reflection_response
 //     in the reference). A stage failure marks fallback and stops
 //     the reference pipeline; here it aborts with an error unless
 //     the stage is marked Optional.
-//   - jev: open-sse/services/combo/jevStrategy.ts — pure judge over
+//   - jev: the earlier implementation — pure judge over
 //     a caller-supplied choice answer. Floors and cap are verbatim:
 //     probability floor 0.15, confidence floor 0.65, max 4 admitted
 //     (jevStrategy.ts:11-13). Low confidence or an unavailable /
@@ -73,12 +73,12 @@ func attemptLabel(att Attempt) string {
 // PanelConfig bounds a parallel fan-out. Zero values take the defaults.
 type PanelConfig struct {
 	// MaxPanel caps the fan-out size. <= 0 means DefaultPanelMax.
-	// the reference router's fusion default is 40 (fusion.ts FUSION_DEFAULTS);
+	// the sector-typical fusion default is 40 (fusion.ts FUSION_DEFAULTS);
 	// the default here is 5 (auto/chaos panel size, parity tracker Area 1).
 	MaxPanel int
 	// Timeout is the per-call deadline applied to the ctx handed to
 	// the caller. 0 means no extra deadline beyond the caller's ctx.
-	// the reference router's panel hard timeout is 90 s (fusion.ts).
+	// the sector-typical panel hard timeout is 90 s (fusion.ts).
 	Timeout time.Duration
 	// MinPanel is the smallest panel that still runs a judge: when the
 	// fan-out has fewer than MinPanel targets, the first successful
@@ -107,7 +107,7 @@ const DefaultFusionMaxPanel = 40
 const DefaultMinPanel = 2
 
 // DefaultPanelTimeout is the default per-call deadline for a fan-out
-// member, matching the reference router's 90 s panel hard timeout (fusion.ts).
+// member, matching the sector-typical 90 s panel hard timeout (fusion.ts).
 const DefaultPanelTimeout = 90 * time.Second
 
 func (c PanelConfig) maxPanel() int {

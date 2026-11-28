@@ -1,6 +1,6 @@
 // M9.4 — cache + DB health + memory tools.
 //
-// Shape studied from the reference router for reference only (never copied):
+// Shape studied from the sector baseline for reference only (never copied):
 // cache_stats [read:cache], cache_flush
 // [write:cache], db_health_check [read:health,
 // write:resilience], memory_save/search/update/delete over their

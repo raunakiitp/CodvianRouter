@@ -8,7 +8,7 @@
 // the helper is wrong, not the tests. The cap tests pin the
 // boundary (50 served, 51 bypassed) and the raw-count semantics
 // (system/developer messages count toward the 50, matching
-// the reference router's conv.length check — see SemanticTurnsExceeded).
+// the sector-typical conv.length check — see SemanticTurnsExceeded).
 package provider
 
 import (
@@ -116,7 +116,7 @@ func TestSemanticTurnsExceeded(t *testing.T) {
 		t.Fatalf("SemanticWindowTurns = %d, want 3", SemanticWindowTurns)
 	}
 	if SemanticMaxTurns != 50 {
-		t.Fatalf("SemanticMaxTurns = %d, want 50 (the reference router conversationHistoryThreshold)", SemanticMaxTurns)
+		t.Fatalf("SemanticMaxTurns = %d, want 50 (the sector baseline conversationHistoryThreshold)", SemanticMaxTurns)
 	}
 	msgs := func(n int) []Message {
 		out := make([]Message, 0, n)
@@ -135,7 +135,7 @@ func TestSemanticTurnsExceeded(t *testing.T) {
 		t.Fatal("51 turns must exceed the cap")
 	}
 	// RAW count: system/developer messages count toward the 50,
-	// matching the reference router's conv.length check on the unfiltered
+	// matching the sector-typical conv.length check on the unfiltered
 	// messages array — 1 system + 50 user/assistant = 51 raw
 	// bypasses, 1 system + 49 = 50 raw does not.
 	withSys := func(nUser int) []Message {

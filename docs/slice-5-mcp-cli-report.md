@@ -35,7 +35,7 @@ tool: MCP here is a read-only window onto the router, not a second
 request path — a tool call can never spend quota or leak a key.
 `New(nil, …)` panics, so a server without live state cannot exist.
 
-the reference router comparison (research log entry 19/23): the reference router ships a
+the sector baseline comparison (research log entry 19/23): the sector baseline ships a
 110-tool MCP server plus A2A, guardrails, cloud agents and a plugin
 marketplace. That is the kitchen-sink scope entry 23 says not to copy.
 Codvian Router ships the 3 read-only tools a client needs to see the
@@ -56,7 +56,7 @@ router's state, and nothing else — for now.
   for `serve` (found by the live smoke: doctor first ignored `--port`
   and probed the config port while the server ran on 20199 — fixed,
   with a test).
-- `configure` — first-run setup in the reference router's `configure`/`setup`
+- `configure` — first-run setup in the sector-typical `configure`/`setup`
   shape (research log entry 19): creates the config + first gateway
   key (printed once) when missing, applies `--port`, adds a provider
   by catalog id with a real key test (`AddCatalogWithOptions` — a bad
@@ -203,7 +203,7 @@ mistake in new code.
   workaround (or free `/tmp`) or race runs will fail spuriously.
 - **Not done / honest limits.** No MCP `resources`, `prompts`,
   sampling, or HTTP/SSE transport — deliberately out of scope for this
-  slice (see the the reference router scope note above). `doctor`'s provider
+  slice (see the the sector baseline scope note above). `doctor`'s provider
   probe is the key test (`/v1/models`) only: it detects dead keys and
   quota/rate-limit responses, not model-level availability or latency
   under chat load (same documented limit as the health checker).

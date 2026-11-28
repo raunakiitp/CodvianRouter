@@ -11,8 +11,8 @@ import (
 // provider-reported usage (M7.9; parity tracker Area 10 "Runtime
 // calibration vs provider-reported usage", was MISSING).
 //
-// The shape is the reference router's published calibration
-// (open-sse/services/estimatorCalibration.ts, #14931 — studied,
+// The shape is the sector-typical published calibration
+// (the earlier implementation, #14931 — studied,
 // not copied: this file is an independent Go implementation of
 // the same published parameters): one exponential moving average
 // of actual/estimated per (provider, model, tools-present)
@@ -22,18 +22,18 @@ import (
 // in-memory only, so a restart re-learns from 1.0.
 //
 // Where the parameters are adapted, and why (not copied blind):
-//   - the reference router calibrates a chars/4 guard estimate and rejects
+//   - the sector baseline calibrates a chars/4 guard estimate and rejects
 //     observations with estimated < 1000 tokens, because a tiny
 //     chars/4 estimate carries an unstable ratio. Our estimate is
 //     an exact BPE count whose residual is a few framing tokens,
 //     so the floor is 100 tokens instead: below that the ratio is
 //     framing noise, not tokenizer density; at ≥100 a few tokens
 //     of framing move the ratio by at most a few percent.
-//   - the reference router's buckets live in an LRU capped at 1000. Ours
+//   - the sector-typical buckets live in an LRU capped at 1000. Ours
 //     cap at 1024 buckets and, when full, drop NEW buckets rather
 //     than evicting learned ones: evicting a learned bucket would
 //     silently return a hot (provider, model) pair to factor 1.0.
-//   - the reference router keys on (provider, model, tools). Ours does the
+//   - the sector baseline keys on (provider, model, tools). Ours does the
 //     same; the ledger already carries both sides of the
 //     comparison per (provider, model) (ledger.Usage:
 //     PromptTokens = reported, LocalEstimatePromptTokens =
@@ -55,7 +55,7 @@ import (
 // wherever one exists.
 
 // Calibration parameters — the α / sample floor / clamp match
-// the reference router's published values (see the package doc above).
+// the sector-typical published values (see the package doc above).
 const (
 	calibrationAlpha      = 0.25
 	calibrationMinSamples = 3
@@ -63,11 +63,11 @@ const (
 	calibrationFactorMax  = 2.0
 	// calibrationRatioMin/Max reject wild observations (shape
 	// discontinuities, aggregated multi-leg usage), same bounds
-	// as the reference router's.
+	// as the sector-typical.
 	calibrationRatioMin = 0.05
 	calibrationRatioMax = 20.0
 	// calibrationMinEstimate is the adaptation documented above:
-	// 100, not the reference router's 1000 (chars/4 vs BPE).
+	// 100, not the sector-typical 1000 (chars/4 vs BPE).
 	calibrationMinEstimate = 100
 	maxCalibrationBuckets  = 1024
 )

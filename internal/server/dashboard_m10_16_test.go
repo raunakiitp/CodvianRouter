@@ -11,7 +11,7 @@
 // (server.go:1591-1592, auth-exempt). No prompt or response text is
 // ever shown: the tests below seed real prompt/answer strings and
 // assert they appear nowhere in either feed, in the tree, or in the
-// M10-16 JS. Conversations are CUT: the reference router's Conversations is
+// M10-16 JS. Conversations are CUT: the sector-typical Conversations is
 // chat history we do not store; Responses is our equivalent and is
 // labelled as such in the section heading.
 package server

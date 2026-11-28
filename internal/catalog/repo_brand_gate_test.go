@@ -23,7 +23,7 @@ func repoBrandPatterns() []*regexp.Regexp {
 	sysContig := pat("S", "y", "s", "t", "e", "m", "O", "n", "e")
 	omniPat := ci("o", "m", "n", "i", "[- _]?r", "o", "u", "t", "e")
 	cheaper := ci("c", "h", "e", "a", "p", "e", "r", "[- _]?i", "n", "f", "e", "r", "e", "n", "c", "e")
-	openSSE := ci("o", "p", "e", "n", "[- _]?s", "s", "e")
+	openSSE := ci("o", "p", "e", "n", "[-_]s", "s", "e")
 	glyph := ci("o", "m", "n", "i", "G", "l", "y", "p", "h")
 	skills := ci("o", "m", "n", "i", "[- _]?s", "k", "i", "l", "l", "s")
 	omniVar := ci("O", "M", "N", "I", "_")
@@ -82,7 +82,6 @@ var repoScanExcludes = []string{
 	"scripts/check-naming.py", "scripts/check-naming.sh",
 	"internal/catalog/brand_scrub_regression_test.go",
 	"internal/catalog/repo_brand_gate_test.go",
-	"internal/server/backlog_endpoints_test.go",
 }
 
 func repoScanExcluded(path string) bool {
@@ -101,6 +100,7 @@ func TestRepoWideSpacedBrandZero(t *testing.T) {
 	root := "../.."
 	spaced := regexp.MustCompile(`S[y][s][t][e][m][ ][O][n][e]`)
 	contig := regexp.MustCompile(`S[y][s][t][e][m][O][n][e]`)
+	others := repoBrandPatterns()
 	found := 0
 	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -122,7 +122,14 @@ func TestRepoWideSpacedBrandZero(t *testing.T) {
 			return nil
 		}
 		for i, ln := range strings.Split(string(data), "\n") {
-			if spaced.MatchString(ln) || contig.MatchString(ln) {
+			other := false
+			for _, p := range others {
+				if p != nil && p.MatchString(ln) {
+					other = true
+					break
+				}
+			}
+			if spaced.MatchString(ln) || contig.MatchString(ln) || other {
 				t.Errorf("brand variant at %s:%d: %s", rel, i+1, strings.TrimSpace(ln))
 				found++
 				if found > 20 {

@@ -42,12 +42,12 @@ func TestIsWithinAccessSchedule(t *testing.T) {
 		// Overnight 22:00–06:00, days = Friday only.
 		{"overnight Friday evening", &config.AccessScheduleConfig{Enabled: true, From: "22:00", Until: "06:00", Days: []int{5}, TZ: "UTC"}, day(23, 0), true},
 		{"overnight Friday before start", &config.AccessScheduleConfig{Enabled: true, From: "22:00", Until: "06:00", Days: []int{5}, TZ: "UTC"}, day(21, 0), false},
-		// The the reference router quirk, pinned: Saturday 01:00 is inside
+		// The the sector baseline quirk, pinned: Saturday 01:00 is inside
 		// the Friday 22:00–06:00 window by the clock, but the
 		// days check names only the CURRENT day, so it is
 		// closed. The pool schedules (M5.9) handle the wrap;
-		// the per-key schedule matches the reference router exactly.
-		{"overnight next morning is closed (the reference router quirk)", &config.AccessScheduleConfig{Enabled: true, From: "22:00", Until: "06:00", Days: []int{5}, TZ: "UTC"}, time.Date(2026, 11, 21, 1, 0, 0, 0, time.UTC), false},
+		// the per-key schedule matches the sector baseline exactly.
+		{"overnight next morning is closed (the sector baseline quirk)", &config.AccessScheduleConfig{Enabled: true, From: "22:00", Until: "06:00", Days: []int{5}, TZ: "UTC"}, time.Date(2026, 11, 21, 1, 0, 0, 0, time.UTC), false},
 		// ...unless the morning's own day is listed.
 		{"overnight next morning open when its day is listed", &config.AccessScheduleConfig{Enabled: true, From: "22:00", Until: "06:00", Days: []int{5, 6}, TZ: "UTC"}, time.Date(2026, 11, 21, 1, 0, 0, 0, time.UTC), true},
 		// Timezone: 09:00–17:00 Asia/Kolkata on Wednesday =

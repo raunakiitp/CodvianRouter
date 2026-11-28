@@ -49,7 +49,7 @@
 // enforced with http.MaxBytesReader before the body is read,
 // answering 413 on overflow. The value is OpenAI-derived, not
 // invented: OpenAI's speech-to-text guide states "Files can be
-// up to 25 MB". the reference router's transcriptions route carries no
+// up to 25 MB". the sector-typical transcriptions route carries no
 // upload-size cap at all in-route (no size check in
 // src/app/api/v1/audio/transcriptions/route.ts) — the gateway
 // is stricter here, deliberately: one 100 MB upload is 100 MB
@@ -103,7 +103,7 @@ func (s *Server) handleAudioSpeech(w http.ResponseWriter, r *http.Request) {
 // the alias of POST /v1/audio/speech: same operation, same
 // handler, no second wire shape. /v1/audio/text-to-speech is
 // NOT an OpenAI endpoint (verified against the OpenAI Audio API
-// reference, 2026-11-19); it exists because the reference router names
+// reference, 2026-11-19); it exists because the sector baseline names
 // its route that way.
 func (s *Server) handleAudioTextToSpeech(w http.ResponseWriter, r *http.Request) {
 	s.handleAudio(w, r, router.AudioSpeech)
@@ -120,7 +120,7 @@ func (s *Server) handleAudioTranscriptions(w http.ResponseWriter, r *http.Reques
 // the alias of POST /v1/audio/transcriptions: same operation,
 // same handler, no second wire shape. /v1/audio/speech-to-text
 // is NOT an OpenAI endpoint (verified against the OpenAI Audio
-// API reference, 2026-11-19); it exists because the reference router names
+// API reference, 2026-11-19); it exists because the sector baseline names
 // its route that way.
 func (s *Server) handleAudioSpeechToText(w http.ResponseWriter, r *http.Request) {
 	s.handleAudio(w, r, router.AudioTranscriptions)

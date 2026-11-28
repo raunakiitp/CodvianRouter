@@ -79,7 +79,7 @@ func TestParseRequestBudget(t *testing.T) {
 		{"strict 1", map[string]string{"X-Codvian-Budget": "0.05", "X-Codvian-Budget-Strict": "1"}, 0.05, true, false},
 		{"strict word", map[string]string{"X-Codvian-Budget": "0.05", "X-Codvian-Budget-Strict": "strict"}, 0.05, true, false},
 		{"strict false", map[string]string{"X-Codvian-Budget": "0.05", "X-Codvian-Budget-Strict": "false"}, 0.05, false, false},
-		{"reference-router alias", map[string]string{"X-Codvian-Budget": "0.05", "Budget-Fallback": "strict"}, 0.05, true, false},
+		{"sector baseline alias", map[string]string{"X-Codvian-Budget": "0.05", "Budget-Fallback": "strict"}, 0.05, true, false},
 		{"alias ignored when header says false", map[string]string{"X-Codvian-Budget": "0.05", "X-Codvian-Budget-Strict": "false", "Budget-Fallback": "strict"}, 0.05, false, false},
 		{"not a number", map[string]string{"X-Codvian-Budget": "abc"}, 0, false, true},
 		{"zero", map[string]string{"X-Codvian-Budget": "0"}, 0, false, true},

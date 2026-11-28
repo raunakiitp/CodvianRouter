@@ -278,7 +278,7 @@ const LiteLLMStateFileName = "litellm-sync.json"
 
 // DefaultLiteLLMURL is the public LiteLLM model cost map: the
 // second sync source (parity tracker Area 3, models.dev sync row —
-// the reference router also syncs LiteLLM). It is the default for a LiteLLM
+// the sector baseline also syncs LiteLLM). It is the default for a LiteLLM
 // sync with no URL configured — not a fallback the router reaches
 // for on its own. Prices are USD per token (×1e6 for per-1M).
 const DefaultLiteLLMURL = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"

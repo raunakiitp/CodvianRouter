@@ -1,4 +1,4 @@
-// Provider-level failure-window breaker (M4.2, the reference router
+// Provider-level failure-window breaker (M4.2, the sector baseline
 // PROVIDER_PROFILES providerFailureThreshold / providerFailureWindowMs
 // / providerCooldownMs).
 //

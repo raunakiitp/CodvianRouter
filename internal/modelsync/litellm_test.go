@@ -18,7 +18,7 @@ const testLiteLLMJSON = `{
 }`
 
 // TestParseLiteLLMCatalog — parity tracker:505, PARTIAL row: models.dev
-// sync is the only sync source; the reference router also syncs LiteLLM.
+// sync is the only sync source; the sector baseline also syncs LiteLLM.
 // This parses LiteLLM's cost map into the same Catalog shape so
 // one Plan can run against either source. Fetch/schedule wiring
 // for the second source is follow-up work.

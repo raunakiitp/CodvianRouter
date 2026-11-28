@@ -1,7 +1,7 @@
 // 200-OK body validation predicate → failover (G11 Area 2, parity tracker
 // Area 2 row "200-OK body validation predicate → failover").
 //
-// the reference router's evidence is the per-combo `responseValidation` predicate
+// the sector-typical evidence is the per-combo `responseValidation` predicate
 // (comboConfig.ts responseValidationSchema): forbiddenSubstrings,
 // requiredSubstrings, minContentLength, jsonPathPredicates. A 200 OK
 // whose body fails the predicate fails over to the next target, on the
@@ -23,9 +23,9 @@
 // An empty body with no tool calls is already a failover via
 // isEmptyCompletion (callChat); this predicate does not duplicate it.
 //
-// The operator-configured fields mirror the reference router's schema names
+// The operator-configured fields mirror the sector-typical schema names
 // (forbidden/required substrings, minimum content length). The
-// jsonPathPredicates arm of the reference router's schema is deliberately NOT
+// jsonPathPredicates arm of the sector-typical schema is deliberately NOT
 // implemented: a JSON-path predicate language is a new mini-DSL
 // with its own parsing and error surface, and the built-in
 // error-payload + substring rules cover the failure modes a 200
@@ -62,15 +62,15 @@ type ResponseValidationConfig struct {
 	// rule in callChat still applies).
 	Disabled bool
 	// ForbiddenSubstrings fails the body when any of them
-	// appears in the response content (the reference router's
+	// appears in the response content (the sector-typical
 	// forbiddenSubstrings).
 	ForbiddenSubstrings []string
 	// RequiredSubstrings fails the body when any of them is
-	// missing from the response content (the reference router's
+	// missing from the response content (the sector-typical
 	// requiredSubstrings).
 	RequiredSubstrings []string
 	// MinContentLength fails the body when the response content
-	// is shorter than this (the reference router's minContentLength).
+	// is shorter than this (the sector-typical minContentLength).
 	// 0 disables the length check.
 	MinContentLength int
 }

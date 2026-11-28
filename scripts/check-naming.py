@@ -1,102 +1,120 @@
 #!/usr/bin/env python3
 # scripts/check-naming.py
 #
-# Naming-scan gate. Exits non-zero if any line ADDED on this branch (vs the
-# merge-base with origin/main) contains a prohibited competitor string.
-# Pre-existing sanctioned prose / removal-history references are not
-# re-flagged; the gate's job is to stop NEW prohibited strings from landing.
+# Naming-scan gate. Exits non-zero if ANY tracked file (minus the disclosed
+# EXCLUDE list) contains a prohibited competitor reference. The scan is
+# whole-tree: the repository must be free of these strings everywhere --
+# code, comments, docs, README, workflows.
 #
-# Prohibited names are assembled from per-character classes so the literal
-# name never appears in this script (avoids self-flagging).
+# Prohibited names are assembled from per-character fragments so the literal
+# name never appears in this script (a self-flagging gate is useless).
 #
-# Banned on added lines (case-insensitive unless noted):
-#   - omni-route (hyphen/spaced/underscore variants)
-#   - cheaperinference (variants)
-#   - "System One" / "SystemOne" (capitalized-only match: the brand is a proper
-#     noun; lowercase prose such as a removed /v1/systemone path or
-#     "non-system one" must not false-positive)
-#   - open-sse, OmniGlyph, omni-skills, OMNI_, "reference router"
+# Covered:
+#   - reference router / reference-router / reference_router (prose + path)
+#   - System One / SystemOne (capitalized-only: the brand is a proper noun,
+#     so lowercase prose like "non-system one" or a removed /v1/systemone
+#     path must not false-positive)
+#   - the reference codebase's path prefix (open-sse)
+#   - OmniGlyph, omni-skills, OMNI_ env vars
+#   - the earlier router product name (omni-route variants)
+#   - the retired cheaper-inference service name
 
 import re
 import sys
-import subprocess
 
-p_omniroute = r'o[m][n][i][- _]?r[o][u][t][e]'
-p_cheaper   = r'c[h][e][a][p][e][r][- _]?i[n][f][e][r][e][n][c][e]'
-p_opensse   = r'o[p][e][n][- _]?s[s][e]'
-p_glyph     = r'o[m][n][i][Gg][l][y][p][h]'
-p_skills    = r'o[m][n][i][- _]?s[k][i][l][l][s]'
-p_omnivar   = r'[Oo][Mm][Nn][Ii]_'
-p_refrouter = r'reference[ ]router'
-ADDED_ONLY_REGEX = re.compile(
-    f'({p_omniroute}|{p_cheaper}|{p_opensse}|{p_glyph}|{p_skills}|{p_omnivar}|{p_refrouter})',
+
+def _frag(*parts):
+    return "".join(parts)
+
+
+# --- case-insensitive classes (fragmented so this file does not self-flag) ---
+P_REFROUTER = _frag(r"re", r"ference[ -_]?r", r"outer")
+P_OPENSSE = _frag(r"o", r"pen[-_]s", r"se")          # literal hyphen/underscore only
+P_GLYPH = _frag(r"o", r"mni ?g", r"lyph")
+P_SKILLS = _frag(r"o", r"mni[-_ ]?s", r"kills")
+P_OMNIVAR = _frag(r"O", r"M", r"N", r"I", r"_")
+P_OMNIROUTE = _frag(r"o", r"mni[-_ ]?r", r"oute")
+P_CHEAPER = _frag(r"ch", r"eaper[-_ ]?i", r"nference")
+
+CI_REGEX = re.compile(
+    "(" + "|".join([P_REFROUTER, P_OPENSSE, P_GLYPH, P_SKILLS,
+                    P_OMNIVAR, P_OMNIROUTE, P_CHEAPER]) + ")",
     re.IGNORECASE,
 )
-p_sysone_contig = r'S[y][s][t][e][m][O][n][e]'
-p_sysone_spaced = r'S[y][s][t][e][m][ ][O][n][e]'
-SYSTEMONE_REGEX_CS = re.compile(f'({p_sysone_contig}|{p_sysone_spaced})')  # capitalized only
+
+# --- capitalized-only class: System One / SystemOne ---
+P_SYS_SPACED = _frag(r"S", r"ystem ", r"O", r"ne")
+P_SYS_CONTIG = _frag(r"S", r"ystem", r"O", r"ne")
+SYS_REGEX = re.compile("(" + P_SYS_SPACED + "|" + P_SYS_CONTIG + ")")
 
 EXCLUDE_PATTERNS = [
-    r'go\.mod$', r'go\.sum$',
-    r'internal/catalog/providers_reference\.go$',
-    r'internal/catalog/verified\.go$',
-    r'internal/catalog/providers_additional\.go$',
-    r'docs/catalog-audit-', r'web/catalog-audit\.json$',
-    r'\.github/', r'\.goreleaser\.yml$',
-    r'bin/codvian-router',
-    r'cmd/codvian-router/release_verify\.go$',
-    r'internal/release/verify\.go$',
-    r'docs/POST_P1_FINDINGS_LEDGER\.md$',
-    r'docs/POST_P1_REMEDIATION_REPORT\.md$',
-    r'scripts/check-naming\.(py|sh)$',   # gate scripts encode the names in their pattern lists (disclosed exception)
+    r"go\.mod$", r"go\.sum$",
+    r"internal/catalog/providers_reference\.go$",
+    r"internal/catalog/verified\.go$",
+    r"internal/catalog/providers_additional\.go$",
+    r"docs/catalog-audit-", r"web/catalog-audit\.json$",
+    r"\.github/", r"\.goreleaser\.yml$",
+    r"bin/codvian-router$",
+    r"cmd/codvian-router/release_verify\.go$",
+    r"internal/release/verify\.go$",
+    r"docs/POST_P1_FINDINGS_LEDGER\.md$",
+    r"docs/POST_P1_REMEDIATION_REPORT\.md$",
+    # The gate scripts and their Go mirror necessarily encode the banned
+    # names in their pattern tables (a disclosed, documented exception).
+    r"scripts/check-naming\.(py|sh)$",
+    r"internal/catalog/repo_brand_gate_test\.go$",
 ]
 
-def should_exclude(filepath):
-    for pattern in EXCLUDE_PATTERNS:
-        if re.search(pattern, filepath):
-            return True
-    return False
 
-def added_lines_scan():
+def should_exclude(path):
+    return any(re.search(p, path) for p in EXCLUDE_PATTERNS)
+
+
+def is_binary(path):
     try:
-        base = subprocess.run(['git', 'merge-base', 'HEAD', 'origin/main'],
-                              capture_output=True, text=True, timeout=30).stdout.strip()
-        if not base:
-            print("PASS: no merge-base with origin/main; added-lines scan skipped")
-            return 0
-        diff = subprocess.run(['git', 'diff', f'{base}...HEAD', '--unified=0'],
-                              capture_output=True, text=True, timeout=60).stdout
+        with open(path, "rb") as f:
+            return b"\x00" in f.read(8192)
     except Exception:
-        return 0
-    if not diff:
-        print("PASS: no added lines vs origin/main")
-        return 0
+        return True
+
+
+def scan(files):
     found = 0
-    print("=== Added-lines scan (vs origin/main) for prohibited strings ===")
-    cur_file = None
-    for line in diff.split('\n'):
-        if line.startswith('+++ b/'):
-            cur_file = line[6:]
+    print("=== Whole-tree scan for prohibited brand references ===")
+    for path in files:
+        if not path or should_exclude(path) or is_binary(path):
             continue
-        if not line.startswith('+') or line.startswith('+++'):
+        try:
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+        except Exception:
             continue
-        added = line[1:]
-        if should_exclude(cur_file or ''):
-            continue
-        if ADDED_ONLY_REGEX.search(added) or SYSTEMONE_REGEX_CS.search(added):
-            print(f"PROHIBITED (added): {cur_file}: {added.strip()[:200]}")
+        hits = 0
+        for i, line in enumerate(content.split("\n"), 1):
+            if CI_REGEX.search(line) or SYS_REGEX.search(line):
+                if hits == 0:
+                    print("PROHIBITED: " + path)
+                print("  " + str(i) + ": " + line.strip()[:200])
+                hits += 1
+                if hits >= 5:
+                    break
+        if hits:
             found = 1
-    if found:
-        print("FAIL: prohibited string added on this branch")
-    else:
-        print("PASS: no prohibited strings in added lines")
     return found
 
-def main():
-    # stdin file list is accepted for backwards compatibility but the gate is
-    # diff-based: it blocks NEW prohibited strings on the branch.
-    _ = [line.strip() for line in sys.stdin if line.strip()]
-    return added_lines_scan()
 
-if __name__ == '__main__':
+def main():
+    files = [ln.strip() for ln in sys.stdin if ln.strip()]
+    if not files:
+        print("FAIL: no file list on stdin (usage: git ls-files | check-naming.py)")
+        return 2
+    if scan(files):
+        print("")
+        print("FAIL: prohibited references found.")
+        return 1
+    print("PASS: no prohibited references in " + str(len(files)) + " tracked files.")
+    return 0
+
+
+if __name__ == "__main__":
     sys.exit(main())

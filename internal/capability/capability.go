@@ -56,7 +56,7 @@ type ProvenanceSource string
 
 const (
 	SourceCatalogDocs       ProvenanceSource = "catalog_docs"        // provider's own published docs
-	SourceCatalogReference  ProvenanceSource = "catalog_reference"   // reference router's metadata
+	SourceCatalogReference  ProvenanceSource = "catalog_reference"   // sector-typical metadata
 	SourceModelsDevSync     ProvenanceSource = "models_dev_sync"     // opt-in models.dev sync
 	SourceLiveProbe         ProvenanceSource = "live_probe"          // /v1/models or capability probe
 	SourceOperatorConfig    ProvenanceSource = "operator_config"     // operator-set in stored provider

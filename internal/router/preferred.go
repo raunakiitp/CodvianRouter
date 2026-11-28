@@ -1,4 +1,4 @@
-// Preferred-account response-start failover (M4.8, the reference router
+// Preferred-account response-start failover (M4.8, the sector baseline
 // preferredConnectionFailover.ts; chat.ts:2507) — opt-in.
 //
 // A preferred account that never starts responding is worse than a

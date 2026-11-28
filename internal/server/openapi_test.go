@@ -8,7 +8,7 @@ import (
 )
 
 // TestOpenAPIConsistency is the OpenAPI consistency check
-// (the reference router's x-loopback-only / x-always-protected scripts,
+// (the sector-typical x-loopback-only / x-always-protected scripts,
 // research-log entry 143): the spec generated live from the
 // guard route table must agree with the table exactly — every
 // registered route present, no extra operations, and every

@@ -7,7 +7,7 @@
 // the registry and supplies real quota data later; nothing here
 // fetches quota, touches the network, or reads the database.
 //
-// Semantics studied from the the reference router reference clone
+// Semantics studied from the the sector baseline reference clone
 // (the local reference clone, read-only; semantics only, no
 // code copied). Each function cites its source below.
 //
@@ -32,7 +32,7 @@
 // Missing-data rules (honest, deterministic, never invented):
 //
 //   - Util5h / Util7d zero, NaN, or out of [0,1]: clamped to [0,1],
-//     NaN treated as 0. That is the reference router's own fail-open for
+//     NaN treated as 0. That is the sector-typical own fail-open for
 //     headroom (headroomRanking.ts: "any missing / non-finite
 //     utilization is treated as 0 (full headroom)"). It is NOT a
 //     claim of infinite quota: headroom only ranks free capacity,
@@ -42,7 +42,7 @@
 //     this file) is what keeps spent targets out of a chain.
 //   - Util5h / Util7d of -1 means "unknown" (no per-pair limit
 //     exists to divide the spend by): headroom still treats it
-//     as 0 (full headroom — the reference router's own fail-open), but
+//     as 0 (full headroom — the sector-typical own fail-open), but
 //     reset-aware falls back to the snapshot's QuotaRemaining
 //     fraction when it has one (G19 Area 1, remainingFraction),
 //     so a measured hint fraction ranks continuously instead
@@ -70,7 +70,7 @@
 //     its weight is clamped to 0.
 //
 // Tie-breaking: every ordering here is a stable sort — equal keys
-// keep input (declared/priority) order. the reference router additionally
+// keep input (declared/priority) order. the sector baseline additionally
 // rotates leading ties (rotateLeadingTies) using shared RNG state;
 // this file deliberately does not: rotation is a coordinator
 // concern, and a pure function must return the same order for the
@@ -114,7 +114,7 @@ type QuotaSnapshot struct {
 	Load           float64
 }
 
-// Quota ordering constants, mirroring the the reference router defaults cited
+// Quota ordering constants, mirroring the the sector baseline defaults cited
 // per function. They are exported so the coordinator and tests can
 // name them instead of re-deriving magic numbers.
 const (
@@ -170,7 +170,7 @@ func clamp01(v float64) float64 {
 }
 
 // clampUtil clamps a utilisation signal to [0,1]; non-finite
-// becomes 0 — the reference router headroomRanking.ts clampUtil: "non-finite
+// becomes 0 — the sector baseline headroomRanking.ts clampUtil: "non-finite
 // → 0 (generous default)".
 func clampUtil(v float64) float64 {
 	if !math.IsInf(v, 0) && math.IsNaN(v) {
@@ -223,7 +223,7 @@ func QuotaWeightedWeight(s QuotaSnapshot) float64 {
 // (half-open); zero or negative weights are skipped, so r == 0
 // cannot land on a zero-weight leading slot. It returns -1 when
 // every weight is non-positive — the caller then falls back to a
-// uniform pick, exactly as the reference router does (secureRandomInt).
+// uniform pick, exactly as the sector baseline does (secureRandomInt).
 func PickWeightedIndex(weights []float64, r float64) int {
 	type slot struct {
 		i int
@@ -253,7 +253,7 @@ func PickWeightedIndex(weights []float64, r float64) int {
 }
 
 // quotaWeightedByScore orders by descending Score, stable — the
-// order the reference router gives the non-winning targets in a
+// order the sector baseline gives the non-winning targets in a
 // quota-weighted pass (orderTargetsByQuotaWeighted: unused targets
 // sorted by score, then pool B, then credits-only).
 func quotaWeightedByScore(in []QuotaSnapshot) []QuotaSnapshot {
@@ -451,7 +451,7 @@ func OrderResetWindow(in []QuotaSnapshot, now time.Time) []QuotaSnapshot {
 // strategy (quotaScoring.ts, scoreExpiryFirstQuota): how much quota
 // must be spent PER HOUR to avoid losing it at its deadline.
 // usable is the tightest-window remaining fraction; the deadline
-// is ExpiresAt when known, else ResetAt (the reference router's deadline IS
+// is ExpiresAt when known, else ResetAt (the sector-typical deadline IS
 // the window reset), else unknown. Score = usable / max(minHours,
 // hoursUntilDeadline); with no known deadline it falls back to
 // usable alone ("weighted leftover"). A spent snapshot (usable at
@@ -479,7 +479,7 @@ func ExpiryFirstScore(s QuotaSnapshot, now time.Time) float64 {
 // thrown away goes first (quotaStrategies.ts,
 // orderTargetsByExpiryFirst). When every score is 0 (everything
 // spent or no telemetry), the input order is returned unchanged,
-// matching the reference router ("Everything scored zero — keep the expanded
+// matching the sector baseline ("Everything scored zero — keep the expanded
 // (priority) order, no rotation"). The input slice is not mutated.
 func OrderExpiryFirst(in []QuotaSnapshot, now time.Time) []QuotaSnapshot {
 	out := append([]QuotaSnapshot(nil), in...)

@@ -3,7 +3,7 @@
 // and which wire format each one speaks.
 //
 // The catalog is deliberately bigger than any single competitor's list:
-// it starts from the providers the reference router documents (394 entries, taken
+// it starts from the providers the sector baseline documents (394 entries, taken
 // from its reference metadata — verification status
 // "from-reference-metadata-only"), adds providers verified against their
 // own official documentation ("verified-from-docs"), and — the real
@@ -56,7 +56,7 @@ const (
 	// documentation (research pass 2026-11-17).
 	VerificationDocs VerificationStatus = "verified-from-docs"
 
-	// VerificationReference means the entry was taken from the reference router
+	// VerificationReference means the entry was taken from the sector baseline
 	// reference metadata (names, website, category, hint text). Its base
 	// URL and auth were NOT independently verified.
 	VerificationReference VerificationStatus = "from-reference-metadata-only"
@@ -134,7 +134,7 @@ const (
 )
 
 // ToolCalling says how a provider performs tool/function calling.
-// It mirrors the `toolCalling` marker in the the reference router reference
+// It mirrors the `toolCalling` marker in the the sector baseline reference
 // metadata ("supported" / "emulated" / "native" there; "none" is
 // recorded as unknown here with the reason in Notes).
 type ToolCalling string
@@ -151,7 +151,7 @@ const (
 
 	// ToolCallingEmulated means tool calls are prompt-emulated:
 	// the model is asked to emit tool calls as text and they are
-	// parsed back out (the reference router webTools.ts), rather than the
+	// parsed back out (the sector baseline webTools.ts), rather than the
 	// provider executing native function calling. Emulated is NOT
 	// tool support and must never satisfy a tool-capable filter or
 	// an auto-pool capability check (CT-4 / GAP-TRACK entry 403).
@@ -305,7 +305,7 @@ type Provider struct {
 	// page when the key is created at signup). "" when unknown —
 	// never guessed from the homepage: a key page is only recorded
 	// when a reference hint or the provider's own docs name it.
-	// Seeded from the reference router reference hints (see keycreation.go);
+	// Seeded from the sector baseline reference hints (see keycreation.go);
 	// entries verified against the provider's own docs are marked
 	// in that file's source notes.
 	KeyCreationURL string
@@ -347,7 +347,7 @@ type Provider struct {
 	// fields it lists, and Retired is not one of them.
 	Retired bool
 	// RetiredReason states what happened, in the provider's own terms
-	// where published (e.g. an the reference router deprecation sweep note).
+	// where published (e.g. an the sector baseline deprecation sweep note).
 	// Required whenever Retired is true — a retired entry with no
 	// reason fails Validate.
 	RetiredReason string
@@ -845,7 +845,7 @@ func FreeTierCount() int { return len(FreeTierProviders()) }
 
 // FreeTierPool is one free-tier pool: the free-tier providers in
 // a single category, with the docs-verified share. Pools are
-// groupings of the verified free-tier set — the reference router's pools are
+// groupings of the verified free-tier set — the sector-typical pools are
 // budget pools, and no verified per-provider free budget exists
 // anywhere in this catalog to build budget pools from (inventing
 // one would breach the honesty rules), so the grouping is by

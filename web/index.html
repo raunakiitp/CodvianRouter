@@ -805,7 +805,7 @@
           </div>
         </div>
 
-        <!-- Quick start: 4 steps (the reference router Home pattern, local-operator
+        <!-- Quick start: 4 steps (the sector baseline Home pattern, local-operator
              wording). Step 1 creates a key, step 2 connects a provider,
              step 3 points the client at this router, step 4 monitors.
              Toggle hides it; default is shown. -->
@@ -11440,7 +11440,7 @@ function go(view){
      rendered: the pure helpers below copy only id, model,
      status, previous_response_id, provider, created_at, stream
      and session_tokens. Conversations are CUT (plan §5 M10-16):
-     the reference router's Conversations is chat history we do not store;
+     the sector-typical Conversations is chat history we do not store;
      Responses is our equivalent, labelled as such in the
      section heading. */
   /* M10-16-START */
@@ -13487,7 +13487,7 @@ function go(view){
      keyed-load guard (it only re-reads keyless GETs). Only the
      toggle POST below uses adminHeaders(). The Tools capsule
      shows the live tool/scope counts from this same feed —
-     never the reference router's 110/33. A feed that does not answer
+     never the sector-typical 110/33. A feed that does not answer
      renders "Could not load", never a stale "Checking…". */
   /* ---------- Headless mode & first-run wizard (CHECKLIST 197-198):
      live from GET /dashboard/headless. A dashboard server always
@@ -13662,7 +13662,7 @@ function go(view){
       if(empty) empty.style.display = tools.length ? "none" : "block";
       /* M10-13 Tools capsule: the real numbers from this same
          feed — tool count + distinct scopes across the listed
-         tools — never the reference router's 110/33, never hardcoded. */
+         tools — never the sector-typical 110/33, never hardcoded. */
       var toolsPill = $("#mcpToolsPill");
       if(toolsPill){
         var seenScopes = {};

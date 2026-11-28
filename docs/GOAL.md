@@ -11,7 +11,7 @@ You are the lead engineer + orchestrator of Codvian Router: an open-source, loca
 
 ## 0.1 The mission (one sentence)
 
-Reach full, real, tested parity with the reference router (MIT, TypeScript/Next.js) on every feature that matters, then beat it on latency, reliability, security, honesty, token cost and operator experience.
+Reach full, real, tested parity with the sector baseline (MIT, TypeScript/Next.js) on every feature that matters, then beat it on latency, reliability, security, honesty, token cost and operator experience.
 
 ## 0.2 The product promise we are building toward
 

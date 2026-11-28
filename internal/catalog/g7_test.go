@@ -77,7 +77,7 @@ func TestBaseURLCoverage(t *testing.T) {
 	// CT-8: the headline total is pinned so README/docs cannot drift
 	// silently again — 614 at triage round 5 minus 4 CT-3 retirements.
 	if cov.Total != 607 {
-		t.Fatalf("catalog total = %d, want 607 (614 at triage round 5, minus 4 CT-3 retirements, the D2 cheaperinference retirement and the Item-6 anyscale/kluster retirements)", cov.Total)
+		t.Fatalf("catalog total = %d, want 607 (614 at triage round 5, minus 4 CT-3 retirements, the D2 the retired inference service retirement and the Item-6 anyscale/kluster retirements)", cov.Total)
 	}
 	// A1 batches 1-16 (2026-11-27): seventy-eight API-key entries gained a
 	// docs-verified base URL (deepinfra, hyperbolic, nscale, lambda-ai, featherless-ai, moonshot, yi, qianfan, heroku,
@@ -225,7 +225,7 @@ func TestFreeTierPoolsAndRanking(t *testing.T) {
 
 // TestKeyCreationURLs — parity tracker:513, MISSING row: no field, no
 // API exposure. The field exists now, seeded with 18 key pages
-// from the reference router reference hints (see keycreation.go); the rest
+// from the sector baseline reference hints (see keycreation.go); the rest
 // need per-provider research, and API/dashboard exposure is a
 // follow-up (server is another builder's, dashboard is M10).
 func TestKeyCreationURLs(t *testing.T) {

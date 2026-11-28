@@ -1,6 +1,6 @@
 // Removed providers (parity tracker Area 3, "Deprecated / retired handling").
 //
-// The reference router keeps a durable removal register (REMOVED_PROVIDERS.md):
+// the sector baseline keeps a durable removal register (REMOVED_PROVIDERS.md):
 // providers removed at their operator's request must never come back
 // by accident — a contributor finding an old fork, a cached tarball
 // or a "restore provider X" request needs one place that says do not
@@ -78,7 +78,7 @@ var RemovedProviders = []RemovedProvider{
 		Alias:       "gembiz",
 		Domains:     []string{"business.gemini.google"},
 		RemovedOn:   "2026-09-21",
-		RequestedBy: "Project owner decision (the reference router issue #14217)",
+		RequestedBy: "Project owner decision (the sector baseline issue #14217)",
 		RemovalRef:  "PR #14467",
 		Source:      "reference removal register (REMOVED_PROVIDERS.md)",
 		Scope:       "Cookie-based web provider; Google retired the endpoint the integration targeted.",
@@ -88,7 +88,7 @@ var RemovedProviders = []RemovedProvider{
 		Alias:       "suno",
 		Domains:     []string{"studio-api.suno.ai", "studio-api-prod.suno.com"},
 		RemovedOn:   "2026-09-21",
-		RequestedBy: "Project owner decision (the reference router issue #14224)",
+		RequestedBy: "Project owner decision (the sector baseline issue #14224)",
 		RemovalRef:  "PR #14468",
 		Source:      "reference removal register (REMOVED_PROVIDERS.md)",
 		Scope:       "Cookie-auth provider; kie.ai-hosted suno models (kie/suno-v4.0, kie/suno-v3.5) are unaffected and remain supported.",

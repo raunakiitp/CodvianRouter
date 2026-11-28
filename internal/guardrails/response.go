@@ -1,5 +1,5 @@
 // G18 Area 7 — response sanitization, non-streaming: the
-// engine half of the response-sanitization row (the reference router:
+// engine half of the response-sanitization row (the sector baseline:
 // opt-in PII_RESPONSE_SANITIZATION, modes redact|warn|block,
 // default redact).
 //

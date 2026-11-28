@@ -28,7 +28,7 @@
 // A liveness snapshot, not a background writer: uptime (from
 // Source.Status()), announced tool count, protocol version, and
 // audit-log state (enabled/disabled). It uses only Source.Status()
-// + Tools() — no new Source methods. (the reference router's heartbeat is a
+// + Tools() — no new Source methods. (the sector-typical heartbeat is a
 // 5 s background writer to runtime/mcp-heartbeat.json; ours is a
 // read-only tool because this server has no serving loop to tick
 // from — the stdio transport is request-driven. A file-writing
@@ -108,20 +108,20 @@
 //
 //   - No option set: everything visible (the default —
 //     announcing the full manifest, as today).
-//   - Deny wins over allow (the reference router's reduceToolManifest rule
+//   - Deny wins over allow (the sector-typical reduceToolManifest rule
 //     3, toolCardinality.ts): a tool in both lists is invisible.
 //   - Allow non-empty: ONLY the listed tools are visible
 //     (exclusive allow-list mode). This differs deliberately
-//     from the reference router, where allowTools is additive (allow-listed
+//     from the sector baseline, where allowTools is additive (allow-listed
 //     tools PLUS scope-matched tools): our scope system already
 //     authorizes per call, and cardinality here is announcement
 //     control — an operator who sets an allow-list means "announce
 //     exactly these". Unknown names in either list are ignored
 //     silently (a deny of a tool that does not exist is a no-op).
-//   - MaxTools <= 0: no cap (the reference router's own guard: a negative
+//   - MaxTools <= 0: no cap (the sector-typical own guard: a negative
 //     max is "no cap", never a silent tail-drop). MaxTools > 0:
 //     keep the first MaxTools in Tools() order (builtins first,
-//     then extras sorted by name). This differs from the reference router's
+//     then extras sorted by name). This differs from the sector-typical
 //     cap, which prioritises allow-listed entries first: with an
 //     exclusive allow-list the set is already restricted, so
 //     Tools() order is the deterministic order and needs no
@@ -195,7 +195,7 @@ type toolSearchHit struct {
 // (after trimming spaces) returns the full list, in input order.
 // No match returns an empty (non-nil) list, not an error. Matching
 // is plain substring only — the query is never compiled as a
-// regexp (Anti-ReDoS; same rule as the reference router's searchTools, which
+// regexp (Anti-ReDoS; same rule as the sector-typical searchTools, which
 // uses indexOf loops for the same reason). tools is not modified.
 func searchTools(tools []Tool, query string) []toolSearchHit {
 	q := strings.ToLower(strings.TrimSpace(query))

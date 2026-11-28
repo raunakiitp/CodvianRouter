@@ -218,7 +218,7 @@ func TestEscalationLadder(t *testing.T) {
 			t.Errorf("ladder stage %q unavailable with empty reason", s.Engine)
 		}
 	}
-	// Intensities mirror the reference router's ladder: rtk standard, caveman full.
+	// Intensities mirror the sector-typical ladder: rtk standard, caveman full.
 	for _, s := range ladder {
 		switch s.Engine {
 		case EngineRTK:

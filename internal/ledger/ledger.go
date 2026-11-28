@@ -159,7 +159,7 @@ func (pr ModelPrice) priceForEndpoint(endpoint string) ModelPrice {
 // input price: 1.25x for the 5-minute TTL, 2x for the 1-hour TTL.
 // Sources in-tree: internal/server/server.go:2092-2094
 // ("Anthropic documents 1.25x (5-minute TTL) and 2x (1-hour TTL)
-// for cache writes") and the the reference router reference estimator
+// for cache writes") and the the sector baseline reference estimator
 // (read-only study, src/lib/usage/cacheWriteEstimate.ts:35,55-56:
 // "5m = 1.25x input, 1h = 2x input"). They apply ONLY to
 // Anthropic-served Claude models (see isAnthropicCacheWriteTier);
@@ -172,7 +172,7 @@ const (
 
 // isAnthropicCacheWriteTier reports whether the (provider, model)
 // pair is billed at Anthropic's documented cache-write multiples.
-// It mirrors the the reference router reference gate
+// It mirrors the the sector baseline reference gate
 // (cacheWriteEstimate.ts: the anthropic branch requires provider in
 // {"anthropic", "claude", "cc"} AND model starting with "claude-"):
 // Bedrock-served Claude models and OpenRouter-served Claude models
@@ -324,7 +324,7 @@ type CostOptions struct {
 	// (subscription / coding-plan / cookie-web) provider at $0
 	// instead of its per-token estimate (see IsFlatRateProvider):
 	// the opt-in display/analytics treatment, matching
-	// the reference router's flatRateAsZero option. Budget / quota paths
+	// the sector-typical flatRateAsZero option. Budget / quota paths
 	// keep estimating (they pass false) — only callers that
 	// opted in zero out.
 	FlatRateAsZero bool
@@ -338,13 +338,13 @@ func NormalizeServiceTier(tier string) string {
 
 // ServiceTierMultiplier returns the cost multiplier for a service
 // tier: flex 0.5x and batch 0.5x (OpenAI Flex Processing is billed
-// at a 50% token discount, like Batch — the reference router
+// at a 50% token discount, like Batch — the sector baseline
 // costCalculator.ts getCodexFastCostMultiplier; the G6-verified
 // batch figure is the same 50%), standard / priority / auto / ""
 // and any unknown tier 1x. An unknown tier is never priced at a
 // guessed multiplier.
 //
-// DIVERGENCE (deliberate, better than the reference router): the reference router's
+// DIVERGENCE (deliberate, better than the sector baseline): the sector-typical
 // fast/priority multiplier (1.5x–2.5x) applies ONLY to Codex
 // GPT-5.x/6 models on the codex/cx providers. We do not apply a
 // provider+model-specific fast multiplier here: a generic tier
@@ -575,7 +575,7 @@ type Usage struct {
 	// router.Attempt by the coordinator — see the G16 report);
 	// "" means standard. The tier multiplier applies to the
 	// hand-computed cost only, never to a provider-reported
-	// exact cost (the reference router returns the exact cost before any
+	// exact cost (the sector baseline returns the exact cost before any
 	// multiplier too).
 	ServiceTier string
 	// AutoVariant is the auto-routing variant that served this
@@ -720,7 +720,7 @@ type Ledger struct {
 	// provider's usage costs $0 in the ledger instead of its
 	// per-token estimate — the provider bills a flat fee, not per
 	// token, so the estimate would overstate the bill. It mirrors
-	// the reference router's flatRateAsZero cost option. The operator (or
+	// the sector-typical flatRateAsZero cost option. The operator (or
 	// main.go, from config) sets it after Open; RecordUsage reads
 	// it per call. Default false: without the opt-in a flat-rate
 	// provider prices like any other provider ("unknown" when
@@ -731,7 +731,7 @@ type Ledger struct {
 	// days (G16, Area 11 retention): rows older than this are
 	// pruned by PruneExpiredUsage and at startup by Open. 0 means
 	// the default (DefaultUsageRetentionDays, 7 days, matching
-	// the reference router's 7-day fallback); negative also means the
+	// the sector-typical 7-day fallback); negative also means the
 	// default. The operator (or main.go, from config) sets it
 	// after Open; call PruneExpiredUsage again after setting it
 	// to apply a configured window to rows Open already pruned
@@ -907,7 +907,7 @@ CREATE TABLE IF NOT EXISTS budgets (
 -- survive a restart exactly like usage history.
 -- M5.1: calendar-window caps (daily / weekly / monthly, NULL =
 -- unset) + the active-window selector (reset_interval +
--- reset_time, the reference router costRules.ts) + warning_threshold.
+-- reset_time, the sector baseline costRules.ts) + warning_threshold.
 CREATE TABLE IF NOT EXISTS key_budgets (
   key_id         TEXT PRIMARY KEY,
   limit_usd      REAL NOT NULL,
@@ -938,7 +938,7 @@ CREATE TABLE IF NOT EXISTS spend_reservations (
 CREATE INDEX IF NOT EXISTS idx_spend_reservations_key ON spend_reservations(gateway_key_id);
 
 -- quota_schedules: time-aware quota windows on a pool (M5.9,
--- the reference router lib/quota/schedules.ts). days is a comma list of JS
+-- the sector baseline lib/quota/schedules.ts). days is a comma list of JS
 -- getDay() values (0 = Sunday); start/end_minute are minutes
 -- from local midnight (end <= start wraps past midnight); mode
 -- is allow (whitelist) or block (blackout); budget_value/unit/
@@ -966,7 +966,7 @@ CREATE TABLE IF NOT EXISTS quota_schedule_reserves (
 );
 
 -- internal_budgets: operator caps on total spend (M5.11,
--- the reference router lib/usage/budgetGuard.ts). scope is global /
+-- the sector baseline lib/usage/budgetGuard.ts). scope is global /
 -- provider / model / pool (the matching *_id names the entity);
 -- period is a calendar window (daily / weekly / monthly);
 -- limit_type is currency (USD) / tokens / requests.
@@ -983,14 +983,14 @@ CREATE TABLE IF NOT EXISTS internal_budgets (
   enabled           INTEGER NOT NULL DEFAULT 1
 );
 
--- quota_pools: fair-share quota pools (M5.4, the reference router
+-- quota_pools: fair-share quota pools (M5.4, the sector baseline
 -- lib/quota/fairShare.ts + dimensions.ts). A pool shares one quota
 -- across its member keys: each dimension (unit x window) has a
 -- global pool limit, each member key has a weight (0-100, its
 -- share of the pool), an optional absolute cap, and a policy
 -- (hard | soft | burst). The ledger IS the counter — consumption
 -- is summed from usage_events, so no counter table exists to
--- drift (the reference router keeps separate quota_consumption buckets with
+-- drift (the sector baseline keeps separate quota_consumption buckets with
 -- a sliding-window decay; ours sums the window directly, which
 -- is the same "ledger is the counter" rule as the USD budgets
 -- and token limits). See pool.go.

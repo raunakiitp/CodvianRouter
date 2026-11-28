@@ -22,13 +22,13 @@
 
 ---
 
-## 1. the reference router's real dashboard inventory
+## 1. the sector-typical real dashboard inventory
 
 Route tree: `the local reference clone/src/app/(dashboard)/dashboard/` (Next.js App Router; each route is a `page.tsx`, usually a thin shell over a `*Client.tsx`). **No central nav manifest was found** — `src/app/(dashboard)/layout.tsx` is a 29-line wrapper and nav links are distributed across components — so this inventory is from the route tree itself, not from a nav config. Line counts are measured where stated; unmeasured routes are listed with path only.
 
 ### 1a. Core operator pages — in scope for M10
 
-| the reference router route | What it is (evidence) | File |
+| the sector baseline route | What it is (evidence) | File |
 |---|---|---|
 | Home (`/dashboard`) | Local-operator console home: 4-step quick-start, provider topology, recent requests, update/readiness banners, sponsor banners | `dashboard/page.tsx`, `dashboard/HomePageClient.tsx`, `dashboard/HomeProviderTopologySection.tsx`, `dashboard/FirstRunReadinessCard.tsx` |
 | Providers | Provider list as addable groups incl. free-tier grouping; per-provider connections, health, key management | `dashboard/providers/page.tsx` (1,984 lines) |
@@ -58,13 +58,13 @@ Route tree: `the local reference clone/src/app/(dashboard)/dashboard/` (Next.js 
 
 ### 1b. Out of scope — deliberate divergences (do NOT build in M10)
 
-| the reference router route | Why out of scope |
+| the sector baseline route | Why out of scope |
 |---|---|
 | Playground (`dashboard/playground/page.tsx`, 15 lines → `PlaygroundStudio`) | **Removed by Raunak's decision.** No chat-playground in a local router console; a playground is a spend surface ("a tool call can never spend quota" logic applies to the dashboard too). `M10-0` asserts zero occurrences. |
-| Gamification, Leaderboard, Radar, Translator, Kimi/VSCode sponsor banners, Changelog, `cli-code`, `cli-agents`, `cloud-agents`, `acp-agents`, `agent-skills`, `omni-skills`, `conductor`, `orchestration`, `relay`, `chaos`, `system` (1proxy/mitm-proxy), `runtime`, `media-providers`, `context`, `onboarding` | Not router-core: engagement features, hosted/cloud agent surfaces, proxy/MITM tooling, or onboarding flows for a different product shape. Recorded here so a builder does not "discover" them mid-slice and add them. `chaos` in particular is backend chaos-harness territory (M4), not a dashboard page. |
-| Login / OIDC / "Require login / password change" (Settings → Security) | **DIVERGENCE (parity tracker Area 8b):** the reference router has password/OIDC login; we have the gateway-key auth model + loopback binding instead. No dashboard login page in M10. If dashboard auth ever lands it is a backend slice, not M10. |
+| Gamification, Leaderboard, Radar, Translator, Kimi/VSCode sponsor banners, Changelog, `cli-code`, `cli-agents`, `cloud-agents`, `acp-agents`, `agent-skills`, `legacy skill pack`, `conductor`, `orchestration`, `relay`, `chaos`, `system` (1proxy/mitm-proxy), `runtime`, `media-providers`, `context`, `onboarding` | Not router-core: engagement features, hosted/cloud agent surfaces, proxy/MITM tooling, or onboarding flows for a different product shape. Recorded here so a builder does not "discover" them mid-slice and add them. `chaos` in particular is backend chaos-harness territory (M4), not a dashboard page. |
+| Login / OIDC / "Require login / password change" (Settings → Security) | **DIVERGENCE (parity tracker Area 8b):** the sector baseline has password/OIDC login; we have the gateway-key auth model + loopback binding instead. No dashboard login page in M10. If dashboard auth ever lands it is a backend slice, not M10. |
 
-### 1c. Structural facts about the reference router's dashboard that shape M10
+### 1c. Structural facts about the sector-typical dashboard that shape M10
 
 1. **Home is a 4-step quick-start + topology, not a KPI wall.** The operator lands on "what do I do first", then providers. Our Overview's KPI row + ~11 detail cards (item 295 caveat: KPI row is exactly 4, detail cards below were kept because other verified items depend on them) is the thing to reconcile in M10-1 — list which detail cards survive and why, don't just keep them.
 2. **Providers and Models are the two big tables** (1,984 and 1,134 lines). Models is a table, never paragraphs.
@@ -74,38 +74,38 @@ Route tree: `the local reference clone/src/app/(dashboard)/dashboard/` (Next.js 
 
 ---
 
-## 2. Our current dashboard inventory vs the reference router
+## 2. Our current dashboard inventory vs the sector baseline
 
 Measured 2026-11-19 in `web/index.html` (8,367 lines; `<script>` starts line 2573). **`<p>` count is 240 lines containing `<p` (251 occurrences: 178 in static HTML + 73 in JS-generated markup)** — PARITY's "174 (109 static + 65 JS)" is stale; the count grew during M9.9/sprint-19 work. Do not quote 174. **`"Playground"` = 0 occurrences** — the removal holds. **13 `<select>` elements** (11 static + 2 JS-built); per PARITY's last dropdown inventory 4 were still native-arrow (model provider filter, model category filter, per-provider add-key role, intent-tier effort) and `#11` Listen-address is styled but fake.
 
 ### 2a. Our sections (nav order, `web/index.html:537-664`)
 
-| # | Our section | Lines | Status vs the reference router | Notes |
+| # | Our section | Lines | Status vs the sector baseline | Notes |
 |---|---|---|---|---|
 | 1 | Overview | 665–917 | PARTIAL | KPI row exactly 4 (item 295 DONE); ~11 detail cards below exceed the item-295 4-card cap — M10-1 reconciles. Spend is 24h/7d/30d range-segmented, no side-by-side 1D/7D/30D, no avg cost/req. |
 | 2 | Providers | 918–1033 | PARTIAL → near-have | Catalog-as-addable-groups landed (item 291: 614 live from `GET /api/catalog`, configured pinned on top, ToS-grey rows disabled Add, search). M10-2 verifies + closes gaps (Free Tier group). |
 | 3 | Models | 1034–1098 | PARTIAL | Table rows only (item 292 DONE). Price-source column + `models.dev` synced marker landed (item 180). Free-tier marking + key-creation links not surfaced (B9 verify-first). |
 | 4 | Auto-router | 1099–1202 | PARTIAL | 6 virtual models (auto, auto/fast, auto/cheap, auto/coding, auto/code, auto/reasoning + intent/*); no router-strategy picker, no sla/nadir/lkgp. Reads `GET /dashboard/auto-route`, `/dashboard/auto-route/last`. |
-| 5 | Routing strategies | 1203–1272 | PARTIAL | Picker offers 7 names incl. wrong `code` (backend `isStrategyName` accepts only balanced, cheapest, cheap, fastest, fast, most-reliable, reliable, least-latency, latency, weighted); 18/22 the reference router strategies MISSING at backend level (M3 territory, not M10 — M10 renders exactly what the backend accepts). |
+| 5 | Routing strategies | 1203–1272 | PARTIAL | Picker offers 7 names incl. wrong `code` (backend `isStrategyName` accepts only balanced, cheapest, cheap, fastest, fast, most-reliable, reliable, least-latency, latency, weighted); 18/22 the sector baseline strategies MISSING at backend level (M3 territory, not M10 — M10 renders exactly what the backend accepts). |
 | 6 | Cooldown | 1273–1339 | PARTIAL | Global + per-chain modes live (`GET/POST /dashboard/cooldown`). No per-model cooldowns, no breaker reset (B6). |
-| 7 | Request coalescing | 1340–1388 | HAVE (narrow) | Live single-flight counters from `GET /dashboard/coalescing`. the reference router has no direct equivalent page; keep — it is a real operator signal, not a storefront extra. |
+| 7 | Request coalescing | 1340–1388 | HAVE (narrow) | Live single-flight counters from `GET /dashboard/coalescing`. the sector baseline has no direct equivalent page; keep — it is a real operator signal, not a storefront extra. |
 | 8 | Concurrency & TCP Fast Open | 1389–1431 | HAVE (narrow) | Live limiter state from `GET /dashboard/concurrency`. Same justification as coalescing. |
 | 9 | Connection pools | 1432–1475 | HAVE (narrow) | Live per-(provider,key) pool state from `GET /dashboard/pools`. |
-| 10 | Route guards | 1476–1619 | OURS-ONLY → REMOVE as page (§6) | Live Tier 1/2/3 tables from `GET /dashboard/guard` — real and correct, but the reference router puts Authz under Settings → Security. Fold into Settings; keep the feed. |
-| 11 | Guardrails | 1620–1787 | OURS-ONLY → REMOVE as page (§6) | 3 kind toggles (PII/Secrets/Injection, ids `grTogglePII/Secrets/Injection`) wired to `GET/POST /dashboard/guardrails` (item 296). the reference router model is backend-only + PII card in Security. Fold into Settings → Security; keep the feed. |
+| 10 | Route guards | 1476–1619 | OURS-ONLY → REMOVE as page (§6) | Live Tier 1/2/3 tables from `GET /dashboard/guard` — real and correct, but the sector baseline puts Authz under Settings → Security. Fold into Settings; keep the feed. |
+| 11 | Guardrails | 1620–1787 | OURS-ONLY → REMOVE as page (§6) | 3 kind toggles (PII/Secrets/Injection, ids `grTogglePII/Secrets/Injection`) wired to `GET/POST /dashboard/guardrails` (item 296). the sector baseline model is backend-only + PII card in Security. Fold into Settings → Security; keep the feed. |
 | 12 | Plugins | 1788–1863 | PARTIAL | Live registry snapshot from `GET /dashboard/plugins`, honest zero state. No install UI — **deliberate**: `POST /admin/plugin/load` is 501 by design (loading arbitrary code = arbitrary code execution). Never add install UI in M10. |
-| 13 | MCP & CLI | 1864–1975 | PARTIAL | `GET /dashboard/mcp` + audit view (`GET /api/mcp/audit`) + transport toggles (`POST /api/mcp/status`). 24 tools / 11 scopes vs the reference router 110 / 33; no heartbeat, no session tracking (recorded gap, no M10 backend proposed). |
+| 13 | MCP & CLI | 1864–1975 | PARTIAL | `GET /dashboard/mcp` + audit view (`GET /api/mcp/audit`) + transport toggles (`POST /api/mcp/status`). 24 tools / 11 scopes vs the sector baseline 110 / 33; no heartbeat, no session tracking (recorded gap, no M10 backend proposed). |
 | 14 | A2A | 1976–2032 | PARTIAL — M9.9 in flight | Section + ids pinned by `a2a_dashboard_test.go`. Reads `GET /api/a2a/status` — **handler exists (`internal/server/a2a_status.go:70`) but is NOT registered in `server.go`**; registration is the M9.9 coordinator's job (see §3.2). No per-owner task list, no task submission from the dashboard (both forbidden by that test). |
 | 15 | API Keys | 2033–2088 | PARTIAL | Rotate wired (`POST /admin/keys/{id}/rotate`); expiry/limits wired (`POST /admin/keys/{id}`). Create NOT wired (no backend route — B1). Single-key revoke NOT wired though `DELETE /admin/keys/{id}` exists. Single-key disable NOT wired though `POST /admin/keys/{id}` `{"disabled":true}` exists (`guard.go:330`). |
 | 16 | Request Logs | 2089–2139 | HAVE | All columns + Reasoning/Cached/Saved; `GET /dashboard/logs`, All/ok/failed filter. |
 | 17 | Usage & Cost | 2140–2240 | PARTIAL | Spend/tokens/failovers from `GET /dashboard/usage`. No Cost Explorer, no forecast, no quota-share/teams UI — although `GET /dashboard/quota-pools` and `GET /dashboard/teams` already exist and are **read by nothing** in the dashboard (0 refs). |
-| 18 | Benchmark | 2241–2391 | OURS-ONLY → KEEP (justified) | Live from `GET /dashboard/benchmark` + history + memstats + release-verify; missed-target verdicts shown honestly. the reference router has no benchmark page, but this is our own measured-evidence surface (Master Prompt: measured wins, reproducible), not a storefront extra. Keep, do not expand in M10. |
+| 18 | Benchmark | 2241–2391 | OURS-ONLY → KEEP (justified) | Live from `GET /dashboard/benchmark` + history + memstats + release-verify; missed-target verdicts shown honestly. the sector baseline has no benchmark page, but this is our own measured-evidence surface (Master Prompt: measured wins, reproducible), not a storefront extra. Keep, do not expand in M10. |
 | 19 | Verification status | 2392–2439 | OURS-ONLY → KEEP (justified) | Honest what-is-proven / what-still-needs-CI-or-a-browser status from `GET /dashboard/verification`. Same justification as Benchmark. Keep. |
 | 20 | Settings | 2440–2565 | WRONG-BEHAVIOUR (in part) | Strategy picker wired (live). **5 switches are display-only with a false "· saved" toast**: Automatic failover, Prompt-cache pinning, Cost-aware routing, Health checks, Request logging (`web/index.html:2460-2499`, generic handler ~6052–6056 flips `aria-checked` and toasts — no fetch, no persistence). **Listen address select (2491) has no handler; Port input is hard-coded `8080` (real default is 20128).** Session-stickiness toggle: same fake pattern (parity tracker Area 8b). |
 
-### 2b. Gap table — the reference router pages/sections vs ours
+### 2b. Gap table — the sector baseline pages/sections vs ours
 
-| the reference router page/section | Ours | Verdict | Our file:line / backend |
+| the sector baseline page/section | Ours | Verdict | Our file:line / backend |
 |---|---|---|---|
 | Home 4-step quick-start + topology | Overview (KPI row + detail cards) | PARTIAL | `web/index.html:665-917`; `GET /dashboard/overview` (`server.go:1343`) |
 | Providers as addable groups (+ Free Tier group) | Providers (catalog list, item 291) | PARTIAL | `web/index.html:918-1033`; `GET /api/catalog` (`server.go:1412`), `GET /api/providers` (`server.go:1406`) |
@@ -135,7 +135,7 @@ Measured 2026-11-19 in `web/index.html` (8,367 lines; `<script>` starts line 257
 | Responses (ours-only feed, no section) | Feed exists, read in trace views only | PARTIAL | `GET /dashboard/responses`, `/dashboard/responses/tree` (`server.go:1523-1524`) |
 | Prices feed | Feed exists, read by nothing | MISSING (UI only) | `GET /dashboard/prices` (`server.go:1400`); 0 refs — Models shows cheapest pair only (known caveat) |
 
-**Single largest dashboard gap vs the reference router: named combos.** the reference router's Combos page is a 5,435-line control centre — the primary routing workflow (CRUD + builder + per-capability endpoint tabs + duplicate/import/export/test/enable) — and we have **zero combos UI** even though a live `GET/POST/PATCH/DELETE /v1/combos` CRUD API already exists. It is the only the reference router primary workflow with no dashboard presence at all. (Close second: Costs — Cost Explorer, forecast, and quota-share/teams UI are all missing while their backend feeds already exist and are unread.)
+**Single largest dashboard gap vs the sector baseline: named combos.** the sector-typical Combos page is a 5,435-line control centre — the primary routing workflow (CRUD + builder + per-capability endpoint tabs + duplicate/import/export/test/enable) — and we have **zero combos UI** even though a live `GET/POST/PATCH/DELETE /v1/combos` CRUD API already exists. It is the only the sector baseline primary workflow with no dashboard presence at all. (Close second: Costs — Cost Explorer, forecast, and quota-share/teams UI are all missing while their backend feeds already exist and are unread.)
 
 ---
 
@@ -295,7 +295,7 @@ Rules: M10-0 lands first. Later slices run in parallel on disjoint regions; the 
 - **Files:** `web/index.html` regions 1099–1202 (Auto-router) + 1203–1272 (Strategies); `internal/server/dashboard_m10_4_test.go`.
 - **Endpoints (EXIST):** `GET/POST /dashboard/strategies` (`server.go:1380-1381`), `GET /dashboard/auto-route`, `GET /dashboard/auto-route/last` (`server.go:1351-1352`). No new backend.
 - **Tests:** picker options in the served page equal the accepted-name set from the live feed (a test that posts each offered name and expects success, and posts `code` and expects rejection); changing the picker POSTs the real global strategy and the smoke confirms the new value on re-read; `node --check`.
-- **Definition-of-Done:** no `code` option; no strategy name offered that the backend rejects; auto/* labelled virtual; the 18 missing the reference router strategies are listed in the slice report as backend-MISSING (M3), not papered over.
+- **Definition-of-Done:** no `code` option; no strategy name offered that the backend rejects; auto/* labelled virtual; the 18 missing the sector baseline strategies are listed in the slice report as backend-MISSING (M3), not papered over.
 
 ### M10-5 — Combos: named-combo CRUD UI (new view) — BLOCKED-in-part on B3
 
@@ -332,7 +332,7 @@ Rules: M10-0 lands first. Later slices run in parallel on disjoint regions; the 
 
 ### M10-9 — Audit / Compliance page (new view) — FULLY BLOCKED on B4
 
-- **Goal:** the Audit page the reference router has (`ComplianceTab`): guard denials, key lifecycle events, management POSTs, MCP audit — identifiers and counts only.
+- **Goal:** the Audit page the sector baseline has (`ComplianceTab`): guard denials, key lifecycle events, management POSTs, MCP audit — identifiers and counts only.
 - **Files:** NEW section (M10-0 slot); `internal/server/dashboard_m10_9_test.go`.
 - **Endpoints:** NONE exist for this page. `GET /api/mcp/audit` (`server.go:1367`) is MCP-only and must not be presented as a full audit. **This slice does not start until B4 (`GET /dashboard/audit`) lands.** No interim version from partial feeds — a partial audit presented as an audit would be fake completeness.
 - **Tests (after B4):** every audit row maps to a real event (guard denial, key event, management POST, or MCP audit entry); no prompts/keys/message content in any row; `node --check`.
@@ -365,7 +365,7 @@ Rules: M10-0 lands first. Later slices run in parallel on disjoint regions; the 
 
 ### M10-13 — MCP polish + A2A section — A2A BLOCKED on M9.9 registration
 
-- **Goal:** MCP page: tool list with scopes (24 tools / 11 scopes — the real numbers, never the reference router's 110/33), live provider/model counts, selector state + counters, audit view, transport toggles (`POST /api/mcp/status`). Record as a known gap (no heartbeat, no session tracking) in the slice report; no M10 backend proposed for it. A2A section: verify + polish the M9.9 section against the exact contract in §3.2 — status capsule, 5-state task-count table, 6-skill table, protocol version, agent-card link, "A2A is disabled" empty state.
+- **Goal:** MCP page: tool list with scopes (24 tools / 11 scopes — the real numbers, never the sector-typical 110/33), live provider/model counts, selector state + counters, audit view, transport toggles (`POST /api/mcp/status`). Record as a known gap (no heartbeat, no session tracking) in the slice report; no M10 backend proposed for it. A2A section: verify + polish the M9.9 section against the exact contract in §3.2 — status capsule, 5-state task-count table, 6-skill table, protocol version, agent-card link, "A2A is disabled" empty state.
 - **Files:** `web/index.html` regions 1864–1975 (MCP) + 1976–2032 (A2A, after M9.9 handover only); `internal/server/dashboard_m10_13_test.go`. Extends (does not rewrite) `a2a_dashboard_test.go` assertions.
 - **Endpoints (EXIST):** `GET /dashboard/mcp` (`server.go:1366`), `GET /api/mcp/audit` (`server.go:1367`), `GET/POST /api/mcp/status` (`server.go:1368-1369`). **A2A:** `GET /api/a2a/status` — handler exists, registration pending M9.9 coordinator (§3.2). If unregistered at M10-13 start, the A2A half of this slice does not start.
 - **Tests:** MCP tool list equals `GET /dashboard/mcp` tools; audit view rows equal `GET /api/mcp/audit`; transport toggle round-trip via `POST /api/mcp/status`; A2A: enabled=false smoke shows all-zero 5-state table + fixed 6 skills + `2025-03-26`; enabled=true smoke shows live counts; store-failure path shows the honest 503 message; test asserts no `/api/a2a/tasks` string and no "Playground" string in the served dashboard.
@@ -389,7 +389,7 @@ Rules: M10-0 lands first. Later slices run in parallel on disjoint regions; the 
 
 ### M10-16 — Batch (read-only) + Responses section — Conversations cut
 
-- **Goal:** Batch: read-only job list from `/v1/batches` (status, model, counts). Create/cancel are NOT wired in M10 — batch creation spends quota through a gateway-key-authenticated API and the dashboard's operator-key UX for it is undecided; a read-only list is the honest scope. Responses: a section from `GET /dashboard/responses` + `/dashboard/responses/tree` (identifiers, model, status, continuation chain, counts only — never input/output text). Conversations: CUT — the reference router's Conversations is chat history we do not store; Responses is our equivalent and is labelled as such ("Responses, not conversations — the router stores response identifiers and chains, not chat transcripts").
+- **Goal:** Batch: read-only job list from `/v1/batches` (status, model, counts). Create/cancel are NOT wired in M10 — batch creation spends quota through a gateway-key-authenticated API and the dashboard's operator-key UX for it is undecided; a read-only list is the honest scope. Responses: a section from `GET /dashboard/responses` + `/dashboard/responses/tree` (identifiers, model, status, continuation chain, counts only — never input/output text). Conversations: CUT — the sector-typical Conversations is chat history we do not store; Responses is our equivalent and is labelled as such ("Responses, not conversations — the router stores response identifiers and chains, not chat transcripts").
 - **Files:** NEW Batch + Responses sections; `internal/server/dashboard_m10_16_test.go`.
 - **Endpoints (EXIST):** `GET /v1/batches` (`server.go` batches block), `GET /dashboard/responses`, `GET /dashboard/responses/tree` (`server.go:1523-1524`). No new backend.
 - **Tests:** batch rows equal the `/v1/batches` response; responses rows equal the feed (identifiers only — test asserts no input/output text appears in the rendered section); `node --check`.
@@ -415,14 +415,14 @@ Rules: M10-0 lands first. Later slices run in parallel on disjoint regions; the 
 
 **Decision: remove both as top-level nav pages. Fold both into Settings → Security. Keep both backend feeds exactly as they are.**
 
-This is the default Raunak's correction requires (remove unless a concrete operator need is documented). The operator need IS documented below — and it is met better inside Settings than by a top-level page, which is exactly the reference router's shape (Authz section + PII card under Settings → Security; no Guardrails page, no Route-guards page).
+This is the default Raunak's correction requires (remove unless a concrete operator need is documented). The operator need IS documented below — and it is met better inside Settings than by a top-level page, which is exactly the sector-typical shape (Authz section + PII card under Settings → Security; no Guardrails page, no Route-guards page).
 
 | Page | Concrete operator need (documented) | Why it does not need a top-level page | Where it lands |
 |---|---|---|---|
-| Guardrails | An operator must be able to see and change what the router blocks (PII / secrets / prompt-injection) and see redaction counts + recent redacted events — this is a live safety control, not decoration. Backend: `GET/POST /dashboard/guardrails` (`server.go:1376-1377`), 3 kind toggles (ids `grTogglePII/Secrets/Injection`, `web/index.html:1748-1758`, wired per item 296). | The need is "change 3 toggles + see counts", a card-sized job. A full page for 3 toggles is the paragraph-heavy, storefront-shaped over-build Raunak corrected. the reference router's model is backend-only guardrails + a PII card in Security. | Settings → Security, as a "PII & content" card: the same 3 toggles (same ids, same POST), redaction counts, recent redacted events. Per-key guardrails in the Keys view stay where they are. |
-| Route guards | An operator must be able to audit the auth posture: which routes are Tier 1/2/3, which are admin-scoped, which are auth-exempt — this is the evidence that M1's scope work holds. Backend: `GET /dashboard/guard` (`server.go:1365`), live Tier 1/2/3 tables. | The need is "audit the route table", a settings/security concern, not a daily workflow. A top-level page elevates an audit table to a primary workflow and duplicates Settings → Security's job. the reference router puts Authz under Settings → Security. | Settings → Security, as a "Route authorization" table: the same live Tier 1/2/3 tables from `GET /dashboard/guard`, plus the tunnel + DB-export rows that live there today. |
+| Guardrails | An operator must be able to see and change what the router blocks (PII / secrets / prompt-injection) and see redaction counts + recent redacted events — this is a live safety control, not decoration. Backend: `GET/POST /dashboard/guardrails` (`server.go:1376-1377`), 3 kind toggles (ids `grTogglePII/Secrets/Injection`, `web/index.html:1748-1758`, wired per item 296). | The need is "change 3 toggles + see counts", a card-sized job. A full page for 3 toggles is the paragraph-heavy, storefront-shaped over-build Raunak corrected. the sector-typical model is backend-only guardrails + a PII card in Security. | Settings → Security, as a "PII & content" card: the same 3 toggles (same ids, same POST), redaction counts, recent redacted events. Per-key guardrails in the Keys view stay where they are. |
+| Route guards | An operator must be able to audit the auth posture: which routes are Tier 1/2/3, which are admin-scoped, which are auth-exempt — this is the evidence that M1's scope work holds. Backend: `GET /dashboard/guard` (`server.go:1365`), live Tier 1/2/3 tables. | The need is "audit the route table", a settings/security concern, not a daily workflow. A top-level page elevates an audit table to a primary workflow and duplicates Settings → Security's job. the sector baseline puts Authz under Settings → Security. | Settings → Security, as a "Route authorization" table: the same live Tier 1/2/3 tables from `GET /dashboard/guard`, plus the tunnel + DB-export rows that live there today. |
 
-**What is deleted:** nav entries `data-view="guard"` and `data-view="guardrails"`, sections `view-guard` (`web/index.html:1476-1619`) and `view-guardrails` (`:1620-1787`). **What is kept:** both feeds, both sets of controls, both tables — moved, not removed. **What is NOT decided here:** whether the guardrails toggles gain per-type selection (23 builtin types in the reference router vs our 3 kind toggles — parity tracker Area 6/8b, MISSING). That is a backend gap, not an M10 layout question; M10 renders the 3 toggles honestly and records per-type selection as MISSING.
+**What is deleted:** nav entries `data-view="guard"` and `data-view="guardrails"`, sections `view-guard` (`web/index.html:1476-1619`) and `view-guardrails` (`:1620-1787`). **What is kept:** both feeds, both sets of controls, both tables — moved, not removed. **What is NOT decided here:** whether the guardrails toggles gain per-type selection (23 builtin types in the sector baseline vs our 3 kind toggles — parity tracker Area 6/8b, MISSING). That is a backend gap, not an M10 layout question; M10 renders the 3 toggles honestly and records per-type selection as MISSING.
 
 ---
 
@@ -496,7 +496,7 @@ Each slice report states: what was built (file:line), which live feed it reads (
 | Slices blocked-in-part on backend | **7** (M10-5 on B3; M10-7 on B1+B2; M10-9 fully blocked on B4; M10-11 on B6; M10-12 on B5; M10-13 A2A half on M9.9 registration; M10-14 on B7/B8 only if the controls are kept — default plan removes them, needing no backend) |
 | Backend-enabler slices | **9** (B1–B9; B9 is verify-first, may be zero-work) |
 | Slices blocked on a missing core read endpoint | **0** — every core read feed already exists (§3.1) |
-| Single largest dashboard gap vs the reference router | **Named combos: zero UI for the reference router's 5,435-line Combos control centre, while a live `/v1/combos` CRUD API already exists** (M10-5; duplicate/import/export/test/enable pending B3). Close second: Costs (explorer/forecast/pools/teams UI missing while the feeds exist unread). |
+| Single largest dashboard gap vs the sector baseline | **Named combos: zero UI for the sector-typical 5,435-line Combos control centre, while a live `/v1/combos` CRUD API already exists** (M10-5; duplicate/import/export/test/enable pending B3). Close second: Costs (explorer/forecast/pools/teams UI missing while the feeds exist unread). |
 | Guardrails / Route guards | Remove both as top-level pages; fold into Settings → Security (§6); feeds and controls kept. |
 | Live-browser items | 110 / 128 / 297 stay pending — no working browser in this VM; do not claim them done (§8.2). |
 | Order | M10-0 first (nav + auth + tokens), then M10-1…M10-16 in parallel on disjoint regions (merge in numeric order), M10-17 gate last. M10-9 waits for B4; M10-13's A2A half waits for the M9.9 coordinator registering `GET /api/a2a/status`. |

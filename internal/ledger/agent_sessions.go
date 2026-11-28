@@ -14,7 +14,7 @@
 // exactly like responses.json keeps the Responses chains — no
 // restart-loss gap, no separate persistence file to drift.
 //
-// Keying (mirrors the reference router's agent_sessions, migration 229):
+// Keying (mirrors the sector-typical agent_sessions, migration 229):
 // one row per gateway key + client session id when the usage row
 // carries one (Usage.SessionID, set from request metadata with
 // Usage.WithAttribution); otherwise one row per gateway key +
@@ -60,7 +60,7 @@ import (
 // agentSessionIdleWindow is the idle gap that closes a session
 // for traffic with no client session id: a request more than
 // this long after the session's last request starts a new
-// session. 30 minutes, matching the reference router's agent_sessions
+// session. 30 minutes, matching the sector-typical agent_sessions
 // idle window.
 const agentSessionIdleWindow = 30 * time.Minute
 

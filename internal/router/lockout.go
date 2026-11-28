@@ -1,4 +1,4 @@
-// Model lockout (M4.3, the reference router modelLockoutSettings.ts).
+// Model lockout (M4.3, the sector baseline modelLockoutSettings.ts).
 //
 // A dead model retried first on every request burns an attempt on
 // every request: the provider answers fine, only the model is dead
@@ -7,13 +7,13 @@
 // a cooldown, and the engine skips it (trace: skipped_model_lockout)
 // until the cooldown ends — the next target serves instead.
 //
-// Defaults are the reference router's verbatim (modelLockoutSettings.ts):
+// Defaults are the sector-typical verbatim (modelLockoutSettings.ts):
 // OFF by default (enabled: false), error codes 403/404/429/502/503/504,
 // base cooldown 120 s, max 30 min, max 10 backoff steps, exponential
 // backoff. The cooldown for the Nth consecutive eligible failure is
 // min(base * 2^(N-1), max), capped at maxSteps steps. A success on
 // the triple clears it — a recovered model serves again at once.
-// A 500 is deliberately NOT in the code list (the reference router's list has
+// A 500 is deliberately NOT in the code list (the sector-typical list has
 // no 500 either): a 500 is a provider failure, and the breaker
 // already owns provider failures; the lockout owns per-model ones.
 package router
@@ -30,7 +30,7 @@ import (
 // LockoutConfig is the operator's model-lockout setting. Zero value
 // means OFF (Enabled false) — the engine behaves exactly as before.
 type LockoutConfig struct {
-	// Enabled turns the lockout on. Default false (the reference router's
+	// Enabled turns the lockout on. Default false (the sector-typical
 	// default: the feature is off until the operator opts in).
 	Enabled bool
 	// ErrorCodes are the statuses that lock the triple. Empty
@@ -48,7 +48,7 @@ type LockoutConfig struct {
 }
 
 // DefaultModelLockoutCodes are the statuses that lock a
-// (provider, key, model) triple (the reference router DEFAULT_MODEL_LOCKOUT_SETTINGS).
+// (provider, key, model) triple (the sector baseline DEFAULT_MODEL_LOCKOUT_SETTINGS).
 var DefaultModelLockoutCodes = []int{403, 404, 429, 502, 503, 504}
 
 // DefaultModelLockoutBase is the first lockout cooldown (120 s).

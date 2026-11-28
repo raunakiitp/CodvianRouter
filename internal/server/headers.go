@@ -437,7 +437,7 @@ func (s *Server) writeResponseHeaders(w http.ResponseWriter, ctx context.Context
 	}
 	if meta.HasCacheSavedUSD {
 		h.Set(headerCodvianCacheSavedUSD, strconv.FormatFloat(meta.CacheSavedUSD, 'f', 10, 64))
-		// the reference router name for the same priced saving (see the
+		// the sector baseline name for the same priced saving (see the
 		// const above): same value, same 10-dp format, so the
 		// two headers can never disagree. A memory-only hit
 		// carries it too — withCacheSavings prices from the
@@ -523,7 +523,7 @@ func (meta ResponseMeta) trailerJSON() ([]byte, error) {
 	}
 	if meta.HasCacheSavedUSD {
 		m["cache_saved_usd"] = meta.CacheSavedUSD
-		// Same figure under the the reference router name, so a stream
+		// Same figure under the the sector baseline name, so a stream
 		// trailer reader sees the same saving as a header
 		// reader (cache hits are non-streaming in practice,
 		// but the trailer is the same meta).

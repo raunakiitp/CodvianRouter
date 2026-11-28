@@ -37,7 +37,7 @@
   - **concurrency-limit text** → failover now, 1 s cool, no backoff climb, no breaker count;
   - **default** → `consecutive429` backoff ladder (`rateLimitWait`), hard cooldown = Retry-After floored at 10 s / capped at `RetryAfterCap`, or the per-auth base when no hint (OAuth 5 s / API-key 3 s / local 2 s).
 - The computed wait is only slept when the failing target was the LAST in the chain; with further targets the loop fails over immediately.
-- `FailoverBeforeRetry` (B2-30, default off — matches the reference router's effective default) skips same-target transient retries when a next target exists.
+- `FailoverBeforeRetry` (B2-30, default off — matches the sector-typical effective default) skips same-target transient retries when a next target exists.
 - Soft-demote cooldown mode (`CooldownSoftDemote`) demotes instead of hard-cooling; Retry-After still floored at 10 s, doubling capped at 5 min.
 
 **Decision:** no policy change justified — the observed behavior was the single-key-chain symptom, the policy is bounded, classified and live-proven post-fix. Changing the reference-parity default without a measured need would violate the preserve-working-code rule.

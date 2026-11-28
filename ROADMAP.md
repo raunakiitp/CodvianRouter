@@ -23,7 +23,7 @@
 
 - Hourly research into LLM routers worldwide: best features, latency
   reduction, and low-end local performance.
-- Hourly deep research into router GitHub repositories (reference routers,
+- Hourly deep research into router GitHub repositories (sector baselines,
   comparable LLM gateways: best features
   extracted into a research log that builds draw from.
 - Planned technical direction from research so far:

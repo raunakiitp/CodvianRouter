@@ -126,14 +126,14 @@ weighted 34.2%; P0-8 CLOSED).
 
 Area 1 baseline: 63 rows, FULL 3, PARTIAL 24, MISSING 35, WRONG 1; strict 4.8%,
 weighted 23.8%. Ours: 7 named strategies (priority, balanced, cheapest, fastest,
-most-reliable, least-latency, weighted, code) vs reference router's 22 + mode packs +
+most-reliable, least-latency, weighted, code) vs sector-typical 22 + mode packs +
 auto/* family. Exit gate: strategy conformance suite green; Area 1 ≥ 80% weighted.
 
 SEQUENCING: Phase A — S1–S4 build in parallel, DISJOINT new files only, NO edits to
 shared files (internal/config/config.go, internal/router/router.go,
 internal/server/server.go, internal/strategy/strategy.go — coordinator wires those
 in Phase B). Each builder writes acceptance tests FIRST (test fails when the
-strategy is removed), reads reference router semantics from the cited reference files
+strategy is removed), reads sector baseline semantics from the cited reference files
 (study only — never copy code), and reports file:line evidence + PARITY rows.
 Phase B — coordinator wires registry/config/router, runs the conformance suite +
 full gate, flips PARITY rows, commits M3. Phase C — S5 combos (fusion/pipeline/
@@ -152,7 +152,7 @@ Phase A DONE 2026-11-18 (verified by coordinator, package tests green):
 S1 orderings (15 tests), S2 quota (16 tests), S3 16-factor + packs (27 tests),
 S4 affinity (24 tests, -race). Phase B DONE (same day, gate running):
 wiring.go + conformance suite (wiring_test.go, 10 tests), registry/config/tree
-allowlists extended to 31 strategies, "weighted" renamed to reference router's
+allowlists extended to 31 strategies, "weighted" renamed to sector-typical
 per-target draw with old custom-weights behaviour moved to "custom-weights"
 (pre-1.0 rename, migration note in LOG.md). Phase B honest verdicts: 14 rows →
 FULL (Area 1 FULL 3 → 17), 11 rows → PARTIAL (data-limited wiring), WRONG 1 → 0.
@@ -325,7 +325,7 @@ parallel requests. That gate DEPENDS on M5.8 (committed-spend reservation):
 today CheckKeyBudget reads spent-then-proceeds, so parallel requests can
 all pass before any ledger row lands — the reservation is the fix, the
 race tests are the proof. M5.14 runs last.
-Reference router evidence verified fresh 2026-11-18: apiKeys.ts fields
+sector baseline evidence verified fresh 2026-11-18: apiKeys.ts fields
 (daily/weekly/fiveHourUsageLimitUsd, maxRequestsPerDay/Minute,
 throttleDelayMs, maxSessions, accessSchedule, rateLimits[]);
 keyQuota.ts (pre-request gate tpm/rpm/monthly, fail-open on infra error,
@@ -436,7 +436,7 @@ savings half and M6.11 (property tests) for the correctness half.
 | M6.9 | Token-cost engine: cache-write tiers 5m/1h split + provider prompt-cache markers (extend beyond anthropic/claude/openrouter) | cache-write tiers; provider prompt-cache markers |
 | M6.10 | Dedup/coalescing: per-key isolation + in-flight cap + timeout | dedup / coalescing |
 | M6.11 | Correctness property tests (exit gate, correctness half): no cross-tenant, no temp leaks, no truncated serves; cross-provider SHARING pinned as documented (M6.12 decided DIVERGENCE — same model shared across providers by design) | (exit gate) |
-| M6.12 | Per-provider isolation: the row says "Deliberately NO" but no decision record was found in LOG.md/PLAN.md — audit first. If genuinely deliberate → flip to DIVERGENCE with the evidence; else add provider to ScopedKey (reference router default-on) | per-provider isolation |
+| M6.12 | Per-provider isolation: the row says "Deliberately NO" but no decision record was found in LOG.md/PLAN.md — audit first. If genuinely deliberate → flip to DIVERGENCE with the evidence; else add provider to ScopedKey (sector baseline default-on) | per-provider isolation |
 
 Deliberate non-goals / evaluate-don't-force: semantic similarity method
 (neural embeddings) — wiring real provider embeddings into the semantic
@@ -478,7 +478,7 @@ Apply. Area 10 now FULL 10 / PARTIAL 13 / MISSING 20 / AHEAD 4
 — spawn M8.0 + M8.1 first, then M8.2–M8.21 in parallel, M8.22 last.**
 
 Deliberate non-goals / do-not-build (from the MUST NEVER list + M6 review):
-OmniGlyph context-as-image (lossy, exempt from the fidelity gate) and LLM
+the legacy glyph set context-as-image (lossy, exempt from the fidelity gate) and LLM
 compressor (model call to compress) are NEVER built. Lossy prose rewriting
 is allowed only behind the fidelity gate (M7.2) — never silent.
 
@@ -533,7 +533,7 @@ Current MCP state: stdio + SSE + Streamable HTTP server with 24 tools (3 built-i
 | Slice | Scope | Files (disjoint) |
 |---|---|---|
 | M9.0 | MCP fixture harness (JSON-RPC recorded pairs over stdio) + Area 9 reconciliation | internal/apitest/mcp_fixture.go (new), tests/fixtures/mcp/ (new) |
-| M9.1 | SECURITY BASELINE: per-tool scope system (own scope set, wildcard matching), enforcement ON by default (never copy reference router's OFF default), audit log of tool calls (inputs hashed, outputs truncated), per-client identity; then an independent SECURITY REVIEW — A2A is gated on it | internal/mcp/scopes.go, internal/mcp/audit.go (new) |
+| M9.1 | SECURITY BASELINE: per-tool scope system (own scope set, wildcard matching), enforcement ON by default (never copy sector-typical OFF default), audit log of tool calls (inputs hashed, outputs truncated), per-client identity; then an independent SECURITY REVIEW — A2A is gated on it | internal/mcp/scopes.go, internal/mcp/audit.go (new) |
 | M9.2 | Remote transports: SSE (GET/POST /api/mcp/sse) + Streamable HTTP (POST/GET/DELETE /api/mcp/stream), gateway-key auth, forced scope enforcement for narrow keys | internal/server/mcp_http.go (new) |
 | M9.3 | Routing/combo + cost/quota tools: list/create/switch combos, combo metrics, set_routing_strategy, explain_route, simulate_route, best_combo_for_task, pick_fastest_model, cost_report, check_quota, set_budget_guard (scoped manage) | internal/mcp/tools_routing.go, internal/mcp/tools_cost.go (new) |
 | M9.4 | Cache + DB health + memory tools: cache_stats, cache_flush, db_health, db_stats, memory_search/add/clear — destructive ones (cache_flush, memory_clear, db autoRepair) ONLY under a separate destructive grant, never the default tool scope | internal/mcp/tools_ops.go (new) |

@@ -1,12 +1,12 @@
 // Key-creation links (parity tracker Area 3, "Key-creation links").
 //
-// the reference router records a key-creation hint for 129 providers; the
+// the sector baseline records a key-creation hint for 129 providers; the
 // catalog recorded none. This file seeds KeyCreationURL for the
 // providers whose hint names a key page that differs from the
 // homepage (the homepage itself is already the Website field, so
 // re-recording it adds nothing).
 //
-// Source: the reference router reference registry authHint fields
+// Source: the sector baseline reference registry authHint fields
 // (src/shared/constants/providers/**/*.ts, read 2026-11-19). Every
 // entry below was hand-checked against that rule: the URL must be
 // a key-management / signup / console page, never an API base
@@ -17,7 +17,7 @@
 // ~110 key pages are that follow-up data task, not this slice.
 //
 // The seed is reference metadata, not docs-verified: a URL here
-// says "the reference router's hint points at this key page", not "we
+// says "the sector-typical hint points at this key page", not "we
 // verified this key page against the provider's docs". The
 // Provider.Verification label is unchanged by the fill.
 package catalog

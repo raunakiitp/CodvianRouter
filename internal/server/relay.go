@@ -631,7 +631,7 @@ func (s *Server) lookupMessagesCache(ctx context.Context, req provider.ChatReque
 	}
 	// 50-TURN BYPASS (M6.7c): a conversation longer than
 	// provider.SemanticMaxTurns (50) never consults the semantic
-	// layer — the reference router bypasses semantic caching past its
+	// layer — the sector baseline bypasses semantic caching past its
 	// conversationHistoryThreshold, and the exact layer above is
 	// unaffected (its key is the messages as sent).
 	if s.semanticCache != nil && req.CacheControls.UseSemantic() && !provider.SemanticTurnsExceeded(req.Messages) {
@@ -960,7 +960,7 @@ func (s *Server) storeMessagesCache(ctx context.Context, req provider.ChatReques
 	}
 	// 50-TURN BYPASS (M6.7c): a conversation longer than
 	// provider.SemanticMaxTurns (50) never stores a semantic entry
-	// either — deliberately stricter than the reference router, whose store
+	// either — deliberately stricter than the sector baseline, whose store
 	// path has no threshold check (see
 	// provider.SemanticTurnsExceeded), so no entry can exist that
 	// a later lookup would have to bypass around. The exact layer

@@ -57,7 +57,7 @@ func (e *Engine) learnRateLimit(att Attempt, sig *adaptive.RateLimitSignals) {
 	if sig.HasRequests || sig.HasTokens {
 		e.setLearnedQuotaHint(att.ProviderID, int(sig.RemainingFraction()*100), quotaHintExpiresAt(*sig, now))
 		// The same measurement at per-key granularity (B2-09 /
-		// the reference router #20561): the engine knows which key made
+		// the sector baseline #20561): the engine knows which key made
 		// this request, so the key's own remaining fraction is
 		// recorded alongside the provider's — the per-key quota
 		// signal the account-rotation cap check reads. Same
@@ -92,7 +92,7 @@ func (e *Engine) setLearnedQuotaHint(providerID string, hint int, expiresAt time
 // setLearnedKeyQuotaHint records a measured remaining-quota
 // fraction (0..100) for one (provider, key) pair, expiring at
 // expiresAt — the per-key twin of setLearnedQuotaHint (B2-09 /
-// the reference router #20561). Same cost (one map write under e.mu), same
+// the sector baseline #20561). Same cost (one map write under e.mu), same
 // source (real upstream rate-limit headers, via learnRateLimit).
 func (e *Engine) setLearnedKeyQuotaHint(providerID, keyID string, hint int, expiresAt time.Time) {
 	e.mu.Lock()

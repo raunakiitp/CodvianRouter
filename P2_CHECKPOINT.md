@@ -109,7 +109,7 @@ content (`4970fb1`). PR #81 is open and unmerged.
   rows that were served. The OpenAI API has no batch re-queue endpoint;
   the sanctioned client-side recovery is to read `output_file_id` +
   `error_file_id`, correct the input, and submit a new batch. The private
-  benchmark (OmniRoute) is no safer: `open-sse/services/batchProcessor.ts`
+  benchmark (the earlier router) is no safer: `the earlier implementation`
   retries within a batch but `recoverStaleBatch` explicitly does not
   replay an interrupted batch "to avoid duplicate provider work", and
   `src/lib/batches/retryFailed.ts` is a manual helper only. Documented

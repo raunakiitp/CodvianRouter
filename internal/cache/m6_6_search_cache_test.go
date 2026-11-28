@@ -11,7 +11,7 @@ import (
 )
 
 // M6.6 — search result cache (parity tracker Area 6, "Search cache
-// (60 s)", the reference router searchCache.ts:12,150). Every behaviour here
+// (60 s)", the sector baseline searchCache.ts:12,150). Every behaviour here
 // has a test that fails without the implementation; toggle evidence
 // is recorded in the M6.6 report (expiry check removed /
 // coalescing join removed → these tests go red).
@@ -182,7 +182,7 @@ func TestM66SearchTTLZeroBypassesCacheAndCoalescing(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	// ttlMs=0 in the reference router: every concurrent call gets its own
+	// ttlMs=0 in the sector baseline: every concurrent call gets its own
 	// independent fetch — no coalescing, no storing.
 	if fetches.Load() != callers {
 		t.Fatalf("ttl=0 fetch ran %d times for %d callers, want %d (bypass means no coalescing)", fetches.Load(), callers, callers)

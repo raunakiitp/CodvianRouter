@@ -737,7 +737,7 @@ type Server struct {
 	// requestRewrite (B3-20, Stage 1): when true, applyGuardrails
 	// rewrites the request in place — PII/secrets the check found
 	// are replaced by placeholders before the request reaches
-	// the provider (the reference router's modifiedPayload). Opt-in; off by
+	// the provider (the sector-typical modifiedPayload). Opt-in; off by
 	// default, so with blocking off a secret still goes to the
 	// provider verbatim exactly as before. Set only by
 	// WithRequestRewrite.
@@ -753,7 +753,7 @@ type Server struct {
 	reversibleVault *guardrails.Vault
 	// responseSanitization (B3-21/B3-22, Stage 1): when true, the
 	// response guardrail runs in the store's mode (redact/warn/
-	// block, default redact, the reference router's PII_RESPONSE_SANITIZATION)
+	// block, default redact, the sector-typical PII_RESPONSE_SANITIZATION)
 	// — non-streaming responses are redacted in place before
 	// delivery, and streaming responses run through the
 	// store-wired ResponseStreamRedactor, with tool-call
@@ -1335,7 +1335,7 @@ func WithEvalEngine(eng Engine) Option {
 }
 
 // WithRequestRewrite when true, applyGuardrails strips PII/secrets from the request
-// before it reaches the provider. Opt-in (the reference router's
+// before it reaches the provider. Opt-in (the sector-typical
 // modifiedPayload); off by default. Wiring only — main.go and
 // tests choose when to turn it on.
 func WithRequestRewrite(enabled bool) Option {
@@ -1358,7 +1358,7 @@ func WithReversibleVault(v *guardrails.Vault) Option {
 // store's mode — non-streaming in applyResponseGuardrails,
 // streaming through the store-wired ResponseStreamRedactor in
 // handleChatStream, with tool-call arguments accumulated per
-// call and checked once complete. Opt-in (the reference router's
+// call and checked once complete. Opt-in (the sector-typical
 // PII_RESPONSE_SANITIZATION); off by default. Wiring only —
 // main.go and tests choose when to turn it on.
 func WithResponseSanitization(enabled bool) Option {
@@ -1609,7 +1609,7 @@ func (s *Server) combosStore() *ComboStore {
 // loopback), so the listen address IS the address clients reach
 // it on. It is never derived from a request: the Host header and
 // X-Forwarded-For can be forged by a caller, and the card's url
-// must name the real endpoint (the reference router derives its base URL
+// must name the real endpoint (the sector baseline derives its base URL
 // from the request; we deliberately do not). Empty when no
 // listen address is configured: the card route is then not
 // registered at all (see New), rather than serving a card whose
@@ -1949,7 +1949,7 @@ func New(engine Engine, opts ...Option) *Server {
 	// M8.5 images.
 	s.register(mux, "POST", "/v1/images/generations", s.handleImagesGenerations)
 	s.register(mux, "POST", "/v1/images/edits", s.handleImagesEdits)
-	// M8.6 audio (canonical ops + the reference router aliases).
+	// M8.6 audio (canonical ops + the sector baseline aliases).
 	s.register(mux, "POST", "/v1/audio/speech", s.handleAudioSpeech)
 	s.register(mux, "POST", "/v1/audio/text-to-speech", s.handleAudioTextToSpeech)
 	s.register(mux, "POST", "/v1/audio/text-to-speech/{voiceId}", s.handleAudioTextToSpeechWithVoice)
@@ -5571,7 +5571,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	// (session-dedup, CCR, Codex) runs first, at the same point.
 	s.applyCompressionPrePass(r, &req)
 	s.applyCompression(&req)
-	// Per-key access schedule (M5.10, the reference router's
+	// Per-key access schedule (M5.10, the sector-typical
 	// validateKeyAccessSchedule): a key outside its allowed
 	// hours is refused with a 403 here, before any budget is
 	// touched — the policy chain runs the schedule check before

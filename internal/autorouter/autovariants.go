@@ -1,6 +1,6 @@
 // Auto-variant resolution (M3 Phase C, builder C5).
 //
-// This file resolves the `auto/*` ids the reference router documents in
+// This file resolves the `auto/*` ids the sector baseline documents in
 // docs/routing/AUTO-COMBO.md and docs/routing/SUBSCRIPTION_LADDER.md
 // that the local autorouter did not yet cover — auto/offline,
 // auto/lkgp, auto/chaos, auto/subscription, auto/thrifty, the
@@ -13,7 +13,7 @@
 //
 // Semantics, each pinned to the reference (study only, no code
 // copied):
-//   - Flat ids: open-sse/services/autoCombo/builtinCatalog.ts
+//   - Flat ids: the earlier implementation
 //     (AUTO_TEMPLATE_VARIANTS) and docs/routing/AUTO-COMBO.md:13-28.
 //   - Category x tier: suffixComposition.ts (AUTO_CATEGORIES,
 //     AUTO_TIERS, tierToWeightVariant, buildAutoCandidateFilter) and

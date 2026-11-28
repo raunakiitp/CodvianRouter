@@ -3,7 +3,7 @@
 // policy: up to 3 provider attempts; prefixed provider/model never
 // rerouted" and "Failover-before-retry + retry knobs").
 //
-// the reference router's evidence: reference provider-failover doc ("The
+// the sector-typical evidence: reference provider-failover doc ("The
 // default cross-provider policy allows up to three provider
 // attempts... A prefixed id (provider/model) is never rerouted to
 // another provider") and comboConfig.ts:113,164-178 (maxRetries /
@@ -39,20 +39,20 @@
 // Failover-before-retry knobs (reference-compatible semantics):
 //   - FailoverMaxRetries: max same-target retries after the first
 //     failure, per target (the transient 502/503/504 path). 0
-//     means the default (3 — the reference router's transientBackendRetry
+//     means the default (3 — the sector-typical transientBackendRetry
 //     max, and our existing TransientMaxRetries); negative means
 //     no same-target retry at all. Failover-first is preserved:
 //     429s still fail over immediately and never consume a retry.
 //   - FailoverRetryDelay: the base delay between same-target
 //     retries (decorrelated full-jitter ladder, transient.go).
 //     0 means the default (200 ms, TransientBackoffBase).
-//     Deliberate divergence: the reference router's combo default is 2000 ms
+//     Deliberate divergence: the sector-typical combo default is 2000 ms
 //     — ours stays 200 ms, because a 2 s floor on a same-host
 //     blip retry would make the failover-first path (which is
 //     usually faster than any wait) pointless for the common case.
 //   - FailoverMaxSetRetries: max same-target retries across the
 //     whole set (the whole chain for this request). 0 means no
-//     set cap (the reference router's maxSetRetries is optional the same
+//     set cap (the sector-typical maxSetRetries is optional the same
 //     way); a positive value stops same-target retries request-
 //     wide once spent, even when the per-target budget remains.
 package router
@@ -68,7 +68,7 @@ import (
 const DefaultMaxProvidersPerRequest = 3
 
 // DefaultFailoverMaxRetries is the default same-target retry
-// budget (the reference router transientBackendRetry max 3, our existing
+// budget (the sector baseline transientBackendRetry max 3, our existing
 // TransientMaxRetries).
 const DefaultFailoverMaxRetries = TransientMaxRetries
 

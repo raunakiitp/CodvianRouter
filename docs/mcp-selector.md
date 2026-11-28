@@ -2,7 +2,7 @@
 
 The router can expose operator-configured MCP servers to models.
 Research-log entry 179 ("Inference Gateway") was not present in
-this worktree or in the the reference router reference checkout available
+this worktree or in the the sector baseline reference checkout available
 here, so this slice implements the task brief as specified; the
 entry could not be read and is not quoted.
 

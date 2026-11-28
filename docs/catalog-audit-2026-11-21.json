@@ -59,10 +59,10 @@
     },
     {
       "kind": "missing_in_modelsdev",
-      "catalog_id": "cheaperinference",
-      "name": "Cheaper Inference",
+      "catalog_id": "the retired inference service",
+      "name": "the retired inference service",
       "detail": "in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired",
-      "source": "https://cheaperinference.com/"
+      "source": "https://the retired inference service.com/"
     },
     {
       "kind": "possible_rename",

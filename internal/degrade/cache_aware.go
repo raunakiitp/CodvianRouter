@@ -1,11 +1,11 @@
-// Cache-aware compression (M7.7, PLAN.md): the the reference router
+// Cache-aware compression (M7.7, PLAN.md): the the sector baseline
 // cachingAware.ts / prefixFreeze.ts behaviour, as pure logic.
 // The resolvers now live in internal/compress/preserve.go
 // (Apply is the real caller and compress cannot import this
 // package); this file keeps aliases for them and owns the
 // PrefixFreeze observer. Read this header before wiring it.
 //
-// What the reference router does (study only, never copied):
+// What the sector baseline does (study only, never copied):
 //
 //   - cachingAware.ts detects a caching context from the request
 //     body (hasCacheControl anywhere in system/tools/messages/
@@ -14,7 +14,7 @@
 //     providers) and getCacheAwareStrategy downgrades
 //     aggressive/ultra to standard, sets skipSystemPrompt=true
 //     and deterministicOnly=true for a caching provider. Since
-//     the reference router #3955 the provider alone is sufficient —
+//     the sector baseline #3955 the provider alone is sufficient —
 //     automatic-prefix-cache providers (OpenAI, Codex, Azure)
 //     carry no cache_control markers, yet rewriting the prefix
 //     still guarantees a cache miss.
@@ -80,11 +80,11 @@
 //     observation (one Observe per request, when enabled) plus
 //     passing FrozenPrefix = freeze.FreezeChecker() is
 //     coordinator follow-up (server/router pass-through).
-//   - QuantumLock (the reference router's opt-in prefix stabilisation) is
+//   - QuantumLock (the sector-typical opt-in prefix stabilisation) is
 //     NOT built here: no equivalent exists in this repo and it
 //     is out of the M7.7 slice.
 //
-// The one deliberate divergence from the reference router: our lossy path
+// The one deliberate divergence from the sector baseline: our lossy path
 // already pins system/developer messages from being DROPPED
 // (compress.applyLossy), so "preserve system prompt" here means
 // the stronger property the post-pass adds — never TRUNCATED
@@ -105,17 +105,17 @@ import (
 
 // DefaultPrefixFreezeThreshold is how many times a system prompt
 // must be observed before it is treated as a frozen stable
-// prefix. Mirrors the reference router's DEFAULT_PREFIX_FREEZE.threshold.
+// prefix. Mirrors the sector-typical DEFAULT_PREFIX_FREEZE.threshold.
 const DefaultPrefixFreezeThreshold = 3
 
 // MaxPrefixFreezeEntries bounds the observer: the oldest
 // observation is evicted first once the cap is reached. Mirrors
-// the reference router's MAX_PREFIX_ENTRIES.
+// the sector-typical MAX_PREFIX_ENTRIES.
 const MaxPrefixFreezeEntries = 5000
 
 // SystemPromptHash is the stable identity of a request's system
 // prompt: SHA-256 (first 24 hex chars) of the system/developer
-// message contents joined with "\n". the reference router hashes the same
+// message contents joined with "\n". the sector baseline hashes the same
 // shape across OpenAI messages, Claude `system` and Gemini
 // `systemInstruction`; ours hashes provider.Message roles only —
 // the canonical form this router carries. "" when there is no
@@ -139,7 +139,7 @@ func SystemPromptHash(msgs []provider.Message) string {
 
 // systemPromptText is the freezable text of one message: its text
 // parts when present, else its Content. Blank text contributes
-// nothing (mirrors the reference router's collectText skipping blank
+// nothing (mirrors the sector-typical collectText skipping blank
 // strings).
 func systemPromptText(m provider.Message) string {
 	if len(m.Parts) > 0 {
@@ -163,7 +163,7 @@ func systemPromptText(m provider.Message) string {
 // freeze only ever PRESERVES a prefix from compression; it never
 // rewrites, drops, or otherwise changes a payload. Default OFF:
 // a disabled observer records nothing and freezes nothing (zero
-// cost when off, mirroring the reference router).
+// cost when off, mirroring the sector baseline).
 type PrefixFreeze struct {
 	mu           sync.Mutex
 	enabled      bool

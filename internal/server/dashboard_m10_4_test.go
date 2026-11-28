@@ -24,7 +24,7 @@
 //   - the extracted inline script passes node --check.
 //
 // The 18-missing-reference-strategies claim in the plan is stale
-// too: the reference router's ROUTING_STRATEGY_VALUES has 22 names and only
+// too: the sector-typical ROUTING_STRATEGY_VALUES has 22 names and only
 // 4 of them are absent from our feed — auto, fusion, pipeline,
 // jev (they are not in strategy.All, so the backend rejects them
 // and the picker never offers them). That gap is backend-MISSING
@@ -241,7 +241,7 @@ func TestDashboardM10_4PickerEqualsLiveFeed(t *testing.T) {
 		}
 	}
 	// Names outside the feed (and outside the alias set) are
-	// rejected and change nothing — including the 4 the reference router
+	// rejected and change nothing — including the 4 the sector baseline
 	// names the backend does not have.
 	before := getStrategies(t, srv).Global
 	for _, name := range m10_4RejectedNames {

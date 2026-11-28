@@ -1,12 +1,12 @@
 // Package config — key groups (AK-1, GAP-TRACK §14).
 //
-// Team-level model access control (the reference router `key_groups` +
+// Team-level model access control (the sector baseline `key_groups` +
 // `group_model_permissions` + `key_group_members`, migration 065,
 // `src/lib/db/apiKeyGroups.ts`): a group is a named set of glob
 // model allow/deny rules, and a gateway key belongs to zero or
 // more groups via GatewayKey.KeyGroups (group IDs).
 //
-// Semantics (matching the reference router where it is sound, diverging
+// Semantics (matching the sector baseline where it is sound, diverging
 // where it is not):
 //
 //   - Deny-wins: any deny rule in ANY of the key's resolved groups
@@ -17,7 +17,7 @@
 //   - A group grants only when it is active and one of its allow
 //     rules matches. A key in groups with no matching allow rule
 //     is refused (no-grant = deny).
-//   - FAIL CLOSED (deliberate divergence from the reference router's
+//   - FAIL CLOSED (deliberate divergence from the sector-typical
 //     fail-open trap): a key whose memberships resolve to NO
 //     existing group (all deleted / typo'd), or whose resolved
 //     groups are ALL disabled, or whose group store is unreadable,
@@ -73,7 +73,7 @@ type GroupModelRule struct {
 // KeyGroup is one team-level model access group: a named set of
 // model allow/deny rules. Disabled is the inactive flag: a
 // disabled group's allows grant nothing, but its denies still
-// refuse (the reference router's "inactive groups pause grants but keep
+// refuse (the sector-typical "inactive groups pause grants but keep
 // denies"). Default (zero value) is active.
 type KeyGroup struct {
 	ID          string           `json:"id"`

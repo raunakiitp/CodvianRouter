@@ -13,7 +13,7 @@ package ledger
 // remaining only moves as requests consume it, so the newest header
 // is the current truth. A row is fresh while its window has not
 // reset and it is younger than the 5-minute TTL (the same TTL
-// the reference router's header cache uses); stale rows are ignored by the
+// the sector-typical header cache uses); stale rows are ignored by the
 // read path and pruned lazily.
 
 import (

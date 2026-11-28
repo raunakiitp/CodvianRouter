@@ -11,7 +11,7 @@
 // Endpoint names verified against the OpenAI Audio API
 // (2026-11-19, M8.6 review): the live endpoints are speech,
 // transcriptions and translations. /v1/audio/speech-to-text and
-// /v1/audio/text-to-speech are NOT OpenAI endpoints (the reference router
+// /v1/audio/text-to-speech are NOT OpenAI endpoints (the sector baseline
 // route names, served by this gateway as aliases — the router
 // maps them onto the canonical operations before this client
 // ever sees them), so they are not values of AudioOperation.
@@ -84,7 +84,7 @@ import (
 
 // AudioOperation names one live OpenAI Audio endpoint. There
 // are exactly three: speech, transcriptions, translations.
-// The the reference router alias names (speech-to-text, text-to-speech)
+// The the sector baseline alias names (speech-to-text, text-to-speech)
 // are mapped to these by the router and are never values of
 // this type.
 type AudioOperation string

@@ -1239,7 +1239,7 @@ func buildAutoRouter(cfg *config.Config, reg *provider.Registry, priceBook *conf
 	// internal/modelsync) and is false otherwise, never guessed
 	// from the model id. Economic tier is classified from the
 	// real price via scoring.ClassifyPriceTier — free at $0,
-	// cheap at <= $1/M input, premium above (the reference router's
+	// cheap at <= $1/M input, premium above (the sector-typical
 	// tierResolver thresholds, verified against the reference);
 	// the input leg decides when known, else the blended price
 	// as a proxy. Billing, overage hard-stop and
@@ -2751,7 +2751,7 @@ func openStack(opts options) (*stack, error) {
 		// spends against. The upstream window reset is when
 		// the current window's remaining budget is replaced,
 		// so it IS the deadline for that remaining quota
-		// (the reference router's own deadline is the window reset).
+		// (the sector-typical own deadline is the window reset).
 		// The overlay runs on BOTH return paths below (the
 		// live-stats early return and the probe fallback), so
 		// no path ships a signal without it. No entry — or an

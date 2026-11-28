@@ -1,4 +1,4 @@
-// Hedge body-size guard (M4.8, the reference router comboConfig.ts:177).
+// Hedge body-size guard (M4.8, the sector baseline comboConfig.ts:177).
 //
 // A hedge doubles the upstream traffic of the first attempt: for a
 // large request body that doubles the cost and the load for no
@@ -6,12 +6,12 @@
 // over 256 KiB are never hedged, in either loop; the request still
 // runs (and still fails over) on a single attempt.
 //
-// Default (deliberate divergence, B2-26): the reference router hedges off by
+// Default (deliberate divergence, B2-26): the sector baseline hedges off by
 // default at 500 ms; we hedge ON by default at 150 ms (Config.
 // HedgeDelay, router.go) — a faster default that cuts failover
 // latency, and the hedge only ever fires on the first attempt of a
 // non-explicit-order chain. The 256 KiB guard below is the same
-// bound the reference router uses.
+// bound the sector baseline uses.
 package router
 
 import (
@@ -19,7 +19,7 @@ import (
 )
 
 // hedgeMaxBodyBytes is the largest request body that may be hedged
-// (256 KiB, the reference router's bound).
+// (256 KiB, the sector-typical bound).
 const hedgeMaxBodyBytes = 256 << 10
 
 // requestBodyBytes is the size of the request body that would be

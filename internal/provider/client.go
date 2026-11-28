@@ -2015,7 +2015,7 @@ type chatCompletionResponse struct {
 // It also decodes the two provider-reported exact-cost shapes
 // (G16, Area 11 gateway-reported cost): OpenRouter's usage.cost
 // (bare USD) and xAI's cost_in_usd_ticks (1e10 ticks per USD —
-// the reference router costCalculator.ts extractExactCostUsd, verified
+// the sector baseline costCalculator.ts extractExactCostUsd, verified
 // against the xAI cost-tracking docs, which state
 // TICKS_IN_USD_CENT = 100_000_000, i.e. 1e10 ticks per USD).
 // Either one, when present and valid (>= 0, finite), becomes

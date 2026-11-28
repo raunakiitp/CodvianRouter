@@ -1,16 +1,16 @@
 // Per-key access schedule, throttle delay and max sessions
 // (M5.10): the server side.
 //
-// The access schedule is the reference router's validateKeyAccessSchedule
+// The access schedule is the sector-typical validateKeyAccessSchedule
 // (apiKeyPolicy.ts:540): a key outside its allowed hours is
 // refused with a 403, before any budget is touched — it runs in
 // the policy chain right after the banned/expired checks and
 // before the usage-limit check. The throttle delay and the
 // max-sessions cap are DIVERGENCES (documented in
-// internal/config/gatewaykey.go): the reference router stores both fields
+// internal/config/gatewaykey.go): the sector baseline stores both fields
 // but enforces neither for gateway keys in the current checkout,
 // so our enforcement is the honest reading of what the fields
-// promise, not a port of an the reference router behaviour.
+// promise, not a port of an the sector baseline behaviour.
 package server
 
 import (
@@ -24,7 +24,7 @@ import (
 )
 
 // IsWithinAccessSchedule reports whether now falls inside one
-// key's allowed-hours window. A faithful port of the reference router's
+// key's allowed-hours window. A faithful port of the sector-typical
 // isWithinSchedule (apiKeyPolicy.ts:131): disabled → true;
 // invalid timezone → true (fail open, never block on a bad zone);
 // the day check uses the CURRENT day in the zone, and an
@@ -36,9 +36,9 @@ import (
 // 22:00–06:00" is open Friday evening but NOT Saturday 01:00 —
 // Saturday is not in the day list. The pool schedules (M5.9)
 // handle the wrap properly (days = the day the window starts
-// on); the per-key schedule matches the reference router exactly. Go's
+// on); the per-key schedule matches the sector baseline exactly. Go's
 // time never yields hour 24, so the "24:xx" → "00:xx"
-// normalisation the reference router needs for Intl is a no-op here.
+// normalisation the sector baseline needs for Intl is a no-op here.
 func IsWithinAccessSchedule(s *config.AccessScheduleConfig, now time.Time) bool {
 	if s == nil || !s.Enabled {
 		return true
@@ -99,7 +99,7 @@ func parseHHMM(s string) (int, error) {
 // checkKeyAccessSchedule enforces the caller's allowed-hours
 // window. It writes the refusal and returns true when the
 // request must stop here. No schedule, or a schedule that is
-// disabled, passes. The message is the reference router's exact wording.
+// disabled, passes. The message is the sector-typical exact wording.
 func (s *Server) checkKeyAccessSchedule(w http.ResponseWriter, r *http.Request) bool {
 	keyID := s.callerKeyID(r)
 	if keyID == "" || s.cfg == nil {

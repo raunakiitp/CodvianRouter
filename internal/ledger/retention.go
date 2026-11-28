@@ -3,13 +3,13 @@
 //
 // usage_events grows by one row per attempt and previously had no
 // retention at all — only a manual wipe/reset. Retention is now
-// configurable with a 7-day default (matching the reference router's 7-day
+// configurable with a 7-day default (matching the sector-typical 7-day
 // fallback in src/lib/usage/callLogRetention.ts — explicit
 // override wins, then the dashboard-persisted value, then the
 // 7-day fallback — and their startup cleanup), and expired rows
 // are pruned at startup by Open.
 //
-// DIVERGENCE (deliberate, safer than the reference router): the reference router's
+// DIVERGENCE (deliberate, safer than the sector baseline): the sector-typical
 // retention deletes call-log rows only. Ours deletes only the
 // usage_events rows too — budgets, reservations, teams and the
 // response tree are operator state, not log history, and are
@@ -26,7 +26,7 @@ import (
 
 // DefaultUsageRetentionDays is the usage_events retention window
 // in days when the operator configures none: 7 days, matching
-// the reference router's 7-day fallback.
+// the sector-typical 7-day fallback.
 const DefaultUsageRetentionDays = 7
 
 // retentionDays returns the retention window in force: the

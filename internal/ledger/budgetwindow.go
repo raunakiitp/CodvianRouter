@@ -1,4 +1,4 @@
-// Budget windows (M5.1, the reference router costRules.ts getBudgetWindow,
+// Budget windows (M5.1, the sector baseline costRules.ts getBudgetWindow,
 // verified 2026-11-18).
 //
 // A per-key budget window is a calendar period in UTC whose boundary

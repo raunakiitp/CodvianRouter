@@ -46,7 +46,7 @@ func TestTeamBudgetGateBlocksChat(t *testing.T) {
 		t.Errorf("400 body = %s, want error type team_budget", rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), "soft committed-usage window resets at") {
-		t.Errorf("400 body = %s, want the reference router's reset message", rec.Body.String())
+		t.Errorf("400 body = %s, want the sector-typical reset message", rec.Body.String())
 	}
 	if s.eng.chatCalls.Load() != 0 {
 		t.Errorf("engine Chat calls = %d, want 0 — the team budget must refuse before any provider is called", s.eng.chatCalls.Load())

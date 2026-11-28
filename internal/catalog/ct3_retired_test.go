@@ -7,7 +7,7 @@ import (
 
 // CT-3 — Dead providers listed in the live catalog feed with free-tier
 // flags. The four entries below were retired from the live surface:
-// blackbox + galadriel are deprecated in the the reference router reference
+// blackbox + galadriel are deprecated in the the sector baseline reference
 // (dead public inference endpoints, sweep-noted); ai21's hosted
 // Jamba/Maestro APIs sunset; bytez has no base URL recorded in either
 // catalog and cannot be added or routed as listed. No shutdown date
@@ -15,13 +15,13 @@ import (
 // of them — never invented (see the RetiredReason on each entry).
 
 // ct3RetiredIDs is the CT-3 retirement set, in catalog order.
-// A1 (2026-11-27, owner decision D2) added cheaperinference to the
+// A1 (2026-11-27, owner decision D2) added the retired inference service to the
 // retired set — same mechanism, separate reason, so the count pins
 // move 4 -> 5 and the live total 610 -> 609. Item 6 (2026-11-27)
 // added anyscale and kluster: both inference platforms are shut down
 // and their own docs sites no longer document the API hosts, so the
 // unverified rows could only be retired — count 5 -> 7, total 609 -> 607.
-var ct3RetiredIDs = []string{"blackbox", "galadriel", "ai21", "bytez", "cheaperinference", "anyscale", "kluster"}
+var ct3RetiredIDs = []string{"blackbox", "galadriel", "ai21", "bytez", "the retired inference service", "anyscale", "kluster"}
 
 func ct3RetiredSet(t *testing.T) map[string]Provider {
 	t.Helper()
