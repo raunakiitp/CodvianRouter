@@ -231,6 +231,16 @@ type ExactStore interface {
 	Set(ctx context.Context, key string, resp CachedResponse, ttl time.Duration)
 	Delete(ctx context.Context, key string)
 	Stats() (entries, bytes int)
+	// SweepExpired removes every expired entry this layer holds and
+	// returns how many were removed. Expired entries are otherwise
+	// removed lazily on access, so Size/Stats can count tombstoned
+	// rows until a sweep runs (background or admin-triggered).
+	SweepExpired(ctx context.Context) int
+	// DeleteExactForModel removes every exact-cache entry whose
+	// cached response was produced for model and returns the keys
+	// that were removed. Used for per-model invalidation (A13 H6):
+	// flushing one model never touches another model's entries.
+	DeleteExactForModel(ctx context.Context, model string) []string
 }
 
 // Delete removes key from memory and from disk, and drops it from
@@ -354,6 +364,44 @@ func (p *PersistentCache) FlushAll(ctx context.Context) int {
 	_, _ = p.db.ExecContext(ctx, `DELETE FROM cache_entries`)
 	p.tenants = make(map[string]map[string]struct{})
 	return n
+}
+
+// SweepExpired removes every expired entry (memory + disk) and returns
+// how many memory entries were removed. Expired disk rows are pruned
+// so a restart never reloads them; Sync also prunes expired rows on
+// its next pass, so this is best-effort immediate reclamation.
+func (p *PersistentCache) SweepExpired(ctx context.Context) int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	n := p.exact.SweepExpired(ctx)
+	if p.closed {
+		return n
+	}
+	_, _ = p.db.ExecContext(ctx, `DELETE FROM cache_entries WHERE expires_unix <= ?`, time.Now().Unix())
+	return n
+}
+
+// DeleteExactForModel removes every exact-cache entry for model from
+// memory, disk and the tenant index, and returns the keys removed.
+// Other models and tenants are untouched (A13 H6 per-model
+// invalidation).
+func (p *PersistentCache) DeleteExactForModel(ctx context.Context, model string) []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	removed := p.exact.DeleteExactForModel(ctx, model)
+	for _, key := range removed {
+		for tenant, keys := range p.tenants {
+			delete(keys, key)
+			if len(keys) == 0 {
+				delete(p.tenants, tenant)
+			}
+		}
+	}
+	if p.closed {
+		return removed
+	}
+	_, _ = p.db.ExecContext(ctx, `DELETE FROM cache_entries WHERE model = ?`, model)
+	return removed
 }
 
 // FlushTenant removes every entry stored under tenant (a gateway key

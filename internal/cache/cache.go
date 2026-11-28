@@ -327,6 +327,47 @@ func (c *ExactCache) FlushAll() int {
 	return n
 }
 
+// SweepExpired removes every expired entry and returns how many were
+// removed. Expired entries are otherwise removed lazily on access,
+// so Size/Stats can count tombstoned rows until a sweep runs.
+func (c *ExactCache) SweepExpired(ctx context.Context) int {
+	_ = ctx
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now()
+	var expired []string
+	for key, e := range c.items {
+		if now.After(e.expires) {
+			expired = append(expired, key)
+		}
+	}
+	for _, key := range expired {
+		c.removeLocked(key)
+	}
+	return len(expired)
+}
+
+// DeleteExactForModel removes every exact-cache entry whose cached
+// response was produced for model and returns the keys removed. It
+// never touches another model's entries (A13 H6 per-model
+// invalidation). Entries stored without a recorded model (empty
+// resp.Model) match only model "".
+func (c *ExactCache) DeleteExactForModel(ctx context.Context, model string) []string {
+	_ = ctx
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var removed []string
+	for key, e := range c.items {
+		if e.resp.Model == model {
+			removed = append(removed, key)
+		}
+	}
+	for _, key := range removed {
+		c.removeLocked(key)
+	}
+	return removed
+}
+
 // Stats returns the live entry count and total accounted bytes
 // (M6.8: backs the cache stats surface). Expired-but-unaccessed
 // entries still count — they are removed lazily on access, same as

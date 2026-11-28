@@ -95,6 +95,69 @@ func TestExactCacheDelete(t *testing.T) {
 	c.Delete(ctx, "missing") // deleting a missing key must not panic
 }
 
+func TestExactCacheDeleteExactForModel(t *testing.T) {
+	ctx := context.Background()
+	c := NewExactCache(10)
+	mA := CachedResponse{Content: "a", Model: "model-a"}
+	mB := CachedResponse{Content: "b", Model: "model-b"}
+	un := CachedResponse{Content: "u"} // no recorded model
+	c.Set(ctx, "k1", mA, time.Minute)
+	c.Set(ctx, "k2", mA, time.Minute)
+	c.Set(ctx, "k3", mB, time.Minute)
+	c.Set(ctx, "k4", un, time.Minute)
+	if c.Size() != 4 {
+		t.Fatalf("Size after sets = %d, want 4", c.Size())
+	}
+	removed := c.DeleteExactForModel(ctx, "model-a")
+	if len(removed) != 2 {
+		t.Fatalf("DeleteExactForModel(model-a) removed %d keys, want 2: %v", len(removed), removed)
+	}
+	if c.Size() != 2 {
+		t.Fatalf("Size after model-a delete = %d, want 2", c.Size())
+	}
+	if _, ok := c.Get(ctx, "k1"); ok {
+		t.Fatalf("k1 (model-a) still present, want removed")
+	}
+	if _, ok := c.Get(ctx, "k2"); ok {
+		t.Fatalf("k2 (model-a) still present, want removed")
+	}
+	if _, ok := c.Get(ctx, "k3"); !ok {
+		t.Fatalf("k3 (model-b) removed, want present")
+	}
+	if _, ok := c.Get(ctx, "k4"); !ok {
+		t.Fatalf("k4 (unattributed) removed, want present")
+	}
+	if removed := c.DeleteExactForModel(ctx, "nope"); len(removed) != 0 {
+		t.Fatalf("DeleteExactForModel(nope) removed %d keys, want 0", len(removed))
+	}
+}
+
+func TestExactCacheSweepExpired(t *testing.T) {
+	ctx := context.Background()
+	c := NewExactCache(10)
+	c.Set(ctx, "k1", CachedResponse{Content: "x", Model: "m"}, 20*time.Millisecond)
+	c.Set(ctx, "k2", CachedResponse{Content: "y", Model: "m"}, time.Minute)
+	if n := c.SweepExpired(ctx); n != 0 {
+		t.Fatalf("SweepExpired before expiry = %d, want 0", n)
+	}
+	if c.Size() != 2 {
+		t.Fatalf("Size before expiry = %d, want 2", c.Size())
+	}
+	time.Sleep(40 * time.Millisecond)
+	if n := c.SweepExpired(ctx); n != 1 {
+		t.Fatalf("SweepExpired after expiry = %d, want 1", n)
+	}
+	if c.Size() != 1 {
+		t.Fatalf("Size after sweep = %d, want 1", c.Size())
+	}
+	if _, ok := c.Get(ctx, "k1"); ok {
+		t.Fatalf("expired k1 served after sweep, want miss")
+	}
+	if _, ok := c.Get(ctx, "k2"); !ok {
+		t.Fatalf("live k2 swept, want present")
+	}
+}
+
 func TestExactKeyDeterministic(t *testing.T) {
 	msgs := []Message{
 		{Role: "system", Content: "be helpful"},
