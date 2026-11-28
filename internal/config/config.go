@@ -1518,6 +1518,25 @@ type RoutingConfig struct {
 	// model or entry means share 1 (equal). Shares must
 	// be positive.
 	QuotaShares map[string]map[string]float64 `json:"quota_shares,omitempty"`
+	// Pipeline knobs (A2-7), read by the engine's "pipeline" strategy.
+	// PipelineTaskDetection (string, empty = "off"): "auto" runs the
+	// multi-stage pipeline only for complex (code/planning) tasks and
+	// serves a single provider for simple ones. PipelineSkipTokensUnder
+	// (integer, 0 = disabled): skip the pipeline and serve a single
+	// provider when the prompt's local token estimate (≈4 chars/token)
+	// is below the threshold. PipelineFallback (string, empty = fail):
+	// "single-provider" serves a single provider when the pipeline
+	// fails, instead of failing the request. PipelineMaxReflectionLoops
+	// (integer, accepted for config symmetry) is NOT-APPLICABLE — the
+	// engine's pipeline primitive has no reflection stage, so a
+	// reflection-loop count has no effect (a request always reflects
+	// zero times). Each is validated at load (pipeline_task_detection
+	// must be ""/"auto"; pipeline_fallback must be ""/"single-provider";
+	// the integer fields must be >= 0).
+	PipelineTaskDetection      string `json:"pipeline_task_detection,omitempty"`
+	PipelineMaxReflectionLoops int    `json:"pipeline_max_reflection_loops,omitempty"`
+	PipelineSkipTokensUnder    int    `json:"pipeline_skip_for_tokens_under,omitempty"`
+	PipelineFallback           string `json:"pipeline_fallback,omitempty"`
 	// JevJudgeEnabled, when true, turns on the JEV strategy's LLM
 	// judge (A2-4): the System One scoring call runs against the
 	// configured judge model (JevJudgeModel) instead of the
@@ -2063,6 +2082,26 @@ func (c *Config) Validate() error {
 					return fmt.Errorf("config: routing.quota_shares[%q][%q] must be positive (got %v)", provider, model, share)
 				}
 			}
+		}
+		// A2-7 pipeline knobs: validated so a typo fails at load, never
+		// routes at a silently ignored setting. pipeline_task_detection is
+		// "" (off) or "auto"; pipeline_fallback is "" (fail) or
+		// "single-provider"; the integer fields must not be negative.
+		switch rc.PipelineTaskDetection {
+		case "", "auto":
+		default:
+			return fmt.Errorf("config: routing.pipeline_task_detection %q is not a known mode (want \"\" or \"auto\")", rc.PipelineTaskDetection)
+		}
+		switch rc.PipelineFallback {
+		case "", "single-provider":
+		default:
+			return fmt.Errorf("config: routing.pipeline_fallback %q is not a known value (want \"\" or \"single-provider\")", rc.PipelineFallback)
+		}
+		if rc.PipelineMaxReflectionLoops < 0 {
+			return fmt.Errorf("config: routing.pipeline_max_reflection_loops must not be negative (got %v)", rc.PipelineMaxReflectionLoops)
+		}
+		if rc.PipelineSkipTokensUnder < 0 {
+			return fmt.Errorf("config: routing.pipeline_skip_for_tokens_under must not be negative (got %v)", rc.PipelineSkipTokensUnder)
 		}
 		if rc.PerTargetTimeoutMs < -1 {
 			return fmt.Errorf("config: routing.per_target_timeout_ms must be -1 (disabled) or >= 0 (got %v)", rc.PerTargetTimeoutMs)

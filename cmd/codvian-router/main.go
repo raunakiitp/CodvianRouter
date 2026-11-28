@@ -3953,6 +3953,16 @@ func openStack(opts options) (*stack, error) {
 			}
 			return routing.ChainCooldownModes[model]
 		}
+		// Pipeline knobs (A2-7): task_detection modes,
+		// skip_under tokens, pipeline_fallback "single-provider", and
+		// the max_reflection_loops value (NOT-APPLICABLE — accepted
+		// and validated, but the pipeline primitive has no reflection
+		// stage, so it has no effect). All values were validated at
+		// load; wiring is a straight pass-through.
+		engCfg.PipelineTaskDetection = routing.PipelineTaskDetection
+		engCfg.PipelineMaxReflectionLoops = routing.PipelineMaxReflectionLoops
+		engCfg.PipelineSkipTokensUnder = routing.PipelineSkipTokensUnder
+		engCfg.PipelineFallback = routing.PipelineFallback
 		// User-named routing groups (CHECKLIST 173): group name
 		// -> ordered members, expanded to (provider, model)
 		// attempts with the same rules as chainFor — enabled

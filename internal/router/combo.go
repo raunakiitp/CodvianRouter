@@ -285,12 +285,31 @@ func (e *Engine) runComboStrategy(ctx context.Context, ordered []Attempt, req pr
 		}
 		return resp, nil
 	case "pipeline":
+		// A2-7 pipeline knobs, surfaced and honoured here:
+		// PipelineSkipTokensUnder skips the multi-stage pipeline for a
+		// short prompt, PipelineTaskDetection "auto" skips it for a
+		// simple (non-code) task, and PipelineFallback "single-provider"
+		// serves a single provider when the pipeline fails.
+		// PipelineMaxReflectionLoops is NOT-APPLICABLE (no reflection
+		// stage in RunPipeline — see PipelineMaxReflectionLoops).
+		if e.pipelineWantsSingle(prompt) {
+			return e.pipelineServeSingle(ctx, ordered, req, rec, trace, &consecutive429, mode, contract, tree, treeRoot, treeOrdered)
+		}
 		stages := make([]PipelineStage, len(ordered))
 		for i, att := range ordered {
 			stages[i] = PipelineStage{Name: fmt.Sprintf("stage-%d", i+1), Target: att}
 		}
 		pres, err := RunPipeline(ctx, prompt, stages, e.comboPipelineCaller(req, rec))
 		if err != nil {
+			// A2-7: pipeline_fallback "single-provider" — on a pipeline
+			// failure, record the stages that ran, then serve a single
+			// provider (ordered[0]) as a fresh call instead of failing
+			// the request. Any other PipelineFallback value (or "") keeps
+			// the fail-on-error behaviour.
+			if e.cfg.PipelineFallback == "single-provider" {
+				e.recordPipelineStages(trace, pres.Stages, rec, &consecutive429, mode, req.CallerID, req)
+				return e.pipelineServeSingle(ctx, ordered, req, rec, trace, &consecutive429, mode, contract, tree, treeRoot, treeOrdered)
+			}
 			e.recordPipelineStages(trace, pres.Stages, rec, &consecutive429, mode, req.CallerID, req)
 			return nil, err
 		}
@@ -467,6 +486,82 @@ func (e *Engine) recordPipelineStages(trace *routetrace.RouteTrace, stages []Pip
 		}
 	}
 	return lastRes, lastOK
+}
+
+// pipelineTokenEstimate estimates the token count of the pipeline
+// prompt for the skip_under knob: ~4 chars per token, the same budget
+// heuristic relayEstimateTokens uses (relay.go). A budget guard, never
+// a billing count.
+func pipelineTokenEstimate(prompt string) int {
+	return len(prompt) / 4
+}
+
+// detectTaskComplex reports whether a pipeline prompt is a "complex"
+// task (A2-7 task_detection "auto"): a code fence or a code/planning
+// marker. A prompt with none of these is a simple task, which a single
+// provider can answer — the multi-stage pipeline adds nothing. This is
+// a deliberately small, honest heuristic, never a model judgement.
+func detectTaskComplex(prompt string) bool {
+	p := strings.ToLower(strings.TrimSpace(prompt))
+	if p == "" {
+		return false
+	}
+	for _, m := range []string{
+		"```", "func ", "function", "implement", "refactor",
+		"debug", "write a program", "write code", "architecture",
+		"plan ",
+	} {
+		if strings.Contains(p, m) {
+			return true
+		}
+	}
+	return false
+}
+
+// pipelineWantsSingle reports whether the pipeline should be skipped
+// in favour of a single provider (A2-7): when the prompt is short
+// enough (PipelineSkipTokensUnder) or — under task_detection "auto" —
+// is a simple non-code task. The multi-stage pipeline is for complex,
+// long work; serving a single provider for the simple/short case is the
+// documented cost/quality win.
+func (e *Engine) pipelineWantsSingle(prompt string) bool {
+	if e.cfg.PipelineSkipTokensUnder > 0 && pipelineTokenEstimate(prompt) < e.cfg.PipelineSkipTokensUnder {
+		return true
+	}
+	if e.cfg.PipelineTaskDetection == "auto" && !detectTaskComplex(prompt) {
+		return true
+	}
+	return false
+}
+
+// pipelineServeSingle serves the pipeline request by a single provider
+// (ordered[0]) instead of running the multi-stage pipeline (A2-7): a
+// short/simple prompt, or a single-provider fallback after a pipeline
+// failure. It dials ordered[0] once, records it as the served success,
+// traces the remaining members as skipped_pipeline (they never ran),
+// records the decision as "pipeline", and returns the response. If the
+// single provider fails, the failure is recorded and the error returned.
+func (e *Engine) pipelineServeSingle(ctx context.Context, ordered []Attempt, req provider.ChatRequest, rec *comboCallRecorder, trace *routetrace.RouteTrace, consecutive429 *int, mode string, contract *routetrace.RoutingContract, tree *strategytree.Node, treeRoot string, treeOrdered bool) (*provider.ChatResponse, error) {
+	if len(ordered) == 0 {
+		return nil, ErrNoAvailableAttempt
+	}
+	att := ordered[0]
+	res := e.callChat(ctx, att, req)
+	rec.record(res)
+	if res.err != nil {
+		e.noteFailure(trace, res, consecutive429, mode, req.CallerID, req.Model)
+		return nil, res.err
+	}
+	if res.resp == nil {
+		return nil, errors.New("router: combo pipeline single provider returned no response")
+	}
+	e.noteSuccess(trace, res, req)
+	for _, a := range ordered[1:] {
+		addTraceAttempt(trace, a, 0, "skipped_pipeline", nil)
+	}
+	e.recordDecision(trace, contract, treeOrdered, "pipeline", req.Model, res.att.Model, res.att.ProviderID)
+	noteTreeServed(trace, tree, res.att.ProviderID, res.att.Model, treeRoot)
+	return e.finishResponse(res), nil
 }
 
 // finishJev records a JEV panel on the trace and returns the
