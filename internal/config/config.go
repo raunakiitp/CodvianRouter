@@ -1538,7 +1538,7 @@ type RoutingConfig struct {
 	PipelineSkipTokensUnder    int    `json:"pipeline_skip_for_tokens_under,omitempty"`
 	PipelineFallback           string `json:"pipeline_fallback,omitempty"`
 	// JevJudgeEnabled, when true, turns on the JEV strategy's LLM
-	// judge (A2-4): the System One scoring call runs against the
+	// judge (A2-4): the LLM-judge scoring call runs against the
 	// configured judge model (JevJudgeModel) instead of the
 	// deterministic heuristic scorer. It is OFF by default — the
 	// preference order is unchanged (heuristic scorer, no extra
@@ -1547,7 +1547,7 @@ type RoutingConfig struct {
 	// judge did.
 	JevJudgeEnabled bool `json:"jev_judge_enabled,omitempty"`
 	// JevJudgeModel names the model the JEV strategy's LLM judge
-	// (A2-4) sends its System One scoring request to. Empty means
+	// (A2-4) sends its LLM-judge scoring request to. Empty means
 	// no judge model: even with jev_judge_enabled on, the judge
 	// call is skipped and the heuristic scorer is used. Configured
 	// exactly like a routing-group model, resolved through the

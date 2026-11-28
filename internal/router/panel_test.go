@@ -424,7 +424,7 @@ func TestJevLowConfidenceFallsOpen(t *testing.T) {
 
 func TestJevUnavailableFallsOpen(t *testing.T) {
 	cands, _ := jevFixture()
-	res := JudgeJev(cands, nil) // no System One answer at all
+	res := JudgeJev(cands, nil) // no judge answer at all
 	if !res.FellOpen || res.FallbackReason != JevHoldUnavailable {
 		t.Errorf("nil-answer verdict = fellOpen=%v reason=%q, want fellOpen=true reason=%q",
 			res.FellOpen, res.FallbackReason, JevHoldUnavailable)

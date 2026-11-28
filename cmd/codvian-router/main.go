@@ -3881,7 +3881,7 @@ func openStack(opts options) (*stack, error) {
 		// validated at load (unknown names, including
 		// "expiry-first", fail there).
 		// JEV LLM judge (A2-4): routing.jev_judge_enabled gates
-		// whether the JEV strategy's System One scoring runs through
+		// whether the JEV strategy's LLM-judge scoring runs through
 		// a real LLM judge call; routing.jev_judge_model names the
 		// model that call is sent to (resolved through the engine's
 		// chain map, like a routing-group model). The flag is OFF by

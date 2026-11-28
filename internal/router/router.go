@@ -860,7 +860,7 @@ type Config struct {
 	// judge did. Never calls any vendor decision API.
 	ComboJevLLMJudge bool
 	// JevJudgeModel, when set, names the judge model for the JEV
-	// strategy's LLM judge (A2-4): the model the System One scoring
+	// strategy's LLM judge (A2-4): the model the LLM-judge scoring
 	// request is sent to, resolved exactly like the fusion judge's
 	// model. It is read only when ComboJevLLMJudge is true; when it
 	// returns "" — or the named model has no serving chain — the

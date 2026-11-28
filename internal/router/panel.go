@@ -683,11 +683,11 @@ type JevCandidate struct {
 	Label    string // optional human-readable label; not used by the judge
 }
 
-// JevChoiceAnswer is the caller-supplied System One choice: the
+// JevChoiceAnswer is the caller-supplied JEV choice: the
 // winning candidate id, per-candidate probabilities, and overall
 // confidence. The panel code NEVER invents these numbers — they
 // come from the caller (a JevScorer, ultimately a model call).
-// A nil *JevChoiceAnswer means the System One call was unavailable.
+// A nil *JevChoiceAnswer means the judge call was unavailable.
 type JevChoiceAnswer struct {
 	Choice        string
 	Probabilities map[string]float64
@@ -761,7 +761,7 @@ func jevFallOpen(candidates []JevCandidate, reason JevHoldReason) JevResult {
 // never appear in the result.
 //
 //   - no candidates → empty verdict, no fall-open;
-//   - one candidate → admitted as-is (the System One call is skipped);
+//   - one candidate → admitted as-is (the judge call is skipped);
 //   - nil answer → fall open, jev_unavailable;
 //   - confidence below JevConfidenceFloor → fall open, low_confidence;
 //   - choice naming an id outside the candidate set → fall open,
@@ -837,7 +837,7 @@ func JudgeJev(candidates []JevCandidate, answer *JevChoiceAnswer) JevResult {
 	return JevResult{Admitted: admitted, Held: held}
 }
 
-// JevScorer produces the System One choice answer for a set of
+// JevScorer produces the JEV choice answer for a set of
 // executed candidates. It is caller-supplied — the panel code does
 // not score anything itself. Returning (nil, nil) signals that the
 // scoring call was unavailable, which falls open per JudgeJev;
