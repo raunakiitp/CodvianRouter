@@ -265,6 +265,17 @@ var flatVariant = map[string]VariantResolution{
 	"smart":         {Strategy: "quality-first"},
 	"lkgp":          {Strategy: "lkgp"},
 	"chaos":         {Strategy: "chaos-mode"},
+	// Combo panels (A2-2): auto/fusion, auto/pipeline and auto/jev are
+	// real multi-target resolutions — the panel IS the decision (see
+	// resolveComboPanel). auto:fusion / auto:pipeline / auto:jev map
+	// here through the router's resolveAutoAlias, and the engine runs
+	// the panel: fusion and jev fan out in parallel over the panel and
+	// pick a winner with a judge; pipeline runs the panel as sequential
+	// stages. The panel order is the resolved order; no answer is faked
+	// in this pure resolver.
+	"fusion":   {Strategy: "fusion"},
+	"pipeline": {Strategy: "pipeline"},
+	"jev":      {Strategy: "jev"},
 	// sla-aware / sla (M3 Area 1, PARITY row 394): pick by SLA
 	// compliance over the catalog's measured signals (see
 	// pickByStrategy). "nadir" (row 396) is listed so
@@ -506,6 +517,8 @@ func resolveFlat(res VariantResolution, catalog []CatalogModel, lastGood string,
 		return resolveLKGP(res, catalog, lastGood)
 	case "auto/chaos", "auto/best-chaos":
 		return resolveChaos(res, catalog), nil
+	case "auto/fusion", "auto/pipeline", "auto/jev":
+		return resolveComboPanel(res, catalog), nil
 	case "auto/subscription":
 		return resolveSubscription(res, catalog)
 	case "auto/thrifty":
@@ -703,6 +716,38 @@ func resolveChaos(res VariantResolution, catalog []CatalogModel) VariantResoluti
 	res.Panel = panel
 	res.Ordered = append([]string(nil), panel...)
 	res.Notes = fmt.Sprintf("parallel fan-out panel of %d (one model per provider, max %d); dispatch fans out, no judge synthesis here", len(panel), ChaosPanelSize)
+	return res
+}
+
+// resolveComboPanel resolves auto/fusion, auto/pipeline and auto/jev
+// (A2-2): the MULTI-TARGET panel the engine runs. fusion and jev fan
+// out in parallel over the panel and pick a winner with a judge;
+// pipeline runs the panel as sequential stages. The panel is one
+// model per provider, at most ChaosPanelSize, in catalog order (the
+// same candidateProjection diversity auto/chaos uses). Model stays ""
+// — the panel IS the decision, and no panel result is faked in this
+// pure resolver; the engine executes it.
+func resolveComboPanel(res VariantResolution, catalog []CatalogModel) VariantResolution {
+	panel := make([]string, 0, ChaosPanelSize)
+	seen := make(map[string]struct{})
+	for _, m := range catalog {
+		if len(panel) >= ChaosPanelSize {
+			break
+		}
+		if _, dup := seen[m.Provider]; dup {
+			continue
+		}
+		seen[m.Provider] = struct{}{}
+		panel = append(panel, m.Model)
+	}
+	res.Panel = panel
+	res.Ordered = append([]string(nil), panel...)
+	switch res.Strategy {
+	case "pipeline":
+		res.Notes = fmt.Sprintf("multi-target pipeline of %d (one model per provider, max %d); the engine runs it as sequential stages", len(panel), ChaosPanelSize)
+	default:
+		res.Notes = fmt.Sprintf("multi-target %s panel of %d (one model per provider, max %d); the engine fans out in parallel and picks a winner with a judge", res.Strategy, len(panel), ChaosPanelSize)
+	}
 	return res
 }
 
