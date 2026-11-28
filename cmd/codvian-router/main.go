@@ -3992,10 +3992,17 @@ func openStack(opts options) (*stack, error) {
 			// mirror may rewrite the live map on this
 			// request path. The copy is ranged after the
 			// lock is released.
-			members, ok := cfg.GroupMembers(group)
-			if !ok {
+			if _, ok := cfg.GroupMembers(group); !ok {
 				return nil, false
 			}
+			// Nested combo-refs: a member of the form "group:<name>"
+			// expands recursively to that inner group's members via
+			// config.ExpandGroupMembers (depth-first, member order
+			// preserved, cycle-guarded). The snapshot is taken under
+			// the routing read lock, so a combo mirror rewriting the
+			// live map cannot race this request path. Cycles are also
+			// rejected at config load (validateGroupGraph).
+			members, _ := config.ExpandGroupMembers(cfg.GroupsSnapshot(), group)
 			var chain []router.Attempt
 			for _, id := range members {
 				providerID, effort, err := config.ParseGroupMember(id)
