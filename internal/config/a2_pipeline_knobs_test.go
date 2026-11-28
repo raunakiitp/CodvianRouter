@@ -13,7 +13,7 @@ import (
 func TestPipelineKnobsValidateAndReject(t *testing.T) {
 	ok := func(t *testing.T, mut func(*RoutingConfig)) {
 		t.Helper()
-		cfg := Default(t.TempDir())
+		cfg := DefaultConfig(t.TempDir())
 		mut(cfg.Routing)
 		if err := cfg.Validate(); err != nil {
 			t.Fatalf("Validate = %v, want nil", err)
