@@ -2880,6 +2880,9 @@ func (c *Config) Validate() error {
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			return fmt.Errorf("config: webhooks[%q].url %q is not an http(s) URL", w.ID, w.URL)
 		}
+		if err := ValidateWebhookKind(w); err != nil {
+			return err
+		}
 		for _, ev := range w.Events {
 			if !knownWebhookEvent(ev) {
 				return fmt.Errorf("config: webhooks[%q] subscribes to unknown event %q (known: %s)", w.ID, ev, strings.Join(KnownWebhookEvents(), ", "))
@@ -3674,6 +3677,13 @@ func (c *Config) Clone() *Config {
 		for i, w := range c.Webhooks {
 			if w.Events != nil {
 				w.Events = append([]string(nil), w.Events...)
+			}
+			if w.Metadata != nil {
+				m := make(map[string]string, len(w.Metadata))
+				for k, v := range w.Metadata {
+					m[k] = v
+				}
+				w.Metadata = m
 			}
 			out.Webhooks[i] = w
 		}

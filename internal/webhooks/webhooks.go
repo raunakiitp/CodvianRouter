@@ -46,6 +46,7 @@ import (
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/egress"
+	"github.com/raunakiitp/codvian-router/internal/webhooks/integrations"
 )
 
 // QuotaExceededEvent is the event name for a quota threshold
@@ -124,12 +125,20 @@ func KnownEvents() []string {
 	}
 }
 
-// Endpoint is one subscribed webhook endpoint.
+// Endpoint is one subscribed webhook endpoint. Kind selects the
+// delivery payload shape: "" (or an unknown value, rejected at config
+// validation) is the generic signed JSON envelope; "slack" / "discord"
+// / "telegram" are chat integrations (see internal/webhooks/integrations)
+// whose bodies are the platform format and are NOT HMAC-signed.
+// Metadata carries optional per-endpoint secrets for chat kinds (e.g. a
+// sealed telegram bot token, unsealed via SetTokenDecrypt).
 type Endpoint struct {
-	ID     string
-	URL    string
-	Events []string
-	Secret string
+	ID       string
+	URL      string
+	Events   []string
+	Secret   string
+	Kind     string
+	Metadata map[string]string
 }
 
 // Dispatcher delivers events to the configured endpoints.
@@ -137,6 +146,20 @@ type Dispatcher struct {
 	endpoints []Endpoint
 	client    *http.Client
 	log       *log.Logger
+	// tokenDecrypt, when set, unseals a chat-kind token held in an
+	// endpoint's Metadata (a sealed value produced by the config Vault).
+	// nil = identity (a plaintext metadata token, or none).
+	tokenDecrypt func(string) (string, error)
+}
+
+// SetTokenDecrypt installs the unseal function used for a chat-kind
+// token stored in endpoint Metadata (the config Vault's Unseal is the
+// production value). nil disables decryption (metadata tokens are then
+// read as plaintext).
+func (d *Dispatcher) SetTokenDecrypt(fn func(string) (string, error)) {
+	if d != nil {
+		d.tokenDecrypt = fn
+	}
 }
 
 // webhookMaxRetries is the retry budget for one delivery: 3
@@ -223,9 +246,10 @@ func (d *Dispatcher) Notify(event string, payload map[string]any) {
 	if d == nil {
 		return
 	}
+	ts := time.Now()
 	body, err := json.Marshal(map[string]any{
 		"event":     event,
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"timestamp": ts.UTC().Format(time.RFC3339),
 		"data":      payload,
 	})
 	if err != nil {
@@ -294,12 +318,70 @@ func (e Endpoint) subscribed(event string) bool {
 	return false
 }
 
+// deliver sends one body to one endpoint. A chat-kind endpoint gets a
+// platform-specific body built from the envelope payload and is NOT
+// signed (Slack/Discord/Telegram do not verify an HMAC); every other
+// endpoint sends the signed JSON envelope, exactly as before.
 func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
-	// The HMAC is over the body, which never changes across
-	// attempts, so the signature is computed once and sent
-	// on every attempt.
+	kind, isChat := integrations.ParseKind(ep.Kind)
 	sig := ""
-	if ep.Secret != "" {
+	targetURL := ep.URL
+	if isChat {
+		var env struct {
+			Timestamp string         `json:"timestamp"`
+			Data      map[string]any `json:"data"`
+		}
+		if err := json.Unmarshal(body, &env); err != nil {
+			d.logf("webhook %s: decode envelope for %s: %v", ep.ID, kind, err)
+			return
+		}
+		ts, perr := time.Parse(time.RFC3339, env.Timestamp)
+		if perr != nil {
+			ts = time.Now()
+		}
+		chatID := ""
+		if kind == integrations.KindTelegram {
+			if sealed := ep.Metadata["bot_token"]; sealed != "" {
+				// The token is held in (sealed) metadata; the chat_id —
+				// the destination — still lives in the endpoint URL.
+				plain := sealed
+				if d.tokenDecrypt != nil {
+					var derr error
+					if plain, derr = d.tokenDecrypt(sealed); derr != nil {
+						d.logf("webhook %s: decrypt telegram bot token: %v", ep.ID, derr)
+						return
+					}
+				}
+				cid, cerr := integrations.ChatIDFromURL(ep.URL)
+				if cerr != nil {
+					d.logf("webhook %s: %v", ep.ID, cerr)
+					return
+				}
+				built, berr := integrations.BuildTelegramURL(plain, cid)
+				if berr != nil {
+					d.logf("webhook %s: build telegram url: %v", ep.ID, berr)
+					return
+				}
+				targetURL, chatID = built, cid
+			} else {
+				cid, perr := integrations.ChatIDFromURL(ep.URL)
+				if perr != nil {
+					d.logf("webhook %s: %v", ep.ID, perr)
+					return
+				}
+				chatID = cid
+			}
+		}
+		out, terr := integrations.Transform(kind, event, env.Data, chatID, ts)
+		if terr != nil {
+			d.logf("webhook %s: transform %s payload: %v", ep.ID, kind, terr)
+			return
+		}
+		body = out
+	} else if ep.Secret != "" {
+		// The HMAC is over the body, which never changes across
+		// attempts, so the signature is computed once and sent
+		// on every attempt.
 		mac := hmac.New(sha256.New, []byte(ep.Secret))
 		mac.Write(body)
 		sig = "sha256=" + hex.EncodeToString(mac.Sum(nil))
@@ -308,7 +390,7 @@ func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
 		// One fresh context per attempt: a slow attempt
 		// consumes its own 10s, never the next attempt's.
 		ctx, cancel := context.WithTimeout(context.Background(), webhookAttemptTimeout)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep.URL, bytes.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
 		if err != nil {
 			cancel()
 			d.logf("webhook %s: build request: %v", ep.ID, err)
@@ -323,17 +405,10 @@ func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
 		resp, err := d.client.Do(req)
 		cancel()
 		if err != nil {
-			// A destination refused by the egress policy is
-			// terminal: retrying would only re-resolve and be
-			// refused again (or, worse, be retried until a
-			// rebinding host flips to an allowed answer).
 			if errors.Is(err, egress.ErrBlocked) {
 				d.logf("webhook %s: delivery blocked by egress policy: %v", ep.ID, err)
 				return
 			}
-			// Other transport errors are retryable (a refused
-			// connection or a reset may clear on the next
-			// attempt).
 			if attempt == webhookMaxRetries {
 				d.logf("webhook %s: delivery failed after %d attempts: %v", ep.ID, webhookMaxRetries+1, err)
 				return
@@ -343,12 +418,6 @@ func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
 			continue
 		}
 		if resp.StatusCode < 500 {
-			// AUD-REL-007: 429 is RETRYABLE, not terminal — a
-			// rate-limited endpoint is asking for slower traffic,
-			// not rejecting the payload. Retry-After (delta-seconds
-			// or HTTP-date) is honored when present, bounded by
-			// webhookRetryAfterCap; the exponential backoff fills in
-			// when the header is absent or unparseable.
 			if resp.StatusCode == http.StatusTooManyRequests {
 				resp.Body.Close()
 				if attempt == webhookMaxRetries {
@@ -363,17 +432,12 @@ func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
 				time.Sleep(delay)
 				continue
 			}
-			// Other 3xx/4xx are terminal — the endpoint rejected
-			// this payload, and the same body would fail the same
-			// way again.
 			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 				d.logf("webhook %s: endpoint returned %s", ep.ID, resp.Status)
 			}
 			resp.Body.Close()
 			return
 		}
-		// 5xx: retryable — the endpoint is failing, not
-		// refusing this payload.
 		resp.Body.Close()
 		if attempt == webhookMaxRetries {
 			d.logf("webhook %s: endpoint returned %s after %d attempts", ep.ID, resp.Status, webhookMaxRetries+1)

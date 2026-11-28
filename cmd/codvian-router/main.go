@@ -4723,9 +4723,21 @@ func webhookDispatcher(cfg *config.Config) *webhooks.Dispatcher {
 	}
 	endpoints := make([]webhooks.Endpoint, 0, len(cfg.Webhooks))
 	for _, w := range cfg.Webhooks {
-		endpoints = append(endpoints, webhooks.Endpoint{ID: w.ID, URL: w.URL, Events: w.Events, Secret: w.Secret})
+		endpoints = append(endpoints, webhooks.Endpoint{ID: w.ID, URL: w.URL, Events: w.Events, Secret: w.Secret, Kind: w.Kind, Metadata: w.Metadata})
 	}
-	return webhooks.New(endpoints, nil, log.New(os.Stderr, "codvian-router: ", log.LstdFlags))
+	d := webhooks.New(endpoints, nil, log.New(os.Stderr, "codvian-router: ", log.LstdFlags))
+	// Chat kinds may hold a sealed bot token in metadata; unseal it with
+	// the per-data-dir Vault. A failure (or no data dir) leaves the
+	// decryptor nil — a plaintext metadata token still works.
+	if cfg.DataDir != "" {
+		if v, err := crypto.New(cfg.DataDir); err == nil {
+			d.SetTokenDecrypt(func(s string) (string, error) {
+				b, err := v.Unseal(s)
+				return string(b), err
+			})
+		}
+	}
+	return d
 }
 
 // isLocalProvider reports whether a configured provider is a local

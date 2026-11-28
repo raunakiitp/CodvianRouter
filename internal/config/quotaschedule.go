@@ -48,6 +48,17 @@ type WebhookConfig struct {
 	URL    string   `json:"url"`
 	Events []string `json:"events,omitempty"`
 	Secret string   `json:"secret,omitempty"`
+	// Kind selects the delivery payload shape. "" (default) is the
+	// generic signed JSON envelope. "slack", "discord" and "telegram"
+	// are chat integrations (internal/webhooks/integrations): the body
+	// is built in the platform format and is NOT HMAC-signed. An
+	// unknown non-empty kind is rejected at validation.
+	Kind string `json:"kind,omitempty"`
+	// Metadata carries optional per-endpoint secrets for chat kinds.
+	// For telegram it holds a sealed bot token under "bot_token"
+	// (unsealed via the config Vault at delivery); the destination
+	// chat_id always lives in the endpoint URL.
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // QuotaExceededEvent is the webhook event for a quota threshold
