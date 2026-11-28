@@ -78,14 +78,15 @@ const QuotaExceededEvent = webhooks.QuotaExceededEvent
 // the budget machinery via notifyBudgetWarning.
 const BudgetWarningEvent = webhooks.BudgetWarningEvent
 
-// ProviderDegradedEvent / ProviderRecoveredEvent are edge-triggered
-// provider-health signals fired from genuine circuit-breaker
-// CLOSED->OPEN / OPEN->CLOSED transitions (see
-// router.Engine.SetBreakerEvents and the server adapter that turns
+// ProviderDegradedEvent / ProviderRecoveredEvent / ProviderResetRedeemedEvent
+// are edge-triggered provider-health signals fired from genuine circuit-breaker
+// CLOSED->OPEN / OPEN->CLOSED transitions and from the redemption of a banked
+// reset (see router.Engine.SetBreakerEvents and the server adapter that turns
 // them into dispatcher.Notify calls).
 const (
-	ProviderDegradedEvent  = webhooks.ProviderDegradedEvent
-	ProviderRecoveredEvent = webhooks.ProviderRecoveredEvent
+	ProviderDegradedEvent      = webhooks.ProviderDegradedEvent
+	ProviderRecoveredEvent     = webhooks.ProviderRecoveredEvent
+	ProviderResetRedeemedEvent = webhooks.ProviderResetRedeemedEvent
 )
 
 // KnownWebhookEvents returns the canonical webhook event set the

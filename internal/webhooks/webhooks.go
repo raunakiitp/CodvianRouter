@@ -1,34 +1,28 @@
 // Package webhooks delivers outbound webhook events to
-// operator-configured endpoints (M5.9). Today only the
-// "quota.exceeded" event is emitted (the reference router webhookDispatcher
-// notifyWebhookEvent): it fires, best-effort, whenever a quota
-// schedule blocks a request. Delivery never blocks the request
-// that triggered it: Notify hands the POST to a goroutine, drops
-// failures on the floor (logged by the caller-supplied logger)
-// after the bounded retry policy below, and never queues work
-// beyond that one goroutine — an endpoint that is down must not
-// queue up work in the gateway. When a secret is configured the
-// body is signed with HMAC-SHA256 (header
+// operator-configured endpoints (M5.9). "quota.exceeded" fires
+// best-effort whenever a quota schedule blocks a request; the other
+// event kinds are emitted by the server's request, breaker, budget and
+// eval paths. Delivery never blocks the request that triggered it:
+// Notify hands the POST to a goroutine and returns. When a secret is
+// configured the body is signed with HMAC-SHA256 (header
 // X-Codvian-Signature-256: sha256=<hex>).
 //
-// RETRY POLICY (M8.19 merge follow-up — matches the reference router's
-// deliverWebhook, src/lib/webhookDispatcher.ts:83-140, in
-// capability, not copied code): one delivery is retried up to
-// webhookMaxRetries times (3 retries, 4 attempts total) with
-// exponential backoff (1s, 2s, 4s) and a per-attempt timeout
-// (10s). Retried: 5xx responses, transport errors, and 429 with
-// Retry-After honored (AUD-REL-007 — a rate-limited endpoint is
-// asking for slower traffic, not rejecting the payload; a
-// Retry-After hint, delta-seconds or HTTP-date, replaces the
-// exponential delay and is capped at webhookRetryAfterCap).
-// Terminal: a 2xx is success and every other 4xx/3xx means the
-// endpoint rejected the payload — retrying the same
-// body would fail the same way). Retries never queue work
-// beyond the one in-flight Notify goroutine, and the attempt
-// count bounds the whole sequence — there is no unbounded
-// redelivery, no persistent queue, and no retry across process
-// restarts (edge-trigger state is in-memory; see
-// internal/server/webhooks_api.go).
+// RETRY POLICY (M8.19): one delivery is retried up to webhookMaxRetries
+// times (3 retries, 4 attempts total) with exponential backoff (1s, 2s,
+// 4s) and a per-attempt timeout (10s). Retried: 5xx responses, transport
+// errors, and 429 with Retry-After honored (a rate-limited endpoint asks
+// for slower traffic, not a rejection; a Retry-After hint replaces the
+// exponential delay, capped at webhookRetryAfterCap). Terminal: a 2xx is
+// success and every other 4xx/3xx means the endpoint rejected the
+// payload — retrying the same body would fail the same way.
+//
+// DURABILITY (A4): with a Queue installed (SetQueue), every delivery and
+// its outcome (status, HTTP status, latency, error, payload snapshot) is
+// persisted and retained as delivery history; retryable failures stay
+// pending and are redelivered once at startup (RedeliverPending), so a
+// failed delivery survives a process restart. An endpoint auto-disables
+// after WebhookAutoDisableThreshold consecutive failed deliveries, and a
+// "*" subscription matches every event.
 package webhooks
 
 import (
@@ -39,10 +33,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/egress"
@@ -74,13 +70,18 @@ const TestPingEvent = "test.ping"
 // trips (CLOSED -> OPEN), with only the provider id and the real
 // consecutive-failure/trip counts and open duration in the payload.
 // ProviderRecoveredEvent fires when that OPEN breaker later clears on
-// a real success. Both are edge-triggered: steady failures while the
-// breaker is already open, and ordinary successes by a healthy
-// provider, never emit an event. Neither payload contains a key, a
-// prompt or any provider credential.
+// a real success. ProviderResetRedeemedEvent fires when an operator
+// redeems a banked reset — a reset redemption that was banked when the
+// provider's breaker tripped open and is claimed by
+// ResetBreaker/ResetAllBreakers (see router.Engine). All three are
+// edge-triggered: steady failures while the breaker is already open,
+// ordinary successes by a healthy provider, and a reset with no banked
+// redemption never emit an event. No payload contains a key, a prompt
+// or any provider credential.
 const (
-	ProviderDegradedEvent  = "provider.degraded"
-	ProviderRecoveredEvent = "provider.recovered"
+	ProviderDegradedEvent      = "provider.degraded"
+	ProviderRecoveredEvent     = "provider.recovered"
+	ProviderResetRedeemedEvent = "provider.reset_redeemed"
 )
 
 // BudgetWarningEvent fires when an internal budget crosses its
@@ -115,6 +116,7 @@ func KnownEvents() []string {
 		BudgetWarningEvent,
 		ProviderDegradedEvent,
 		ProviderRecoveredEvent,
+		ProviderResetRedeemedEvent,
 		RequestCompletedEvent,
 		RequestFailedEvent,
 		ProviderExhaustedEvent,
@@ -146,6 +148,15 @@ type Dispatcher struct {
 	endpoints []Endpoint
 	client    *http.Client
 	log       *log.Logger
+	// queue, when set, persists every delivery and its outcome for
+	// redelivery across restarts plus a delivery history.
+	queue *Queue
+	// autoDisableThreshold disables an endpoint after this many
+	// consecutive failed deliveries (<=0 = the default).
+	autoDisableThreshold int
+	failMu               sync.Mutex
+	failures             map[string]int
+	disabled             map[string]bool
 	// tokenDecrypt, when set, unseals a chat-kind token held in an
 	// endpoint's Metadata (a sealed value produced by the config Vault).
 	// nil = identity (a plaintext metadata token, or none).
@@ -161,6 +172,35 @@ func (d *Dispatcher) SetTokenDecrypt(fn func(string) (string, error)) {
 		d.tokenDecrypt = fn
 	}
 }
+
+// WebhookAutoDisableThreshold is the default number of consecutive
+// failed deliveries after which an endpoint is auto-disabled.
+const WebhookAutoDisableThreshold = 10
+
+// SetQueue installs a durable delivery queue (nil = no persistence).
+func (d *Dispatcher) SetQueue(q *Queue) {
+	if d != nil {
+		d.queue = q
+	}
+}
+
+// Queue returns the installed delivery queue (nil when none).
+func (d *Dispatcher) Queue() *Queue {
+	if d == nil {
+		return nil
+	}
+	return d.queue
+}
+
+// SetAutoDisableThreshold overrides the auto-disable failure threshold.
+func (d *Dispatcher) SetAutoDisableThreshold(n int) {
+	if d != nil {
+		d.autoDisableThreshold = n
+	}
+}
+
+// Disabled reports whether an endpoint has been auto-disabled.
+func (d *Dispatcher) Disabled(id string) bool { return d.isDisabled(id) }
 
 // webhookMaxRetries is the retry budget for one delivery: 3
 // retries after the first attempt (4 attempts total),
@@ -259,6 +299,9 @@ func (d *Dispatcher) Notify(event string, payload map[string]any) {
 		if !ep.subscribed(event) {
 			continue
 		}
+		if d.isDisabled(ep.ID) {
+			continue
+		}
 		ep := ep
 		go d.safeDeliver(ep, event, body)
 	}
@@ -311,18 +354,43 @@ func (d *Dispatcher) safeDeliver(ep Endpoint, event string, body []byte) {
 
 func (e Endpoint) subscribed(event string) bool {
 	for _, ev := range e.Events {
-		if ev == event {
+		if ev == event || ev == "*" {
 			return true
 		}
 	}
 	return false
 }
 
-// deliver sends one body to one endpoint. A chat-kind endpoint gets a
-// platform-specific body built from the envelope payload and is NOT
-// signed (Slack/Discord/Telegram do not verify an HMAC); every other
-// endpoint sends the signed JSON envelope, exactly as before.
+// deliver records the delivery (when a queue is set), runs the bounded
+// retry loop, records the outcome, and updates the endpoint's
+// consecutive-failure streak (auto-disabling it at the threshold).
 func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
+	if d.isDisabled(ep.ID) {
+		d.logf("webhook %s: endpoint is auto-disabled after repeated failures; delivery skipped", ep.ID)
+		return
+	}
+	recID := ""
+	if d.queue != nil {
+		dl := &Delivery{EndpointID: ep.ID, Event: event, URL: ep.URL, Body: append([]byte(nil), body...)}
+		if err := d.queue.Enqueue(dl); err == nil {
+			recID = dl.ID
+		} else {
+			d.logf("webhook %s: could not persist delivery: %v", ep.ID, err)
+		}
+	}
+	status, latency, retryable, derr := d.deliverOnce(ep, event, body)
+	if recID != "" {
+		if qerr := d.queue.Complete(recID, status, latency.Milliseconds(), retryable, derr); qerr != nil {
+			d.logf("webhook %s: could not record delivery outcome: %v", ep.ID, qerr)
+		}
+	}
+	d.recordOutcome(ep.ID, derr)
+}
+
+// deliverOnce runs the bounded retry loop and reports the final outcome:
+// the last HTTP status, the last attempt latency, whether the failure is
+// retryable (a later redelivery could succeed), and the final error.
+func (d *Dispatcher) deliverOnce(ep Endpoint, event string, body []byte) (status int, latency time.Duration, retryable bool, err error) {
 	kind, isChat := integrations.ParseKind(ep.Kind)
 	sig := ""
 	targetURL := ep.URL
@@ -331,8 +399,8 @@ func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
 			Timestamp string         `json:"timestamp"`
 			Data      map[string]any `json:"data"`
 		}
-		if err := json.Unmarshal(body, &env); err != nil {
-			d.logf("webhook %s: decode envelope for %s: %v", ep.ID, kind, err)
+		if uerr := json.Unmarshal(body, &env); uerr != nil {
+			d.logf("webhook %s: decode envelope for %s: %v", ep.ID, kind, uerr)
 			return
 		}
 		ts, perr := time.Parse(time.RFC3339, env.Timestamp)
@@ -397,11 +465,11 @@ func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
 		// One fresh context per attempt: a slow attempt
 		// consumes its own 10s, never the next attempt's.
 		ctx, cancel := context.WithTimeout(context.Background(), webhookAttemptTimeout)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
-		if err != nil {
+		req, rerr := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
+		if rerr != nil {
 			cancel()
-			d.logf("webhook %s: build request: %v", ep.ID, err)
-			return
+			d.logf("webhook %s: build request: %v", ep.ID, rerr)
+			return 0, 0, false, rerr
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("User-Agent", "codvian-router-webhook/1")
@@ -412,27 +480,32 @@ func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
 		if sig != "" {
 			req.Header.Set("X-Codvian-Signature-256", sig)
 		}
-		resp, err := d.client.Do(req)
+		start := time.Now()
+		resp, derr := d.client.Do(req)
+		latency = time.Since(start)
 		cancel()
-		if err != nil {
-			if errors.Is(err, egress.ErrBlocked) {
-				d.logf("webhook %s: delivery blocked by egress policy: %v", ep.ID, err)
-				return
+		if derr != nil {
+			// A destination refused by the egress policy is terminal.
+			if errors.Is(derr, egress.ErrBlocked) {
+				d.logf("webhook %s: delivery blocked by egress policy: %v", ep.ID, derr)
+				return 0, latency, false, derr
 			}
 			if attempt == webhookMaxRetries {
-				d.logf("webhook %s: delivery failed after %d attempts: %v", ep.ID, webhookMaxRetries+1, err)
-				return
+				d.logf("webhook %s: delivery failed after %d attempts: %v", ep.ID, webhookMaxRetries+1, derr)
+				return 0, latency, true, derr
 			}
-			d.logf("webhook %s: delivery failed (attempt %d/%d): %v; retrying", ep.ID, attempt+1, webhookMaxRetries+1, err)
+			d.logf("webhook %s: delivery failed (attempt %d/%d): %v; retrying", ep.ID, attempt+1, webhookMaxRetries+1, derr)
 			time.Sleep(webhookRetryBackoff(attempt + 1))
 			continue
 		}
-		if resp.StatusCode < 500 {
-			if resp.StatusCode == http.StatusTooManyRequests {
+		status = resp.StatusCode
+		if status < 500 {
+			// AUD-REL-007: 429 is RETRYABLE, not terminal.
+			if status == http.StatusTooManyRequests {
 				resp.Body.Close()
 				if attempt == webhookMaxRetries {
 					d.logf("webhook %s: endpoint returned %s after %d attempts", ep.ID, resp.Status, webhookMaxRetries+1)
-					return
+					return status, latency, true, fmt.Errorf("http %d", status)
 				}
 				delay := webhookRetryBackoff(attempt + 1)
 				if ra := webhookRetryAfter(resp.Header.Get("Retry-After"), time.Now()); ra > 0 {
@@ -442,20 +515,91 @@ func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
 				time.Sleep(delay)
 				continue
 			}
-			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			// Other 3xx/4xx are terminal — the endpoint rejected this
+			// payload; retrying the same body would fail identically.
+			if status < 200 || status >= 300 {
 				d.logf("webhook %s: endpoint returned %s", ep.ID, resp.Status)
+				resp.Body.Close()
+				return status, latency, false, fmt.Errorf("http %d", status)
 			}
 			resp.Body.Close()
-			return
+			return status, latency, false, nil
 		}
+		// 5xx: retryable.
 		resp.Body.Close()
 		if attempt == webhookMaxRetries {
 			d.logf("webhook %s: endpoint returned %s after %d attempts", ep.ID, resp.Status, webhookMaxRetries+1)
-			return
+			return status, latency, true, fmt.Errorf("http %d", status)
 		}
 		d.logf("webhook %s: endpoint returned %s (attempt %d/%d); retrying", ep.ID, resp.Status, attempt+1, webhookMaxRetries+1)
 		time.Sleep(webhookRetryBackoff(attempt + 1))
 	}
+	return status, latency, true, fmt.Errorf("http %d", status)
+}
+
+// endpointByID returns the configured endpoint with id.
+func (d *Dispatcher) endpointByID(id string) (Endpoint, bool) {
+	for _, ep := range d.endpoints {
+		if ep.ID == id {
+			return ep, true
+		}
+	}
+	return Endpoint{}, false
+}
+
+// isDisabled reports whether an endpoint was auto-disabled.
+func (d *Dispatcher) isDisabled(id string) bool {
+	d.failMu.Lock()
+	defer d.failMu.Unlock()
+	return d.disabled[id]
+}
+
+// recordOutcome updates the consecutive-failure streak for an endpoint
+// and auto-disables it once the threshold is reached. err == nil (a
+// success) resets the streak.
+func (d *Dispatcher) recordOutcome(id string, derr error) {
+	d.failMu.Lock()
+	defer d.failMu.Unlock()
+	if d.failures == nil {
+		d.failures = map[string]int{}
+	}
+	if d.disabled == nil {
+		d.disabled = map[string]bool{}
+	}
+	if derr == nil {
+		d.failures[id] = 0
+		return
+	}
+	d.failures[id]++
+	threshold := d.autoDisableThreshold
+	if threshold <= 0 {
+		threshold = WebhookAutoDisableThreshold
+	}
+	if d.failures[id] >= threshold && !d.disabled[id] {
+		d.disabled[id] = true
+		d.logf("webhook %s: auto-disabled after %d consecutive failed deliveries", id, d.failures[id])
+	}
+}
+
+// RedeliverPending attempts every delivery still pending in the queue —
+// e.g. after a restart loaded a persisted queue — and returns how many it
+// attempted. It is synchronous; call it once from startup.
+func (d *Dispatcher) RedeliverPending() int {
+	if d == nil || d.queue == nil {
+		return 0
+	}
+	n := 0
+	for _, dl := range d.queue.Pending() {
+		ep, ok := d.endpointByID(dl.EndpointID)
+		if !ok || d.isDisabled(dl.EndpointID) {
+			continue
+		}
+		status, latency, retryable, derr := d.deliverOnce(ep, dl.Event, dl.Body)
+		_ = d.queue.Complete(dl.ID, status, latency.Milliseconds(), retryable, derr)
+		d.recordOutcome(ep.ID, derr)
+		n++
+	}
+	return n
 }
 
 func (d *Dispatcher) logf(format string, args ...any) {

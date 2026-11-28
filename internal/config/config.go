@@ -396,6 +396,12 @@ type Config struct {
 	// schedules writes both the ledger rows and this block.
 	QuotaSchedules []QuotaScheduleConfig `json:"quota_schedules,omitempty"`
 
+	// WebhooksDurableQueue enables the persistent outbound webhook delivery
+	// queue (A4 item 5): pending/failed deliveries persist under the data
+	// dir and are redelivered once at startup, and a delivery history is
+	// retained. Off by default (in-memory, matching prior behaviour).
+	WebhooksDurableQueue bool `json:"webhooks_durable_queue,omitempty"`
+
 	// Webhooks is the operator-configured outbound webhook
 	// endpoints (M5.9, see quotaschedule.go). Today only the
 	// "quota.exceeded" event is emitted, best-effort, when a
