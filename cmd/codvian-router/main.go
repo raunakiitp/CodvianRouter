@@ -4726,6 +4726,15 @@ func webhookDispatcher(cfg *config.Config) *webhooks.Dispatcher {
 		endpoints = append(endpoints, webhooks.Endpoint{ID: w.ID, URL: w.URL, Events: w.Events, Secret: w.Secret, Kind: w.Kind, Metadata: w.Metadata})
 	}
 	d := webhooks.New(endpoints, nil, log.New(os.Stderr, "codvian-router: ", log.LstdFlags))
+	// Durable delivery queue: pending/failed deliveries persist to the
+	// data dir and are redelivered once at startup, and delivery history
+	// is retained. Wire it before any event can fire.
+	if cfg.DataDir != "" && cfg.WebhooksDurableQueue {
+		if q, qerr := webhooks.OpenQueue(filepath.Join(cfg.DataDir, "webhook-queue.json")); qerr == nil {
+			d.SetQueue(q)
+			go d.RedeliverPending()
+		}
+	}
 	// Chat kinds may hold a sealed bot token in metadata; unseal it with
 	// the per-data-dir Vault. A failure (or no data dir) leaves the
 	// decryptor nil — a plaintext metadata token still works.
