@@ -386,6 +386,13 @@ func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
 		mac.Write(body)
 		sig = "sha256=" + hex.EncodeToString(mac.Sum(nil))
 	}
+	// Mirror the (already signed) envelope timestamp into a header so a
+	// receiver can reject a replay before parsing the body. The body
+	// carries the same timestamp and is covered by the HMAC above.
+	var stamp struct {
+		Timestamp string `json:"timestamp"`
+	}
+	_ = json.Unmarshal(body, &stamp)
 	for attempt := 0; attempt <= webhookMaxRetries; attempt++ {
 		// One fresh context per attempt: a slow attempt
 		// consumes its own 10s, never the next attempt's.
@@ -399,6 +406,9 @@ func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("User-Agent", "codvian-router-webhook/1")
 		req.Header.Set("X-Codvian-Event", event)
+		if stamp.Timestamp != "" {
+			req.Header.Set(TimestampHeader, stamp.Timestamp)
+		}
 		if sig != "" {
 			req.Header.Set("X-Codvian-Signature-256", sig)
 		}
