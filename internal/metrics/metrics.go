@@ -71,15 +71,24 @@ type histogram struct {
 // Recorder is a concurrency-safe in-memory store for router metrics.
 // The zero value is usable, but prefer NewRecorder.
 type Recorder struct {
-	mu            sync.Mutex
-	requests      map[requestKey]uint64
-	failovers     map[failoverKey]uint64
-	cacheHits     map[string]uint64
-	cacheMisses   map[string]uint64
-	budgetRefused uint64
-	coalesced     uint64
-	inFlight      int64
-	latency       map[latencyKey]*histogram
+	mu          sync.Mutex
+	requests    map[requestKey]uint64
+	failovers   map[failoverKey]uint64
+	cacheHits   map[string]uint64
+	cacheMisses map[string]uint64
+	// Semantic-hit vector space (Stream D observability): which vector
+	// space produced each served semantic hit ("neural" /
+	// "bag-of-words"), so neural-vs-BoW serving is visible per hit,
+	// not just in aggregate.
+	semanticVectorSource map[string]uint64
+	// Cache store refusals by poison reason (Stream D poison guards):
+	// one per response the store gate refused to cache ("refusal",
+	// "truncated", "tool_calls", "empty", "temperature").
+	cacheStoreRefused map[string]uint64
+	budgetRefused     uint64
+	coalesced         uint64
+	inFlight          int64
+	latency           map[latencyKey]*histogram
 	// Adaptive concurrency limiter state, fed by the router (see
 	// SetConcurrencyLimit / IncConcurrencyRejected): the current
 	// cap per provider and how many calls were shed by it.
@@ -132,19 +141,21 @@ type Recorder struct {
 // NewRecorder returns an initialized Recorder.
 func NewRecorder() *Recorder {
 	return &Recorder{
-		requests:            make(map[requestKey]uint64),
-		failovers:           make(map[failoverKey]uint64),
-		cacheHits:           make(map[string]uint64),
-		cacheMisses:         make(map[string]uint64),
-		latency:             make(map[latencyKey]*histogram),
-		concurrencyLimit:    make(map[concurrencyKey]float64),
-		concurrencyRejected: make(map[concurrencyKey]uint64),
-		guardrailRedacted:   make(map[string]uint64),
-		guardrailBlocked:    make(map[string]uint64),
-		guardrailEvals:      make(map[guardrailEvalKey]uint64),
-		panics:              make(map[string]uint64),
-		usageTokens:         make(map[usageKey]uint64),
-		usageCostMicros:     make(map[usageKey]uint64),
+		requests:             make(map[requestKey]uint64),
+		failovers:            make(map[failoverKey]uint64),
+		cacheHits:            make(map[string]uint64),
+		cacheMisses:          make(map[string]uint64),
+		semanticVectorSource: make(map[string]uint64),
+		cacheStoreRefused:    make(map[string]uint64),
+		latency:              make(map[latencyKey]*histogram),
+		concurrencyLimit:     make(map[concurrencyKey]float64),
+		concurrencyRejected:  make(map[concurrencyKey]uint64),
+		guardrailRedacted:    make(map[string]uint64),
+		guardrailBlocked:     make(map[string]uint64),
+		guardrailEvals:       make(map[guardrailEvalKey]uint64),
+		panics:               make(map[string]uint64),
+		usageTokens:          make(map[usageKey]uint64),
+		usageCostMicros:      make(map[usageKey]uint64),
 	}
 }
 
@@ -312,6 +323,33 @@ func (r *Recorder) IncCacheMiss(layer string) {
 		r.cacheMisses = make(map[string]uint64)
 	}
 	r.cacheMisses[sanitizeLabel(layer)]++
+}
+
+// IncSemanticVectorSource increments
+// codvian_router_semantic_hits_by_vector_source_total for one served
+// semantic cache hit, labelled with the vector space the hit was
+// matched in ("neural" or "bag-of-words"). Called by the serving
+// engine/relay on every semantic hit; exact hits never reach it.
+func (r *Recorder) IncSemanticVectorSource(source string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.semanticVectorSource == nil {
+		r.semanticVectorSource = make(map[string]uint64)
+	}
+	r.semanticVectorSource[sanitizeLabel(source)]++
+}
+
+// IncCacheStoreRefused increments
+// codvian_router_cache_store_refused_total for one response the cache
+// store gate refused to store, labelled with the poison reason
+// ("refusal", "truncated", "tool_calls", "empty", "temperature").
+func (r *Recorder) IncCacheStoreRefused(reason string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.cacheStoreRefused == nil {
+		r.cacheStoreRefused = make(map[string]uint64)
+	}
+	r.cacheStoreRefused[sanitizeLabel(reason)]++
 }
 
 // IncBudgetRefused increments codvian_router_budget_refused_total.
@@ -620,6 +658,16 @@ func (r *Recorder) WriteTo(b *strings.Builder) {
 	b.WriteString("# HELP codvian_router_cache_misses_total Total cache misses by layer.\n")
 	b.WriteString("# TYPE codvian_router_cache_misses_total counter\n")
 	writeStringCounter(b, "codvian_router_cache_misses_total", "layer", r.cacheMisses)
+	// Semantic hits by the vector space they were matched in (neural
+	// embedding vs hashed bag-of-words fallback) — Stream D
+	// observability: which space actually serves.
+	b.WriteString("# HELP codvian_router_semantic_hits_by_vector_source_total Served semantic cache hits by vector space (neural or bag-of-words).\n")
+	b.WriteString("# TYPE codvian_router_semantic_hits_by_vector_source_total counter\n")
+	writeStringCounter(b, "codvian_router_semantic_hits_by_vector_source_total", "source", r.semanticVectorSource)
+	// Responses the cache store gate refused to store, by poison reason.
+	b.WriteString("# HELP codvian_router_cache_store_refused_total Responses refused by the cache store poison guard, by reason (refusal, truncated, tool_calls, empty, temperature).\n")
+	b.WriteString("# TYPE codvian_router_cache_store_refused_total counter\n")
+	writeStringCounter(b, "codvian_router_cache_store_refused_total", "reason", r.cacheStoreRefused)
 
 	// Budget refused.
 	b.WriteString("# HELP codvian_router_budget_refused_total Total requests refused by the budget guard.\n")
@@ -832,6 +880,12 @@ type Snapshot struct {
 	// Empty (nil) before any cache lookup has been recorded.
 	CacheHitsByLayer   map[string]uint64 `json:"cache_hits_by_layer,omitempty"`
 	CacheMissesByLayer map[string]uint64 `json:"cache_misses_by_layer,omitempty"`
+	// SemanticHitsByVectorSource is the same semantic-hit counter
+	// split by vector space ("neural" / "bag-of-words"), and
+	// CacheStoreRefusedByReason the store-poison refusals by reason.
+	// Empty (nil) until the first event, like the layer maps above.
+	SemanticHitsByVectorSource map[string]uint64 `json:"semantic_hits_by_vector_source,omitempty"`
+	CacheStoreRefusedByReason  map[string]uint64 `json:"cache_store_refused_by_reason,omitempty"`
 	// Panics is the total recovered panics since process start,
 	// summed over every location (see Panics). Zero until a panic
 	// actually happens — the dashboard renders it as an honest
@@ -895,6 +949,18 @@ func (r *Recorder) Snapshot() Snapshot {
 		snap.CacheMissesByLayer = make(map[string]uint64, len(r.cacheMisses))
 		for k, n := range r.cacheMisses {
 			snap.CacheMissesByLayer[k] = n
+		}
+	}
+	if len(r.semanticVectorSource) > 0 {
+		snap.SemanticHitsByVectorSource = make(map[string]uint64, len(r.semanticVectorSource))
+		for k, n := range r.semanticVectorSource {
+			snap.SemanticHitsByVectorSource[k] = n
+		}
+	}
+	if len(r.cacheStoreRefused) > 0 {
+		snap.CacheStoreRefusedByReason = make(map[string]uint64, len(r.cacheStoreRefused))
+		for k, n := range r.cacheStoreRefused {
+			snap.CacheStoreRefusedByReason[k] = n
 		}
 	}
 	for _, n := range r.panics {

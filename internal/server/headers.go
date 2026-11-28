@@ -75,6 +75,11 @@ const (
 	headerCodvianFallbackPath     = "X-Codvian-Fallback-Path"
 	headerCodvianCache            = "X-Codvian-Cache"
 	headerCodvianCacheSimilarity  = "X-Codvian-Cache-Similarity"
+	// headerCodvianCacheEmbedding names the vector space a SEMANTIC
+	// cache hit was matched in ("neural" or "bag-of-words"), so
+	// neural-embedding hits are distinguishable from token-overlap
+	// hits on the wire. Absent on exact hits and misses.
+	headerCodvianCacheEmbedding = "X-Codvian-Cache-Embedding"
 	headerCodvianCacheSavedTokens = "X-Codvian-Cache-Saved-Tokens"
 	headerCodvianCacheSavedUSD    = "X-Codvian-Cache-Saved-USD"
 	// headerReferenceCostSaved is the legacy compatibility name for the same

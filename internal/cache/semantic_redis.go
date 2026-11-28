@@ -117,6 +117,11 @@ type RedisSemanticCache struct {
 	closed bool
 }
 
+// EmbeddingStats returns the live embedding counters of the inner
+// in-memory cache (Stream D observability); it satisfies
+// EmbeddingStatsReporter.
+func (r *RedisSemanticCache) EmbeddingStats() EmbeddingStats { return r.inner.EmbeddingStats() }
+
 // redisSemanticKey is the stable Redis key for one entry: the
 // prefix plus the hex SHA-256 of the (model, tenant,
 // temp_bucket, vec_key) tuple. Two identical tuples key
@@ -345,6 +350,10 @@ func (s redisSemanticStore) SetTextForModelScoped(ctx context.Context, model, te
 }
 
 func (s redisSemanticStore) Stats() (entries, bytes int) { return s.p.Stats() }
+
+// EmbeddingStats forwards the inner cache's live embedding counters (see
+// persistentSemanticStore.EmbeddingStats).
+func (s redisSemanticStore) EmbeddingStats() EmbeddingStats { return s.p.EmbeddingStats() }
 
 // AsStore returns p as a SemanticStore, for serve mode: the
 // degrade wrapper and the relay store through the returned

@@ -4872,6 +4872,34 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	if s.obsCollector != nil {
 		s.obsCollector.WritePrometheus(w)
 	}
+	// Semantic-cache embedding counters (Stream D observability), read
+	// live from the wired semantic store when it reports them: which
+	// vector space the text APIs embed with (neural vs bag-of-words),
+	// how many neural calls failed open, and whether a neural embedder
+	// is configured at all. The per-HIT split is in the recorder's own
+	// exposition (codvian_router_semantic_hits_by_vector_source_total);
+	// these are the embed-side totals. Absent when the store does not
+	// report them - never a zero-filled fake.
+	if s.semanticCache != nil {
+		if es, ok := s.semanticCache.(cache.EmbeddingStatsReporter); ok {
+			st := es.EmbeddingStats()
+			w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+			_, _ = fmt.Fprintf(w, "# HELP codvian_router_semantic_embeds_total Text embeddings built by the semantic cache, by vector space (neural or bag-of-words).\n")
+			_, _ = fmt.Fprintf(w, "# TYPE codvian_router_semantic_embeds_total counter\n")
+			_, _ = fmt.Fprintf(w, "codvian_router_semantic_embeds_total{source=%q} %d\n", cache.VectorSourceNeural, st.Neural)
+			_, _ = fmt.Fprintf(w, "codvian_router_semantic_embeds_total{source=%q} %d\n", cache.VectorSourceBagOfWords, st.BagOfWords)
+			_, _ = fmt.Fprintf(w, "# HELP codvian_router_semantic_embed_fallbacks_total Neural embedding calls that failed open to the hashed bag-of-words vector (error, timeout, empty or malformed vector).\n")
+			_, _ = fmt.Fprintf(w, "# TYPE codvian_router_semantic_embed_fallbacks_total counter\n")
+			_, _ = fmt.Fprintf(w, "codvian_router_semantic_embed_fallbacks_total %d\n", st.Fallbacks)
+			_, _ = fmt.Fprintf(w, "# HELP codvian_router_semantic_embedding_configured 1 when a neural embedding provider is wired into the semantic cache, else 0.\n")
+			_, _ = fmt.Fprintf(w, "# TYPE codvian_router_semantic_embedding_configured gauge\n")
+			cfg := 0
+			if st.NeuralConfigured {
+				cfg = 1
+			}
+			_, _ = fmt.Fprintf(w, "codvian_router_semantic_embedding_configured %d\n", cfg)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -5048,13 +5076,23 @@ func (s *Server) setStaleHeader(w http.ResponseWriter) {
 	}
 }
 
+// cacheVectorSourceReporter is optionally implemented by engines that
+// can report the vector space of their most recent semantic cache hit
+// (degrade.StaleEngine does, via LastCacheVectorSource).
+type cacheVectorSourceReporter interface {
+	LastCacheVectorSource() string
+}
+
 // setCacheHeader marks a non-streaming response that was served
 // proactively from a cache, so the client never mistakes it for a
 // fresh provider response: X-Codvian-Cache is "exact" or "semantic",
-// and a semantic hit also carries its cosine similarity. It must be
-// called before the response body is written. Streaming responses
-// cannot carry the header (the hit is known only after the stream
-// ends), so handleChatStream logs it instead.
+// and a semantic hit also carries its cosine similarity and the vector
+// space it was matched in (X-Codvian-Cache-Embedding: "neural" or
+// "bag-of-words"), so neural-embedding hits are distinguishable from
+// token-overlap hits on the wire. It must be called before the
+// response body is written. Streaming responses cannot carry the
+// header (the hit is known only after the stream ends), so
+// handleChatStream logs it instead.
 func (s *Server) setCacheHeader(w http.ResponseWriter) {
 	chr, ok := s.engine.(cacheHitReporter)
 	if !ok {
@@ -5064,9 +5102,14 @@ func (s *Server) setCacheHeader(w http.ResponseWriter) {
 	if !hit {
 		return
 	}
-	w.Header().Set("X-Codvian-Cache", kind)
+	w.Header().Set(headerCodvianCache, kind)
 	if kind == "semantic" {
-		w.Header().Set("X-Codvian-Cache-Similarity", fmt.Sprintf("%.3f", sim))
+		w.Header().Set(headerCodvianCacheSimilarity, fmt.Sprintf("%.3f", sim))
+		if vs, ok := s.engine.(cacheVectorSourceReporter); ok {
+			if src := vs.LastCacheVectorSource(); src != "" {
+				w.Header().Set(headerCodvianCacheEmbedding, src)
+			}
+		}
 	}
 }
 
