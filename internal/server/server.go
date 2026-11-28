@@ -5974,6 +5974,11 @@ func validateChatRequest(req *provider.ChatRequest) string {
 	if req.Model == "" {
 		return "model is required"
 	}
+	if req.Strategy != "" {
+		if _, ok := strategy.Parse(req.Strategy); !ok {
+			return fmt.Sprintf("strategy: unknown strategy %q", strings.TrimSpace(req.Strategy))
+		}
+	}
 	if req.ReasoningEffort != "" && !provider.ValidReasoningEffort(req.ReasoningEffort) {
 		return fmt.Sprintf("reasoning_effort must be one of %s", strings.Join(provider.ReasoningEfforts, ", "))
 	}

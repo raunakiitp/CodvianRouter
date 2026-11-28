@@ -452,7 +452,7 @@ func TestM819UpdateValidation(t *testing.T) {
 		{"empty url", "/api/webhooks/" + created.ID, `{"url":"  "}`, ""},
 		{"unknown event", "/api/webhooks/" + created.ID, `{"events":["key.rotated"]}`, "key.rotated"},
 		{"empty events", "/api/webhooks/" + created.ID, `{"events":[]}`, "events is required"},
-		{"unknown field", "/api/webhooks/" + created.ID, `{"kind":"slack"}`, ""},
+		{"unknown field", "/api/webhooks/" + created.ID, `{"definitely_not_a_field":true}`, ""},
 		{"client-supplied id", "/api/webhooks/" + created.ID, `{"id":"wh-mine"}`, ""},
 		{"enabled field", "/api/webhooks/" + created.ID, `{"enabled":false}`, ""},
 	}

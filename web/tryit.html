@@ -1668,6 +1668,18 @@ const ROUTES = [
     "bootstrap": false
   },
   {
+    "method": "POST",
+    "path": "/api/webhooks/{id}/test",
+    "tier": "ALWAYS_PROTECTED",
+    "spawn_capable": false,
+    "description": "Emits a test.ping event, with example data, to the named webhook endpoint through the live dispatcher (regardless of its subscription set) so an operator can verify connectivity. Asynchronous, best-effort: 202 means dispatched, not answered. Unknown id is 404. Auth always required \u2014 it makes the server POST to an operator-chosen URL.",
+    "auth_exempt": false,
+    "scopes": [
+      "admin"
+    ],
+    "bootstrap": false
+  },
+  {
     "method": "GET",
     "path": "/api/webhooks",
     "tier": "MANAGEMENT",

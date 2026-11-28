@@ -70,6 +70,7 @@ import (
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/config"
+	"github.com/raunakiitp/codvian-router/internal/crypto"
 	"github.com/raunakiitp/codvian-router/internal/guardrails"
 	"github.com/raunakiitp/codvian-router/internal/ledger"
 	"github.com/raunakiitp/codvian-router/internal/webhooks"
@@ -78,14 +79,15 @@ import (
 // BudgetWarningEvent fires when an internal budget crosses its
 // warning threshold (M8.19). The payload carries the budget
 // identity and the consumption that tripped it; see
-// notifyBudgetWarning. It is the second event kind after
-// webhooks.QuotaExceededEvent ("quota.exceeded"); no other event
-// kind exists.
-const BudgetWarningEvent = "budget.warning"
+// notifyBudgetWarning. It is an alias of the canonical constant in
+// internal/webhooks (the single source of truth for event names).
+const BudgetWarningEvent = webhooks.BudgetWarningEvent
 
 // webhookKnownEvents is the fixed event list a registration may
-// subscribe to. Unknown events are a 400 naming the event.
-var webhookKnownEvents = []string{webhooks.QuotaExceededEvent, BudgetWarningEvent, webhooks.ProviderDegradedEvent, webhooks.ProviderRecoveredEvent, webhooks.RequestCompletedEvent, webhooks.RequestFailedEvent, webhooks.ProviderExhaustedEvent, webhooks.TestPingEvent}
+// subscribe to. It is webhooks.KnownEvents() verbatim — the SAME set
+// the config-file validator accepts — so the two never drift.
+// Unknown events are a 400 naming the event.
+var webhookKnownEvents = webhooks.KnownEvents()
 
 // webhookMaxBody caps a registration request body (1 MiB, the
 // same cap the quota-schedule handler uses).
@@ -98,6 +100,7 @@ type webhookView struct {
 	URL       string   `json:"url"`
 	Events    []string `json:"events"`
 	HasSecret bool     `json:"has_secret"`
+	Kind      string   `json:"kind,omitempty"`
 }
 
 // webhooksResponse is the GET /api/webhooks payload.
@@ -109,9 +112,11 @@ type webhooksResponse struct {
 // server-generated; a client-supplied id is rejected as an
 // unknown field.
 type webhookCreateRequest struct {
-	URL    string   `json:"url"`
-	Events []string `json:"events"`
-	Secret string   `json:"secret,omitempty"`
+	URL      string            `json:"url"`
+	Events   []string          `json:"events"`
+	Secret   string            `json:"secret,omitempty"`
+	Kind     string            `json:"kind,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // webhookViewOf maps a stored registration to its API view.
@@ -120,7 +125,7 @@ func webhookViewOf(w config.WebhookConfig) webhookView {
 	if events == nil {
 		events = []string{}
 	}
-	return webhookView{ID: w.ID, URL: w.URL, Events: events, HasSecret: w.Secret != ""}
+	return webhookView{ID: w.ID, URL: w.URL, Events: events, HasSecret: w.Secret != "", Kind: w.Kind}
 }
 
 // validateWebhookURL enforces the SSRF default for a new target:
@@ -203,6 +208,16 @@ func dedupeWebhookEvents(events []string) []string {
 	return out
 }
 
+// quoteAll returns each name wrapped in double quotes, for an error
+// message that lists the known events without hand-copying the set.
+func quoteAll(in []string) []string {
+	out := make([]string, len(in))
+	for i, s := range in {
+		out[i] = "\"" + s + "\""
+	}
+	return out
+}
+
 // newWebhookID mints a registration id: "wh_" + 16 random hex
 // chars. The caller checks it against the stored ids.
 func newWebhookID() (string, error) {
@@ -244,11 +259,32 @@ func (s *Server) rebuildWebhookDispatcher() {
 	}
 	endpoints := make([]webhooks.Endpoint, 0, len(s.cfg.Webhooks))
 	for _, w := range s.cfg.Webhooks {
-		endpoints = append(endpoints, webhooks.Endpoint{ID: w.ID, URL: w.URL, Events: w.Events, Secret: w.Secret})
+		endpoints = append(endpoints, webhooks.Endpoint{ID: w.ID, URL: w.URL, Events: w.Events, Secret: w.Secret, Kind: w.Kind, Metadata: w.Metadata})
 	}
 	// nil client = the SSRF-safe egress client (production). Tests
 	// that deliver to a loopback httptest receiver set webhookClient.
 	s.webhooks = webhooks.New(endpoints, s.webhookClient, s.logger)
+	// Chat-kind endpoints may hold a sealed bot token in metadata;
+	// unseal it with the per-data-dir Vault (nil = read plaintext).
+	s.webhooks.SetTokenDecrypt(s.webhookTokenDecrypt())
+}
+
+// webhookTokenDecrypt returns the unseal function for a chat-kind token
+// held in endpoint metadata, derived from the per-data-dir Vault, or nil
+// when there is no data dir or the Vault cannot be opened (metadata
+// tokens are then read as plaintext).
+func (s *Server) webhookTokenDecrypt() func(string) (string, error) {
+	if s.cfg == nil || s.cfg.DataDir == "" {
+		return nil
+	}
+	v, err := crypto.New(s.cfg.DataDir)
+	if err != nil {
+		return nil
+	}
+	return func(x string) (string, error) {
+		b, err := v.Unseal(x)
+		return string(b), err
+	}
 }
 
 // persistWebhooks saves the config file after a mutation, or
@@ -297,7 +333,7 @@ func (s *Server) handleWebhookCreate(w http.ResponseWriter, r *http.Request) {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid webhook registration: expected {\"url\": string, \"events\": [\"quota.exceeded\"|\"budget.warning\"|\"provider.degraded\"|\"provider.recovered\"], \"secret\": string}")
+		writeError(w, http.StatusBadRequest, "invalid webhook registration: expected {\"url\": string, \"events\": ["+strings.Join(quoteAll(webhookKnownEvents), ", ")+"], \"secret\": string}")
 		return
 	}
 	req.URL = strings.TrimSpace(req.URL)
@@ -324,7 +360,12 @@ func (s *Server) handleWebhookCreate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	next := config.WebhookConfig{ID: id, URL: req.URL, Events: dedupeWebhookEvents(req.Events), Secret: req.Secret}
+	wc := config.WebhookConfig{ID: id, URL: req.URL, Events: dedupeWebhookEvents(req.Events), Secret: req.Secret, Kind: req.Kind, Metadata: req.Metadata}
+	if err := config.ValidateWebhookKind(wc); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	next := wc
 	prev := append([]config.WebhookConfig(nil), s.cfg.Webhooks...)
 	s.cfg.Webhooks = append(s.cfg.Webhooks, next)
 	if err := s.persistWebhooks(); err != nil {
@@ -395,6 +436,66 @@ func (s *Server) handleWebhookByID(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// webhookTestIDFromRequest returns the {id} path segment of
+// POST /api/webhooks/{id}/test: from the mux when the request arrived
+// through the registered route, or by trimming the /api/webhooks/
+// prefix and the /test suffix when the handler is invoked directly
+// (tests, apitest harness).
+func webhookTestIDFromRequest(r *http.Request) string {
+	if id := strings.TrimSpace(r.PathValue("id")); id != "" {
+		return id
+	}
+	p := strings.TrimPrefix(r.URL.Path, "/api/webhooks/")
+	p = strings.TrimSuffix(p, "/test")
+	return strings.Trim(p, "/")
+}
+
+// webhookTestPayload is the example data a test-send carries. It
+// names itself as a test so a receiver can distinguish it from a real
+// event, and carries a round-trip timestamp so an operator can see
+// the delivery land.
+func webhookTestPayload(id string) map[string]any {
+	return map[string]any{
+		"webhook_id": id,
+		"test":       true,
+		"message":    "codvian-router webhook test delivery",
+		"sent_at":    time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// handleWebhookTest serves POST /api/webhooks/{id}/test: it emits a
+// test.ping event, carrying example data, to the named endpoint
+// through the live dispatcher — regardless of whether that endpoint
+// subscribes to test.ping, so an operator can verify connectivity
+// before relying on the channel. Delivery is asynchronous and
+// best-effort (the M5.9 contract): a 202 means the delivery was
+// dispatched, not that the remote endpoint answered. Unknown ids are
+// 404; no config or no dispatcher is 503.
+func (s *Server) handleWebhookTest(w http.ResponseWriter, r *http.Request) {
+	if s.cfg == nil {
+		writeError(w, http.StatusServiceUnavailable, "webhooks unavailable: no config wired")
+		return
+	}
+	id := webhookTestIDFromRequest(r)
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "webhook id is required")
+		return
+	}
+	if _, ok := s.findWebhook(id); !ok {
+		writeError(w, http.StatusNotFound, "webhook not found")
+		return
+	}
+	if s.webhooks == nil {
+		writeError(w, http.StatusServiceUnavailable, "webhook dispatcher unavailable")
+		return
+	}
+	if !s.webhooks.NotifyEndpoint(id, webhooks.TestPingEvent, webhookTestPayload(id)) {
+		writeError(w, http.StatusNotFound, "webhook not found")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"ok": true, "event": webhooks.TestPingEvent, "webhook_id": id})
+}
+
 // webhookUpdateRequest is the PUT /api/webhooks/{id} body.
 // Partial update, the reference router's PUT semantics (src/app/api/
 // webhooks/[id]/route.ts: updateWebhookSchema — every field
@@ -410,9 +511,11 @@ func (s *Server) handleWebhookByID(w http.ResponseWriter, r *http.Request) {
 // of those fields, so they are not accepted here — adding them
 // needs a config-model extension, not a handler change.
 type webhookUpdateRequest struct {
-	URL    *string  `json:"url,omitempty"`
-	Events []string `json:"events,omitempty"`
-	Secret *string  `json:"secret,omitempty"`
+	URL      *string           `json:"url,omitempty"`
+	Events   []string          `json:"events,omitempty"`
+	Secret   *string           `json:"secret,omitempty"`
+	Kind     *string           `json:"kind,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // handleWebhookUpdate serves PUT /api/webhooks/{id}: apply the
@@ -427,7 +530,7 @@ func (s *Server) handleWebhookUpdate(w http.ResponseWriter, r *http.Request, sto
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid webhook update: expected {\"url\": string (optional), \"events\": [\"quota.exceeded\"|\"budget.warning\"|\"provider.degraded\"|\"provider.recovered\"] (optional), \"secret\": string (optional)}")
+		writeError(w, http.StatusBadRequest, "invalid webhook update: expected {\"url\": string (optional), \"events\": ["+strings.Join(quoteAll(webhookKnownEvents), ", ")+"] (optional), \"secret\": string (optional)}")
 		return
 	}
 	next := stored
@@ -452,6 +555,16 @@ func (s *Server) handleWebhookUpdate(w http.ResponseWriter, r *http.Request, sto
 	}
 	if req.Secret != nil {
 		next.Secret = *req.Secret
+	}
+	if req.Kind != nil {
+		next.Kind = *req.Kind
+	}
+	if req.Metadata != nil {
+		next.Metadata = req.Metadata
+	}
+	if err := config.ValidateWebhookKind(next); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	prev := append([]config.WebhookConfig(nil), s.cfg.Webhooks...)
 	for i := range s.cfg.Webhooks {
@@ -484,6 +597,7 @@ func (s *Server) handleWebhookUpdate(w http.ResponseWriter, r *http.Request, sto
 func (s *Server) registerWebhooksRoutes(mux *http.ServeMux) {
 	s.register(mux, "POST", "/api/webhooks", s.handleWebhooks)
 	s.register(mux, "GET", "/api/webhooks", s.handleWebhooks)
+	s.register(mux, "POST", "/api/webhooks/{id}/test", s.handleWebhookTest)
 	s.register(mux, "GET", "/api/webhooks/{id}", s.handleWebhookByID)
 	s.register(mux, "PUT", "/api/webhooks/{id}", s.handleWebhookByID)
 	s.register(mux, "DELETE", "/api/webhooks/{id}", s.handleWebhookByID)

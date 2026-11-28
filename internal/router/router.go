@@ -1085,6 +1085,13 @@ func (c Config) withDefaults() Config {
 	if c.DeadlineFailureMax == 0 {
 		c.DeadlineFailureMax = DefaultDeadlineFailureMax
 	}
+	// Hedge default (A2-9a): 150 ms stays ON for engine-computed
+	// chains — a bounded latency-insurance trade that doubles in-flight
+	// load only when the first pick is slow. Explicit-order chains
+	// (contract order / group / strategy tree) disable it in
+	// ChatWithChainStrategy (hedgeOff); a negative HedgeDelay disables
+	// it outright. Durable decision record + rejected alternatives:
+	// docs/routing-decisions.md (D-A2-9a). Not changed silently.
 	if c.HedgeDelay == 0 {
 		c.HedgeDelay = 150 * time.Millisecond
 	}
@@ -1194,7 +1201,7 @@ type providerStats struct {
 	// Latency histogram for true p95 (B9): fixed-bucket histogram
 	// covering 0-10000 ms with 1 ms resolution up to 1000 ms,
 	// then 10 ms resolution up to 10000 ms.
-	latencyHist [1100]int // buckets: 0-1000 (1ms each), 1010-10000 (10ms each)
+	latencyHist [1901]int // buckets: 0-1000 (1ms each), 1010-10000 (10ms each, 900 buckets)
 }
 
 // RoutingInfo is the routing outcome of the most recently finished
@@ -2176,11 +2183,12 @@ func (e *Engine) setLastAutoDecision(dec *autorouter.Decision) {
 // package — it would be a cycle — so the mapping is duplicated here
 // and pinned by TestResolveAutoAlias): cheapest -> auto/cheap,
 // fastest and least-latency -> auto/fast, most-reliable ->
-// auto/reasoning, code -> auto/code, anything else (balanced,
-// weighted, or an unknown axis) -> auto. An unknown axis still
-// rewrites to "auto": the StrategyHook factory ranks unknown names
-// as balanced, so the request never errors on the alias — it just
-// gets the balanced strategy for the auto model.
+// auto/reasoning, code -> auto/code, fusion -> auto/fusion,
+// pipeline -> auto/pipeline, jev -> auto/jev, anything else
+// (balanced, weighted, or an unknown axis) -> auto. An unknown axis
+// still rewrites to "auto": the StrategyHook factory ranks unknown
+// names as balanced, so the request never errors on the alias — it
+// just gets the balanced strategy for the auto model.
 func (e *Engine) resolveAutoAlias(req provider.ChatRequest) (string, provider.ChatRequest) {
 	model := strings.TrimSpace(req.Model)
 	if len(model) <= 5 || !strings.EqualFold(model[:5], "auto:") {
@@ -2199,6 +2207,12 @@ func (e *Engine) resolveAutoAlias(req provider.ChatRequest) (string, provider.Ch
 		req.Model = "auto/reasoning"
 	case "code":
 		req.Model = "auto/code"
+	case "fusion":
+		req.Model = "auto/fusion"
+	case "pipeline":
+		req.Model = "auto/pipeline"
+	case "jev":
+		req.Model = "auto/jev"
 	default:
 		req.Model = "auto"
 	}
@@ -2350,7 +2364,9 @@ func (e *Engine) noteAttemptStats(providerID, keyID string, ok bool, latencyMs i
 
 // latencyBucket returns the histogram bucket index for a latency in ms.
 // Buckets 0-1000: 1 ms each (0-1000 ms).
-// Buckets 1001-1099: 10 ms each (1010-10000 ms).
+// Buckets 1001-1900: 10 ms each (1010-10000 ms). A latency in the
+// 1010-10000 ms band maps to one of the 900 wide buckets; anything
+// above 10000 ms clamps to the last bucket so it is never dropped.
 func latencyBucket(latencyMs int64) int {
 	if latencyMs <= 1000 {
 		return int(latencyMs)
@@ -2358,7 +2374,7 @@ func latencyBucket(latencyMs int64) int {
 	if latencyMs <= 10000 {
 		return 1001 + int((latencyMs-1010)/10)
 	}
-	return 1099 // cap at max bucket
+	return 1900 // cap at max bucket (>= 10000 ms)
 }
 
 // p95LatencyMs returns the 95th-percentile latency from the histogram,
@@ -2501,7 +2517,21 @@ func lastUserPrompt(req provider.ChatRequest) string {
 // it onto the chain with withResolvedEffort, so the attempt
 // carries the tier's effort to the wire and the trace.
 func (e *Engine) resolveAutoRequest(ctx context.Context, req provider.ChatRequest) (string, provider.ChatRequest, string, autoDispatch) {
-	strategy, req := e.resolveAutoAlias(req)
+	// Per-request "strategy" body field (A2-1): the highest
+	// per-request strategy control. It is read before the alias and
+	// wins over it — a client that names a strategy explicitly gets
+	// that strategy even when the model also carries an
+	// "auto:<axis>" alias (the alias still rewrites the model, so
+	// the auto-router resolves a concrete model underneath). Like
+	// the alias, the contract's routing.sort still overrides it for
+	// the request (see chatWithChainStrategy). Empty keeps the
+	// alias/chain/global precedence exactly as before.
+	bodyStrategy := strings.TrimSpace(req.Strategy)
+	aliasStrategy, req := e.resolveAutoAlias(req)
+	strategy := aliasStrategy
+	if bodyStrategy != "" {
+		strategy = bodyStrategy
+	}
 	if strategy == "" && req.Model == autorouter.CodeVirtualModel {
 		strategy = "code"
 	}
