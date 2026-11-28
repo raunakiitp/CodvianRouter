@@ -4961,6 +4961,26 @@ func (e *Engine) chatWithChainStrategy(ctx context.Context, chain []Attempt, req
 		e.setLastTrace(trace)
 		return nil, trace, gerr
 	}
+	// qtSd/ virtual-model minting (A2-5): a "qtSd/<group>/<provider>/<model>"
+	// model alias expands the routing group <group> to its provider/model
+	// chain and routes it as a "quota-share" pool (the engine's DRR orders
+	// the members). It is resolved here — after group resolution, before
+	// the contract — so the contract filters the unwrapped chain. A
+	// rejected pool publishes its trace (contract + Error, no attempts)
+	// and returns before any provider is dialled, like a rejected group.
+	req, chain, qtSdGroup, qtSdMinted, qerr := e.resolveQtSdChain(chain, req)
+	if qerr != nil {
+		trace.Contract = groupFailureTrace(qtSdGroup, qerr).Contract
+		e.setLastTrace(trace)
+		return nil, trace, qerr
+	}
+	if qtSdMinted {
+		// The minted pool is not an explicit member order — the DRR
+		// picks the winner — so force the quota-share strategy; the
+		// chain stays non-explicit (explicitOrder stays false) and
+		// orderQuotaShare runs. The contract names the pool.
+		reqStrategy = quotaShareStrategy
+	}
 	// Forced-reasoning policy (CHECKLIST 311-312): a group
 	// replaces the chain the entry points stamped, so the
 	// request-level decision (riding req) is re-stamped here —
@@ -4986,6 +5006,16 @@ func (e *Engine) chatWithChainStrategy(ctx context.Context, chain []Attempt, req
 			contract = &routetrace.RoutingContract{Group: groupName}
 		} else {
 			contract.Group = groupName
+		}
+	}
+	// A qtSd/ pool is named on the trace contract the same way
+	// (A2-5): the model alias sets no routing.group, so one is
+	// created/updated here.
+	if qtSdMinted {
+		if contract == nil {
+			contract = &routetrace.RoutingContract{Group: qtSdGroup}
+		} else {
+			contract.Group = qtSdGroup
 		}
 	}
 	if cerr != nil {
@@ -6027,6 +6057,25 @@ func (e *Engine) chatStreamWithChainStrategy(ctx context.Context, chain []Attemp
 		e.publishTrace(ctx, tr)
 		return nil, gerr
 	}
+	// qtSd/ virtual-model minting (A2-5): same as the non-streaming
+	// path — a "qtSd/<group>/<provider>/<model>" model alias expands
+	// the routing group to its provider/model chain and routes it as a
+	// "quota-share" pool. Resolved after group resolution, before the
+	// empty-chain check, so a pool whose default chain is empty still
+	// gets the honest error instead of "empty fallback chain". A
+	// rejected pool publishes its trace and returns before any provider
+	// is dialled, so the server can still answer a plain JSON 400.
+	req, chain, qtSdGroup, qtSdMinted, qerr := e.resolveQtSdChain(chain, req)
+	if qerr != nil {
+		tr := groupFailureTrace(qtSdGroup, qerr)
+		tr.Endpoint = traceEndpointFor(req)
+		tr.Compression = traceCompression(req.Compressed)
+		e.publishTrace(ctx, tr)
+		return nil, qerr
+	}
+	if qtSdMinted {
+		reqStrategy = quotaShareStrategy
+	}
 	// Forced-reasoning policy (CHECKLIST 311-312): see
 	// ChatWithChainStrategy — a group replaces the chain the
 	// entry points stamped, so the request-level decision is
@@ -6082,6 +6131,16 @@ func (e *Engine) chatStreamWithChainStrategy(ctx context.Context, chain []Attemp
 			contract = &routetrace.RoutingContract{Group: groupName}
 		} else {
 			contract.Group = groupName
+		}
+	}
+	// A qtSd/ pool is named on the trace contract the same way
+	// (A2-5): the model alias sets no routing.group, so one is
+	// created/updated here.
+	if qtSdMinted {
+		if contract == nil {
+			contract = &routetrace.RoutingContract{Group: qtSdGroup}
+		} else {
+			contract.Group = qtSdGroup
 		}
 	}
 	if err != nil {
