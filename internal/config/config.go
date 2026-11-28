@@ -1527,10 +1527,11 @@ type RoutingConfig struct {
 	// is below the threshold. PipelineFallback (string, empty = fail):
 	// "single-provider" serves a single provider when the pipeline
 	// fails, instead of failing the request. PipelineMaxReflectionLoops
-	// (integer, accepted for config symmetry) is NOT-APPLICABLE — the
-	// engine's pipeline primitive has no reflection stage, so a
-	// reflection-loop count has no effect (a request always reflects
-	// zero times). Each is validated at load (pipeline_task_detection
+	// (integer, 0 = off): when > 0, appends that many real reflection
+	// stages after the main pipeline stages — each re-examines the
+	// original prompt plus the previous stage's output and produces a
+	// revised output (threaded forward, Optional so it never aborts).
+	// Each is validated at load (pipeline_task_detection
 	// must be ""/"auto"; pipeline_fallback must be ""/"single-provider";
 	// the integer fields must be >= 0).
 	PipelineTaskDetection      string `json:"pipeline_task_detection,omitempty"`

@@ -290,14 +290,32 @@ func (e *Engine) runComboStrategy(ctx context.Context, ordered []Attempt, req pr
 		// short prompt, PipelineTaskDetection "auto" skips it for a
 		// simple (non-code) task, and PipelineFallback "single-provider"
 		// serves a single provider when the pipeline fails.
-		// PipelineMaxReflectionLoops is NOT-APPLICABLE (no reflection
-		// stage in RunPipeline — see PipelineMaxReflectionLoops).
+		// PipelineMaxReflectionLoops > 0 appends that many real
+		// reflection stages after the main stages: each reflection
+		// stage re-examines the original prompt plus the previous
+		// stage's output and produces a revised output (threaded
+		// forward by pipelineStageInput), targeting the last main
+		// stage's provider. The stages are Optional, so a reflection
+		// failure is recorded as skipped and never aborts the
+		// pipeline; 0 (the default) appends nothing, so reflection is
+		// observably OFF — no extra stage, no extra provider call,
+		// and the final Text is the last main stage's output.
 		if e.pipelineWantsSingle(prompt) {
 			return e.pipelineServeSingle(ctx, ordered, req, rec, trace, &consecutive429, mode, contract, tree, treeRoot, treeOrdered)
 		}
 		stages := make([]PipelineStage, len(ordered))
 		for i, att := range ordered {
 			stages[i] = PipelineStage{Name: fmt.Sprintf("stage-%d", i+1), Target: att}
+		}
+		if loops := e.cfg.PipelineMaxReflectionLoops; loops > 0 && len(ordered) > 0 {
+			reflTarget := ordered[len(ordered)-1]
+			for k := 1; k <= loops; k++ {
+				stages = append(stages, PipelineStage{
+					Name:     fmt.Sprintf("reflection-%d", k),
+					Target:   reflTarget,
+					Optional: true,
+				})
+			}
 		}
 		pres, err := RunPipeline(ctx, prompt, stages, e.comboPipelineCaller(req, rec))
 		if err != nil {
