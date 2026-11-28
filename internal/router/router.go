@@ -821,7 +821,7 @@ type Config struct {
 	// multi-stage pipeline always runs); PipelineSkipTokensUnder 0
 	// (never skip the pipeline for a short prompt);
 	// PipelineFallback "" (a failed pipeline fails the request);
-	// PipelineMaxReflectionLoops is NOT-APPLICABLE (see below).
+	// PipelineMaxReflectionLoops 0 (no reflection stages appended).
 	PipelineTaskDetection string
 	// PipelineSkipTokensUnder, when > 0, skips the multi-stage
 	// pipeline for a prompt whose local token estimate (the same
@@ -836,18 +836,17 @@ type Config struct {
 	// failing the request. Any other value fails the request on a
 	// pipeline failure. "" is the default (fail).
 	PipelineFallback string
-	// PipelineMaxReflectionLoops is surfaced for config symmetry
-	// with the reference pipeline but is NOT-APPLICABLE here: the
-	// engine's pipeline primitive (RunPipeline, panel.go) has no
-	// reflection stage — it is a linear chain of provider stages
-	// that thread the previous output into the next input — so a
-	// reflection-loop count cannot be honoured honestly. It is
-	// read (accepted in config, validated, wired) and deliberately
-	// has no effect; a request always reflects zero times. See the
-	// A2-7 PR body.
+	// PipelineMaxReflectionLoops, when > 0, appends that many real
+	// reflection stages after the main pipeline stages (see the
+	// "pipeline" case in combo.go): each reflection stage re-examines
+	// the original prompt plus the previous stage's output and
+	// produces a revised output, threaded forward by pipelineStageInput
+	// and targeting the last main stage's provider (Optional, so a
+	// reflection failure never aborts). 0 (the default) appends no
+	// reflection stage, so reflection is observably OFF.
 	PipelineMaxReflectionLoops int
-	// ComboJevLLMJudge, when true, runs the JEV strategy's System
-	// One scoring through a real LLM judge call (llmJevScorer) —
+	// ComboJevLLMJudge, when true, runs the JEV strategy's LLM-judge
+	// scoring through a real LLM judge call (llmJevScorer) —
 	// the same configured judge model the fusion LLM judge uses
 	// (Config.JudgeModel, A2-3) — instead of the deterministic
 	// heuristicJevScorer. It is OFF by default (A2-4): with the

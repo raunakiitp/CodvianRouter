@@ -3955,10 +3955,10 @@ func openStack(opts options) (*stack, error) {
 		}
 		// Pipeline knobs (A2-7): task_detection modes,
 		// skip_under tokens, pipeline_fallback "single-provider", and
-		// the max_reflection_loops value (NOT-APPLICABLE — accepted
-		// and validated, but the pipeline primitive has no reflection
-		// stage, so it has no effect). All values were validated at
-		// load; wiring is a straight pass-through.
+		// max_reflection_loops (when > 0 the pipeline appends that many
+		// real reflection stages — see the "pipeline" case in combo.go).
+		// All values were validated at load; wiring is a straight
+		// pass-through.
 		engCfg.PipelineTaskDetection = routing.PipelineTaskDetection
 		engCfg.PipelineMaxReflectionLoops = routing.PipelineMaxReflectionLoops
 		engCfg.PipelineSkipTokensUnder = routing.PipelineSkipTokensUnder

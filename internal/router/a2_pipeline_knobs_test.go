@@ -118,3 +118,68 @@ func TestPipelineFallbackSingleProvider(t *testing.T) {
 		t.Fatalf("provider a calls = %d, want >= 1 (a served the fallback)", a.chatCalls())
 	}
 }
+
+// TestPipelineReflectionLoopsOnRunsRealReflectionStages (Item 3):
+// with PipelineMaxReflectionLoops=2 the pipeline appends two real
+// reflection stages after the main stages, targeting the last main
+// stage's provider (b). Each reflection stage re-runs b and its output
+// becomes the final served text, so the ON result differs observably
+// from OFF. FAILS-WHEN-OFF: with the knob at 0 no reflection stage
+// runs, b is called once, and the served text is the main stage's.
+func TestPipelineReflectionLoopsOnRunsRealReflectionStages(t *testing.T) {
+	a := &fakeClient{}
+	b := &fakeClient{}
+	bCalls := 0
+	a.chatFn = func(ctx context.Context, req provider.ChatRequest) (*provider.ChatResponse, error) {
+		return &provider.ChatResponse{Content: "a-out"}, nil
+	}
+	b.chatFn = func(ctx context.Context, req provider.ChatRequest) (*provider.ChatResponse, error) {
+		bCalls++
+		if bCalls == 1 {
+			return &provider.ChatResponse{Content: "b-out"}, nil // stage-2
+		}
+		return &provider.ChatResponse{Content: "b-reflected"}, nil // reflection stages
+	}
+	eng := pipelineEngine(t, a, b, func(c *Config) { c.PipelineMaxReflectionLoops = 2 })
+	resp, _, err := eng.ChatWithChainStrategy(context.Background(), comboChain("a", "b"), comboReq(), "pipeline")
+	if err != nil {
+		t.Fatalf("ChatWithChainStrategy(pipeline, reflection=2) = %v, want nil", err)
+	}
+	if resp.Content != "b-reflected" {
+		t.Fatalf("served content = %q, want %q (reflection stage produced the revised output)", resp.Content, "b-reflected")
+	}
+	if a.chatCalls() != 1 {
+		t.Fatalf("provider a calls = %d, want 1 (only stage-1)", a.chatCalls())
+	}
+	if b.chatCalls() != 3 {
+		t.Fatalf("provider b calls = %d, want 3 (stage-2 + 2 reflection stages)", b.chatCalls())
+	}
+}
+
+// TestPipelineReflectionLoopsOffRunsNoReflection (Item 3 OFF side):
+// with the knob at 0 (default) no reflection stage runs — the served
+// text is the last main stage's output and the last provider is dialled
+// exactly once. This is the observable OFF behaviour the ON test
+// differs from.
+func TestPipelineReflectionLoopsOffRunsNoReflection(t *testing.T) {
+	a := &fakeClient{}
+	b := &fakeClient{}
+	a.chatFn = func(ctx context.Context, req provider.ChatRequest) (*provider.ChatResponse, error) {
+		return &provider.ChatResponse{Content: "a-out"}, nil
+	}
+	b.chatFn = func(ctx context.Context, req provider.ChatRequest) (*provider.ChatResponse, error) {
+		return &provider.ChatResponse{Content: "b-out"}, nil
+	}
+	eng := pipelineEngine(t, a, b, func(c *Config) { c.PipelineMaxReflectionLoops = 0 })
+	resp, _, err := eng.ChatWithChainStrategy(context.Background(), comboChain("a", "b"), comboReq(), "pipeline")
+	if err != nil {
+		t.Fatalf("ChatWithChainStrategy(pipeline, reflection=0) = %v, want nil", err)
+	}
+	if resp.Content != "b-out" {
+		t.Fatalf("served content = %q, want %q (last main stage, no reflection)", resp.Content, "b-out")
+	}
+	if b.chatCalls() != 1 {
+		t.Fatalf("provider b calls = %d, want 1 (no reflection stage dialled b again)", b.chatCalls())
+	}
+
+}
