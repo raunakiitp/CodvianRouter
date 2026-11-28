@@ -8,9 +8,9 @@ the per-route sections; regenerate instead:
 python3 scripts/gen-api-docs.py
 ```
 
-Coverage: **357 routes** (184 GET, 124 POST, 22 DELETE, 22 PATCH, 5 PUT) —
-11 `LOCAL_ONLY`, 59 `ALWAYS_PROTECTED`,
-287 `MANAGEMENT`; 61 auth-exempt, 285 scope-gated, 11 key-only (gateway key, no scope).
+Coverage: **358 routes** (184 GET, 125 POST, 22 DELETE, 22 PATCH, 5 PUT) —
+11 `LOCAL_ONLY`, 60 `ALWAYS_PROTECTED`,
+287 `MANAGEMENT`; 61 auth-exempt, 286 scope-gated, 11 key-only (gateway key, no scope).
 Enforced by `TestAPIReferenceCoversEveryRoute`
 (`internal/server/api_reference_test.go`): the test reads the guard
 table and this doc and FAILS if any route is missing. That test is
@@ -2425,6 +2425,22 @@ its key field; the key is kept only in page memory, never stored.
 
   ```sh
   curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/api/webhooks
+  ```
+
+  Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.
+
+### `POST /api/webhooks/{id}/test`
+
+- **Tier:** `ALWAYS_PROTECTED`
+- **Scope(s):** `admin` — scope `admin` implies every scope
+- **Auth:** Gateway key required — always, even if auth were relaxed for Tier 3
+- **Spawn-capable:** no
+- **Description:** Emits a test.ping event, with example data, to the named webhook endpoint through the live dispatcher (regardless of its subscription set) so an operator can verify connectivity. Asynchronous, best-effort: 202 means dispatched, not answered. Unknown id is 404. Auth always required — it makes the server POST to an operator-chosen URL.
+- **Request body:** JSON object for the action described above. The exact field list lives in the handler and is NOT re-specified here — do not send fields guessed from this doc.
+- **Response:** JSON feed/object as described above. The exact field list lives in the handler and is NOT re-specified here — do not assume fields beyond the description.
+
+  ```sh
+  curl -X POST -H "Authorization: Bearer $CODVIAN_KEY" -d '{}' http://127.0.0.1:8080/api/webhooks/{id}/test
   ```
 
   Errors use the OpenAI-shaped envelope `{"error": {"message": "...", "type": "invalid_request_error"}}` (see `writeError` in internal/server/server.go); server/upstream failures use type `server_error` / `upstream_error`. Unauthenticated: 401; authenticated but wrong scope: 403; non-loopback to a LOCAL_ONLY route: 403 `LOCAL_ONLY`.

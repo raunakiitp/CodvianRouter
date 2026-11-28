@@ -42,6 +42,10 @@
 // (LastAutoDecision / attribution sink) and the resolution
 // Notes — so the dashboard and traces show exactly why priority
 // order applied instead of a Nadir decision.
+//
+// The durable decision record — why this is fail-CLOSED and why an
+// external fail-open decisions API is refused — is
+// docs/routing-decisions.md (D-A2-9b).
 package router
 
 import (
