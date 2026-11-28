@@ -325,7 +325,7 @@ func (e *Engine) runComboStrategy(ctx context.Context, ordered []Attempt, req pr
 		// A2-4: when the operator turned the JEV LLM judge ON
 		// (config routing.jev_judge_enabled) and a judge model
 		// resolves (config routing.jev_judge_model), run the real
-		// System One call (llmJevScorer) — the configured JEV judge
+		// judge call (llmJevScorer) — the configured JEV judge
 		// model. It must produce choice+probabilities. A judge
 		// failure (or an off flag / unresolvable judge model) falls
 		// back to heuristicJevScorer via fallbackJevScorer, so the
@@ -913,7 +913,7 @@ func (heuristicJevScorer) ScoreJev(ctx context.Context, prompt string, candidate
 
 // llmJevScorer is a JevScorer backed by one real engine attempt: it
 // sends the original prompt plus the numbered candidates to the
-// judge attempt's provider/model and parses a System One answer
+// judge attempt's provider/model and parses a judge answer
 // (choice + confidence + per-candidate probabilities) from the
 // reply. It calls e.callChat directly — a leaf, never the combo
 // interception — so it cannot recurse. An unparseable reply, an
@@ -967,7 +967,7 @@ var (
 	jevProbsRe      = regexp.MustCompile(`(?i)\bPROBS:\s*([0-9.,\s]+)`)
 )
 
-// parseJevJudge parses the System One answer from a judge reply: the
+// parseJevJudge parses the judge answer from a judge reply: the
 // 1-based winner index, an overall confidence, and a probability for
 // every candidate in 1-based order (whitespace or comma separated,
 // summing to 1). Anything malformed is an error — a judgement is

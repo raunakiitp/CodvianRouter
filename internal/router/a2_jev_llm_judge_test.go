@@ -1,6 +1,6 @@
 // A2-4: JEV LLM judge behind a feature flag.
 //
-// The JEV strategy's System One scoring normally uses the
+// The JEV strategy's LLM-judge scoring normally uses the
 // deterministic heuristicJevScorer. This file pins the feature flag
 // (Config.ComboJevLLMJudge) that swaps in a real LLM judge call
 // (llmJevScorer) to the configured judge model. Default OFF keeps
@@ -103,7 +103,7 @@ func TestJevLLMJudgeWhenFlagOn(t *testing.T) {
 		t.Fatalf("ChatWithChainStrategy(jev) = %v, want nil", err)
 	}
 	if judge.calls() != 1 {
-		t.Fatalf("judge calls = %d, want 1 (the JEV System One call)", judge.calls())
+		t.Fatalf("judge calls = %d, want 1 (the JEV judge call)", judge.calls())
 	}
 	if resp.Content != jevPanelShort {
 		t.Fatalf("served content = %q, want the judge's choice (%q) — got the heuristic pick instead", resp.Content, jevPanelShort)

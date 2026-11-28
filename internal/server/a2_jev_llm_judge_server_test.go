@@ -31,7 +31,7 @@ func (c *staticClient) ListModels(ctx context.Context) ([]string, error) { retur
 func (c *staticClient) TestKey(ctx context.Context) error                { return nil }
 
 // srvJevJudge is a fake judge model that counts calls and answers the
-// JEV System One prompt with a fixed choice+probabilities line.
+// JEV judge prompt with a fixed choice+probabilities line.
 type srvJevJudge struct {
 	mu    sync.Mutex
 	chats int
@@ -102,7 +102,7 @@ func TestServerJevLLMJudgeReachable(t *testing.T) {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
 	if judge.calls() != 1 {
-		t.Fatalf("judge calls = %d, want 1 (the JEV System One call from a real HTTP request)", judge.calls())
+		t.Fatalf("judge calls = %d, want 1 (the JEV judge call from a real HTTP request)", judge.calls())
 	}
 	if got := chatContent(rec.Body.Bytes()); got != "short" {
 		t.Fatalf("served content = %q, want the judge's choice %q (not the heuristic winner)", got, "short")
