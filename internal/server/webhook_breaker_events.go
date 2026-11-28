@@ -40,6 +40,21 @@ func (b *breakerWebhookEvents) ProviderRecovered(provider string) {
 	b.w.Notify(webhooks.ProviderRecoveredEvent, map[string]any{"provider": provider})
 }
 
+// ProviderResetRedeemed forwards a banked-reset redemption (an operator
+// claimed a reset that was banked when the provider's breaker tripped) as
+// the "provider.reset_redeemed" webhook event. The payload carries only the
+// provider id and when the reset was banked — never a key, model, prompt or
+// credential.
+func (b *breakerWebhookEvents) ProviderResetRedeemed(provider string, bankedAt time.Time) {
+	if b == nil || b.w == nil {
+		return
+	}
+	b.w.Notify(webhooks.ProviderResetRedeemedEvent, map[string]any{
+		"provider":  provider,
+		"banked_at": bankedAt.UTC().Format(time.RFC3339),
+	})
+}
+
 // BreakerEventsWire returns a router.BreakerEvents sink that forwards
 // the engine's genuine breaker transitions to the server's webhook
 // dispatcher. A server without webhooks wired returns a nil-sink

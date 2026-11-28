@@ -1115,12 +1115,14 @@ func (c Config) withDefaults() Config {
 // BreakerEvents is optionally implemented by a sink that wants
 // edge-triggered provider-health notifications (a server webhook
 // adapter satisfies it). Only CLOSED->OPEN and OPEN->CLOSED
-// transitions are reported — steady failures while open, and routine
-// successes on a healthy provider, never emit events. A nil sink
-// disables reporting without changing breaker behavior.
+// transitions are reported, plus the redemption of a banked reset —
+// steady failures while open, routine successes on a healthy
+// provider, and a reset with no banked redemption never emit events.
+// A nil sink disables reporting without changing breaker behavior.
 type BreakerEvents interface {
 	ProviderDegraded(provider string, consecutiveFailures, trips int, openFor time.Duration)
 	ProviderRecovered(provider string)
+	ProviderResetRedeemed(provider string, bankedAt time.Time)
 }
 
 // UsageMetrics is optionally implemented by a metrics sink that wants
@@ -1433,9 +1435,15 @@ type Engine struct {
 	// accounting point for both chat and streaming requests.
 	usageMetrics UsageMetrics
 	// breakerEvents, when set, receives genuine CLOSED->OPEN and
-	// OPEN->CLOSED circuit-breaker transitions (e.g. the server's
-	// webhook adapter). Nil disables notifications only.
+	// OPEN->CLOSED circuit-breaker transitions and banked-reset
+	// redemptions (e.g. the server's webhook adapter). Nil disables
+	// notifications only.
 	breakerEvents BreakerEvents
+	// resetBank holds the banked reset redemptions: provider -> the
+	// time its reset was banked (when its breaker tripped open). A
+	// banked redemption is what ResetBreaker/ResetAllBreakers redeem,
+	// firing provider.reset_redeemed. Natural recovery voids it.
+	resetBank map[string]time.Time
 
 	// limiter is the per-(provider, key) adaptive concurrency
 	// limiter (internal/adaptive, Gradient2). It caps in-flight
@@ -1540,6 +1548,7 @@ func NewEngine(clients map[string]provider.Client, ledger Ledger, cfg Config) *E
 		lockouts:              NewModelLockout(cfg.ModelLockout),
 		ttft:                  make(map[string]*ttftStats),
 		breakerIgnored4xx:     make(map[string]int),
+		resetBank:             make(map[string]time.Time),
 		cooldowns:             make(map[string]time.Time),
 		softCooldowns:         make(map[string]*softCooldownState),
 		runtimeCooldownChains: make(map[string]string),
@@ -1608,7 +1617,18 @@ func (e *Engine) SetBreakerEvents(s BreakerEvents) {
 // transition to the optional sink. Called under e.mu, so it copies
 // the numbers and dispatches asynchronously — no sink can re-enter
 // the engine and deadlock.
+//
+// The same genuine trip is where a reset redemption is BANKED for the
+// provider (provider.reset_redeemed): a reset only becomes redeemable
+// once the breaker has opened. Banking is edge-triggered exactly like
+// the degraded report — steady failures while already open (the
+// wasOpen && !wasProbe guard that returns below) never re-bank.
 func (e *Engine) notifyDegradedLocked(provider string, st *breakerState, wasOpen, wasProbe bool) {
+	if !wasOpen || wasProbe {
+		if _, ok := e.resetBank[provider]; !ok {
+			e.resetBank[provider] = time.Now()
+		}
+	}
 	if e.breakerEvents == nil || (wasOpen && !wasProbe) {
 		return
 	}
@@ -3337,6 +3357,11 @@ func (e *Engine) breakerSuccess(provider string) {
 	// Deleting the state resets the escalation: a provider that
 	// recovered earns the base reset on its next trip (M4.2).
 	delete(e.breakers, provider)
+	// Natural recovery voids any banked reset redemption: the breaker
+	// cleared on its own, so there is nothing left for an operator to
+	// redeem (provider.reset_redeemed must not fire for a reset of a
+	// provider that already recovered).
+	delete(e.resetBank, provider)
 	e.mu.Unlock()
 	// Edge-triggered recovery: only a success that actually clears
 	// an OPEN breaker is reported; ordinary healthy successes are
@@ -3378,10 +3403,23 @@ func (e *Engine) ResetBreaker(provider string) bool {
 	}
 	delete(e.breakers, provider)
 	delete(e.windowBreakers, provider)
+	// Redeem the banked reset redemption, if one exists. A redemption
+	// is banked when the breaker tripped open, so a real reset of a
+	// tripped provider redeems it and fires provider.reset_redeemed; a
+	// reset of a provider with no banked redemption (e.g. only
+	// degraded, never open) performs the reset but redeems nothing.
+	bankedAt, hadBanked := e.resetBank[provider]
+	if hadBanked {
+		delete(e.resetBank, provider)
+	}
+	sink := e.breakerEvents
 	e.mu.Unlock()
 	// G11 Area 2: persist the cleared state so a restart does
 	// not resurrect the reset breaker.
 	e.saveBreakerStore()
+	if sink != nil && hadBanked {
+		go sink.ProviderResetRedeemed(provider, bankedAt)
+	}
 	return true
 }
 
@@ -3400,16 +3438,36 @@ func (e *Engine) ResetAllBreakers() []string {
 		seen[id] = true
 	}
 	reset := make([]string, 0, len(seen))
+	// redeemeds holds the providers whose BANKED reset redemption this
+	// reset-all claims, paired with when each was banked (the same
+	// provider.reset_redeemed contract as ResetBreaker). Only a
+	// provider with a banked redemption emits; an un-banked reset is a
+	// silent reset, exactly like the single-provider path.
+	var redeemeds []string
+	var bankedAts []time.Time
 	for id := range seen {
 		delete(e.breakers, id)
 		delete(e.windowBreakers, id)
 		reset = append(reset, id)
+		if bt, ok := e.resetBank[id]; ok {
+			delete(e.resetBank, id)
+			redeemeds = append(redeemeds, id)
+			bankedAts = append(bankedAts, bt)
+		}
 	}
 	sort.Strings(reset)
+	sink := e.breakerEvents
 	e.mu.Unlock()
 	// G11 Area 2: persist the cleared state (see ResetBreaker).
 	if len(reset) > 0 {
 		e.saveBreakerStore()
+	}
+	if sink != nil {
+		for i, id := range redeemeds {
+			id := id
+			bt := bankedAts[i]
+			go sink.ProviderResetRedeemed(id, bt)
+		}
 	}
 	return reset
 }
