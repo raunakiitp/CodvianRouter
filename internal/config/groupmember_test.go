@@ -127,3 +127,72 @@ func TestConfigStreamMaxLifetimeMs(t *testing.T) {
 		t.Errorf("positive stream_max_lifetime_ms failed Validate: %v", err)
 	}
 }
+
+// --- nested group refs (Item 2: recursive combo-ref expansion) ---
+
+func TestValidateGroupGraphNoCycle(t *testing.T) {
+	groups := map[string][]string{
+		"outer": {"group:inner", "p1"},
+		"inner": {"p2", "p3"},
+	}
+	if err := validateGroupGraph(groups); err != nil {
+		t.Fatalf("acyclic graph rejected: %v", err)
+	}
+}
+
+func TestValidateGroupGraphCycle(t *testing.T) {
+	groups := map[string][]string{
+		"a": {"group:b"},
+		"b": {"group:a"},
+	}
+	err := validateGroupGraph(groups)
+	if err == nil || !strings.Contains(err.Error(), "cycle") {
+		t.Fatalf("2-cycle not rejected: %v", err)
+	}
+}
+
+func TestValidateGroupGraphSelfRef(t *testing.T) {
+	groups := map[string][]string{"a": {"group:a"}}
+	if err := validateGroupGraph(groups); err == nil {
+		t.Fatal("self-ref not rejected as cycle")
+	}
+}
+
+func TestExpandGroupMembersNested(t *testing.T) {
+	groups := map[string][]string{
+		"outer": {"p1", "group:mid", "p4"},
+		"mid":   {"p2", "group:inner"},
+		"inner": {"p3"},
+	}
+	got, ok := ExpandGroupMembers(groups, "outer")
+	if !ok {
+		t.Fatal("ok=false for known group")
+	}
+	want := []string{"p1", "p2", "p3", "p4"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("nested expansion = %v, want %v (depth-first, order preserved)", got, want)
+	}
+}
+
+func TestExpandGroupMembersCycleTerminates(t *testing.T) {
+	// Defensive runtime guard: even if a cycle slipped past load, the
+	// expansion must terminate (visited set), never loop.
+	groups := map[string][]string{
+		"a": {"group:b", "pa"},
+		"b": {"group:a", "pb"},
+	}
+	got, ok := ExpandGroupMembers(groups, "a")
+	if !ok {
+		t.Fatal("ok=false")
+	}
+	joined := strings.Join(got, ",")
+	if !strings.Contains(joined, "pa") || !strings.Contains(joined, "pb") {
+		t.Fatalf("cycle expansion missing members: %v", got)
+	}
+}
+
+func TestExpandGroupMembersUnknown(t *testing.T) {
+	if _, ok := ExpandGroupMembers(map[string][]string{}, "nope"); ok {
+		t.Fatal("unknown group returned ok=true")
+	}
+}

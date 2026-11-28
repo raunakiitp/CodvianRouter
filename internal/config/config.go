@@ -2267,6 +2267,25 @@ func (c *Config) Validate() error {
 				if id == "" {
 					return fmt.Errorf("config: routing.groups[%q][%d] is empty", name, i)
 				}
+				// A member starting with "group:" names another
+				// routing group (a nested combo-ref): it expands to
+				// that group's members recursively at request time.
+				// The referenced name is validated here (unknown
+				// group = startup error) and cycles are rejected by
+				// validateGroupGraph after the loop.
+				if strings.HasPrefix(id, "group:") {
+					inner := strings.TrimSpace(id[len("group:"):])
+					if inner == "" {
+						return fmt.Errorf("config: routing.groups[%q][%d] names a group but the group name is empty", name, i)
+					}
+					if _, ok := rc.Groups[inner]; !ok {
+						return fmt.Errorf("config: routing.groups[%q][%d] names unknown routing group %q", name, i, inner)
+					}
+					if inner == name {
+						return fmt.Errorf("config: routing.groups[%q][%d] references itself (cycle)", name, i)
+					}
+					continue
+				}
 				providerID, effort, err := ParseGroupMember(id)
 				if err != nil {
 					return fmt.Errorf("config: routing.groups[%q][%d]: %w", name, i, err)
@@ -2283,6 +2302,12 @@ func (c *Config) Validate() error {
 					return fmt.Errorf("config: routing.groups[%q] lists unknown provider %q", name, providerID)
 				}
 			}
+		}
+		// Nested group refs form a directed graph (group -> inner
+		// groups); a cycle would infinite-loop at request time, so
+		// it is rejected here at load, naming the cycle path.
+		if err := validateGroupGraph(rc.Groups); err != nil {
+			return err
 		}
 		for model, s := range rc.ChainStrategies {
 			if model == "" {

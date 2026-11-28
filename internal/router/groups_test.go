@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/raunakiitp/codvian-router/internal/config"
 	"github.com/raunakiitp/codvian-router/internal/provider"
 )
 
@@ -620,5 +621,65 @@ func TestGroupNoEffortPassesClientEffort(t *testing.T) {
 	}
 	if seenStream != "high" {
 		t.Errorf("stream upstream effort = %q, want high (client value passed through)", seenStream)
+	}
+}
+
+// TestNestedGroupRefExpandsThroughRealPath (Item 2): a routing group
+// whose member is another "group:<name>" (a nested combo-ref) expands
+// recursively to the inner group's providers, in order, through the
+// real Chat path. Groups: outer = [a, group:mid], mid = [b, c], so the
+// flattened chain is a, b, c. FAILS-WHEN-OFF: without recursive
+// expansion "group:mid" would be an unresolvable member and the chain
+// would not be a, b, c.
+func TestNestedGroupRefExpandsThroughRealPath(t *testing.T) {
+	a := &fakeClient{}
+	b := &fakeClient{}
+	c := &fakeClient{}
+	led := &fakeLedger{}
+	cfg := testConfig()
+	cfg.ChainFor = func(model string) []Attempt {
+		return []Attempt{{ProviderID: "a", Model: model}, {ProviderID: "b", Model: model}, {ProviderID: "c", Model: model}}
+	}
+	groups := map[string][]string{
+		"outer": {"a", "group:mid"},
+		"mid":   {"b", "c"},
+	}
+	cfg.GroupChain = func(group, model string) ([]Attempt, bool) {
+		members, ok := config.ExpandGroupMembers(groups, group)
+		if !ok {
+			return nil, false
+		}
+		var chain []Attempt
+		for _, m := range members {
+			chain = append(chain, Attempt{ProviderID: m, Model: model})
+		}
+		return chain, true
+	}
+	eng := NewEngine(map[string]provider.Client{"a": a, "b": b, "c": c}, led, cfg)
+	a.chatFn = func(ctx context.Context, req provider.ChatRequest) (*provider.ChatResponse, error) {
+		return nil, &provider.RateLimitError{}
+	}
+	b.chatFn = func(ctx context.Context, req provider.ChatRequest) (*provider.ChatResponse, error) {
+		return &provider.ChatResponse{Content: "from-b"}, nil
+	}
+	req := testReq()
+	req.Model = "m"
+	req.Routing = &provider.RequestRouting{Group: "outer"}
+	resp, err := eng.Chat(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if resp.Content != "from-b" {
+		t.Fatalf("Content = %q, want from-b", resp.Content)
+	}
+	if a.chatCalls() != 1 || b.chatCalls() != 1 || c.chatCalls() != 0 {
+		t.Fatalf("calls a=%d b=%d c=%d, want a=1 b=1 c=0 (nested mid expanded to b,c)", a.chatCalls(), b.chatCalls(), c.chatCalls())
+	}
+	tr := eng.LastTrace()
+	if tr == nil || len(tr.Attempts) != 2 {
+		t.Fatalf("trace attempts = %v, want 2", tr)
+	}
+	if tr.Attempts[0].Provider != "a" || tr.Attempts[1].Provider != "b" {
+		t.Errorf("trace order = %q, %q, want a, b (nested expansion in order)", tr.Attempts[0].Provider, tr.Attempts[1].Provider)
 	}
 }
