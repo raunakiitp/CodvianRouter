@@ -343,8 +343,9 @@ supports `claude` and `continue`).
   and disk quotas for the files API.
 - **Supply chain** — dependency vulnerability scanning (`govulncheck`),
   SBOM generation, gitleaks secret scanning and a repository secret
-  scanner in CI; no competitor references in tracked content
-  (`scripts/check-naming.sh`).
+  scanner in CI; no competitor references in tracked content — the
+  whole-tree naming gate (`scripts/check-naming.py`) runs as a CI step and
+  is mirrored by a Go test, see `docs/naming-gate.md`.
 
 ## Billing, budgets and quotas
 
