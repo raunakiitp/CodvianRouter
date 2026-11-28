@@ -206,12 +206,28 @@ func fanOutWithGrace(ctx context.Context, targets []Attempt, call PanelCaller, c
 	results := make([]PanelResult, len(targets))
 	got := make([]bool, len(targets))
 	var mu sync.Mutex
+	// abandoned is set (under mu) BEFORE cancel() so a member waking up from
+	// the cancelled call records errStragglerAbandoned instead of the raw
+	// context error — the abandon decision is made before cancellation, so
+	// the goroutine's view is deterministic (no race between cancel() and
+	// the parent's abandon-marking loop).
+	abandoned := false
 	done := make(chan int, len(targets))
+	var wg sync.WaitGroup
 	for i, att := range targets {
+		wg.Add(1)
 		go func(i int, att Attempt) {
+			defer wg.Done()
 			text, err := call(callCtx, att)
 			if err == nil && strings.TrimSpace(text) == "" {
 				err = errors.New("empty response")
+			}
+			if err != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+				mu.Lock()
+				if abandoned && !got[i] {
+					err = errStragglerAbandoned
+				}
+				mu.Unlock()
 			}
 			mu.Lock()
 			results[i] = PanelResult{Attempt: att, Text: text, Err: err}
@@ -271,7 +287,19 @@ collect:
 	if timer != nil {
 		timer.Stop()
 	}
+	if ctx.Err() == nil {
+		// The parent context is still alive, so this return is the grace or
+		// hard-timeout path: the unfinished members are abandoned by choice.
+		// (On a caller cancellation the raw context error is the honest one.)
+		mu.Lock()
+		abandoned = true
+		mu.Unlock()
+	}
 	cancel()
+	// Wait for every writer to exit before reading results: returning while
+	// a goroutine may still write results[i] would be a data race on the
+	// returned slice. cancel() bounds the wait — callers honour callCtx.
+	wg.Wait()
 	mu.Lock()
 	defer mu.Unlock()
 	for i := range results {
