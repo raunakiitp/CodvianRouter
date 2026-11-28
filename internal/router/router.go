@@ -1174,7 +1174,7 @@ type providerStats struct {
 	// Latency histogram for true p95 (B9): fixed-bucket histogram
 	// covering 0-10000 ms with 1 ms resolution up to 1000 ms,
 	// then 10 ms resolution up to 10000 ms.
-	latencyHist [1100]int // buckets: 0-1000 (1ms each), 1010-10000 (10ms each)
+	latencyHist [1901]int // buckets: 0-1000 (1ms each), 1010-10000 (10ms each, 900 buckets)
 }
 
 // RoutingInfo is the routing outcome of the most recently finished
@@ -2330,7 +2330,9 @@ func (e *Engine) noteAttemptStats(providerID, keyID string, ok bool, latencyMs i
 
 // latencyBucket returns the histogram bucket index for a latency in ms.
 // Buckets 0-1000: 1 ms each (0-1000 ms).
-// Buckets 1001-1099: 10 ms each (1010-10000 ms).
+// Buckets 1001-1900: 10 ms each (1010-10000 ms). A latency in the
+// 1010-10000 ms band maps to one of the 900 wide buckets; anything
+// above 10000 ms clamps to the last bucket so it is never dropped.
 func latencyBucket(latencyMs int64) int {
 	if latencyMs <= 1000 {
 		return int(latencyMs)
@@ -2338,7 +2340,7 @@ func latencyBucket(latencyMs int64) int {
 	if latencyMs <= 10000 {
 		return 1001 + int((latencyMs-1010)/10)
 	}
-	return 1099 // cap at max bucket
+	return 1900 // cap at max bucket (>= 10000 ms)
 }
 
 // p95LatencyMs returns the 95th-percentile latency from the histogram,
