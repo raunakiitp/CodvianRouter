@@ -113,8 +113,8 @@ const DefaultMaxEntries = 1000
 
 // DefaultMaxEntryBytes is the per-entry size cap (M6.1): an entry
 // whose response content exceeds 256 KiB is never stored —
-// the reference router's per-entry cap (semanticCache.ts:110). DefaultMaxTotalBytes
-// is the total memory cap for the layer: 2 MiB (the reference router's memory
+// the sector-typical per-entry cap (semanticCache.ts:110). DefaultMaxTotalBytes
+// is the total memory cap for the layer: 2 MiB (the sector-typical memory
 // tier, semanticCache.ts:127). Entry size is measured as the stored
 // response content in bytes — the key is a fixed 64-char hex string
 // and struct overhead is not counted, so the measure is exact and
@@ -400,7 +400,7 @@ type ChatRequest struct {
 //
 // M6.9 audit (2026-11-18) — zero providers added, deliberately:
 //   - Bedrock: the upstream Converse API DOES honour the marker, but
-//     only translated into a Converse cachePoint (the reference router reference,
+//     only translated into a Converse cachePoint (the sector baseline reference,
 //     read-only study: executors/bedrock.ts:78,211-213,233,433 — a
 //     cache_control marker becomes a cache point after the block it
 //     marks, for anthropic.claude / amazon.nova models, max 4 per
@@ -411,7 +411,7 @@ type ChatRequest struct {
 //     ever sends upstream. Bedrock needs a wire/provider slice
 //     first (Message field + Converse cachePoint), then this map.
 //   - Vertex: Vertex-served Claude models honour cache_control
-//     ephemeral (the reference router executors/vertex.ts:251 and
+//     ephemeral (the sector baseline executors/vertex.ts:251 and
 //     downgradeUnsupportedVertexClaudeTtl — 1h TTL unsupported on
 //     legacy Claude models, 5m only). Our Vertex client speaks
 //     Gemini generateContent only (internal/provider/vertex_client.go
@@ -591,7 +591,7 @@ const DefaultSemanticTTL = time.Hour
 const SemanticVectorDims = 256
 
 // NeuralEmbedder embeds text into a dense vector using a neural
-// embedding model served by a provider (the reference router semanticCache.ts:
+// embedding model served by a provider (the sector baseline semanticCache.ts:
 // text-embedding-3-small, 1536-dim, 3 s timeout, fail-open). It is
 // implemented by the caller — the router's provider client — and
 // injected through LocalSemanticCacheConfig.NeuralEmbedder. A nil
@@ -607,11 +607,11 @@ type NeuralEmbedder func(ctx context.Context, text string) ([]float32, error)
 
 // DefaultNeuralEmbeddingModel is the provider embedding model used
 // when neural embeddings are enabled and no model is configured
-// (the reference router semanticCache.ts: text-embedding-3-small).
+// (the sector baseline semanticCache.ts: text-embedding-3-small).
 const DefaultNeuralEmbeddingModel = "text-embedding-3-small"
 
 // DefaultNeuralEmbeddingTimeout bounds one provider embedding call
-// (the reference router semanticCache.ts: 3 s). A call that exceeds it fails
+// (the sector baseline semanticCache.ts: 3 s). A call that exceeds it fails
 // open to the hashed bag-of-words vector.
 const DefaultNeuralEmbeddingTimeout = 3 * time.Second
 

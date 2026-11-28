@@ -38,7 +38,7 @@
 //     the state is request-scoped by construction, created fresh
 //     per request — so the gate is vacuous for the in-request
 //     relay. Cross-request relay (a handoff surviving into the
-//     NEXT request of a session, which is how the reference router's
+//     NEXT request of a session, which is how the sector-typical
 //     success-triggered handoff is consumed) runs on the
 //     engine-owned session store below (relaySessions, keyed by
 //     the gateway key the request arrived under —
@@ -66,7 +66,7 @@
 //     ([RelayHandoffThreshold, RelayExhaustionThreshold)),
 //     the handoff TTL and the summariser message cap are
 //     operator-configurable through Config (routing.* in the
-//     config file, B2-01 wiring); unset means the reference router's
+//     config file, B2-01 wiring); unset means the sector-typical
 //     defaults (0.85 / 0.95 / 5h / 30 messages). The
 //     allowlist (Config.RelayHandoffProviders) and the
 //     on-error opt-in (Config.RelayOnError) were already
@@ -116,7 +116,7 @@ import (
 const contextRelayStrategy = "context-relay"
 
 // Relay thresholds and defaults, mirroring strategy.RelayState's
-// (affinity.go) — which mirror the reference router's resolveContextRelayConfig
+// (affinity.go) — which mirror the sector-typical resolveContextRelayConfig
 // / contextHandoff.ts constants.
 const (
 	// defaultRelayHandoffThreshold is the quota-use fraction at
@@ -137,7 +137,7 @@ const (
 	// by a degraded (unsummarised) handoff, so a missing
 	// summariser can never blow the next attempt's context window
 	// with an unbounded verbatim paste. 4000 chars is a local
-	// safety bound, not an the reference router constant.
+	// safety bound, not an the sector baseline constant.
 	maxDegradedTranscriptChars = 4000
 )
 
@@ -172,7 +172,7 @@ type RelayHandoff struct {
 // RelaySummariser is the caller-owned summariser call: given the
 // source messages (the original request's messages, oldest first,
 // capped at the configured max, default 30), it returns the handoff
-// summary — the the reference router generateHandoffAsync step. It is a Config
+// summary — the the sector baseline generateHandoffAsync step. It is a Config
 // func because the router cannot import the strategy package. The
 // caller (cmd/codvian-router main.go) supplies the production one:
 // the cheapest priced model with a live client, called directly,
@@ -219,7 +219,7 @@ type relayState struct {
 	// maxMessages are the operator-configured context-relay
 	// knobs (Config.RelayHandoffThreshold etc., B2-01
 	// wiring), stored raw: zero means "not configured" and
-	// the accessors below resolve it to the reference router's default,
+	// the accessors below resolve it to the sector-typical default,
 	// so a state built as a bare literal (as the tests do)
 	// behaves exactly like a configured one with defaults.
 	handoffThreshold    float64
@@ -265,7 +265,7 @@ func newRelayState(strategy string, cfg Config) *relayState {
 }
 
 // handoffThresholdValue resolves the trigger threshold: the
-// configured value when it is a usable fraction, the reference router's
+// configured value when it is a usable fraction, the sector-typical
 // default (0.85) otherwise. Zero means "not configured".
 func (r *relayState) handoffThresholdValue() float64 {
 	if r.handoffThreshold > 0 && r.handoffThreshold < 1 {
@@ -276,7 +276,7 @@ func (r *relayState) handoffThresholdValue() float64 {
 
 // exhaustionThresholdValue resolves the exhaustion threshold:
 // the configured value when it is a usable fraction above the
-// trigger threshold, the reference router's default (0.95) otherwise.
+// trigger threshold, the sector-typical default (0.95) otherwise.
 func (r *relayState) exhaustionThresholdValue() float64 {
 	if r.exhaustionThreshold > 0 && r.exhaustionThreshold <= 1 && r.exhaustionThreshold > r.handoffThresholdValue() {
 		return r.exhaustionThreshold
@@ -285,7 +285,7 @@ func (r *relayState) exhaustionThresholdValue() float64 {
 }
 
 // ttlValue resolves the handoff TTL: the configured value when
-// positive, the reference router's default (5h) otherwise.
+// positive, the sector-typical default (5h) otherwise.
 func (r *relayState) ttlValue() time.Duration {
 	if r.ttl > 0 {
 		return r.ttl
@@ -294,7 +294,7 @@ func (r *relayState) ttlValue() time.Duration {
 }
 
 // maxMessagesValue resolves the summariser message cap: the
-// configured value when positive, the reference router's default (30)
+// configured value when positive, the sector-typical default (30)
 // otherwise.
 func (r *relayState) maxMessagesValue() int {
 	if r.maxMessages > 0 {
@@ -449,13 +449,13 @@ func (r *relayState) buildHandoffText() string {
 }
 
 // maxRelayHistoryTokens caps the formatted history fed to the
-// summariser (the reference router MAX_HISTORY_TOKENS_FOR_SUMMARY = 8000).
+// summariser (the sector baseline MAX_HISTORY_TOKENS_FOR_SUMMARY = 8000).
 // Mirrors strategy.maxRelayHistoryTokens.
 const maxRelayHistoryTokens = 8000
 
 // relayEstimateTokens estimates the token count of text for the
 // history budget: ~4 chars per token, the same rough heuristic
-// the reference router's estimateTokens uses. A budget guard, not a billing
+// the sector-typical estimateTokens uses. A budget guard, not a billing
 // count.
 func relayEstimateTokens(text string) int {
 	return len(text) / 4
@@ -547,7 +547,7 @@ func (r *relayState) maybeBuildHandoff(ctx context.Context, summariser RelaySumm
 	}
 	r.handoffWanted = false
 	r.wantExpiresAt = time.Time{}
-	// Generation-time selection (as in the reference router's
+	// Generation-time selection (as in the sector-typical
 	// generateHandoffAsync): what the summariser — or the degraded
 	// transcript — receives is the selected set, never the raw
 	// stored window. Idempotent with the record-time selection.

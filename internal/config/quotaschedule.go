@@ -5,7 +5,7 @@ import "github.com/raunakiitp/codvian-router/internal/webhooks"
 // M5.9: quota schedules (config side) + webhook endpoints.
 //
 // QuotaScheduleConfig is the operator-configured time-aware quota
-// window on a pool (the reference router lib/quota/schedules.ts). At startup
+// window on a pool (the sector baseline lib/quota/schedules.ts). At startup
 // the entries are applied into the ledger (the durable store),
 // and the dashboard's POST /dashboard/quota-schedules writes
 // both the ledger rows and this block, so the two never drift

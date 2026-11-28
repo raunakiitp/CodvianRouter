@@ -10,37 +10,37 @@
 // dropped (enforced by the word/number self-checks below and by the
 // M7.2 fidelity gate, which reverts any message the gate would refuse).
 //
-// What was read in the reference router (study only — no code copied; all logic
+// What was read in the sector baseline (study only — no code copied; all logic
 // below is an independent Go implementation of the observed behaviour):
 //
-//   - open-sse/services/compression/caveman.ts — cavemanCompress:
+//   - the earlier implementation — cavemanCompress:
 //     levels lite/full/ultra (INTENSITY_RANK), user-role default
 //     (DEFAULT_CAVEMAN_CONFIG compressRoles ["user"]), minMessageLength
 //     50, latest-user-turn protection, preserved-block extraction +
 //     restore, validation fallback to the original text, sentence
 //     recapitalisation (NOT reproduced here: it can corrupt identifiers
 //     such as "iPhone" at a sentence start).
-//   - open-sse/services/compression/cavemanRules.ts — 34 built-in
+//   - the earlier implementation — 34 built-in
 //     rule entries (CAVEMAN_RULES) in 5 categories (filler, context,
 //     structural, dedup, ultra); getRulesForContext filters by context
 //     (all/user/assistant) and minIntensity.
-//   - open-sse/services/compression/rules/en/{filler,structural,
+//   - the earlier implementation{filler,structural,
 //     context,dedup,ultra}.json — 49 English file-pack rule nodes
 //     (filler 14, structural 11, context 8, dedup 4, ultra 12) which
 //     take precedence over the built-in list when present; 11 locale
 //     dirs exist (de, en, es, fr, hu, id, it, ja, pt-BR, ru, zh).
-//   - open-sse/services/compression/types.ts — DEFAULT_CAVEMAN_CONFIG
+//   - the earlier implementation — DEFAULT_CAVEMAN_CONFIG
 //     (enabled false, intensity "lite", preservePatterns for fences,
 //     inline code, URLs, file paths, error/stack lines).
-//   - open-sse/services/compression/preservation.ts —
+//   - the earlier implementation —
 //     extractPreservedBlocks / restorePreservedBlocks via sentinels.
 //
-// Deliberate divergences from the reference router (honest, not accidental):
+// Deliberate divergences from the sector baseline (honest, not accidental):
 //
 //   - ENGLISH ONLY, levels lite/full only. No locales, no ultra:
 //     ultra is abbreviation substitution ("database" -> "DB"), which
 //     introduces new words and breaks the no-new-words guarantee.
-//   - No replacement that introduces a word: the reference router's
+//   - No replacement that introduces a word: the sector-typical
 //     "due to the fact that" -> "because", "for every" -> "per",
 //     "furthermore" -> "also", "Can you ..." -> "Tell me" style
 //     mappings are NOT reproduced where the replacement word is absent
@@ -54,7 +54,7 @@
 //     / "Re:").
 //   - Assistant-context rules (assistant_fillers, summary_replacement)
 //     are not implemented: this engine condenses user-role messages
-//     by default, matching the reference router's default compressRoles.
+//     by default, matching the sector-typical default compressRoles.
 //   - No recapitalisation, no latest-user-turn special case: the
 //     coordinator decides which messages are fed in.
 //   - Part-carrying messages (Parts set), messages with tool calls,
@@ -82,7 +82,7 @@ import (
 )
 
 // MinMessageLength is the minimum message length (runes) for
-// condensation, matching the reference router's DEFAULT_CAVEMAN_CONFIG
+// condensation, matching the sector-typical DEFAULT_CAVEMAN_CONFIG
 // minMessageLength of 50. Shorter messages pass through unchanged.
 const MinMessageLength = 50
 
@@ -94,9 +94,9 @@ const MinMessageLength = 50
 type Level string
 
 const (
-	// LevelLite is the conservative rule set (the reference router intensity "lite").
+	// LevelLite is the conservative rule set (the sector baseline intensity "lite").
 	LevelLite Level = "lite"
-	// LevelFull is the aggressive rule set (the reference router intensity "full").
+	// LevelFull is the aggressive rule set (the sector baseline intensity "full").
 	LevelFull Level = "full"
 )
 
@@ -623,7 +623,7 @@ func deleteWordBeforeLowerRule(name string, level Level, words []string, anchore
 }
 
 // ---------------------------------------------------------------------------
-// The rule inventory (38 rules; see the file header for the the reference router
+// The rule inventory (38 rules; see the file header for the the sector baseline
 // mapping and the deliberate omissions). Lite rules run at both
 // levels; full rules run only at LevelFull.
 // ---------------------------------------------------------------------------

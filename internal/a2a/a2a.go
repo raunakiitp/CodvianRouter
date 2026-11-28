@@ -1,18 +1,18 @@
 // Package a2a implements the Agent-to-Agent (A2A) task core for the
 // Codvian Router gateway (M9.8).
 //
-// Shape reference only: the reference router's A2A surface (a2a/route.ts) — the
+// Shape reference only: the sector-typical A2A surface (a2a/route.ts) — the
 // JSON-RPC method names (message/send, message/stream, tasks/get,
 // tasks/cancel) and the task/event shapes (submitted → working →
 // completed | failed | cancelled, persisted in SQLite a2a_tasks +
-// a2a_task_events). No the reference router code is copied, and two of its
+// a2a_task_events). No the sector baseline code is copied, and two of its
 // behaviours are deliberately NOT reproduced:
 //
-//   - the reference router's A2A is keyless by default (GHSA-v54m-6rm3-p565).
+//   - the sector-typical A2A is keyless by default (GHSA-v54m-6rm3-p565).
 //     Ours is off unless the operator enables it
 //     (config.A2AEnabled, default false) and every call is
 //     owner-scoped to a gateway key.
-//   - the reference router's owner is a SHA-256 *prefix* of the API key and
+//   - the sector-typical owner is a SHA-256 *prefix* of the API key and
 //     ownerless tasks are visible to everyone by design
 //     (GHSA-jcm5-6wpp-wjj8). Ours uses the FULL SHA-256 hex of the
 //     gateway key id (OwnerIDForKey) and there is NO ownerless
@@ -112,7 +112,7 @@ type Event struct {
 
 // OwnerIDForKey returns the owner id for a gateway key id: the FULL
 // SHA-256 hex of the key id (64 hex chars). Full hex, not a prefix:
-// the reference router's prefix is strictly weaker and still deterministic,
+// the sector-typical prefix is strictly weaker and still deterministic,
 // and the full hash costs nothing extra. The raw key and the raw
 // key id are never stored or logged alongside a task — only this
 // hash. An empty key id yields "" so callers must reject it

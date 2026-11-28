@@ -884,7 +884,7 @@ func messageText(m provider.Message) string {
 // semanticText is the text the semantic cache matches on: the last
 // SemanticScopeTurns turns excluding system/developer messages,
 // each rendered "role: text" (a missing role reads as "user", as
-// in the reference router's normalizer) and joined with "\n", in
+// in the sector-typical normalizer) and joined with "\n", in
 // conversation order. Messages inside the window with no text
 // contribute no line but still occupy their window slot. "" when
 // none of the last 3 turns carries text.
@@ -1277,7 +1277,7 @@ func (e *StaleEngine) lookup(ctx context.Context, req provider.ChatRequest) (cac
 	}
 	// 50-TURN BYPASS (M6.7c): a conversation longer than
 	// provider.SemanticMaxTurns (50) never consults the semantic
-	// layer — the reference router bypasses semantic caching past its
+	// layer — the sector baseline bypasses semantic caching past its
 	// conversationHistoryThreshold, and the exact layer above is
 	// unaffected (its key is the pre-compression request — see
 	// scopedKey — so the bypass does not apply to it).
@@ -1405,7 +1405,7 @@ func reasoningToolCallRefs(calls []provider.ToolCall) []cache.ReasoningToolCall 
 // content-cache early return, because its gates are different:
 //
 //   - Tool-using requests are INCLUDED, not excluded: reasoning
-//     replay exists precisely for tool-call turns (the reference router keys
+//     replay exists precisely for tool-call turns (the sector baseline keys
 //     on the tool_call id). Storing reasoning text cannot drop
 //     tool calls — the client replays the calls themselves in the
 //     transcript — so cache.ShouldStore's tool-call exclusion
@@ -1414,7 +1414,7 @@ func reasoningToolCallRefs(calls []provider.ToolCall) []cache.ReasoningToolCall 
 //     "length" means the reasoning may be cut off mid-thought)
 //     and the temperature gate (temp>0 without the per-key
 //     allowance is never stored as if deterministic — M6.3).
-//     the reference router itself applies neither gate to replay (replay is
+//     the sector baseline itself applies neither gate to replay (replay is
 //     a protocol requirement there, not a determinism cache);
 //     this wrapper applies them because this router's cache
 //     rules (M1.4/M6.3) say a hot or truncated answer is never
@@ -1744,7 +1744,7 @@ func (e *StaleEngine) store(ctx context.Context, req provider.ChatRequest, resp 
 	}
 	// 50-TURN BYPASS (M6.7c): a conversation longer than
 	// provider.SemanticMaxTurns (50) never stores a semantic entry
-	// either — deliberately stricter than the reference router, whose store
+	// either — deliberately stricter than the sector baseline, whose store
 	// path has no threshold check (see
 	// provider.SemanticTurnsExceeded), so no entry can exist that
 	// a later lookup would have to bypass around. The exact layer

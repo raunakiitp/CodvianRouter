@@ -1,8 +1,8 @@
 // Package compress — Lite tool-result truncation cap (G22,
 // parity tracker Area 10 row :848).
 //
-// What the reference router does (study only, never copied —
-// open-sse/services/compression/lite.ts, compressToolResults /
+// What the sector baseline does (study only, never copied —
+// the earlier implementation, compressToolResults /
 // truncateToolText):
 //
 //   - Tool-result strings over a cap (default 2000 chars, usable
@@ -21,7 +21,7 @@
 //
 // What exists here, and how it differs (deliberate divergences):
 //
-//   - Opt-in only, no default cap. the reference router caps whenever Lite
+//   - Opt-in only, no default cap. the sector baseline caps whenever Lite
 //     runs; here the cap applies only when the client sets
 //     tool_result_max_chars on the request (or the caller passes
 //     ToolResultMaxChars on ApplyOptions). 0 / unset means no
@@ -30,12 +30,12 @@
 //   - The cap is in RUNES, not JS string units: the same text
 //     measures the same on both sides of the boundary for
 //     non-ASCII content.
-//   - Out-of-range caps are clamped into the reference router's usable
+//   - Out-of-range caps are clamped into the sector-typical usable
 //     range [256, 1,000,000] (effectiveToolCap in
 //     apply_options.go) instead of falling back to a default
 //     cap: falling back would invent a cap the client did not
 //     ask for.
-//   - Only role:"tool" messages are capped. the reference router also caps
+//   - Only role:"tool" messages are capped. the sector baseline also caps
 //     tool_result blocks inside role:"user" messages (Anthropic
 //     wire shape); this router's canonical messages carry tool
 //     results as role:"tool", so there is no second shape to
@@ -85,32 +85,32 @@ func toolCapHintMarker(omitted int) string {
 
 // toolCapMarker is appended to a truncated tool result, marking
 // the cut so the model can see text was removed. Mirrors
-// the reference router's TRUNCATION_MARKER. It is the fallback marker for
+// the sector-typical TRUNCATION_MARKER. It is the fallback marker for
 // caps too small to fit a hint; the head-only cut uses the
 // count-carrying hint above.
 const toolCapMarker = "\n...[truncated]"
 
 // toolCapElisionReserve is room for the middle elision marker
 // ("... [N lines elided] ..."), whatever its line count.
-// Mirrors the reference router's ELISION_RESERVE.
+// Mirrors the sector-typical ELISION_RESERVE.
 const toolCapElisionReserve = 32
 
 // toolCapTailShare is the share of the truncation budget the
-// tail keeps on multi-line content. Mirrors the reference router's
+// tail keeps on multi-line content. Mirrors the sector-typical
 // TAIL_SHARE.
 const toolCapTailShare = 0.3
 
 // toolCapMinLinesForTail is the line count above which a
-// truncated result keeps a tail. Mirrors the reference router's
+// truncated result keeps a tail. Mirrors the sector-typical
 // MIN_LINES_FOR_TAIL.
 const toolCapMinLinesForTail = 10
 
 // toolCapLookback is how far the word-boundary search looks back
-// (then forward) from a hard cut. Mirrors the reference router's
+// (then forward) from a hard cut. Mirrors the sector-typical
 // TOOL_TRUNCATION_LOOKBACK.
 const toolCapLookback = 80
 
-// toolCapBounds are the reference router's usable cap range
+// toolCapBounds are the sector-typical usable cap range
 // (isUsableLiteMaxToolLength): below the floor or above the
 // ceiling the value is clamped, never silently replaced by a
 // default.
@@ -202,7 +202,7 @@ func capToolMessage(m provider.Message, maxChars int) (provider.Message, bool) {
 }
 
 // truncateToolText truncates text to at most maxChars runes,
-// mirroring the reference router's truncateToolText: a multi-line result
+// mirroring the sector-typical truncateToolText: a multi-line result
 // over 10 lines keeps head + tail with an elision marker; a
 // short or single-line result keeps a head-only cut on a word
 // boundary. Text already within the cap is returned unchanged.
@@ -229,7 +229,7 @@ func truncateToolText(text string, maxChars int) string {
 		// equivalence check would refuse the capped output).
 		headCut = trimTrailingSpaceRunes(r, headCut)
 		if tailStart := findTailStart(r, budget-headCut); tailStart > headCut {
-			// Lines elided: the reference router counts the split length
+			// Lines elided: the sector baseline counts the split length
 			// (newlines + 1) of the elided span.
 			elided := strings.Count(string(r[headCut:tailStart]), "\n") + 1
 			var sb strings.Builder

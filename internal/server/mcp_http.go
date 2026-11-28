@@ -35,7 +35,7 @@
 //     503 on its routes. The flags are in-memory only: a restart
 //     restores the default (off).
 //
-// Transports (shape studied from the reference router's httpTransport.ts,
+// Transports (shape studied from the sector-typical httpTransport.ts,
 // reimplemented here — no code copied):
 //
 //   - SSE: GET /api/mcp/sse opens the event stream (first event
@@ -50,7 +50,7 @@
 //     header), later messages address it by that header, a
 //     non-initialize without an id is a 400, and an unknown id
 //     is a 404 (an initialize with a stale id opens a fresh
-//     session, like the reference router's auto-recovery). A POST that is a
+//     session, like the sector-typical auto-recovery). A POST that is a
 //     request answers 200 application/json directly; a
 //     notification answers 202 with no body. GET /api/mcp/stream
 //     opens the server→client SSE stream for a session (the
@@ -119,7 +119,7 @@ const (
 	mcpMaxMessageBytes = 1 << 20
 	// mcpSessionIdleTimeout is how long a session with no traffic
 	// and no open stream lives before the lazy sweep evicts it
-	// (the reference router's default is the same five minutes).
+	// (the sector-typical default is the same five minutes).
 	mcpSessionIdleTimeout = 5 * time.Minute
 	// mcpSessionSweepInterval is how often the lazy sweep may run
 	// (checked on session creation and status reads).
@@ -163,7 +163,7 @@ const (
 	mcpHeartbeatInterval = 30 * time.Second
 	// mcpUnknownSessionCode is the JSON-RPC error code for an
 	// unknown/foreign session id on the Streamable transport
-	// (the reference router uses the same -32000).
+	// (the sector baseline uses the same -32000).
 	mcpUnknownSessionCode = -32000
 )
 
@@ -744,7 +744,7 @@ func (s *Server) handleMCPSSE(w http.ResponseWriter, r *http.Request) {
 // session, opens the server→client event stream, and streams
 // queued responses until the client disconnects (which terminates
 // the session — a reconnecting client GETs again for a fresh
-// session, the same reset-on-initialize behaviour the reference router's SSE
+// session, the same reset-on-initialize behaviour the sector-typical SSE
 // singleton has). The first event is `endpoint` with the POST URL
 // carrying the session id; responses follow as `message` events.
 func (s *Server) handleMCPSSEStream(w http.ResponseWriter, r *http.Request) {

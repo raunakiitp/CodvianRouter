@@ -24,7 +24,7 @@
 // store records no owner for an uploaded file (M8.7 design —
 // the Files API itself lists every file to any key), so the
 // create handler CANNOT check that the input file belongs to
-// the caller's key. the reference router denies null-owner / foreign input
+// the caller's key. the sector baseline denies null-owner / foreign input
 // files (GHSA-2jm2-mpx8-6523); here that check is impossible
 // without an owner column on files.File, which is a
 // coordinator decision for the Files store, not this slice.
@@ -390,7 +390,7 @@ func (s *Server) enforceBatchModelPolicy(w http.ResponseWriter, r *http.Request,
 
 // handleBatchesList serves GET /v1/batches: the caller's
 // batches, newest first. ?limit= defaults to 20, max 100 — an
-// invalid limit is a 400 naming the bound (the reference router
+// invalid limit is a 400 naming the bound (the sector baseline
 // parseListLimit shape), never a silent clamp or a 500.
 func (s *Server) handleBatchesList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {

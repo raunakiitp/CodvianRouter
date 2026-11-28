@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// M5.4: fair-share quota pools — the reference router's decideFairShare
+// M5.4: fair-share quota pools — the sector-typical decideFairShare
 // (fairShare.ts) over ledger-derived consumption.
 
 func poolCtx() context.Context { return context.Background() }

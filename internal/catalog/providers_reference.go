@@ -10,7 +10,7 @@
 // (api.* host, /v1, /api, or another versioned path) were kept.
 package catalog
 
-// referenceProviders holds the provider entries taken from the reference router
+// referenceProviders holds the provider entries taken from the sector baseline
 // reference metadata. Verification is "from-reference-metadata-only"
 // for every entry: base URLs and auth were NOT independently verified.
 var referenceProviders = []Provider{
@@ -83,10 +83,10 @@ var referenceProviders = []Provider{
 		Notes:        "",
 	},
 	{
-		ID:            "cheaperinference",
-		Name:          "Cheaper Inference",
+		ID:            "the retired inference service",
+		Name:          "the retired inference service",
 		Alias:         "cinf",
-		Website:       "https://cheaperinference.com/",
+		Website:       "https://the retired inference service.com/",
 		Category:      CategoryAPIKey,
 		BaseURLs:      nil,
 		WireFormats:   []WireFormat{WireOpenAI},

@@ -10,7 +10,7 @@
 //   - GET /dashboard/mcp keyless → 200: 24 tools, 11 distinct
 //     scopes, providers 0, models 0, ready false, mode "off",
 //     servers [] — the plan's "24 tools / 11 scopes" are the live
-//     numbers, never the reference router's 110/33. The tool list renders
+//     numbers, never the sector-typical 110/33. The tool list renders
 //     even at 0 providers (plan §7).
 //   - GET /api/mcp/status keyless → 200: both transports off,
 //     0 sessions (live session COUNTS).
@@ -22,7 +22,7 @@
 // dashboard:
 //   - the MCP section renders (all ids, incl. the new M10-13
 //     tools-count pill) with no Playground, no invented
-//     endpoint, and no the reference router numbers;
+//     endpoint, and no the sector baseline numbers;
 //   - the three MCP read feeds answer 200 keyless — they are
 //     AuthExempt BY DESIGN (internal/server/guard.go:116-118;
 //     internal/server/mcp.go:1-18 header: "unauthenticated by
@@ -152,9 +152,9 @@ func TestDashboardM10_13MCPSectionRenders(t *testing.T) {
 	if strings.Contains(body, "Playground") {
 		t.Errorf("dashboard must not contain a Playground")
 	}
-	// No invented endpoints and no the reference router numbers anywhere in
+	// No invented endpoints and no the sector baseline numbers anywhere in
 	// the MCP region: the plan's numbers are the live 24/11, never
-	// the reference router's 110 tools / 33 scopes; there is no per-session
+	// the sector-typical 110 tools / 33 scopes; there is no per-session
 	// or heartbeat feed to call.
 	for _, gone := range []string{"/api/mcp/tasks", "/api/mcp/sessions", "/api/mcp/heartbeat",
 		"110 tools", "33 scopes", "heartbeat"} {

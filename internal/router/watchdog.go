@@ -1,4 +1,4 @@
-// Throughput watchdog on stalled streams (M4.6, the reference router
+// Throughput watchdog on stalled streams (M4.6, the sector baseline
 // streamHealth.ts).
 //
 // A stream that stops delivering bytes is worse than a stream that

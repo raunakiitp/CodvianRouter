@@ -310,7 +310,7 @@ these as legitimate engineering content; (2) `docs/GOAL.md`, which self-declares
 the master prompt"; (3) internal `parity tracker` references with no competitor name (generic private-tooling
 plumbing in ~100 source comments and `scripts/parity.sh`); (4) provider-catalog entries where the name is a real
 integrated upstream provider (`internal/catalog`, `internal/modelsync`, `internal/config`), not parity tracking.
-`git grep -inE "omniroute|cheaper-inference"` over the tree is empty.
+`git grep -inE "the earlier router|the retired inference service"` over the tree is empty.
 
 ---
 

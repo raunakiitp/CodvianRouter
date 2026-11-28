@@ -975,7 +975,7 @@ func scanVault(text string, vault *Vault) (string, []Finding, int) {
 		// scan of a megabyte prompt is unbounded regex work on
 		// the hot path. The deliberate divergence from the old
 		// behaviour is that an injection phrase past 16 KB is
-		// now unchecked (same bound the reference router uses); PII and
+		// now unchecked (same bound the sector baseline uses); PII and
 		// secret redaction above still scan the full text, so
 		// a key or an address past 16 KB is still redacted.
 		head, tail := injectionHead(out)

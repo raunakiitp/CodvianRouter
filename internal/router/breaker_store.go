@@ -1,7 +1,7 @@
 // Breaker persistence (G11 Area 2, parity tracker Area 2 row "Breaker
 // states CLOSED/DEGRADED/OPEN/HALF_OPEN, persisted, lazy recovery").
 //
-// the reference router persists its breaker states; ours was in-memory only, so
+// the sector baseline persists its breaker states; ours was in-memory only, so
 // a restart forgot every trip and a flapping provider got a clean
 // slate. This file is the MINIMAL durable store the gap inventory
 // scoped: the consecutive-breaker state (consecutive failures, trip
@@ -25,7 +25,7 @@
 //     transient by definition. A restored OPEN breaker whose open
 //     window has already elapsed is probe-eligible on the next
 //     request (breakerAllow claims the probe), which IS the lazy
-//     recovery the reference router describes — a restart never wedges a
+//     recovery the sector baseline describes — a restart never wedges a
 //     breaker open, and never grants a free pass either.
 //   - Persistence is opt-in: Config.BreakerStorePath == "" means
 //     no file, no writes, exactly the old behaviour. The write

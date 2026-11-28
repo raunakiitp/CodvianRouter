@@ -1,5 +1,5 @@
 // M4.10 divergence proof: a 402 (payment required) fails over to
-// the next target instead of stopping the chain. the reference router
+// the next target instead of stopping the chain. the sector baseline
 // classifies 402 as quota_exhausted, retryable: false
 // (failureClassification.ts:70); Codvian deliberately diverges —
 // billing/quota is per-target, so provider A's empty balance says

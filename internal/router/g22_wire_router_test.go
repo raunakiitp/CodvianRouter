@@ -15,7 +15,7 @@ import (
 // A request naming mode "aggressive" against an engine whose
 // configured providers include a prompt-cache-marker provider
 // (anthropic) is downgraded to "standard", so a rewriting mode
-// cannot break the cacheable prefix (the reference router #3955: the
+// cannot break the cacheable prefix (the sector baseline #3955: the
 // provider alone is sufficient — no cache_control marker is
 // required). Against an engine with no caching provider the
 // mode stands. This test FAILS while maybeCompress calls plain

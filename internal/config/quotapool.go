@@ -1,4 +1,4 @@
-// Fair-share quota pools (M5.4, the reference router lib/quota/dimensions.ts):
+// Fair-share quota pools (M5.4, the sector baseline lib/quota/dimensions.ts):
 // a pool shares one quota across its member gateway keys. The
 // config file declares pools; the ledger stores them (see
 // internal/ledger/pool.go) and the server syncs config → ledger

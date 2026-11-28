@@ -130,7 +130,7 @@ func TestRestartRemoteRefused(t *testing.T) {
 }
 
 // TestRemovedFakeRoutesAre404 proves the fabricated endpoints from
-// 17c27f4 (SystemOne canned reply, fixed video "drilldown" metrics,
+// 17c27f4 (sector judge canned reply, fixed video "drilldown" metrics,
 // static voice list) are no longer served.
 func TestRemovedFakeRoutesAre404(t *testing.T) {
 	srv := newTestServer(t, &fakeEngine{})

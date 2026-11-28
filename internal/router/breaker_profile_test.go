@@ -11,8 +11,8 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/provider"
 )
 
-// TestBreakerProfilesMatchReference: the profile table is the reference router's
-// PROVIDER_PROFILES verbatim (open-sse/config/constants.ts).
+// TestBreakerProfilesMatchReference: the profile table is the sector-typical
+// PROVIDER_PROFILES verbatim (the earlier implementation/config/constants.ts).
 func TestBreakerProfilesMatchReference(t *testing.T) {
 	oauth := BreakerProfileFor(AuthProfileOAuth)
 	if oauth.OpenThreshold != 8 || oauth.ResetTimeout != 60*time.Second || oauth.DegradeThreshold != 5 ||

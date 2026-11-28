@@ -241,7 +241,7 @@ func applyWithOptions(model string, msgs []provider.Message, req *provider.Compr
 	// G22 cache-aware inputs (rows :868/:869): the effective
 	// Lite tool-result cap and whether the system prompt must
 	// not be truncated. The freeze defaults to true (preserve
-	// mode "always", the reference router's default) — a caller opts out
+	// mode "always", the sector-typical default) — a caller opts out
 	// per request ("never") or per cache state ("whenNoCache"
 	// with no cache to protect), or freezes explicitly via the
 	// PrefixFreeze seam (opts.FreezeSystemPrompt, or a frozen
@@ -328,7 +328,7 @@ func applyWithOptions(model string, msgs []provider.Message, req *provider.Compr
 	}
 	// G22 cache-aware downgrade (row :868): for a caching
 	// provider, aggressive/ultra become standard so a rewriting
-	// mode cannot break the cacheable prefix (the reference router #3955:
+	// mode cannot break the cacheable prefix (the sector baseline #3955:
 	// the provider alone is sufficient — no cache_control
 	// marker is required). res.Mode below names the effective
 	// mode that actually ran.
@@ -409,7 +409,7 @@ func applyWithOptions(model string, msgs []provider.Message, req *provider.Compr
 					}
 					out = filtered
 				case EngineCaveman:
-					// Standard mode IS Caveman (the reference router
+					// Standard mode IS Caveman (the sector baseline
 					// standard); the stacked default is
 					// Caveman full, and standard takes the
 					// same level.
@@ -931,7 +931,7 @@ func contains(list []string, s string) bool {
 
 // ---- Engine registry (B4-21, Stage 1) ----
 //
-// the reference router registers 15 compression engines and orders them by
+// the sector baseline registers 15 compression engines and orders them by
 // stackPriority; a stacked pipeline runs them in that order and a
 // caller selects engines per request. This build previously had
 // only a fixed 3-step lossless pipeline plus the two mode engines
@@ -942,7 +942,7 @@ func contains(list []string, s string) bool {
 // as the default stack (priority order).
 //
 // Stack priorities: session-dedup 3, CCR 4, codex 12, Ionizer
-// 13, SmartCrusher 15 and Relevance 18 match the reference router's
+// 13, SmartCrusher 15 and Relevance 18 match the sector-typical
 // published stackPriority values for those engines.
 // Lite 1, RTK 6 and Caveman 8 are ours — they preserve the
 // effective order this build already had (lossless first, RTK
@@ -993,7 +993,7 @@ const (
 )
 
 // StackPriority values for the registered engines. See the
-// registry doc above for which are the reference router's and which are ours.
+// registry doc above for which are the sector-typical and which are ours.
 const (
 	PriorityLite          = 1
 	PrioritySessionDedup  = 3
@@ -1405,7 +1405,7 @@ func ApplyWithEngines(model string, msgs []provider.Message, req *provider.Compr
 
 // ---- Session-dedup (B4-23, Stage 1) ----
 //
-// the reference router's session-dedup engine (stackPriority 3, lossless):
+// the sector-typical session-dedup engine (stackPriority 3, lossless):
 // content repeated across turns of one session is replaced by a
 // [dedup:ref sha=…] marker pointing at the earlier occurrence —
 // the model still sees the original earlier in the conversation,
@@ -1544,7 +1544,7 @@ func DeduplicateSession(msgs []provider.Message, store *SessionDedupStore, sessi
 
 // ---- CCR (B4-24, Stage 1) ----
 //
-// the reference router's CCR engine (stackPriority 4, lossless):
+// the sector-typical CCR engine (stackPriority 4, lossless):
 // contextual-compression-retrieval — retrieved content is stored
 // once and later occurrences are replaced by a [ccr:ref sha=…]
 // marker, with a 24 h retention backed by SQLite. Same marker
@@ -1781,7 +1781,7 @@ func (s *CCRStore) GetByPrefix(prefix string) (string, bool) {
 
 // ---- Codex Responses tool-output compression (B4-26, Stage 1) ----
 //
-// the reference router's Codex engine (stackPriority 12, lossless-first):
+// the sector-typical Codex engine (stackPriority 12, lossless-first):
 // compresses tool outputs from Codex Responses-style calls
 // (code execution / file reads / long command output). This
 // build has no Responses-API wire shape yet, so the engine

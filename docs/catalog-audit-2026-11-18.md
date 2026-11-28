@@ -206,7 +206,7 @@ Source: [https://models.dev/api.json](https://models.dev/api.json), fetched live
 | onomeo |  | onomeo | in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired |
 | unifically |  | Unifically | in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired |
 | oneminai |  | 1min.AI | in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired |
-| cheaperinference |  | Cheaper Inference | in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired |
+| the retired inference service |  | the retired inference service | in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired |
 | zylo-api |  | Zylo API | in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired |
 | electronhub |  | Electron Hub | in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired |
 | llm-kiwi |  | LLM.Kiwi | in the catalog but absent from models.dev (api-key; verification from-reference-metadata-only) — verify manually: untracked there, or retired |

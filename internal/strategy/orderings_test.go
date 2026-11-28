@@ -4,7 +4,7 @@
 // removed or returns the input order unchanged. All randomness is
 // seeded (math/rand with a fixed seed) so the tests are reproducible.
 //
-// the reference router semantics under test (read-only reference,
+// the sector baseline semantics under test (read-only reference,
 // the local reference clone):
 //   - random:        fisherYatesShuffle, applyStrategyOrdering.ts "random"
 //   - strict-random: shuffleDeck.ts getNextFromDeck — deck + mutex, no
@@ -389,7 +389,7 @@ func TestWeightedDrawMatchesReferenceSemantics(t *testing.T) {
 		t.Fatalf("WeightedDraw(weight 0,0,1) = %v, want c/m3", got.Key())
 	}
 
-	// Total weight <= 0: uniform pick among all targets (the reference router
+	// Total weight <= 0: uniform pick among all targets (the sector baseline
 	// fallback branch) — result must be a member, never an error.
 	zero := []OrderingTarget{
 		{Provider: "a", Model: "m1", Weight: 0},

@@ -96,7 +96,7 @@ func TestKeyBudgetWindowedEnforcement(t *testing.T) {
 }
 
 // TestKeyBudgetActiveWindowFallback: the active limit follows
-// the reference router's getActiveBudgetLimit — monthly with no monthly limit
+// the sector-typical getActiveBudgetLimit — monthly with no monthly limit
 // falls back to the daily limit; weekly with no weekly limit falls
 // back to daily; daily with no daily limit means no calendar cap
 // is active FOR DISPLAY. B2: the fallback is display-only —

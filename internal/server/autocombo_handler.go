@@ -3,7 +3,7 @@
 // and supplies the candidate pool; this file never touches server.go,
 // globals, the DB, or the network.
 //
-// Shape (open-sse/handlers/autoComboCandidates.ts,
+// Shape (the earlier implementation,
 // AutoComboCandidatesResult / AutoComboCandidateView):
 //
 //	{ "channel": "auto/coding", "candidates": [

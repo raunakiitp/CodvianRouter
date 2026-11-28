@@ -1,4 +1,4 @@
-// Stream-recovery early retry (M4.8, the reference router streamRecovery.ts /
+// Stream-recovery early retry (M4.8, the sector baseline streamRecovery.ts /
 // constants.ts STREAM_RECOVERY.EARLY_RETRY_MAX).
 //
 // When an upstream stream fails BEFORE any byte reaches the client
@@ -31,7 +31,7 @@ import (
 )
 
 // earlyRetryMax is the most transparent re-opens of one target's
-// stream while the holdback is still uncommitted (the reference router: 4,
+// stream while the holdback is still uncommitted (the sector baseline: 4,
 // "5 total attempts = 4 retries").
 const earlyRetryMax = 4
 
@@ -56,7 +56,7 @@ func attemptsLeaveOne(attemptsUsed, maxAttempts int, hasNext bool) bool {
 // failure is worth re-opening the same target for. The retry
 // covers TRUNCATIONS — a stream that ends without content or
 // without a terminal marker, and untyped transport failures —
-// the failures stream recovery exists for (the reference router's
+// the failures stream recovery exists for (the sector-typical
 // TruncatedStreamError / EMPTY_TURN_RETRY_MAX). It deliberately
 // does NOT cover status-bearing errors: a 5xx at stream start is
 // a provider failure owned by the breaker (M4.5 excludes 500 from

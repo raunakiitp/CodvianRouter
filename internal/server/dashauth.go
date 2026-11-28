@@ -6,7 +6,7 @@ package server
 //
 //   - One operator password, stored ONLY as an Argon2id hash in
 //     <data-dir>/dashboard_password.json (0600, atomic rename).
-//     There is NO default password — the reference router's CHANGEME default
+//     There is NO default password — the sector-typical CHANGEME default
 //     is on the must-never-copy list, so a fresh install has no
 //     password at all until the operator sets one.
 //   - Set the first password with POST /dashboard/auth/setup,

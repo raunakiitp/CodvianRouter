@@ -5,7 +5,7 @@
 // The gate runs BEFORE any provider is called and before the
 // traffic check (a refused request consumes no traffic slot): for
 // every pool the caller's key belongs to, the ledger decides
-// (see internal/ledger/pool.go — the reference router's decideFairShare).
+// (see internal/ledger/pool.go — the sector-typical decideFairShare).
 // A block is a 429 + Retry-After to the window reset, error type
 // "key_pool_limit". A soft-policy key allowed past its fair share
 // is still served, with the X-Codvian-FairShare-Penalized header

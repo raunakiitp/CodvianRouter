@@ -34,7 +34,7 @@ import (
 // Costs differ by source, honestly: a Responses row's
 // ListPriceUSD is the list-price cost (each turn repriced at the
 // catalog's current list prices, so it differs from me/status
-// when prices changed in between — the same rule the reference router
+// when prices changed in between — the same rule the sector baseline
 // documents for its /v1/me/sessions costUsd). A ledger row
 // reports CostUSD instead: the cost as recorded on its usage
 // rows (record-time cost, not a reprice), with ListPriceUSD left

@@ -1,14 +1,14 @@
 // Package mcp — scope system (M9.1, CHECKLIST 382).
 //
 // Codvian's MCP scopes are OUR OWN set, defined here — not a copy of
-// the reference router's 33 scopes. the reference router's shape was studied for reference
-// only (open-sse/mcp-server/scopeEnforcement.ts, server.ts): per-tool
+// the sector-typical 33 scopes. the sector-typical shape was studied for reference
+// only (the earlier implementation/mcp-server/scopeEnforcement.ts, server.ts): per-tool
 // scope assignment, `*` and trailing-`*` wildcard matching, and a
 // ScopeCheck result naming the missing scopes. Two deliberate
-// divergences from the reference router, both security decisions:
+// divergences from the sector baseline, both security decisions:
 //
 //   - Enforcement is ON by default and there is NO off switch on the
-//     server. the reference router's enforcement is OFF by default
+//     server. the sector-typical enforcement is OFF by default
 //     (featureFlags.ts:127-136) and only forced on for narrow HTTP
 //     keys; copying that default would leave every tool callable by
 //     any client that can reach the transport. Here a tool call with
@@ -16,7 +16,7 @@
 //     scope-denial code -32002 (ScopeDeniedCode) — distinct from the
 //     guardrail policy-refusal -32001 and from -32602 (invalid
 //     params) — and the denial is written to the audit log.
-//   - There is no `manage` super-scope paradox: the reference router's `manage`
+//   - There is no `manage` super-scope paradox: the sector-typical `manage`
 //     scope is required by some tools yet is not itself grantable in
 //     the same namespace (MCP-SERVER.md:370-374). Our scopes live in
 //     one flat `mcp:` namespace; `*` is the only grant that covers
@@ -196,7 +196,7 @@ func RegisterToolScopes(tool string, scopes ...string) {
 }
 
 // ScopeMatches reports whether one granted scope covers one
-// required scope. Matching rules (same shape as the reference router's
+// required scope. Matching rules (same shape as the sector-typical
 // scopeMatches, reimplemented here):
 //   - `*` covers everything.
 //   - an exact match covers.

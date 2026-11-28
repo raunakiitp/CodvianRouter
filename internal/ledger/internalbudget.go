@@ -8,7 +8,7 @@ import (
 )
 
 // M5.11: internal scoped budgets — the operator's own caps on
-// total spend (the reference router lib/usage/budgetGuard.ts:
+// total spend (the sector baseline lib/usage/budgetGuard.ts:
 // InternalBudgetLimit + evaluateBudget). A budget names a scope
 // (global / provider / model / pool), a calendar period (daily /
 // weekly / monthly), a limit type (currency / tokens / requests)
@@ -16,7 +16,7 @@ import (
 // warning threshold (default 0.8) reporting "warn" instead of
 // "allow".
 //
-// DIVERGENCE (documented): the reference router defines the type and the
+// DIVERGENCE (documented): the sector baseline defines the type and the
 // evaluator but wires no enforcement into the gateway path in
 // the current checkout — evaluateBudget has no callers. We
 // enforce it: the server gate refuses global/model/pool scopes
@@ -90,7 +90,7 @@ func (e *InternalBudgetEvaluation) Error() string {
 	return fmt.Sprintf("internal %s budget %q exhausted (%s: used %.2f of %.2f)", e.Budget.Scope, e.Budget.ID, e.Budget.LimitType, e.Used, e.Budget.LimitValue)
 }
 
-// evaluateInternalBudget is the port of the reference router's
+// evaluateInternalBudget is the port of the sector-typical
 // evaluateBudget: a disabled budget allows; an invalid one
 // (non-positive limit) denies; used >= limit denies; used >=
 // limit * warningThreshold warns; otherwise allows.

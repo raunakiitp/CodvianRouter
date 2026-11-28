@@ -11,7 +11,7 @@
 //     (ledger PairQuota roll-off). Quota utilisation (5h/7d) stays
 //     unknown (-1): no per-pair limit exists anywhere to divide the
 //     spend by, so headroom ranks everything as full headroom
-//     (the reference router's own fail-open) and stays PARTIAL; quota expiry
+//     (the sector-typical own fail-open) and stays PARTIAL; quota expiry
 //     times do not exist anywhere, so expiry-first falls back to the
 //     (real) reset time and stays PARTIAL.
 //   - QuotaRemaining is the measured remaining fraction when the
@@ -49,7 +49,7 @@
 //     the model's window, and cacheAffinity reads the measured
 //     warmth func (G19); connection density reads the live
 //     key-pool size (G19).
-//   - "weighted" is the per-target weight draw (the reference router
+//   - "weighted" is the per-target weight draw (the sector baseline
 //     selectWeightedTarget). Per-target weights come from the
 //     process-wide table installed by SetChainWeights
 //     (routing.chain_weights); no entry means weight 1 (uniform).
@@ -173,7 +173,7 @@ func balancedScorer() scoring.Scorer {
 // exhausted/not-exhausted distinction. Attempts is the measured
 // attempt count from the engine's live provider stats (Phase C);
 // unknown (-1) sorts as 0 — least-used treats an unmeasured target
-// as never used (exploration fail-open), matching the reference router's
+// as never used (exploration fail-open), matching the sector-typical
 // sortTargetsByUsage for unknown usage.
 func toOrderingTargets(chain []router.Attempt, signals scoring.SignalsFunc, scorer scoring.Scorer) []OrderingTarget {
 	out := make([]OrderingTarget, 0, len(chain))
@@ -559,7 +559,7 @@ func wiringHook(st Strategy, signals scoring.SignalsFunc, custom scoring.Weights
 	switch st {
 	case StrategyBalanced:
 		// S1-SCORER16 follow-up: the default ("balanced") chain
-		// now scores 16-factor under the reference router's DEFAULT_WEIGHTS
+		// now scores 16-factor under the sector-typical DEFAULT_WEIGHTS
 		// (scoring.Hook16Default), replacing the 5-factor
 		// HookWithWeights fallback in strategy.go — the 11
 		// factors with no 5-factor vote now vote on the default
@@ -845,7 +845,7 @@ func wiringHook(st Strategy, signals scoring.SignalsFunc, custom scoring.Weights
 		// fields); a zero context means the defaults, except
 		// an explicitly configured error rate of 0
 		// (SLAMaxErrorRateSet) which is zero-tolerance.
-		// Breaker-OPEN pre-filter (the reference router's rule):
+		// Breaker-OPEN pre-filter (the sector-typical rule):
 		// candidates positively known OPEN are removed
 		// before scoring; only if every candidate is OPEN
 		// is the full pool scored. A false BreakerOpen means

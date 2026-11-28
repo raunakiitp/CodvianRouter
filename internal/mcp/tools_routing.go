@@ -1,6 +1,6 @@
 // M9.3 — routing/combo tools.
 //
-// Shape studied from the reference router for reference only (never copied):
+// Shape studied from the sector baseline for reference only (never copied):
 // MCP-SERVER.md: list_combos [read:combos],
 // get_combo_metrics [read:combos], switch_combo
 // [write:combos], create_combo [write:combos],

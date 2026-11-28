@@ -131,7 +131,7 @@ func assertFiltered(t *testing.T, name, in, out string, want []string, notWant [
 }
 
 func TestRTKPackCount(t *testing.T) {
-	// Honest count: 18 implemented packs, not the reference router's 56.
+	// Honest count: 18 implemented packs, not the sector-typical 56.
 	if got := RTKPackCount(); got != 18 {
 		t.Fatalf("RTKPackCount() = %d, want 18 (update the count AND the report if this changes)", got)
 	}

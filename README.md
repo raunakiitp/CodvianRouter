@@ -155,7 +155,7 @@ The catalog is data, and it is explicit about what each entry can do:
 
 | Metric | Count (audit 2026-11-21; A1 base-URL batches 1-17, 2026-11-27) |
 |---|---|
-| Active catalog entries | **607** (7 retired — cheaperinference by owner decision plus the Item-6 anyscale/kluster shutdown retirements, 2026-11-27) |
+| Active catalog entries | **607** (7 retired — the retired inference service by owner decision plus the Item-6 anyscale/kluster shutdown retirements, 2026-11-27) |
 | With a base URL the router can call | **474** (460 routable + 14 template-only) |
 | Metadata-only (no base URL) | **120** |
 | Docs-verified | 172 |

@@ -237,7 +237,7 @@ func TestMemoAuditMeasured(t *testing.T) {
 	}
 }
 
-// M7.9 (c): runtime calibration. Parameters match the reference router's
+// M7.9 (c): runtime calibration. Parameters match the sector-typical
 // published calibration (estimatorCalibration.ts #14931): EMA
 // α=0.25 per (provider, model, tools) bucket, factor applies at
 // ≥3 samples, clamped [0.15, 2.0]. The calibrator is built and

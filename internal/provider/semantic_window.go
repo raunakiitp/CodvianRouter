@@ -26,7 +26,7 @@ const SemanticWindowTurns = 3
 // SemanticMaxTurns is the maximum conversation length the semantic
 // cache serves at all (M6.7c): a conversation longer than this
 // bypasses semantic caching entirely — no lookup, no store. It is
-// the reference router's conversationHistoryThreshold (default 50).
+// the sector-typical conversationHistoryThreshold (default 50).
 const SemanticMaxTurns = 50
 
 // SemanticMessageText is the visible text of one message: Content,
@@ -49,7 +49,7 @@ func SemanticMessageText(m Message) string {
 // SemanticWindowText is the text the semantic cache matches on: the
 // last SemanticWindowTurns turns excluding system/developer messages,
 // each rendered "role: text" (a missing role reads as "user", as in
-// the reference router's normalizer) and joined with "\n", in conversation
+// the sector-typical normalizer) and joined with "\n", in conversation
 // order. Messages inside the window with no text contribute no line
 // but still occupy their window slot. "" when none of the last 3
 // turns carries text.
@@ -100,12 +100,12 @@ func SemanticWindowText(msgs []Message) string {
 // is unaffected: its key is the messages as sent, so a long
 // conversation can still hit exactly.
 //
-// CAP SEMANTICS (verified against the the reference router reference clone,
+// CAP SEMANTICS (verified against the the sector baseline reference clone,
 // study only, the local reference clone):
 //
 //   - WHAT IS COUNTED: the RAW request messages — every message in
 //     the request, system/developer included, before any exclusion.
-//     the reference router's guard is `conv.length > threshold` where conv is
+//     the sector-typical guard is `conv.length > threshold` where conv is
 //     `params.body.messages ?? params.body.input`, the unfiltered
 //     array (services/cache/semanticCacheManager.ts:364; the conv
 //     assignment is at :313); the system exclusion and the 3-turn
@@ -113,18 +113,18 @@ func SemanticWindowText(msgs []Message) string {
 //     normalizeConversationForEmbedding. So a conversation of 1
 //     system + 50 user/assistant messages (51 raw) bypasses, while
 //     1 system + 49 (50 raw) does not.
-//   - WHERE THE BYPASS APPLIES IN THE REFERENCE ROUTER: LOOKUP ONLY, and only
+//   - WHERE THE BYPASS APPLIES IN THE SECTOR BASELINE: LOOKUP ONLY, and only
 //     the semantic layer. The guard sits in the semantic lookup
 //     (semanticCacheManager.ts:364), AFTER the exact-hash layer
 //     (same file, ~line 330), so a long conversation still hits
 //     exactly; the store path (same file, ~line 433, and
 //     handlers/chatCore/semanticCacheStore.ts) has NO threshold
 //     check and stores long conversations. This router DELIBERATELY
-//     goes further than the reference router on the store side (per the M6.7c
+//     goes further than the sector baseline on the store side (per the M6.7c
 //     brief): a >50-turn conversation never stores a semantic entry
 //     either, so no entry can exist that a later lookup would have
 //     to bypass around. The threshold itself and the lookup
-//     behaviour match the reference router exactly.
+//     behaviour match the sector baseline exactly.
 //   - BOUNDARY: strictly greater than — 50 turns are served, 51
 //     bypass (config/semanticCacheConfig.ts:45,73:
 //     conversationHistoryThreshold: 50, "Maximum message turns in

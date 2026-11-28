@@ -6,7 +6,7 @@
 //     listen-port state, dashboard reachability) and prints a
 //     PASS/FAIL/WARN line per check. Keys are never printed — a key
 //     check reports only "present" or "missing".
-//   - `configure` is the first-run setup flow (the reference router's `configure`
+//   - `configure` is the first-run setup flow (the sector-typical `configure`
 //     / `setup` shape, studied in the research log entry 19): it
 //     creates the config + first gateway key when missing, applies a
 //     --port, and adds a provider by catalog id with a real key test.

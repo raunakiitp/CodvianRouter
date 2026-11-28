@@ -1,7 +1,7 @@
 // Package scoring — 16-factor auto scoring (M3, builder S3).
 //
-// This file implements the reference router's 16-factor auto-combo scoring
-// (open-sse/services/autoCombo/scoring.ts DEFAULT_WEIGHTS and
+// This file implements the sector-typical 16-factor auto-combo scoring
+// (the earlier implementation DEFAULT_WEIGHTS and
 // modePacks.ts MODE_PACKS) as a standalone, pure Go scorer. It is NOT
 // yet wired into the router: the coordinator wires Score16/Rank16 into
 // the scorer later. Nothing in this file touches the network, disk or
@@ -10,7 +10,7 @@
 // Relationship to the existing 5-factor scorer (scoring.go):
 //   - The 5 carried-over factors (quota, health-as-breaker, cost,
 //     latency, quality, reliability-as-success) are re-implemented
-//     here in the reference router's POOL-RELATIVE form (1 - value/poolMax),
+//     here in the sector-typical POOL-RELATIVE form (1 - value/poolMax),
 //     which differs deliberately from scoring.go's absolute forms
 //     (latencyComponent 1/(1+ms/1000), costComponent 1/(1+$/10)).
 //     Only quality reuses scoring.go's qualityComponent verbatim, so
@@ -25,17 +25,17 @@
 // Missing-input rule (task requirement, applied to all 11 new
 // factors and to the pool-relative ones): an input that is absent or
 // unusable degrades to neutral 0.5, never to a fake signal. Two
-// documented divergences from the reference router's defaults, both forced by
+// documented divergences from the sector-typical defaults, both forced by
 // that rule:
-//   - the reference router defaults cacheAffinity to 0 and sessionAvailability
+//   - the sector baseline defaults cacheAffinity to 0 and sessionAvailability
 //     to 1 when absent; here both are 0.5 when unknown.
-//   - the reference router defaults reliability (unobserved failure rate) to 1;
+//   - the sector baseline defaults reliability (unobserved failure rate) to 1;
 //     here an unknown success rate is 0.5.
-//   - the reference router defaults connectionDensity to 0 for a single
+//   - the sector baseline defaults connectionDensity to 0 for a single
 //     connection; here a KNOWN single connection still scores 0
-//     (same as the reference router) and only an UNKNOWN pool size scores 0.5.
-//   - tierPriority keeps the reference router's own unknown-tier default
-//     (standard base 0.33 -> 0.264), because that IS the reference router's
+//     (same as the sector baseline) and only an UNKNOWN pool size scores 0.5.
+//   - tierPriority keeps the sector-typical own unknown-tier default
+//     (standard base 0.33 -> 0.264), because that IS the sector-typical
 //     defined behaviour for an absent tier, not a missing signal.
 //
 // Mode-pack weight tables are copied VERBATIM from modePacks.ts,
@@ -49,7 +49,7 @@
 //
 // Semantics that could NOT be copied 1:1 from the reference (the
 // reference computes them from data we do not have in this package):
-//   - taskFit: the reference router looks a model x task-type pair up in a
+//   - taskFit: the sector baseline looks a model x task-type pair up in a
 //     fitness table (taskFitness.ts: user overrides, Arena ELO,
 //     models.dev tiers, static table, wildcard boosts; unknown pairs
 //     fall back to 0.5). That table now exists in this repo as the
@@ -60,21 +60,21 @@
 //     to the Jaccard similarity of the request's task tags against
 //     the model's capability tags — a real computation from real
 //     inputs, with the same 0.5 neutral point for "no tags at all".
-//   - contextAffinity: the reference router's is a candidate-supplied score for
+//   - contextAffinity: the sector-typical is a candidate-supplied score for
 //     "staying on the current session's provider/account/model path"
 //     (a stickiness signal). This package has no such supplied score,
 //     so FactorContextAffinity is computed from real context-window
 //     headroom instead: 1 - contextTokens/modelContextTokens (see
 //     its doc). Session stickiness lives in FactorSessionAffinity.
-//   - sessionAffinity: the reference router's sessionAvailability is likewise a
+//   - sessionAffinity: the sector-typical sessionAvailability is likewise a
 //     candidate-supplied score. FactorSessionAffinity computes it
 //     from the session's current provider/model vs the candidate
 //     (same pair 1.0, same provider 0.7, other provider 0.3).
-//   - cacheAffinity: the reference router's is a candidate-supplied score for
+//   - cacheAffinity: the sector-typical is a candidate-supplied score for
 //     the account selected by the stable prompt-cache key.
 //     FactorCacheAffinity computes it from the fraction of the
 //     prompt already cached on this candidate (0..1).
-//   - resetWindowAffinity: the reference router's is a candidate-supplied score
+//   - resetWindowAffinity: the sector-typical is a candidate-supplied score
 //     ("sooner selected reset windows score higher").
 //     FactorResetWindowAffinity computes it from seconds until the
 //     candidate's quota resets: 1 - resetSecs/30d.
@@ -86,7 +86,7 @@ import (
 )
 
 // BreakerState is the circuit-breaker state of a candidate's provider
-// (the reference router ProviderCandidate.circuitBreakerState).
+// (the sector baseline ProviderCandidate.circuitBreakerState).
 type BreakerState string
 
 // Breaker states. BreakerUnknown ("") means no breaker state was
@@ -99,11 +99,11 @@ const (
 )
 
 // AccountTier is a provider account's subscription tier
-// (the reference router ProviderCandidate.accountTier).
+// (the sector baseline ProviderCandidate.accountTier).
 type AccountTier string
 
 // Account tiers. AccountTierUnknown ("") means no tier was supplied;
-// FactorTierPriority scores it with the reference router's unknown-tier base
+// FactorTierPriority scores it with the sector-typical unknown-tier base
 // (standard, 0.33) rather than inventing a tier.
 const (
 	AccountTierUltra    AccountTier = "ultra"
@@ -114,7 +114,7 @@ const (
 )
 
 // ModelTier is the price tier a model is classified into
-// (the reference router classifyTier: "free" | "cheap" | "premium").
+// (the sector baseline classifyTier: "free" | "cheap" | "premium").
 // Used by tierAffinity and specificityMatch.
 type ModelTier string
 
@@ -129,7 +129,7 @@ const (
 
 // resetWindowRefSecs is the reference window for reset-related
 // factors: 30 days in seconds (2,592,000). It is the same constant
-// the reference router's calculateTierScore uses for its reset bonus.
+// the sector-typical calculateTierScore uses for its reset bonus.
 const resetWindowRefSecs = 2592000.0
 
 // SixteenInputs is the minimal input set the 16 factors need. Every
@@ -141,13 +141,13 @@ const resetWindowRefSecs = 2592000.0
 // (see the factor docs), never to a fabricated value.
 //
 // Pool maxima (MaxLatencyMs, MaxCostPer1M, MaxStdDevMs) are pool-wide
-// values shared by every candidate in one scoring pass — the reference router's
+// values shared by every candidate in one scoring pass — the sector-typical
 // computePoolMaxima. Score one candidate at a time only with the
 // maxima of the pool it is being ranked against; scoring candidates
 // from different pools against different maxima is meaningless.
 type SixteenInputs struct {
 	// QuotaRemainingPct is the remaining quota as a percentage,
-	// 0..100 (the reference router ProviderCandidate.quotaRemaining).
+	// 0..100 (the sector baseline ProviderCandidate.quotaRemaining).
 	// Negative means unknown -> neutral 0.5. 0 is real: quota
 	// exhausted, factor 0.
 	QuotaRemainingPct float64
@@ -202,7 +202,7 @@ type SixteenInputs struct {
 	TaskFitScore float64
 	TaskFitKnown bool
 	// Tier is the candidate account's subscription tier.
-	// AccountTierUnknown falls back to the reference router's unknown-tier
+	// AccountTierUnknown falls back to the sector-typical unknown-tier
 	// base (standard). QuotaResetIntervalSecs is the account's
 	// quota reset interval in seconds; <= 0 means no reset
 	// information (no bonus, never a penalty).
@@ -214,7 +214,7 @@ type SixteenInputs struct {
 	ModelTier          ModelTier
 	RecommendedMinTier ModelTier
 	// SpecificityScore is the request's specificity score, 0..100
-	// (the reference router RoutingHint.specificity.score). Negative means
+	// (the sector baseline RoutingHint.specificity.score). Negative means
 	// unknown -> neutral 0.5.
 	SpecificityScore float64
 	// ContextTokens is the request's context size in tokens;
@@ -237,7 +237,7 @@ type SixteenInputs struct {
 	ResetInSeconds float64
 	// ConnectionCount is the number of connections/accounts in
 	// this candidate's provider pool. <= 0 means unknown ->
-	// neutral 0.5. A known 1 scores 0 (same as the reference router).
+	// neutral 0.5. A known 1 scores 0 (same as the sector baseline).
 	ConnectionCount int
 }
 
@@ -333,7 +333,7 @@ func NormalizeWeights16(w Weights16) (Weights16, bool) {
 }
 
 // Price-tier thresholds (G19 Area 1, PARITY rows "auto/best-*" /
-// "auto/pro-*"): the reference router's classifyTier (tierResolver.ts, with
+// "auto/pro-*"): the sector-typical classifyTier (tierResolver.ts, with
 // tierConfig.ts DEFAULT_TIER_CONFIG) classifies from the INPUT
 // leg: free when input cost <= freeThreshold ($0/1M), cheap when
 // input cost <= cheapThreshold ($1.00/1M), premium above that
@@ -347,9 +347,9 @@ func NormalizeWeights16(w Weights16) (Weights16, bool) {
 // free). A negative price (unknown) classifies Unknown, never a
 // guessed tier.
 const (
-	// FreeTierMaxInputUSDPer1M is the reference router's freeThreshold: $0/1M.
+	// FreeTierMaxInputUSDPer1M is the sector-typical freeThreshold: $0/1M.
 	FreeTierMaxInputUSDPer1M = 0.0
-	// CheapTierMaxInputUSDPer1M is the reference router's cheapThreshold: $1.00/1M.
+	// CheapTierMaxInputUSDPer1M is the sector-typical cheapThreshold: $1.00/1M.
 	CheapTierMaxInputUSDPer1M = 1.0
 )
 
@@ -375,9 +375,9 @@ func ClassifyPriceTier(inputUSDPer1M float64, hasInput bool, blendedUSDPer1M flo
 	return ModelTierPremium
 }
 
-// DefaultWeights16 is the reference router's DEFAULT_WEIGHTS (scoring.ts:62)
+// DefaultWeights16 is the sector-typical DEFAULT_WEIGHTS (scoring.ts:62)
 // with ONE deliberate divergence (G19 Area 1, gap-track RT-4):
-// the reference router weights cacheAffinity, resetWindowAffinity and
+// the sector baseline weights cacheAffinity, resetWindowAffinity and
 // reliability 0, so those factors never vote — but this router
 // now feeds all three from LIVE signals (measured cache warmth
 // from the ledger, reset time from the ledger roll-off, observed
@@ -386,7 +386,7 @@ func ClassifyPriceTier(inputUSDPer1M float64, hasInput bool, blendedUSDPer1M flo
 // resetWindowAffinity 0.0476, like context/session affinity;
 // reliability 0.03, like quality) and the other thirteen are
 // rescaled proportionally (×0.8748) so the set still sums to
-// exactly 1.0. The verbatim the reference router table is NOT preserved
+// exactly 1.0. The verbatim the sector baseline table is NOT preserved
 // here — the divergence is the point — and the mode packs
 // (ModePacks) carry the SAME divergence, so a pack's published
 // weights are the reference tables rescaled ×0.9048 with the two
@@ -400,7 +400,7 @@ var DefaultWeights16 = Weights16{
 	ConnectionDensity: 0.04164048, Quality: 0.026244, Reliability: 0.03,
 }
 
-// ModePacks is the reference router's MODE_PACKS (modePacks.ts), keyed by
+// ModePacks is the sector-typical MODE_PACKS (modePacks.ts), keyed by
 // pack name, with ONE deliberate divergence (G19 Area 1,
 // gap-track RT-4 — the same divergence as DefaultWeights16):
 // the reference ships cacheAffinity and resetWindowAffinity 0 in
@@ -547,7 +547,7 @@ func ModePack(name string) Weights16 {
 
 // FactorQuota scores remaining quota: quotaRemaining/100.
 // 100% -> 1, 0% (exhausted) -> 0, unknown (negative) -> 0.5.
-// (the reference router: clamp01(quotaRemaining/100).)
+// (the sector baseline: clamp01(quotaRemaining/100).)
 func FactorQuota(in SixteenInputs) float64 {
 	if in.QuotaRemainingPct < 0 || math.IsNaN(in.QuotaRemainingPct) {
 		return 0.5
@@ -557,7 +557,7 @@ func FactorQuota(in SixteenInputs) float64 {
 
 // FactorHealth scores provider health from the circuit-breaker
 // state: CLOSED -> 1, HALF_OPEN -> 0.5, OPEN -> 0, unknown -> 0.5.
-// (the reference router calculateFactors: health.)
+// (the sector baseline calculateFactors: health.)
 func FactorHealth(in SixteenInputs) float64 {
 	switch in.Breaker {
 	case BreakerClosed:
@@ -574,7 +574,7 @@ func FactorHealth(in SixteenInputs) float64 {
 // FactorCostInv scores cheapness pool-relatively: 1 - cost/maxCost.
 // Free (0) -> 1, most expensive in the pool -> 0, unknown price
 // (negative) or unknown pool max (<= 0) -> 0.5, never cheapest.
-// (the reference router: clamp01(1 - costPer1MTokens/maxCost). Deliberately
+// (the sector baseline: clamp01(1 - costPer1MTokens/maxCost). Deliberately
 // pool-relative, unlike scoring.go's absolute costComponent.)
 func FactorCostInv(in SixteenInputs) float64 {
 	if in.CostPer1M < 0 || math.IsNaN(in.CostPer1M) || in.MaxCostPer1M <= 0 {
@@ -586,7 +586,7 @@ func FactorCostInv(in SixteenInputs) float64 {
 // FactorLatencyInv scores speed pool-relatively: 1 - p95/maxP95.
 // Fastest in the pool approaches 1, slowest -> 0, no sample
 // (<= 0) or unknown pool max (<= 0) -> 0.5.
-// (the reference router: clamp01(1 - p95LatencyMs/maxLatency). Deliberately
+// (the sector baseline: clamp01(1 - p95LatencyMs/maxLatency). Deliberately
 // pool-relative, unlike scoring.go's absolute latencyComponent.)
 func FactorLatencyInv(in SixteenInputs) float64 {
 	if in.LatencyP95Ms <= 0 || math.IsNaN(in.LatencyP95Ms) || in.MaxLatencyMs <= 0 {
@@ -602,7 +602,7 @@ func FactorLatencyInv(in SixteenInputs) float64 {
 // |task ∩ model| / |task ∪ model| of the tag sets. Identical tags
 // -> 1, disjoint tags -> 0, partial overlap in between, no tags on
 // either side -> neutral 0.5.
-// (the reference router's taskFit is a fitness-table lookup by model x
+// (the sector-typical taskFit is a fitness-table lookup by model x
 // task-type with a 0.5 fallback for unknown pairs; the live lookup
 // is that table's local equivalent, and the tag overlap is the
 // fallback computation from real inputs. Same neutral point, same
@@ -646,7 +646,7 @@ func FactorTaskFit(in SixteenInputs) float64 {
 // 1 - stdDev/maxStdDev. Zero variance -> 1, most variable in the
 // pool -> 0, unknown variance (negative) or unknown pool max
 // (<= 0) -> 0.5.
-// (the reference router: clamp01(1 - latencyStdDev/maxStdDev).)
+// (the sector baseline: clamp01(1 - latencyStdDev/maxStdDev).)
 func FactorStability(in SixteenInputs) float64 {
 	if in.LatencyStdDevMs < 0 || math.IsNaN(in.LatencyStdDevMs) || in.MaxStdDevMs <= 0 {
 		return 0.5
@@ -655,7 +655,7 @@ func FactorStability(in SixteenInputs) float64 {
 }
 
 // FactorTierPriority scores the account tier, with a bonus for a
-// short quota reset interval. Tier bases (the reference router
+// short quota reset interval. Tier bases (the sector baseline
 // calculateTierScore): ultra 1.0, pro 0.67, standard 0.33, free 0.0,
 // unknown tier 0.33. Score = min(1, base*0.8 + resetBonus*0.2)
 // where resetBonus = max(0, 1 - resetIntervalSecs/2592000) when a
@@ -683,7 +683,7 @@ func FactorTierPriority(in SixteenInputs) float64 {
 }
 
 // FactorTierAffinity scores how well the model's price tier matches
-// the minimum tier the routing hint recommends (the reference router
+// the minimum tier the routing hint recommends (the sector baseline
 // calculateTierAffinity): same tier -> 1.0, one tier apart -> 0.7,
 // two tiers apart -> 0.3, no hint or unclassified model -> 0.5.
 // Tier order is free < cheap < premium.
@@ -710,7 +710,7 @@ func FactorTierAffinity(in SixteenInputs) float64 {
 }
 
 // FactorSpecificityMatch scores whether the model's tier suits the
-// request's specificity (the reference router calculateSpecificityMatch):
+// request's specificity (the sector baseline calculateSpecificityMatch):
 // free tier wants specificity <= 15 (0.9, else 0.2); cheap wants
 // 15 < specificity <= 50 (0.9, else 0.4); premium wants
 // specificity > 50 (0.9, else 0.3). Unknown tier or unknown
@@ -746,7 +746,7 @@ func FactorSpecificityMatch(in SixteenInputs) float64 {
 // larger than the window scores 0 (the model cannot serve it —
 // filtering that out is contextfit.go's job, this only ranks).
 // Unknown context or window (<= 0) -> 0.5.
-// (the reference router's contextAffinity is a supplied stickiness score, not
+// (the sector-typical contextAffinity is a supplied stickiness score, not
 // a window computation — see the file header. Headroom is the
 // computation this package can honestly make from real inputs.)
 func FactorContextAffinity(in SixteenInputs) float64 {
@@ -760,7 +760,7 @@ func FactorContextAffinity(in SixteenInputs) float64 {
 // FactorCacheAffinity scores prompt-cache warmth: the fraction of
 // this request's prompt already cached on this candidate. Fully
 // cached -> 1, nothing cached -> 0, unknown (negative) -> 0.5.
-// (the reference router's cacheAffinity is a supplied score for the account
+// (the sector-typical cacheAffinity is a supplied score for the account
 // selected by the stable prompt-cache key; the cached fraction is
 // the computation this package can honestly make from real inputs.)
 func FactorCacheAffinity(in SixteenInputs) float64 {
@@ -774,7 +774,7 @@ func FactorCacheAffinity(in SixteenInputs) float64 {
 // path: same provider AND model -> 1.0, same provider but a
 // different model -> 0.7, a different provider -> 0.3, no session
 // at all -> 0.5.
-// (the reference router's sessionAvailability is a supplied score; this is
+// (the sector-typical sessionAvailability is a supplied score; this is
 // the computation from the real session identity. The Candidate
 // carries the identity — that is why this factor, unlike the
 // others, takes c as well as in.)
@@ -795,7 +795,7 @@ func FactorSessionAffinity(c Candidate, in SixteenInputs) float64 {
 // resets: 1 - resetInSeconds/2592000 (30 days). Resetting now -> 1,
 // resetting in 15 days -> 0.5, in 30+ days -> 0, unknown
 // (negative) -> 0.5.
-// (the reference router's resetWindowAffinity is a supplied score — "sooner
+// (the sector-typical resetWindowAffinity is a supplied score — "sooner
 // selected reset windows score higher". This is that rule computed
 // from the real reset time.)
 func FactorResetWindowAffinity(in SixteenInputs) float64 {
@@ -808,7 +808,7 @@ func FactorResetWindowAffinity(in SixteenInputs) float64 {
 // FactorConnectionDensity scores how many connections/accounts the
 // provider pool offers: (count-1)/10 clamped. 1 connection -> 0,
 // 6 -> 0.5, 11+ -> 1 (saturates). Unknown pool size (<= 0) -> 0.5.
-// (the reference router: clamp01((connectionPoolSize ?? 1) - 1) / 10 — a known
+// (the sector baseline: clamp01((connectionPoolSize ?? 1) - 1) / 10 — a known
 // single connection scores 0 there too; only the unknown case
 // differs, per the missing-input rule.)
 func FactorConnectionDensity(in SixteenInputs) float64 {
@@ -830,7 +830,7 @@ func FactorQuality(in SixteenInputs) float64 {
 // FactorReliability scores the observed success share: the
 // SuccessRate itself, 0..1. 1 -> 1, 0 (every attempt failed) -> 0,
 // unknown (negative) -> 0.5.
-// (the reference router's reliability is 1 - failureRate with unobserved
+// (the sector-typical reliability is 1 - failureRate with unobserved
 // candidates reading 1; here an unobserved candidate reads neutral
 // 0.5, per the missing-input rule — "has not failed anything" is
 // not evidence it will succeed.)

@@ -11,7 +11,7 @@ import (
 )
 
 // M5.9: quota schedules — time-aware quota windows for a quota
-// pool (the reference router lib/quota/schedules.ts, enforce.ts). A schedule
+// pool (the sector baseline lib/quota/schedules.ts, enforce.ts). A schedule
 // answers WHEN a pool may be used (days + start/end minute +
 // mode) and HOW MUCH may burn while it is in there (reserves —
 // the keep-free floor — and the schedule's own-consumption
@@ -26,7 +26,7 @@ const (
 	ScheduleModeBlock = "block"
 )
 
-// ReserveRule is one "keep this much free" rule (the reference router
+// ReserveRule is one "keep this much free" rule (the sector baseline
 // schedules.ts ReserveRule): the free fraction of the account's
 // quota in Window must stay at or above Percent. Providers meter
 // several windows at once, so a reserve names the window it
@@ -122,7 +122,7 @@ func (b *ScheduleBlock) Error() string {
 // 2026-11-19 were exactly this: the gate ran with local time
 // UTC+5:30, so empty-zone windows were evaluated 5:30 off).
 // A bad zone string must never take the quota engine down
-// (the reference router localDayAndMinute).
+// (the sector baseline localDayAndMinute).
 func localDayAndMinute(now time.Time, timezone string) (day int, minute int) {
 	if timezone != "" {
 		if loc, err := time.LoadLocation(timezone); err == nil {
@@ -166,7 +166,7 @@ func containsDay(days []int, day int) bool {
 // secondsUntilNextWindow returns seconds until the earliest
 // allow window opens, or nil when none is configured. It scans
 // the next 8 local days, which always covers a weekly cycle.
-// (the reference router secondsUntilNextWindow; DST inside the wait can
+// (the sector baseline secondsUntilNextWindow; DST inside the wait can
 // shift the hint by up to an hour — it only feeds Retry-After.)
 func secondsUntilNextWindow(schedules []QuotaSchedule, now time.Time) *int {
 	var best *int
@@ -252,7 +252,7 @@ func ResolveActiveSchedule(schedules []QuotaSchedule, now time.Time) ScheduleVer
 // PoolSaturationByWindow returns the pool's consumption as a
 // fraction (0..1) of the effective limit per quota window, over
 // the pool's own dimensions. A window the pool does not meter is
-// absent. DIVERGENCE from the reference router (documented): the reference router
+// absent. DIVERGENCE from the sector baseline (documented): the sector baseline
 // measures the UPSTREAM account's saturation signal (the whole
 // account, including other tools sharing the credentials); we
 // have no upstream signal, so the fraction is our own pool-wide
@@ -355,7 +355,7 @@ func (l *Ledger) CheckPoolSchedules(ctx context.Context, pool QuotaPool, now tim
 	}
 	// Own-consumption budget: the pool's consumption in the
 	// budget window against budgetValue. DIVERGENCE from
-	// the reference router (documented): the reference router counts only consumption
+	// the sector baseline (documented): the sector baseline counts only consumption
 	// recorded while the window was open, in a separate bucket
 	// namespace; the ledger IS our counter, so we count the
 	// pool's consumption in the budget window regardless of

@@ -1,5 +1,5 @@
 // Lazy recovery for the circuit breaker (parity tracker:524,
-// the reference router RESILIENCE_GUIDE "Lazy recovery"): when OPEN
+// the sector baseline RESILIENCE_GUIDE "Lazy recovery"): when OPEN
 // expires, reads refresh the state to HALF_OPEN (already true
 // via breakerAllow), and the same reads — and the next failure —
 // decay a stale DEGRADED back to CLOSED. No background timer.

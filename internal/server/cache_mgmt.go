@@ -1,7 +1,7 @@
 // Cache management API (M8.15 — DELETE /api/cache).
 //
-// the reference router parity, Area 6 "Flush / invalidation" and Area 14 §14b
-// "Cache": the reference router has clearCache / invalidateByModel /
+// the sector baseline parity, Area 6 "Flush / invalidation" and Area 14 §14b
+// "Cache": the sector baseline has clearCache / invalidateByModel /
 // DELETE /api/cache; we had only POST /admin/cache/flush (exact
 // layer, admin scope) plus GET /api/cache/stats. This file adds
 // the DELETE that clears every cache layer the server can reach

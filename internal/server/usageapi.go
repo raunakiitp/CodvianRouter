@@ -13,7 +13,7 @@ import (
 	"github.com/raunakiitp/codvian-router/internal/ledger"
 )
 
-// M5.7: usage/budget management API (the reference router
+// M5.7: usage/budget management API (the sector baseline
 // /api/usage/budget + /api/usage/om-usage).
 //
 //   - GET /api/usage/budget?apiKeyId= — management auth
@@ -21,7 +21,7 @@ import (
 //     limits, warning threshold, reset cadence, last/next reset,
 //     spend today / this month / this budget period, the active
 //     limit, and the budget check (allow/warn/deny), plus the
-//     rolling 5h cap. The shape mirrors the reference router's GET
+//     rolling 5h cap. The shape mirrors the sector-typical GET
 //     /api/usage/budget (getCostSummary + checkBudget).
 //   - POST /api/usage/budget — management auth (admin scope):
 //     setBudget for one key: daily/weekly/monthly limits,
@@ -31,13 +31,13 @@ import (
 //     Ledger-first, then config persist with rollback — the
 //     same pattern as handleKeyBudgetUpdate.
 //   - GET /api/usage/om-usage — the terminal-friendly usage
-//     command (the reference router's @@om-usage): any valid gateway key,
+//     command (the sector-typical @@om-usage): any valid gateway key,
 //     but only when the operator enabled allow_usage_command
 //     on that key (403 otherwise). ?format=json answers JSON;
 //     the default is plain text for a terminal.
 
 // usageBudgetCheck is the allow/warn/deny verdict of GET
-// /api/usage/budget (the reference router's checkBudget).
+// /api/usage/budget (the sector-typical checkBudget).
 type usageBudgetCheck struct {
 	Status string `json:"status"` // allow | warn | deny
 	Reason string `json:"reason"`

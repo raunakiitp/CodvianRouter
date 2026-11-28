@@ -72,7 +72,7 @@ func TestSLAAwareHookUnknownSignalsKeepDeclaredOrder(t *testing.T) {
 }
 
 func TestSLAAwareHookFiltersBreakerOpenCandidates(t *testing.T) {
-	// the reference router's rule: OPEN-breaker candidates are removed
+	// the sector-typical rule: OPEN-breaker candidates are removed
 	// before scoring; only if every candidate is OPEN is the
 	// full pool scored. prov-a would win on every signal
 	// (fastest, cleanest, cheapest) but its breaker is OPEN,
@@ -103,7 +103,7 @@ func TestSLAAwareHookFiltersBreakerOpenCandidates(t *testing.T) {
 	if got := ranked[2].ProviderID; got != "prov-a" {
 		t.Errorf("sla-aware with prov-a OPEN: last = %q, want prov-a (OPEN sorts last, never dropped)", got)
 	}
-	// All OPEN: the full pool is scored (the reference router's
+	// All OPEN: the full pool is scored (the sector-typical
 	// fallback), so the best candidate still serves first.
 	allOpen := func(providerID, model string) scoring.Signals {
 		s := signals(providerID, model)

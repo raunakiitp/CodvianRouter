@@ -1,4 +1,4 @@
-// Same-host transient retry (M4.5, the reference router transientBackendRetry.ts).
+// Same-host transient retry (M4.5, the sector baseline transientBackendRetry.ts).
 //
 // A 502/503/504 from a target is usually a blip on that host, not
 // a dead provider: retrying the SAME host — up to 3 times, with
@@ -25,7 +25,7 @@ import (
 )
 
 // TransientMaxRetries is the most same-host retries after the
-// first failure (the reference router: max 3).
+// first failure (the sector baseline: max 3).
 const TransientMaxRetries = 3
 
 // TransientBackoffBase is the first transient-retry delay (200 ms).
@@ -35,7 +35,7 @@ const TransientBackoffBase = 200 * time.Millisecond
 const TransientBackoffCap = 2 * time.Second
 
 // isTransientStatus reports whether err is a same-host transient
-// failure: an HTTP 502, 503 or 504 (the reference router's transient set).
+// failure: an HTTP 502, 503 or 504 (the sector-typical transient set).
 // 500 is NOT transient (a 500 is a provider failure, owned by the
 // breaker); 408/429 have their own retry paths; transport errors
 // have no status and fail over instead.

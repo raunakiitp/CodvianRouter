@@ -79,7 +79,7 @@ func TestLKGPRecordedTargetAbsentKeepsOrder(t *testing.T) {
 }
 
 func TestLKGPMatchesByProviderWhenConnectionDiffers(t *testing.T) {
-	// the reference router orderByLkgp: provider+connection match first, then
+	// the sector baseline orderByLkgp: provider+connection match first, then
 	// provider-only (or "provider/" model prefix) match.
 	store := NewLKGPStore()
 	store.RecordSuccess("combo:chat", "beta", "beta/medium", "conn-other")
@@ -193,7 +193,7 @@ func TestAffinityContextOptimizedTiesKeepInputOrder(t *testing.T) {
 }
 
 func TestAffinityContextOptimizedUnknownWindowSortsLast(t *testing.T) {
-	// Unknown window (0, mirroring the reference router's `?? 0`) sorts after every
+	// Unknown window (0, mirroring the sector-typical `?? 0`) sorts after every
 	// known window; if NO window is known the input order is unchanged.
 	in := []ContextTarget{
 		{AffinityTarget: AffinityTarget{Provider: "alpha", Model: "a"}, ContextWindow: 0},
@@ -287,7 +287,7 @@ func TestContextRelayBuildsNextAttemptContext(t *testing.T) {
 	state.HandoffProviders = []string{"codex"}
 
 	// Successful attempt on an allowlisted provider inside the quota
-	// window [0.85, 0.95) requests a handoff (the reference router
+	// window [0.85, 0.95) requests a handoff (the sector baseline
 	// maybeGenerateHandoff gates).
 	shouldGenerate := state.RecordAttempt(AttemptOutcome{
 		Provider: "codex", Model: "codex/mini", ConnectionID: "conn-1",
@@ -444,7 +444,7 @@ func TestContextRelayFailedAttemptDoesNotRequestHandoffByDefault(t *testing.T) {
 }
 
 func TestContextRelaySecondHandoffNotRegenerated(t *testing.T) {
-	// the reference router skips generation while a handoff is already active.
+	// the sector baseline skips generation while a handoff is already active.
 	now := time.Now()
 	state := NewRelayState("sess-1", "combo:chat")
 	state.RecordAttempt(AttemptOutcome{

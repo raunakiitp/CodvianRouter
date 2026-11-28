@@ -1,4 +1,4 @@
-// Wait budgets (M4.8, the reference router settings.ts:143-159) — opt-in.
+// Wait budgets (M4.8, the sector baseline settings.ts:143-159) — opt-in.
 //
 // The default philosophy is fail-fast: a 429 fails over at once,
 // and a Retry-After >= 60 s abandons the target. Wait budgets are
@@ -26,7 +26,7 @@ import (
 )
 
 // WaitBudgetConfig is the opt-in wait-budget configuration. Zero
-// values mean the the reference router defaults (90 s / 5 / 300 s).
+// values mean the the sector baseline defaults (90 s / 5 / 300 s).
 type WaitBudgetConfig struct {
 	// Enabled turns wait budgets on. Default false (fail-fast).
 	Enabled bool

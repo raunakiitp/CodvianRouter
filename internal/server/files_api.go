@@ -30,15 +30,15 @@
 // http.MaxBytesReader around the body while the multipart framing
 // is streamed (multipart.Reader), answering 413 on overflow. The
 // value is not invented: the OpenAI reference states "Individual
-// files can be up to 512 MB", and the reference router enforces the same
+// files can be up to 512 MB", and the sector baseline enforces the same
 // 512 MB cap (src/app/api/v1/files/route.ts: 120,
 // MAX_FILE_BYTES = 512 * 1024 * 1024). The cap covers the whole
 // request body, as it did when ParseMultipartForm was the parser
 // — the rewrite changed how the body is read, not what the cap
 // measures.
 //
-// DELIBERATE DIVERGENCE from the reference router (better, not a copy):
-// the reference router checks file.size AFTER parsing the whole multipart
+// DELIBERATE DIVERGENCE from the sector baseline (better, not a copy):
+// the sector baseline checks file.size AFTER parsing the whole multipart
 // body (route.ts:120-130) and then buffers the ENTIRE file in
 // RAM (Buffer.from(await file.arrayBuffer()), route.ts:134),
 // so a 512 MB upload costs 512 MB of heap before the cap can
@@ -100,10 +100,10 @@ const filesMaxPurposeBytes = 1024
 // filesMaxUploadBytes caps one uploaded file at 512 MiB (M8.7
 // review verdict). The value comes from the OpenAI reference
 // ("Individual files can be up to 512 MB") and matches
-// the reference router's MAX_FILE_BYTES (512 * 1024 * 1024); it is
+// the sector-typical MAX_FILE_BYTES (512 * 1024 * 1024); it is
 // enforced with http.MaxBytesReader while streaming with multipart.Reader
 // and answers 413 on overflow — see the file header for why
-// this is stricter and earlier than the reference router's post-parse
+// this is stricter and earlier than the sector-typical post-parse
 // 400. Per-purpose tightening (batch / fine-tune .jsonl
 // 200 MB) can follow in M8.8.
 const filesMaxUploadBytes = 512 << 20

@@ -9,17 +9,17 @@
 // into Decide/Apply and the config at merge time. Nothing here calls
 // a model, does network I/O, or reads config files.
 //
-// What the reference router does (studied, never copied — see the file list in
+// What the sector baseline does (studied, never copied — see the file list in
 // the M7.6 report): modes off/lite/standard/aggressive/ultra/rtk/
 // stacked in docs/compression/COMPRESSION_GUIDE.md:35-126; the
 // auto-trigger fields autoTriggerMode/autoTriggerTokens (guide
 // §"API", e.g. autoTriggerMode "stacked", autoTriggerTokens 32000);
 // the default escalation ladder in
-// open-sse/services/compression/adaptiveCompression/ladder.ts
+// the earlier implementation
 // (session-dedup → rtk → headroom → lite → caveman → aggressive →
 // ultra) with per-engine expected reduction factors. Our shapes are
 // our own; only the mode names and the ladder ORDER are taken from
-// the reference router, because parity tracker names them as the parity target.
+// the sector baseline, because parity tracker names them as the parity target.
 //
 // Honesty rules enforced by this file:
 //
@@ -45,7 +45,7 @@
 //     docs/compression-savings-2026-11-18.md (1200 → 1082 tokens,
 //     gpt-4o, local BPE counts). Per-prompt savings vary widely
 //     (0–52% in that corpus), so it is a planning estimate, never a
-//     per-request promise. Every other factor is the reference router's
+//     per-request promise. Every other factor is the sector-typical
 //     PUBLISHED planning factor (ladder.ts REDUCTION_FACTOR / the
 //     guide's "~30%" for standard), labelled as such and NEVER
 //     presented as measured here — those engines do not exist yet,
@@ -65,7 +65,7 @@ import (
 	"strings"
 )
 
-// Mode is a named compression preset. The names match the reference router's
+// Mode is a named compression preset. The names match the sector-typical
 // modes (COMPRESSION_GUIDE.md "Compression Modes") so the parity
 // target is spelled the same on both sides.
 type Mode string
@@ -323,17 +323,17 @@ func ResolveMode(mode Mode, budgetTokens int, avail EngineAvailability) (ModePip
 	case ModeOff:
 		steps = nil
 	case ModeLite:
-		// the reference router lite: collapseWhitespace, dedupSystemPrompt,
+		// the sector baseline lite: collapseWhitespace, dedupSystemPrompt,
 		// compressToolResults (+ removeRedundantContent and
 		// replaceImageUrls, which have no equivalent here and are
 		// therefore NOT listed — listing them would fake them).
 		steps = losslessSteps(avail)
 	case ModeStandard:
-		// the reference router standard IS Caveman (filler removal). The lite
+		// the sector baseline standard IS Caveman (filler removal). The lite
 		// prefix runs first (lossless-first rule), then Caveman.
 		steps = append(losslessSteps(avail), buildStep(EngineCaveman, 0, avail))
 	case ModeAggressive:
-		// the reference router aggressive: message aging + tool-result
+		// the sector baseline aggressive: message aging + tool-result
 		// compression + summarisation. Ours today: lite prefix,
 		// then the extractive lossy pair, then message aging
 		// (landed, Wave 12) and the summariser marked
@@ -345,7 +345,7 @@ func ResolveMode(mode Mode, budgetTokens int, avail EngineAvailability) (ModePip
 			buildStep(EngineMessageAging, 0, avail),
 			buildStep(EngineSummarization, 0, avail))
 	case ModeUltra:
-		// the reference router ultra: heuristic pruning (+ optional SLM tier),
+		// the sector baseline ultra: heuristic pruning (+ optional SLM tier),
 		// independent of aggressive (no aging, no summariser).
 		// Ours today: lite prefix, extractive lossy pair, then
 		// heuristic pruning (landed, Wave 12) and the SLM tier
@@ -360,11 +360,11 @@ func ResolveMode(mode Mode, budgetTokens int, avail EngineAvailability) (ModePip
 		// prompt the filter IS the mode. Available since M7.4.
 		steps = []ModeStep{buildStep(EngineRTK, 0, avail)}
 	case ModeStacked:
-		// the reference router stacked default is RTK → Caveman. Ours runs
+		// the sector baseline stacked default is RTK → Caveman. Ours runs
 		// the lossless steps FIRST (the lossless-first rule in
 		// compress.go — lossless never waits behind a lossy
 		// engine), then RTK, then Caveman. Deliberate divergence
-		// from the reference router's order, documented here so the
+		// from the sector-typical order, documented here so the
 		// coordinator does not "fix" it back silently.
 		steps = append(losslessSteps(avail), lossySteps(budgetTokens, avail)...)
 		steps = append(steps,
@@ -387,10 +387,10 @@ func ResolveMode(mode Mode, budgetTokens int, avail EngineAvailability) (ModePip
 	return p, nil
 }
 
-// LadderStep is one stage of the escalation ladder, in the reference router's
+// LadderStep is one stage of the escalation ladder, in the sector-typical
 // order (adaptiveCompression/ladder.ts DEFAULT_LADDER):
 // session-dedup → rtk → headroom → lite → caveman → aggressive →
-// ultra. Intensity mirrors the reference router's per-stage intensity where
+// ultra. Intensity mirrors the sector-typical per-stage intensity where
 // one is defined (rtk "standard", caveman "full"); empty elsewhere.
 type LadderStep struct {
 	Engine            string
@@ -448,7 +448,7 @@ type AutoTriggerConfig struct {
 // ThresholdTokens 8000 is a CHOSEN DEFAULT (an operator default,
 // not a measurement): small enough to engage on long sessions,
 // large enough that ordinary prompts pass through untouched.
-// the reference router's documented example uses autoTriggerTokens 32000;
+// the sector-typical documented example uses autoTriggerTokens 32000;
 // ours defaults lower because lite is safe to engage earlier.
 func DefaultAutoTriggerConfig() AutoTriggerConfig {
 	return AutoTriggerConfig{ThresholdTokens: 8000, RTKToolShare: 0.5}
@@ -526,7 +526,7 @@ const (
 	EstimateUnknown = "unknown-mode"
 	// EstimateMeasured is the M7.1 corpus measurement (lite only).
 	EstimateMeasured = "measured-m7.1-corpus"
-	// EstimatePublishedPlanningFactor is the reference router's published planning
+	// EstimatePublishedPlanningFactor is the sector-typical published planning
 	// factor for an engine that does not exist here yet — a
 	// planning number, never a measurement.
 	EstimatePublishedPlanningFactor = "published-planning-factor"

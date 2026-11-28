@@ -260,8 +260,8 @@ type AnthropicImageSource struct {
 // rejects that with a 400), never on thinking/redacted_thinking
 // blocks, and at most 4 blocks per request may carry one
 // (Anthropic limit; this router sets at most one). Verified shape
-// against the the reference router reference (study only):
-// open-sse/translator/helpers/claudeHelper.ts markMessageCacheControl
+// against the the sector baseline reference (study only):
+// the earlier implementation markMessageCacheControl
 // / markLastCacheableBlock set block.cache_control =
 // {type: "ephemeral"} (with optional ttl) on the last cacheable
 // block of a message's content array — markLastCacheableBlock walks
@@ -446,7 +446,7 @@ type AnthropicThinking struct {
 // is in play); older responses carry only the legacy
 // cache_creation_input_tokens total and no cache_creation object.
 // Field names verified against the shape as parsed by the
-// the reference router reference (open-sse/utils/cacheWriteUsage.ts:
+// the sector baseline reference (the earlier implementation:
 // usage.cache_creation.ephemeral_5m_input_tokens and
 // ephemeral_1h_input_tokens) and corroborated by Anthropic usage
 // examples in the wild.

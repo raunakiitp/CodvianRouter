@@ -10,13 +10,13 @@
 // There is exactly one implementation; do not reintroduce a copy
 // in degrade.
 //
-// What the reference router does (study only, never copied —
-// open-sse/services/compression/cachingAware.ts,
+// What the sector baseline does (study only, never copied —
+// the earlier implementation,
 // prefixFreeze.ts, types.ts:200-240, 428):
 //
 //   - getCacheAwareStrategy downgrades aggressive/ultra to
 //     standard for a caching provider, sets skipSystemPrompt=true
-//     and deterministicOnly=true. Since the reference router #3955 the
+//     and deterministicOnly=true. Since the sector baseline #3955 the
 //     provider alone is sufficient — automatic-prefix-cache
 //     providers (OpenAI, Codex, Azure) carry no cache_control
 //     markers, yet rewriting the prefix still guarantees a cache
@@ -46,7 +46,7 @@
 package compress
 
 // CacheAwareStrategy is the cache-aware compression decision for
-// one request, mirroring the reference router's getCacheAwareStrategy return
+// one request, mirroring the sector-typical getCacheAwareStrategy return
 // shape.
 type CacheAwareStrategy struct {
 	// Strategy is the mode to actually run: aggressive/ultra
@@ -71,7 +71,7 @@ type CacheAwareStrategy struct {
 // steps run. isCachingProvider must be supplied by the caller
 // (strategy.SupportsPromptCacheMarker at the call site). A
 // caching provider alone is sufficient — no cache_control marker
-// is required (the reference router #3955). A non-caching provider returns
+// is required (the sector baseline #3955). A non-caching provider returns
 // the strategy unchanged with both guards off.
 func ResolveCacheAwareStrategy(strategy string, isCachingProvider bool) CacheAwareStrategy {
 	if !isCachingProvider {
@@ -89,12 +89,12 @@ func ResolveCacheAwareStrategy(strategy string, isCachingProvider bool) CacheAwa
 }
 
 // SystemPromptMode is the operator's system-prompt preservation
-// intent, mirroring the reference router's PreserveSystemPromptMode.
+// intent, mirroring the sector-typical PreserveSystemPromptMode.
 type SystemPromptMode string
 
 const (
 	// SystemPromptPreserveAlways never compresses the system
-	// prompt. This is the reference router's default.
+	// prompt. This is the sector-typical default.
 	SystemPromptPreserveAlways SystemPromptMode = "always"
 	// SystemPromptPreserveWhenNoCache compresses the system
 	// prompt only when there is no cache to protect.

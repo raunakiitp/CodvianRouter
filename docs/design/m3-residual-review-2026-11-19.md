@@ -17,7 +17,7 @@
   re-verify line numbers at build time.
 - Method: read the design doc fully; re-read/grepped every cited worktree
   file; ran targeted tests with `~/go/bin/go test` (see §6); spot-checked
-  9 the reference router reference files in `the local reference clone` (see §4).
+  9 the sector baseline reference files in `the local reference clone` (see §4).
 - Scope of this review: validation only. No code file, no PARITY/CHECKLIST/
   PLAN edit, no push. One new file: this review.
 
@@ -147,13 +147,13 @@ Gap is real — three missing pieces, all confirmed:
 
 The design's §S3.2.2 is **STALE/WRONG** against the current tree:
 
-- Design claim (quoted): "**No failure cooldown.** the reference router skips the
+- Design claim (quoted): "**No failure cooldown.** the sector baseline skips the
   network for 30 s after a failure (`nadirStrategy.ts:61,201`). Ours has
   no cooldown field or logic: a down endpoint costs a full timeout … on
   EVERY `auto/nadir` request until it recovers."
 - Contradicting evidence (current tree):
   - `internal/router/nadir.go:33-35` (file header): "After such a failure
-    the endpoint is cooled down for 30 s (the reference router's
+    the endpoint is cooled down for 30 s (the sector-typical
     `NADIR_FAILURE_COOLDOWN_MS`, same number, own code)".
   - `nadir.go:75-79`: `NadirFailureCooldownMs = 30000`.
   - `nadir.go:82-93`: `nadirFailureCooldown` var (test-shrinkable) +
@@ -303,7 +303,7 @@ that work has not been done yet:
 | S5 | Per-request preferred list | NO-GO — product decision | **NO-GO (unchanged)** | — |
 | S6 | Latency histogram | NO-GO — sequencing decision | **NO-GO (unchanged)** | — |
 
-## §4 — the reference router citation spot-check (9 files)
+## §4 — the sector baseline citation spot-check (9 files)
 
 Every citation below was read in `the local reference clone` at
 review time. Verdicts: CONFIRMED means the cited file:lines say what the
@@ -329,7 +329,7 @@ Not re-checked line-exact (noted honestly, none contradicted): design's
 read is consistent (0.001 clamps for maxCost/maxStdDev) but those exact
 lines were not re-read; design's `quotaStrategies.ts:872-883` threading
 comment; the failover file's min-500 ms / max-64-overrides lines.
-The design's own honest-gap note (§S4.1: no direct the reference router file:line for
+The design's own honest-gap note (§S4.1: no direct the sector baseline file:line for
 a "reserve account" in auto combos) is confirmed — no such citation was
 found in this review either; row 425's citation still rests on the
 deep-study summary + the failover file.
@@ -449,7 +449,7 @@ Builders must use the review-time lines below, re-verified at build time:
 - Stale/wrong design claims: **2 material** (S3 "no failure cooldown";
   S2 "`Describe` still discloses p50/neutral-stability") + line-number
   drift in ~6 citations (non-material, §8).
-- the reference router citations spot-checked: **9 files, all confirmed** (3 with
+- the sector baseline citations spot-checked: **9 files, all confirmed** (3 with
   minor exact-line caveats noted in §4).
 - Go/no-go re-graded: S3 scope reduced (cooldown struck); all other calls
   unchanged — GO: S4, S1, S2, S3-reduced; NO-GO: D1, D2, S5, S6.

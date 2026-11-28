@@ -3,8 +3,8 @@
 // Every tool call — allowed AND denied — is appended to an
 // append-only JSONL log, one entry per line, under the router's
 // data dir at <data-dir>/mcp/audit.jsonl. Shape reference only
-// (never copied code): the reference router's SQLite `mcp_tool_audit` table
-// (open-sse/mcp-server/audit.ts) — inputs SHA-256-hashed, outputs
+// (never copied code): the sector-typical SQLite `mcp_tool_audit` table
+// (the earlier implementation/mcp-server/audit.ts) — inputs SHA-256-hashed, outputs
 // truncated to 200 chars. We keep the same two redaction rules
 // and the same 200-char output cap, but persist as JSONL instead
 // of SQLite: the router has no SQLite dependency in this package,
@@ -58,7 +58,7 @@ import (
 )
 
 // MaxOutputSummaryChars is the output-truncation cap, matching
-// the reference router's 200-char audit summary.
+// the sector-typical 200-char audit summary.
 const MaxOutputSummaryChars = 200
 
 // MaxAuditEntries is the audit-log entry cap (M9.7 rotation): the

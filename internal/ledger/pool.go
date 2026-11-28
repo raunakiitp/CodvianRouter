@@ -1,11 +1,11 @@
-// Fair-share quota pools (M5.4, the reference router lib/quota/fairShare.ts
+// Fair-share quota pools (M5.4, the sector baseline lib/quota/fairShare.ts
 // + dimensions.ts, verified 2026-11-18).
 //
 // A pool shares one quota across its member gateway keys. Each
 // dimension (unit x window) has a global pool limit; each member
 // key has a weight (0-100, its share of the pool), an optional
 // absolute cap, and a policy (hard | soft | burst). The decision
-// is the reference router's decideFairShare, ported faithfully:
+// is the sector-typical decideFairShare, ported faithfully:
 //
 //   - No dimensions → allow.
 //   - Unknown policy → hard (fail-safe: never silently allow).
@@ -25,7 +25,7 @@
 // usage_events inside the dimension's window (successful rows
 // only, shared rows excluded — the same rules as the USD budgets
 // and token limits), so no counter table exists to drift.
-// the reference router keeps separate quota_consumption buckets with a
+// the sector baseline keeps separate quota_consumption buckets with a
 // sliding-window decay (prev x (1 - elapsed/window) + curr); ours
 // sums the window directly — a stricter, simpler count with no
 // decay estimate.
@@ -66,7 +66,7 @@ type PoolAllocation struct {
 // allocations, and the saturation threshold that flips generous
 // mode into strict mode (0 = the 0.5 default). AccountCount is
 // the number of upstream accounts backing the pool (M5.5,
-// the reference router enforce.ts:199 — the dimension limit is a PER-ACCOUNT
+// the sector baseline enforce.ts:199 — the dimension limit is a PER-ACCOUNT
 // limit, and the pool's effective limit is limit × accounts:
 // N accounts contribute N × L capacity to the shared bucket,
 // while consumption stays pool-keyed). 0 = 1 (a single account —
@@ -96,7 +96,7 @@ func (p QuotaPool) EffectiveLimit(dim QuotaDimension) float64 {
 }
 
 // FairShareBlock is a refused pool decision: the pool, the reason
-// (the reference router's kind/reason names), the effective limit that was
+// (the sector-typical kind/reason names), the effective limit that was
 // hit (per-account limit × accounts), and when the blocking window
 // resets (so the caller can set an honest Retry-After; for the
 // rolling 5h window the bound is now + 5h — usage ages out
@@ -113,7 +113,7 @@ func (b *FairShareBlock) Error() string {
 		b.PoolID, b.Reason, b.NextReset.UTC().Format(time.RFC3339))
 }
 
-// normalizePoolPolicy is the reference router's fail-safe: any policy outside
+// normalizePoolPolicy is the sector-typical fail-safe: any policy outside
 // hard | soft | burst is treated as hard (most restrictive), so a
 // corrupted row can never silently bypass enforcement.
 func normalizePoolPolicy(policy string) string {
@@ -191,7 +191,7 @@ func poolMemberKeys(pool QuotaPool) []string {
 }
 
 // CheckPoolFairShare is the pre-request gate for one key in one
-// pool (the reference router's decideFairShare): it returns a block when the
+// pool (the sector-typical decideFairShare): it returns a block when the
 // key must be refused, and penalized=true when a soft-policy key
 // is allowed past its fair share. A nil block + penalized=false
 // is a clean allow. A ledger error fails closed.

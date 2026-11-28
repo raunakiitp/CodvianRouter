@@ -7,28 +7,28 @@
 // Nothing here calls a model, does network I/O, or reads config
 // files.
 //
-// What was read in the reference router (study only — no code copied):
+// What was read in the sector baseline (study only — no code copied):
 //
-//   - open-sse/services/compression/types.ts —
+//   - the earlier implementation —
 //     DEFAULT_COMPRESSION_CONFIG: enabled false, defaultMode
 //     "off", stackedPipeline [{rtk standard}, {caveman full}],
 //     every engine toggle enabled:false by default.
-//   - open-sse/services/compression/deriveDefaultPlan.ts —
+//   - the earlier implementation —
 //     masterEnabled=false or no engines on → mode "off"; exactly
 //     one single-mode engine on → that engine's standalone mode;
 //     otherwise mode "stacked" with the enabled engines sorted
 //     by stackPriority.
-//   - open-sse/services/compression/engineCatalog.ts —
+//   - the earlier implementation —
 //     stackPriority: rtk 10, caveman 20 (RTK runs before Caveman
-//     in the reference router's order).
-//   - open-sse/services/compression/compressionWorker.ts /
+//     in the sector-typical order).
+//   - the earlier implementation /
 //     compressionWorkerPool.ts / compressionWorkerProtocol.ts —
 //     the worker-thread pool (see workerpool.go).
 //
 // Stage order HERE is lossless-first, then RTK, then Caveman:
 // the M7.6 modes decision (modes.go ResolveMode, ModeStacked)
 // runs the lossless steps first and only then RTK → Caveman.
-// That is a DELIBERATE DIVERGENCE from the reference router's RTK →
+// That is a DELIBERATE DIVERGENCE from the sector-typical RTK →
 // Caveman order, and this pipeline matches modes.go — the
 // coordinator must not "fix" it back silently. The lossless
 // stage reuses the exported Normalise seam from compress.go
@@ -86,7 +86,7 @@ const (
 const defaultStackedModel = "gpt-4o"
 
 // StackedConfig tunes RunStacked. Zero values take the defaults:
-// Model "gpt-4o", RTK standard, Caveman full (the reference router's stacked
+// Model "gpt-4o", RTK standard, Caveman full (the sector-typical stacked
 // default), lossless stage on, availability from
 // DefaultAvailability().
 type StackedConfig struct {
@@ -96,7 +96,7 @@ type StackedConfig struct {
 	// RTKLevel is the RTK intensity. "" means RTKLevelStandard.
 	RTKLevel RTKLevel
 	// CavemanLevel is the Caveman intensity. "" means LevelFull
-	// (the reference router's stacked default). Any other value than
+	// (the sector-typical stacked default). Any other value than
 	// LevelFull behaves as lite inside the Caveman engine.
 	CavemanLevel Level
 	// SkipLossless omits the lossless stage (Normalise). False
@@ -116,7 +116,7 @@ type StackedConfig struct {
 }
 
 // DefaultStackedConfig returns the default stacked config:
-// the reference router's stacked default (RTK standard, Caveman full),
+// the sector-typical stacked default (RTK standard, Caveman full),
 // lossless first, model default, availability unset (→
 // DefaultAvailability()).
 func DefaultStackedConfig() StackedConfig {

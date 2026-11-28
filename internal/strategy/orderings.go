@@ -4,7 +4,7 @@
 // yet — the coordinator wires these into the strategy registry later.
 // This file intentionally touches no other file.
 //
-// the reference router semantics (read-only reference,
+// the sector baseline semantics (read-only reference,
 // the local reference clone; studied, not copied):
 //   - random:        fisherYatesShuffle — applyStrategyOrdering.ts "random"
 //   - strict-random: shuffleDeck.ts getNextFromDeck — deck + mutex, each
@@ -33,8 +33,8 @@
 // internal/strategy/strategy.go:180): the old "weighted" strategy is
 // not a per-target weight at all — WeightsFor re-weights the 5 scoring
 // factors (latency/success/cost/quality/quota) with operator weights.
-// the reference router's "weighted" is a per-target weight draw over the targets
-// themselves. WeightedDraw below implements the reference router's draw; it does
+// the sector-typical "weighted" is a per-target weight draw over the targets
+// themselves. WeightedDraw below implements the sector-typical draw; it does
 // not replace WeightsFor (that stays for the scoring-factor weights),
 // it supplies the missing per-target-weight behaviour.
 package strategy
@@ -55,9 +55,9 @@ import (
 //   - Provider, Model: identity; Key() is "provider/model".
 //   - Score:  P2C composite, higher is better (the caller folds
 //     success rate and latency into it, e.g. successRate/100 +
-//     1/log10(avgLatencyMs+10) per the reference router's getP2CTargetScore).
+//     1/log10(avgLatencyMs+10) per the sector-typical getP2CTargetScore).
 //     Pass math.Inf(-1) for a target whose breaker is OPEN —
-//     the reference router scores it -Inf so it can never win a P2C draw.
+//     the sector baseline scores it -Inf so it can never win a P2C draw.
 //     The p2c draw adds the G10 latency term to this score
 //     (see OrderP2C), so LatencyMs below can still move the
 //     draw even when two Scores tie.
@@ -103,7 +103,7 @@ func copyTargets(targets []OrderingTarget) []OrderingTarget {
 }
 
 // ShuffleTargets returns a Fisher-Yates shuffle of targets (new
-// slice; input untouched). the reference router's fisherYatesShuffle
+// slice; input untouched). the sector-typical fisherYatesShuffle
 // (shuffleDeck.ts): for i from n-1 down to 1, swap i with a uniform
 // j in [0, i].
 func ShuffleTargets(targets []OrderingTarget, rnd *rand.Rand) []OrderingTarget {
@@ -118,7 +118,7 @@ func ShuffleTargets(targets []OrderingTarget, rnd *rand.Rand) []OrderingTarget {
 
 // OrderLeastUsed orders by attempt/usage count ascending (fewest
 // attempts first). Ties keep declared order (stable sort), matching
-// the reference router's sortTargetsByUsage (Array.sort is stable; equal usage
+// the sector-typical sortTargetsByUsage (Array.sort is stable; equal usage
 // keeps input order).
 func OrderLeastUsed(targets []OrderingTarget) []OrderingTarget {
 	out := copyTargets(targets)
@@ -131,7 +131,7 @@ func OrderLeastUsed(targets []OrderingTarget) []OrderingTarget {
 // quota-exhausted targets (QuotaRemaining <= 0) are demoted behind
 // them, still in declared order. Trying the list in this order
 // drains the first live target's quota before moving to the next —
-// the reference router's fill-first keeps priority order and drains by retrying
+// the sector-typical fill-first keeps priority order and drains by retrying
 // the first target; this adds the exhausted-demotion so a drained
 // target stops leading the chain.
 func OrderFillFirst(targets []OrderingTarget) []OrderingTarget {
@@ -145,7 +145,7 @@ func OrderFillFirst(targets []OrderingTarget) []OrderingTarget {
 // OrderP2C implements power-of-two-choices (targetSorters.ts:136):
 // draw two distinct indices uniformly at random, put the
 // better-Score one first, and keep every other target in input
-// order behind it. The draw is exactly the reference router's: first =
+// order behind it. The draw is exactly the sector-typical: first =
 // Intn(n); second = Intn(n-1), bumped by one when it would collide
 // with first. A tie keeps the first-drawn target (strict >).
 //
@@ -195,16 +195,16 @@ func OrderP2C(targets []OrderingTarget, rnd *rand.Rand) []OrderingTarget {
 	return out
 }
 
-// WeightedDraw implements the reference router's selectWeightedTarget
+// WeightedDraw implements the sector-typical selectWeightedTarget
 // (targetSorters.ts:28): a single per-target weight draw. Total
 // weight W = sum of positive weights; draw r uniform in [0, W) and
 // walk the targets subtracting each weight, returning the first
 // target where r <= 0. When the total weight is <= 0 (no positive
 // weight anywhere) it falls back to a uniform pick, exactly as
-// the reference router does. Negative weights are clamped to 0 (weights are
+// the sector baseline does. Negative weights are clamped to 0 (weights are
 // non-negative by definition). It reports false only for an empty
 // list. The last target is the unreachable-in-practice fallback
-// (the reference router's targets.at(-1)) if floating point ever walks past
+// (the sector-typical targets.at(-1)) if floating point ever walks past
 // every target.
 func WeightedDraw(targets []OrderingTarget, rnd *rand.Rand) (OrderingTarget, bool) {
 	if len(targets) == 0 {
@@ -265,7 +265,7 @@ func OrderWeightedFallback(targets []OrderingTarget, selected OrderingTarget, pr
 // the counter is taken modulo the current list length on every call
 // — so the list may grow, shrink, or reorder between calls without
 // a panic or stale index; rotation simply continues over whatever
-// list is current. This matches the reference router's rrState.ts counter
+// list is current. This matches the sector-typical rrState.ts counter
 // (startIndex = counter % targets.length), minus the sticky-target
 // affinity, which is a separate concern and is not implemented here.
 type RoundRobin struct {

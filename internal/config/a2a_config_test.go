@@ -9,7 +9,7 @@ import (
 func a2aTestBoolPtr(b bool) *bool { return &b }
 
 // A2A enable flag (M9.8): the A2A surface is OFF unless the operator
-// opts in. The default must stay false — the reference router's keyless-by-
+// opts in. The default must stay false — the sector-typical keyless-by-
 // default A2A (GHSA-v54m-6rm3-p565) is never copied.
 
 func TestA2AEnabledDefaultFalse(t *testing.T) {

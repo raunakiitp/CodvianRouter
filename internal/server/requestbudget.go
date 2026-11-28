@@ -74,7 +74,7 @@ const (
 	headerRequestBudget       = "X-Codvian-Budget"
 	headerRequestBudgetStrict = "X-Codvian-Budget-Strict"
 	// headerBudgetFallback is the reference-style alias for the
-	// strict flag (the reference router's budget companion header
+	// strict flag (the sector-typical budget companion header
 	// is Budget-Fallback: strict). Accepted, never required.
 	headerBudgetFallback = "Budget-Fallback"
 )

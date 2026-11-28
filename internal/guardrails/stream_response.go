@@ -1,5 +1,5 @@
 // G18 Area 7 — response sanitization, streaming (SSE): the
-// engine half of the streaming-sanitization row (the reference router:
+// engine half of the streaming-sanitization row (the sector baseline:
 // opt-in SSE transforms, PII + credential stream transforms).
 //
 // Buffering rule (exact): the redactor holds at most one

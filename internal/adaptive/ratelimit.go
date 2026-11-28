@@ -5,7 +5,7 @@ package adaptive
 // from them, so the router slows down BEFORE the 429 instead of
 // discovering the limit by hitting it.
 //
-// The parser is a faithful port of the reference router's storeRateLimitHeaders
+// The parser is a faithful port of the sector-typical storeRateLimitHeaders
 // (src/lib/quota/saturationSignals.ts): request headers (Anthropic
 // anthropic-ratelimit-requests-*, OpenAI x-ratelimit-limit-requests /
 // -remaining-requests, generic x-ratelimit-limit / -remaining) and
@@ -14,7 +14,7 @@ package adaptive
 // output-tokens). Resets normalize to absolute times: Anthropic
 // RFC3339 → parsed, OpenAI Go-style durations ("6m0s", "1.5s") →
 // now + duration, plain seconds → now + seconds, HTTP dates →
-// parsed. Entries live 5 minutes (the reference router's RL_HEADER_TTL_MS).
+// parsed. Entries live 5 minutes (the sector-typical RL_HEADER_TTL_MS).
 //
 // Pacing rule: the learned remaining fraction (remaining / limit,
 // most restrictive of the request/token signals) scales the cap:
@@ -34,7 +34,7 @@ import (
 )
 
 // RateLimitTTL is how long a learned signal stays usable: 5
-// minutes, the reference router's RL_HEADER_TTL_MS.
+// minutes, the sector-typical RL_HEADER_TTL_MS.
 const RateLimitTTL = 5 * time.Minute
 
 // RateLimitSignals is one parsed set of upstream rate-limit headers.
@@ -220,7 +220,7 @@ func parseReset(now time.Time, candidates ...string) *time.Time {
 			return &t
 		}
 		// Go-style duration (OpenAI reset headers): bounded,
-		// non-overlapping segments, same shape as the reference router's
+		// non-overlapping segments, same shape as the sector-typical
 		// parseDurationMs.
 		if d, ok := parseGoDuration(s); ok {
 			t := now.Add(d)

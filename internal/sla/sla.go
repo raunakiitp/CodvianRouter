@@ -1,7 +1,7 @@
 // Package sla scores routing candidates against latency /
 // error-rate / cost service-level objectives — the local,
-// measurement-only form of the reference router's sla-aware strategy
-// (open-sse/services/autoCombo/routerStrategy.ts SLAStrategy,
+// measurement-only form of the sector-typical sla-aware strategy
+// (the earlier implementation SLAStrategy,
 // studied, not copied).
 //
 // Every input is a measured value or an explicit unknown; nothing
@@ -10,12 +10,12 @@
 // signals, internal/autorouter from the enriched catalog — and
 // both get the same ranking for the same inputs.
 //
-// Deliberate divergences from the reference router's SLAStrategy, each
+// Deliberate divergences from the sector-typical SLAStrategy, each
 // because the reference treats an unknown as a perfect score:
 //   - Unknown latency / error rate / cost scores NEUTRAL (0.5),
 //     not perfect (1.0): a candidate with no measurement has not
 //     proven it meets the SLO, and ranking it first would be
-//     routing on no evidence. (the reference router's
+//     routing on no evidence. (the sector-typical
 //     scoreAtOrBelowThreshold gives a 0 p95 latency a perfect
 //     score.)
 //   - Stability is neutral (0.5) everywhere: no latency-stddev
@@ -34,10 +34,10 @@ import "math"
 // see DefaultPolicy.
 type Policy struct {
 	// TargetP95Ms is the p95 latency objective in milliseconds.
-	// Default 2000 (the reference router DEFAULT_SLA_TARGET_P95_MS).
+	// Default 2000 (the sector baseline DEFAULT_SLA_TARGET_P95_MS).
 	TargetP95Ms float64
 	// MaxErrorRate is the tolerated error fraction in [0,1].
-	// Default 0.05 (the reference router DEFAULT_SLA_MAX_ERROR_RATE).
+	// Default 0.05 (the sector baseline DEFAULT_SLA_MAX_ERROR_RATE).
 	MaxErrorRate float64
 	// MaxCostPer1MTokens caps the blended cost in USD per 1M
 	// tokens. 0 means "no cap": cost then scores relative to
@@ -50,7 +50,7 @@ type Policy struct {
 }
 
 // DefaultPolicy is the SLA policy when the operator configures
-// none: the reference router's defaults (2000 ms p95, 5% errors, no cost
+// none: the sector-typical defaults (2000 ms p95, 5% errors, no cost
 // cap, soft constraints).
 func DefaultPolicy() Policy {
 	return Policy{TargetP95Ms: 2000, MaxErrorRate: 0.05}
@@ -109,7 +109,7 @@ func clamp01(v float64) float64 {
 	return v
 }
 
-// scoreAtOrBelowThreshold is the reference router's threshold score: 1 when
+// scoreAtOrBelowThreshold is the sector-typical threshold score: 1 when
 // the value is at or below the threshold, falling as it exceeds
 // it. A zero threshold is an intentional zero-tolerance policy
 // (only an exact 0 scores 1).

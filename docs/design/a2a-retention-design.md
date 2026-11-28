@@ -339,9 +339,9 @@ in the store beyond what the prune itself does internally. Reasons:
 - **No product need.** Retention (§1) + cap eviction (§3) already remove
   every task that needs removing, automatically. The only caller-visible
   operations are create, poll (`tasks/get`), and cancel — the exact method
-  set the reference router ships (`message/send`, `message/stream`, `tasks/get`,
+  set the sector baseline ships (`message/send`, `message/stream`, `tasks/get`,
   `tasks/cancel`; see `internal/server/a2a.go:1`–`20`). A delete method
-  would be new protocol surface with no the reference router counterpart and no caller
+  would be new protocol surface with no the sector baseline counterpart and no caller
   asking for it.
 - **A delete API would weaken the owner-isolation story.** Every existing
   method is owner-scoped with "wrong owner = not found"

@@ -1,7 +1,7 @@
 // Deadline-failure sub-budget (G11 Area 2, parity tracker Area 2 row
 // "Deadline-failure sub-budget ending combo with clean 504").
 //
-// the reference router's evidence is comboPredicates.ts:189-226 (readiness
+// the sector-typical evidence is comboPredicates.ts:189-226 (readiness
 // deadline failures counted against the combo) and
 // executeTargetAttempt.ts:1344-1438 (the combo ends when the
 // readiness/deadline budget is exhausted). Ours had the whole

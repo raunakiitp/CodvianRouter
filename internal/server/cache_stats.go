@@ -1,6 +1,6 @@
 // Cache analytics (M6.8 — GET /api/cache/stats).
 //
-// the reference router parity, Area 6 "Cache analytics" (PARTIAL): the reference router has
+// the sector baseline parity, Area 6 "Cache analytics" (PARTIAL): the sector baseline has
 // a cache_metrics table, getCacheStats(), GET /api/cache/stats and
 // /dashboard/cache. This file is the backend stats endpoint only —
 // the dashboard page is M10's job and is NOT built here.

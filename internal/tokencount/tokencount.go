@@ -276,7 +276,7 @@ func vendoredOrFallback(name string) (string, bool) {
 // Two size guards (M1.9, parity tracker Area 10 "Large-input bound /
 // DoS safety" — was MISSING):
 //   - longer than maxExactCountBytes: no BPE at all, a chars/4
-//     estimate with Estimated=true (the the reference router behaviour for
+//     estimate with Estimated=true (the the sector baseline behaviour for
 //     over-cap input, and fail-safe here: callers treat a Count
 //     error as "proceed", so erroring on a huge prompt would
 //     silently undercount a budget gate — an estimate in the

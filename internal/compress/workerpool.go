@@ -3,18 +3,18 @@
 //
 // CompressionPool runs stacked-pipeline jobs OFF the request hot
 // path, on a bounded set of goroutines — Go's equivalent of
-// the reference router's worker-thread pool. It does NOT wire itself into
+// the sector-typical worker-thread pool. It does NOT wire itself into
 // Apply or any handler; the coordinator decides at merge time
 // which calls go through the pool (the pool is for work that may
 // wait, e.g. background / pre-compression — a request that needs
 // its compressed prompt now must not be parked behind a queue).
 //
-// What was read in the reference router (study only — no code copied):
+// What was read in the sector baseline (study only — no code copied):
 //
-//   - open-sse/services/compression/compressionWorkerPool.ts —
+//   - the earlier implementation —
 //     CompressionWorkerPool: size default 2 (env
-//     OMNI_COMPRESSION_WORKERS), per-job timeout default 120 s
-//     (OMNI_COMPRESSION_WORKER_TIMEOUT_MS), idle eviction 60 s,
+//     COVARIANT_COMPRESSION_WORKERS), per-job timeout default 120 s
+//     (COVARIANT_COMPRESSION_WORKER_TIMEOUT_MS), idle eviction 60 s,
 //     maxOldGenerationSizeMb 1024; run() returns a promise;
 //     close() resolves queued and in-flight jobs with the
 //     UNCHANGED body; a spawn failure marks the pool broken and
@@ -25,17 +25,17 @@
 //     other faults fail with retryInProcess=true; idle workers
 //     are terminated (dropping the reference alone would strand
 //     the thread for the process lifetime).
-//   - open-sse/services/compression/compressionWorker.ts — the
+//   - the earlier implementation — the
 //     worker-thread entry point: adapts the body, runs the
 //     stacked pipeline, posts per-step progress, and on ANY
 //     engine throw posts an error message instead of dying.
-//   - open-sse/services/compression/compressionWorkerProtocol.ts
+//   - the earlier implementation
 //     — the job/message protocol ({id, body, mode, options};
 //     step/result/error) and isCompressionWorkerEligible: only
 //     standard/rtk/stacked (plus non-SLM ultra) are eligible,
 //     stacked only when every step is caveman/rtk/standard, and
 //     the payload must be strictly serializable.
-//   - open-sse/services/compression/engines/llmlingua/onnxWorker.ts
+//   - the earlier implementation
 //     — the ONNX (LLMLingua-2) worker: heavy deps imported
 //     lazily inside the handler, fail-open to the ORIGINAL text
 //     on any failure, and code blocks never reach the worker.
@@ -52,7 +52,7 @@
 //     until space frees or the caller's context ends.
 //   - Every job carries a context and a timeout: the effective
 //     timeout is the job's Timeout, else the pool's JobTimeout
-//     (default 120 s, mirroring the reference router's worker timeout).
+//     (default 120 s, mirroring the sector-typical worker timeout).
 //     A job that exceeds it resolves with ErrJobTimeout and the
 //     pool keeps working. A job whose context is cancelled
 //     resolves with the context error. The timed-out job's
@@ -67,7 +67,7 @@
 //   - Shutdown drains: Shutdown stops accepting new jobs and
 //     waits for queued and in-flight jobs to finish, so every
 //     submitted future resolves. It never abandons a submitted
-//     job. (the reference router's close() resolves pending jobs with the
+//     job. (the sector-typical close() resolves pending jobs with the
 //     unchanged body instead; draining is the stricter choice
 //     here because a queued stacked job is cheap CPU work and
 //     its caller is waiting on the future — resolving it with
@@ -99,7 +99,7 @@ var (
 	ErrJobTimeout = errors.New("compression job timed out")
 )
 
-// DefaultJobTimeout mirrors the reference router's worker timeout
+// DefaultJobTimeout mirrors the sector-typical worker timeout
 // (compressionWorkerPool.ts: 120_000 ms).
 const DefaultJobTimeout = 120 * time.Second
 
@@ -163,7 +163,7 @@ type CompressionJob struct {
 // success; on failure Result is the zero StackedResult and the
 // original messages are NOT smuggled in as a fake success — the
 // caller decides the fallback (usually: send the original
-// messages uncompressed), exactly like the reference router's fail-open
+// messages uncompressed), exactly like the sector-typical fail-open
 // contract, but reported as an error instead of a silent
 // "unchanged" success.
 type CompressionJobResult struct {
