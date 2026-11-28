@@ -66,6 +66,16 @@ run_step "go vet ./..." go vet ./...
 # must classify every spawn-capable route LOCAL_ONLY), so CI runs it.
 run_step "scripts/check-route-guard.sh" sh scripts/check-route-guard.sh
 
+# A2A4-L2: the naming gate is a real gate (the repo must stay free of
+# prohibited brand references), so CI runs the whole-tree scan over every
+# tracked file. The Go mirror test (internal/catalog/repo_brand_gate_test.go)
+# enforces the same rule inside `go test`; this step makes the standalone
+# script authoritative too and catches anything the test's exclusions hide.
+gate_naming() {
+  git ls-files -z | tr '\0' '\n' | python3 scripts/check-naming.py
+}
+run_step "scripts/check-naming.py (whole-tree naming gate)" gate_naming
+
 # --- otel build tag (AUD-TEST-002): the tagged sources only compile with
 # -tags otel, and nothing in CI ever built them.
 run_step "go build -tags otel ./..." go build -tags otel ./...
