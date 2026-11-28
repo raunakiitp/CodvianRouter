@@ -814,6 +814,38 @@ type Config struct {
 	ComboMinPanel           int
 	ComboPanelHardTimeoutMs int
 	ComboStragglerGraceMs   int
+	// Pipeline knobs (A2-7), read by the engine's "pipeline"
+	// strategy path (see runComboStrategy). Each is optional; the
+	// zero value keeps the documented default:
+	// PipelineTaskDetection "off" (no task detection — the
+	// multi-stage pipeline always runs); PipelineSkipTokensUnder 0
+	// (never skip the pipeline for a short prompt);
+	// PipelineFallback "" (a failed pipeline fails the request);
+	// PipelineMaxReflectionLoops is NOT-APPLICABLE (see below).
+	PipelineTaskDetection string
+	// PipelineSkipTokensUnder, when > 0, skips the multi-stage
+	// pipeline for a prompt whose local token estimate (the same
+	// ~4 chars/token heuristic relayEstimateTokens uses) is below
+	// the threshold: such a short prompt is served by a single
+	// provider (ordered[0]) instead of running all the stages. The
+	// local estimate is a budget guard, never a billing count.
+	PipelineSkipTokensUnder int
+	// PipelineFallback, when "single-provider", serves the single
+	// provider (ordered[0]) when the multi-stage pipeline fails
+	// (a stage error, or the whole pipeline erroring), instead of
+	// failing the request. Any other value fails the request on a
+	// pipeline failure. "" is the default (fail).
+	PipelineFallback string
+	// PipelineMaxReflectionLoops is surfaced for config symmetry
+	// with the reference pipeline but is NOT-APPLICABLE here: the
+	// engine's pipeline primitive (RunPipeline, panel.go) has no
+	// reflection stage — it is a linear chain of provider stages
+	// that thread the previous output into the next input — so a
+	// reflection-loop count cannot be honoured honestly. It is
+	// read (accepted in config, validated, wired) and deliberately
+	// has no effect; a request always reflects zero times. See the
+	// A2-7 PR body.
+	PipelineMaxReflectionLoops int
 	// ComboJevLLMJudge, when true, runs the JEV strategy's System
 	// One scoring through a real LLM judge call (llmJevScorer) —
 	// the same configured judge model the fusion LLM judge uses
