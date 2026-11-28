@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/adaptive"
+	"github.com/raunakiitp/codvian-router/internal/cache"
 	"github.com/raunakiitp/codvian-router/internal/wire"
 )
 
@@ -345,14 +346,19 @@ func anthropicMarkerCount(anthReq *wire.AnthropicRequest) int {
 
 // applyPromptCacheMarker sets cache_control {"type": "ephemeral"} on
 // up to three slots of an already-converted Anthropic request —
-// the exact annotation cache.Prepare() describes for its own
-// request type, placed here because this client is the only
-// production caller of wire.ConvertRequest (both call sites
-// below) and the only place that knows the serving provider
-// (providerID), the temperature, the tools, and the prompt length
-// together. The relay is NOT the site: it hands the request to
-// engine.Chat/ChatStream (internal/server/relay.go:1221,1396) and
-// never sees the resolved provider or the wire body.
+// placed here because this client is the only production caller of
+// wire.ConvertRequest (both call sites below) and the only place
+// that knows the serving provider (providerID), the temperature,
+// the tools, and the prompt length together. The relay is NOT the
+// site: it hands the request to engine.Chat/ChatStream
+// (internal/server/relay.go:1221,1396) and never sees the resolved
+// provider or the wire body.
+//
+// The canonical last-user-message slot (M6.9c) is produced by
+// cache.Prepare, which this client routes through (providerID
+// anthropic / claude): cache.Prepare owns the provider set and the
+// "mark the LAST user message" rule; this client copies its
+// decision onto the converted wire blocks below.
 //
 // Slots, in priority order (G13 adds system + tools alongside the
 // M6.9c last-user slot; Anthropic allows at most 4 markers per
@@ -361,8 +367,9 @@ func anthropicMarkerCount(anthReq *wire.AnthropicRequest) int {
 // left exactly as the client sent it, and no auto-marker is added
 // once 4 markers are present):
 //
-//  1. Last user message's last text block (M6.9c). Placement
-//     mirrors cache.Prepare (LAST user message) and the sector-typical
+//  1. Last user message's last text block (M6.9c) — annotated only
+//     where cache.Prepare placed its marker; placement mirrors
+//     cache.Prepare (LAST user message) and the sector-typical
 //     markLastCacheableBlock: walk back from the last user
 //     message, then back through its blocks to the last
 //     non-empty TEXT block — thinking/redacted_thinking, blank
@@ -391,8 +398,43 @@ func (c *anthropicClient) applyPromptCacheMarker(anthReq *wire.AnthropicRequest,
 	const maxAnthropicMarkers = 4
 	marked := anthropicMarkerCount(anthReq)
 	ephemeral := &wire.AnthropicCacheControl{Type: "ephemeral"}
-	// 1. Last user message's last text block.
-	if marked < maxAnthropicMarkers {
+	// Route the canonical last-user-message marker through
+	// cache.Prepare: it owns the provider set (anthropic/claude)
+	// and the last-user-message rule, so this client's marker is
+	// cache.Prepare's annotation copied onto the wire blocks.
+	// System and developer messages are excluded — they do not
+	// become wire messages — so cacheReq's indexes stay 1:1
+	// aligned with anthReq.Messages.
+	cacheReq := &cache.ChatRequest{Model: req.Model, Stream: req.Stream}
+	for _, m := range req.Messages {
+		if m.Role == "system" || m.Role == "developer" {
+			continue
+		}
+		cacheReq.Messages = append(cacheReq.Messages, cache.Message{Role: m.Role, Content: m.Content})
+	}
+	cache.Prepare(cacheReq, c.providerID)
+
+	// Did cache.Prepare annotate a user message? That is the
+	// canonical "last user message takes the marker" decision
+	// (provider set + presence of a user message). The wire-level
+	// placement below runs its own loop over anthReq.Messages, so
+	// no index alignment between cacheReq and the converted
+	// request is assumed (the converter may merge adjacent
+	// same-role messages).
+	prepareMarked := false
+	for i := len(cacheReq.Messages) - 1; i >= 0; i-- {
+		if cacheReq.Messages[i].Role == "user" {
+			prepareMarked = cacheReq.Messages[i].CacheControl != nil
+			break
+		}
+	}
+
+	// 1. Last user message's last text block — only where
+	//    cache.Prepare placed its marker; placement mirrors
+	//    cache.Prepare (LAST user message): the last non-empty
+	//    TEXT block (thinking/redacted_thinking, blank text,
+	//    image and tool_result blocks never take a marker).
+	if prepareMarked && marked < maxAnthropicMarkers {
 		for i := len(anthReq.Messages) - 1; i >= 0; i-- {
 			if anthReq.Messages[i].Role != "user" {
 				continue

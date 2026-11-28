@@ -468,3 +468,40 @@ func TestM69cClientCacheControlSurvivesDecode(t *testing.T) {
 		t.Fatalf("decoded tool CacheControl = %+v, want ephemeral", req2.Tools)
 	}
 }
+
+// TestCachePrepareIsLivePath proves cache.Prepare is not dead code:
+// anthropicClient.applyPromptCacheMarker routes native Anthropic
+// hosts (providerID anthropic / claude) through it, so the marker
+// the client sends upstream IS cache.Prepare's annotation. If
+// cache.Prepare is removed (no symbol) the client package fails to
+// compile; if its provider set drifts from the client's live
+// behaviour, this test fails.
+func TestCachePrepareIsLivePath(t *testing.T) {
+	for _, tc := range []struct {
+		providerID string
+		wantMarked bool
+	}{
+		{"anthropic", true},
+		{"claude", true},
+		{"openrouter", false}, // out of cache.Prepare's canonical set
+		{"", false},
+	} {
+		t.Run("provider="+tc.providerID, func(t *testing.T) {
+			srv, mock := newAnthropicMock(t)
+			defer srv.Close()
+
+			_, err := mustM69cAnthropicClient(t, srv, tc.providerID).Chat(context.Background(), ChatRequest{
+				Model:    "claude-sonnet-4-5",
+				Messages: []Message{{Role: "user", Content: m69cLongText()}},
+			})
+			if err != nil {
+				t.Fatalf("Chat: %v", err)
+			}
+			got := strings.Contains(string(mock.lastBody), "cache_control")
+			if got != tc.wantMarked {
+				t.Errorf("provider %q: cache_control on the wire = %v, want %v\nbody: %s",
+					tc.providerID, got, tc.wantMarked, mock.lastBody)
+			}
+		})
+	}
+}

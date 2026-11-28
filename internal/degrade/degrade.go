@@ -615,6 +615,26 @@ func flushExactStore(ctx context.Context, c cache.ExactStore) int {
 	}
 }
 
+// SweepExpired removes every expired entry from the wrapped exact
+// layer and returns how many were removed. A nil exact layer
+// sweeps nothing.
+func (e *StaleEngine) SweepExpired(ctx context.Context) int {
+	if e == nil || e.exact == nil {
+		return 0
+	}
+	return e.exact.SweepExpired(ctx)
+}
+
+// DeleteExactForModel removes every exact-cache entry the wrapped
+// layer holds for model and returns how many keys were removed.
+// Other models are untouched (A13 H6 per-model invalidation).
+func (e *StaleEngine) DeleteExactForModel(ctx context.Context, model string) int {
+	if e == nil || e.exact == nil {
+		return 0
+	}
+	return len(e.exact.DeleteExactForModel(ctx, model))
+}
+
 // savingsEngine is a *StaleEngine that also reports live cache
 // savings (M6.2b): it embeds the wrapper, so every method the
 // server asserts on the engine (Chat, ChatStream, ChatStreamFrom,

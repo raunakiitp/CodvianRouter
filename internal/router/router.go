@@ -1071,6 +1071,20 @@ type Config struct {
 	// chain (already-tried targets, targets with no live
 	// client, zero-quota targets), so the hook never has to.
 	RefusalChainFor func(model string) []Attempt
+	// ServeCache turns IN-ENGINE cache consultation on (A13 Stream A):
+	// for a cacheable request the Engine consults the exact layer and then
+	// the semantic layer and serves a hit WITHOUT dialling a provider. It
+	// is OFF by default, so an engine built without wiring behaves exactly
+	// as before. ExposedCache/ExposedSemanticCache are the layers; the
+	// gates are the degrade wrapper's (see internal/router/cache.go).
+	ServeCache bool
+	// AllowNonZeroCacheTemp is the explicit permission to cache
+	// temperature>0 requests. Off by default: a temperature>0 answer is
+	// never stored and never served.
+	AllowNonZeroCacheTemp bool
+	// CacheMetrics, when set, receives hit/miss counts per layer, so the
+	// dashboard and the ops surface can see engine-path cache activity.
+	CacheMetrics CacheMetricsSink
 	// GroupChain, if set, resolves a user-named routing group
 	// (CHECKLIST 173) to its fallback chain for a request model:
 	// the group's members, in config order, as (provider, model)
@@ -1453,6 +1467,12 @@ type Engine struct {
 	// SetGlobalStrategy, e.g. from the dashboard); "" means "use
 	// the configured global strategy".
 	runtimeGlobal string
+	// A13 Stream A: the in-engine cache layers and the metrics sink.
+	// Guarded by mu like every other runtime field; a nil layer means
+	// that layer is off.
+	exactCache    cache.ExactStore
+	semanticCache cache.SemanticStore
+	lastCacheHit  string
 	// runtimeChains overrides the per-chain strategy for one model
 	// (set via SetChainStrategy); an entry's "" value is never
 	// stored — clearing deletes the entry.
@@ -2324,6 +2344,42 @@ func (e *Engine) effectiveStrategy(reqStrategy, model string) string {
 		return e.cfg.Strategy
 	}
 	return "priority"
+}
+
+// CacheMetricsSink receives per-layer cache hit/miss counts from the engine
+// (A13 Stream A). It is the same shape the server's recorder already
+// implements for the wrapper path, so one sink can serve both.
+type CacheMetricsSink interface {
+	IncCacheHit(layer string)
+	IncCacheMiss(layer string)
+}
+
+// SetCaches installs the exact and semantic layers the engine consults
+// (A13 Stream A). Either may be nil, which turns that layer off. It is safe
+// to call at runtime: a request reads both layers under the engine lock
+// through exactCacheRef / semanticCacheRef.
+func (e *Engine) SetCaches(exact cache.ExactStore, semantic cache.SemanticStore) {
+	e.mu.Lock()
+	e.exactCache = exact
+	e.semanticCache = semantic
+	e.mu.Unlock()
+}
+
+// LastCacheHit reports which layer served the most recent request ("" when
+// it was served live or no cache was consulted). It is the engine-path
+// counterpart of the wrapper's LastCacheHit, so a caller can tell a cache
+// hit from a dialled request without inspecting the trace.
+func (e *Engine) LastCacheHit() string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.lastCacheHit
+}
+
+// ClearLastCacheHit resets the last-hit marker at the start of a request.
+func (e *Engine) ClearLastCacheHit() {
+	e.mu.Lock()
+	e.lastCacheHit = ""
+	e.mu.Unlock()
 }
 
 // SetGlobalStrategy overrides the global strategy at runtime (e.g.
@@ -5171,6 +5227,24 @@ func (e *Engine) chatWithChainStrategy(ctx context.Context, chain []Attempt, req
 	if err := ctx.Err(); err != nil {
 		return nil, trace, e.mapDeadlineErr(err, parentCtx)
 	}
+	// A13 Stream A (gap H1): IN-ENGINE cache consultation. Before this,
+	// only the degrade wrapper and the server relay consulted the caches,
+	// so a bare Engine never cached. The lookup runs here — after the
+	// group/contract resolution and the deadline budget, before any
+	// attempt — so every gate the wrapper applies holds: a routing
+	// contract, a bypass header, a non-cacheable temperature and a
+	// tool-carrying request all miss. A hit is served WITHOUT dialling a
+	// provider and is free by construction.
+	if hit, layer, ok := e.engineCacheLookup(ctx, req); ok {
+		e.mu.Lock()
+		e.lastCacheHit = layer
+		e.mu.Unlock()
+		e.noteCacheHit(layer)
+		served := CachedResponseFor(hit, req)
+		trace.Attempts = nil
+		e.setLastTrace(trace)
+		return served, trace, nil
+	}
 	// An explicit contract order is final: no scoring may re-rank
 	// it (CHECKLIST 157 — the balanced hook used to re-rank the
 	// chain by probe latency after the contract had ordered it).
@@ -5570,7 +5644,7 @@ func (e *Engine) chatWithChainStrategy(ctx context.Context, chain []Attempt, req
 				e.recordDecision(trace, contract, treeOrdered, strategy, req.Model, r1.att.Model, r1.att.ProviderID)
 				noteTreeServed(trace, tree, r1.att.ProviderID, r1.att.Model, treeRoot)
 				e.setLastTrace(trace)
-				return e.finishResponse(r1), trace, nil
+				return e.finishAndStore(ctx, r1, req), trace, nil
 			}
 			// r1 failed: record it refusal-aware (a refusal
 			// touches no health signal — see noteRefusal),
@@ -5630,7 +5704,7 @@ func (e *Engine) chatWithChainStrategy(ctx context.Context, chain []Attempt, req
 					e.recordDecision(trace, contract, treeOrdered, strategy, req.Model, r2.att.Model, r2.att.ProviderID)
 					noteTreeServed(trace, tree, r2.att.ProviderID, r2.att.Model, treeRoot)
 					e.setLastTrace(trace)
-					return e.finishResponse(*r2), trace, nil
+					return e.finishAndStore(ctx, *r2, req), trace, nil
 				}
 				if isContentRefusalErr(r2.err) {
 					// Both hedged targets refused the content:
@@ -5725,7 +5799,7 @@ func (e *Engine) chatWithChainStrategy(ctx context.Context, chain []Attempt, req
 			e.recordDecision(trace, contract, treeOrdered, strategy, req.Model, res.att.Model, res.att.ProviderID)
 			noteTreeServed(trace, tree, res.att.ProviderID, res.att.Model, treeRoot)
 			e.setLastTrace(trace)
-			return e.finishResponse(res), trace, nil
+			return e.finishAndStore(ctx, res, req), trace, nil
 		}
 		lastErr = res.err
 		if isContentRefusalErr(res.err) {
@@ -5927,6 +6001,17 @@ func (e *Engine) mapDeadlineErr(err error, parentCtx context.Context) error {
 		return ErrDeadlineExceeded
 	}
 	return err
+}
+
+// finishAndStore is finishResponse plus the A13 Stream A store: a served
+// response is written into the engine's cache layers under the same gates a
+// lookup honours, so the next identical request can be answered without a
+// provider. A store failure is silent by design — caching must never break a
+// request that already succeeded.
+func (e *Engine) finishAndStore(ctx context.Context, res attemptResult, req provider.ChatRequest) *provider.ChatResponse {
+	resp := e.finishResponse(res)
+	e.engineCacheStore(ctx, req, resp)
+	return resp
 }
 
 func (e *Engine) finishResponse(res attemptResult) *provider.ChatResponse {
@@ -6239,6 +6324,24 @@ func (e *Engine) chatStreamWithChainStrategy(ctx context.Context, chain []Attemp
 		return nil, projErr
 	}
 	e.recordRouting(strategy, req.Model)
+	// A13 Stream A (gap H1): the streaming path consults the same cache
+	// layers with the same gates as Chat, so a bare Engine caches streams
+	// too. A hit is served as a single-delta stream ending in Done — the
+	// client sees a normal stream, no provider is dialled, and the cost is
+	// zero by construction.
+	if hit, layer, ok := e.engineCacheLookup(ctx, req); ok {
+		e.mu.Lock()
+		e.lastCacheHit = layer
+		e.mu.Unlock()
+		e.noteCacheHit(layer)
+		served := CachedResponseFor(hit, req)
+		e.publishTrace(ctx, &routetrace.RouteTrace{Contract: contract, Endpoint: traceEndpointFor(req), Compression: traceCompression(req.Compressed)})
+		out := make(chan StreamEvent, 2)
+		out <- StreamEvent{Delta: served.Content}
+		out <- StreamEvent{Done: true, FinishReason: "stop", Resp: served}
+		close(out)
+		return out, nil
+	}
 	bctx, cancel := e.withDeadline(ctx)
 	out := make(chan StreamEvent, 16)
 	go func() {
@@ -7257,6 +7360,19 @@ attemptLoop:
 			// — the handoff is built lazily and never costs a
 			// summariser call for a finished request.
 			e.relayNote(relay, req, attemptResult{att: streamAtt, latencyMs: lat, called: true})
+			// A13 Stream A: a completed stream is stored under the same
+			// gates as a non-streaming answer, so the stream and chat
+			// paths share one write tier. doneResp carries the
+			// upstream's reassembled response (its own reported usage),
+			// never an estimate; a nil one simply means nothing to
+			// store.
+			if doneResp != nil {
+				stored := *doneResp
+				if stored.Content == "" && partial.Len() > 0 {
+					stored.Content = partial.String()
+				}
+				e.engineCacheStore(ctx, req, &stored)
+			}
 			return
 		case streamCtxDone:
 			// Terminal "cancelled" when the caller went away;

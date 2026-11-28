@@ -3,8 +3,11 @@ package cache
 import "testing"
 
 // Prompt-cache marker boundary, pinned by the M6.9 audit
-// (2026-11-18): Prepare() annotates exactly anthropic / claude /
-// openrouter and nothing else. The audit verified, per provider,
+// (2026-11-18): Prepare() annotates exactly anthropic / claude and
+// nothing else. openrouter's OpenAI-wire markers are applied by the
+// provider client (internal/provider/client.go,
+// applyOpenRouterPromptCacheMarker), not by cache.Prepare, so it is
+// deliberately out of this set. The audit verified, per provider,
 // that no other provider in the tree can honestly be added —
 // either the upstream honours no message marker (OpenAI automatic,
 // Gemini cachedContents, DeepSeek automatic, Cohere none
@@ -39,7 +42,7 @@ func TestPrepareM69ProviderBoundary(t *testing.T) {
 	}
 	// Supported: exactly the last user message (index 3), and
 	// the marker is the ephemeral type.
-	for _, provider := range []string{"anthropic", "claude", "openrouter", "Anthropic", " ANTHROPIC ", "Claude"} {
+	for _, provider := range []string{"anthropic", "claude", "Anthropic", " ANTHROPIC ", "Claude"} {
 		req := mkReq()
 		Prepare(req, provider)
 		got := annotated(req)
@@ -55,12 +58,14 @@ func TestPrepareM69ProviderBoundary(t *testing.T) {
 	// honours the marker only translated (Converse cachePoint /
 	// Vertex Claude rawPredict), which this router cannot yet
 	// carry (see the promptCacheProviders comment); the rest
-	// honour no message marker at all.
+	// honour no message marker at all. openrouter is out of
+	// cache.Prepare's canonical set: its OpenAI-wire marking lives
+	// in the provider client and is governed there (g13).
 	for _, provider := range []string{
 		"bedrock", "vertex", "vertex-partner",
 		"openai", "gemini", "google",
 		"deepseek", "cohere", "fireworks", "together", "groq", "xai",
-		"mistral", "ollama", "unknown-provider", "",
+		"mistral", "ollama", "openrouter", "unknown-provider", "",
 	} {
 		req := mkReq()
 		Prepare(req, provider)

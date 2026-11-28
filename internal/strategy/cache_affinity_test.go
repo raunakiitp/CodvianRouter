@@ -50,11 +50,12 @@ func TestCacheAffinityPrefersMarkerSupportingTarget(t *testing.T) {
 
 func TestCacheAffinityMarkerCoversAllPrepareProviders(t *testing.T) {
 	// Every provider cache.Prepare() annotates must win the marker
-	// tiebreak; openrouter is in the set too (it passes the marker
-	// through to the underlying provider).
+	// tiebreak. openrouter is deliberately out of the set: its
+	// OpenAI-wire markers are applied by the provider client, not by
+	// cache.Prepare, so it does not win the marker tiebreak here.
 	in := cacheTargets("deepseek", "openrouter", "openai", "claude")
 	got := OrderByCacheAffinity(in, cacheableReq())
-	if want := []string{"openrouter", "claude", "deepseek", "openai"}; !sameStrings(cacheProviders(got), want) {
+	if want := []string{"claude", "deepseek", "openrouter", "openai"}; !sameStrings(cacheProviders(got), want) {
 		t.Fatalf("OrderByCacheAffinity = %v, want %v", cacheProviders(got), want)
 	}
 }
@@ -179,12 +180,12 @@ func TestCacheAffinityPureAndDeterministic(t *testing.T) {
 }
 
 func TestCacheAffinityMarkerNormalization(t *testing.T) {
-	for _, p := range []string{"anthropic", "Anthropic", "ANTHROPIC", " anthropic ", "claude", "Claude", "openrouter", "OpenRouter"} {
+	for _, p := range []string{"anthropic", "Anthropic", "ANTHROPIC", " anthropic ", "claude", "Claude"} {
 		if !SupportsPromptCacheMarker(p) {
 			t.Errorf("SupportsPromptCacheMarker(%q) = false, want true", p)
 		}
 	}
-	for _, p := range []string{"", "openai", "google", "gemini", "deepseek", "anthropicx", "xanthropic"} {
+	for _, p := range []string{"", "openai", "google", "gemini", "deepseek", "openrouter", "OpenRouter", "anthropicx", "xanthropic"} {
 		if SupportsPromptCacheMarker(p) {
 			t.Errorf("SupportsPromptCacheMarker(%q) = true, want false", p)
 		}
