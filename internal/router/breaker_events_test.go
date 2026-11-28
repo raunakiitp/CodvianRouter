@@ -10,6 +10,7 @@ import (
 type breakerEventSink struct {
 	degraded  chan degradedCall
 	recovered chan string
+	redeemed  chan redeemedCall
 }
 
 type degradedCall struct {
@@ -19,11 +20,19 @@ type degradedCall struct {
 	openFor     time.Duration
 }
 
+type redeemedCall struct {
+	provider string
+	bankedAt time.Time
+}
+
 func (s *breakerEventSink) ProviderDegraded(p string, n, trips int, openFor time.Duration) {
 	s.degraded <- degradedCall{p, n, trips, openFor}
 }
 func (s *breakerEventSink) ProviderRecovered(p string) {
 	s.recovered <- p
+}
+func (s *breakerEventSink) ProviderResetRedeemed(p string, bankedAt time.Time) {
+	s.redeemed <- redeemedCall{p, bankedAt}
 }
 
 // T7: breaker events are edge-triggered and grounded in the real
@@ -36,7 +45,7 @@ func (s *breakerEventSink) ProviderRecovered(p string) {
 // channels.
 func TestBreakerTransitionEventsEdgeTriggered(t *testing.T) {
 	eng := NewEngine(map[string]provider.Client{}, nil, Config{BreakerThreshold: 3})
-	sink := &breakerEventSink{degraded: make(chan degradedCall, 4), recovered: make(chan string, 4)}
+	sink := &breakerEventSink{degraded: make(chan degradedCall, 4), recovered: make(chan string, 4), redeemed: make(chan redeemedCall, 4)}
 	eng.SetBreakerEvents(sink)
 
 	eng.mu.Lock()
@@ -92,7 +101,7 @@ func TestBreakerTransitionEventsEdgeTriggered(t *testing.T) {
 // cycle, so provider.degraded fires again with the escalated trip count.
 func TestBreakerProbeFailureRefiresDegraded(t *testing.T) {
 	eng := NewEngine(map[string]provider.Client{}, nil, Config{BreakerThreshold: 3})
-	sink := &breakerEventSink{degraded: make(chan degradedCall, 4), recovered: make(chan string, 4)}
+	sink := &breakerEventSink{degraded: make(chan degradedCall, 4), recovered: make(chan string, 4), redeemed: make(chan redeemedCall, 4)}
 	eng.SetBreakerEvents(sink)
 
 	// Trip the breaker once (first degraded already consumed/ignored).

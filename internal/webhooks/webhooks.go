@@ -74,13 +74,18 @@ const TestPingEvent = "test.ping"
 // trips (CLOSED -> OPEN), with only the provider id and the real
 // consecutive-failure/trip counts and open duration in the payload.
 // ProviderRecoveredEvent fires when that OPEN breaker later clears on
-// a real success. Both are edge-triggered: steady failures while the
-// breaker is already open, and ordinary successes by a healthy
-// provider, never emit an event. Neither payload contains a key, a
-// prompt or any provider credential.
+// a real success. ProviderResetRedeemedEvent fires when an operator
+// redeems a banked reset — a reset redemption that was banked when the
+// provider's breaker tripped open and is claimed by
+// ResetBreaker/ResetAllBreakers (see router.Engine). All three are
+// edge-triggered: steady failures while the breaker is already open,
+// ordinary successes by a healthy provider, and a reset with no banked
+// redemption never emit an event. No payload contains a key, a prompt
+// or any provider credential.
 const (
-	ProviderDegradedEvent  = "provider.degraded"
-	ProviderRecoveredEvent = "provider.recovered"
+	ProviderDegradedEvent      = "provider.degraded"
+	ProviderRecoveredEvent     = "provider.recovered"
+	ProviderResetRedeemedEvent = "provider.reset_redeemed"
 )
 
 // BudgetWarningEvent fires when an internal budget crosses its
@@ -115,6 +120,7 @@ func KnownEvents() []string {
 		BudgetWarningEvent,
 		ProviderDegradedEvent,
 		ProviderRecoveredEvent,
+		ProviderResetRedeemedEvent,
 		RequestCompletedEvent,
 		RequestFailedEvent,
 		ProviderExhaustedEvent,
