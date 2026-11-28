@@ -73,6 +73,9 @@ func TestResolveAutoAlias(t *testing.T) {
 		"auto:balanced":      {axis: "balanced", model: "auto"},
 		"auto:weighted":      {axis: "weighted", model: "auto"},
 		"auto:code":          {axis: "code", model: "auto/code"},
+		"auto:fusion":        {axis: "fusion", model: "auto/fusion"},
+		"auto:pipeline":      {axis: "pipeline", model: "auto/pipeline"},
+		"auto:jev":           {axis: "jev", model: "auto/jev"},
 		"AUTO:Cheapest":      {axis: "cheapest", model: "auto/cheap"},
 	}
 	for in, want := range cases {

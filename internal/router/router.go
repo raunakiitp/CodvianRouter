@@ -2156,11 +2156,12 @@ func (e *Engine) setLastAutoDecision(dec *autorouter.Decision) {
 // package — it would be a cycle — so the mapping is duplicated here
 // and pinned by TestResolveAutoAlias): cheapest -> auto/cheap,
 // fastest and least-latency -> auto/fast, most-reliable ->
-// auto/reasoning, code -> auto/code, anything else (balanced,
-// weighted, or an unknown axis) -> auto. An unknown axis still
-// rewrites to "auto": the StrategyHook factory ranks unknown names
-// as balanced, so the request never errors on the alias — it just
-// gets the balanced strategy for the auto model.
+// auto/reasoning, code -> auto/code, fusion -> auto/fusion,
+// pipeline -> auto/pipeline, jev -> auto/jev, anything else
+// (balanced, weighted, or an unknown axis) -> auto. An unknown axis
+// still rewrites to "auto": the StrategyHook factory ranks unknown
+// names as balanced, so the request never errors on the alias — it
+// just gets the balanced strategy for the auto model.
 func (e *Engine) resolveAutoAlias(req provider.ChatRequest) (string, provider.ChatRequest) {
 	model := strings.TrimSpace(req.Model)
 	if len(model) <= 5 || !strings.EqualFold(model[:5], "auto:") {
@@ -2179,6 +2180,12 @@ func (e *Engine) resolveAutoAlias(req provider.ChatRequest) (string, provider.Ch
 		req.Model = "auto/reasoning"
 	case "code":
 		req.Model = "auto/code"
+	case "fusion":
+		req.Model = "auto/fusion"
+	case "pipeline":
+		req.Model = "auto/pipeline"
+	case "jev":
+		req.Model = "auto/jev"
 	default:
 		req.Model = "auto"
 	}
