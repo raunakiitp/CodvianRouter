@@ -78,14 +78,15 @@ import (
 // BudgetWarningEvent fires when an internal budget crosses its
 // warning threshold (M8.19). The payload carries the budget
 // identity and the consumption that tripped it; see
-// notifyBudgetWarning. It is the second event kind after
-// webhooks.QuotaExceededEvent ("quota.exceeded"); no other event
-// kind exists.
-const BudgetWarningEvent = "budget.warning"
+// notifyBudgetWarning. It is an alias of the canonical constant in
+// internal/webhooks (the single source of truth for event names).
+const BudgetWarningEvent = webhooks.BudgetWarningEvent
 
 // webhookKnownEvents is the fixed event list a registration may
-// subscribe to. Unknown events are a 400 naming the event.
-var webhookKnownEvents = []string{webhooks.QuotaExceededEvent, BudgetWarningEvent, webhooks.ProviderDegradedEvent, webhooks.ProviderRecoveredEvent, webhooks.RequestCompletedEvent, webhooks.RequestFailedEvent, webhooks.ProviderExhaustedEvent, webhooks.TestPingEvent}
+// subscribe to. It is webhooks.KnownEvents() verbatim — the SAME set
+// the config-file validator accepts — so the two never drift.
+// Unknown events are a 400 naming the event.
+var webhookKnownEvents = webhooks.KnownEvents()
 
 // webhookMaxBody caps a registration request body (1 MiB, the
 // same cap the quota-schedule handler uses).
@@ -203,6 +204,16 @@ func dedupeWebhookEvents(events []string) []string {
 	return out
 }
 
+// quoteAll returns each name wrapped in double quotes, for an error
+// message that lists the known events without hand-copying the set.
+func quoteAll(in []string) []string {
+	out := make([]string, len(in))
+	for i, s := range in {
+		out[i] = "\"" + s + "\""
+	}
+	return out
+}
+
 // newWebhookID mints a registration id: "wh_" + 16 random hex
 // chars. The caller checks it against the stored ids.
 func newWebhookID() (string, error) {
@@ -297,7 +308,7 @@ func (s *Server) handleWebhookCreate(w http.ResponseWriter, r *http.Request) {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid webhook registration: expected {\"url\": string, \"events\": [\"quota.exceeded\"|\"budget.warning\"|\"provider.degraded\"|\"provider.recovered\"], \"secret\": string}")
+		writeError(w, http.StatusBadRequest, "invalid webhook registration: expected {\"url\": string, \"events\": ["+strings.Join(quoteAll(webhookKnownEvents), ", ")+"], \"secret\": string}")
 		return
 	}
 	req.URL = strings.TrimSpace(req.URL)
@@ -395,6 +406,66 @@ func (s *Server) handleWebhookByID(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// webhookTestIDFromRequest returns the {id} path segment of
+// POST /api/webhooks/{id}/test: from the mux when the request arrived
+// through the registered route, or by trimming the /api/webhooks/
+// prefix and the /test suffix when the handler is invoked directly
+// (tests, apitest harness).
+func webhookTestIDFromRequest(r *http.Request) string {
+	if id := strings.TrimSpace(r.PathValue("id")); id != "" {
+		return id
+	}
+	p := strings.TrimPrefix(r.URL.Path, "/api/webhooks/")
+	p = strings.TrimSuffix(p, "/test")
+	return strings.Trim(p, "/")
+}
+
+// webhookTestPayload is the example data a test-send carries. It
+// names itself as a test so a receiver can distinguish it from a real
+// event, and carries a round-trip timestamp so an operator can see
+// the delivery land.
+func webhookTestPayload(id string) map[string]any {
+	return map[string]any{
+		"webhook_id": id,
+		"test":       true,
+		"message":    "codvian-router webhook test delivery",
+		"sent_at":    time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// handleWebhookTest serves POST /api/webhooks/{id}/test: it emits a
+// test.ping event, carrying example data, to the named endpoint
+// through the live dispatcher — regardless of whether that endpoint
+// subscribes to test.ping, so an operator can verify connectivity
+// before relying on the channel. Delivery is asynchronous and
+// best-effort (the M5.9 contract): a 202 means the delivery was
+// dispatched, not that the remote endpoint answered. Unknown ids are
+// 404; no config or no dispatcher is 503.
+func (s *Server) handleWebhookTest(w http.ResponseWriter, r *http.Request) {
+	if s.cfg == nil {
+		writeError(w, http.StatusServiceUnavailable, "webhooks unavailable: no config wired")
+		return
+	}
+	id := webhookTestIDFromRequest(r)
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "webhook id is required")
+		return
+	}
+	if _, ok := s.findWebhook(id); !ok {
+		writeError(w, http.StatusNotFound, "webhook not found")
+		return
+	}
+	if s.webhooks == nil {
+		writeError(w, http.StatusServiceUnavailable, "webhook dispatcher unavailable")
+		return
+	}
+	if !s.webhooks.NotifyEndpoint(id, webhooks.TestPingEvent, webhookTestPayload(id)) {
+		writeError(w, http.StatusNotFound, "webhook not found")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"ok": true, "event": webhooks.TestPingEvent, "webhook_id": id})
+}
+
 // webhookUpdateRequest is the PUT /api/webhooks/{id} body.
 // Partial update, the reference router's PUT semantics (src/app/api/
 // webhooks/[id]/route.ts: updateWebhookSchema — every field
@@ -427,7 +498,7 @@ func (s *Server) handleWebhookUpdate(w http.ResponseWriter, r *http.Request, sto
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid webhook update: expected {\"url\": string (optional), \"events\": [\"quota.exceeded\"|\"budget.warning\"|\"provider.degraded\"|\"provider.recovered\"] (optional), \"secret\": string (optional)}")
+		writeError(w, http.StatusBadRequest, "invalid webhook update: expected {\"url\": string (optional), \"events\": ["+strings.Join(quoteAll(webhookKnownEvents), ", ")+"] (optional), \"secret\": string (optional)}")
 		return
 	}
 	next := stored
@@ -484,6 +555,7 @@ func (s *Server) handleWebhookUpdate(w http.ResponseWriter, r *http.Request, sto
 func (s *Server) registerWebhooksRoutes(mux *http.ServeMux) {
 	s.register(mux, "POST", "/api/webhooks", s.handleWebhooks)
 	s.register(mux, "GET", "/api/webhooks", s.handleWebhooks)
+	s.register(mux, "POST", "/api/webhooks/{id}/test", s.handleWebhookTest)
 	s.register(mux, "GET", "/api/webhooks/{id}", s.handleWebhookByID)
 	s.register(mux, "PUT", "/api/webhooks/{id}", s.handleWebhookByID)
 	s.register(mux, "DELETE", "/api/webhooks/{id}", s.handleWebhookByID)
