@@ -3835,6 +3835,12 @@ func openStack(opts options) (*stack, error) {
 		if routing.HedgeDelayMs != 0 {
 			engCfg.HedgeDelay = time.Duration(routing.HedgeDelayMs) * time.Millisecond
 		}
+		// Fusion judge + panel knobs (A2-3b): the operator's
+		// judge model (empty = the first panel member, the fusion
+		// default) and the panel sizes/timeouts. Without this
+		// wiring the engine fields stayed unset and the fusion
+		// judge was unreachable from a real request.
+		applyFusionRouting(&engCfg, routing)
 		// Context-relay thresholds/TTL (B2-01): 0 keeps
 		// the engine defaults (0.85 / 0.95 / 5h / 30
 		// messages). The config was validated at load,
