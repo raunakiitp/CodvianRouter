@@ -42,6 +42,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -302,7 +303,25 @@ func (e *Engine) runComboStrategy(ctx context.Context, ordered []Attempt, req pr
 		noteTreeServed(trace, tree, lastRes.att.ProviderID, lastRes.att.Model, treeRoot)
 		return e.finishResponse(lastRes), nil
 	case "jev":
-		pres, err := RunJevPanel(ctx, prompt, ordered, e.comboPanelCaller(req, rec), heuristicJevScorer{}, PanelConfig{})
+		scorer := JevScorer(heuristicJevScorer{})
+		// A2-4: when the operator turned the JEV LLM judge ON
+		// (config routing.jev_judge_enabled) and a judge model
+		// resolves (config routing.jev_judge_model), run the real
+		// System One call (llmJevScorer) — the configured JEV judge
+		// model. It must produce choice+probabilities. A judge
+		// failure (or an off flag / unresolvable judge model) falls
+		// back to heuristicJevScorer via fallbackJevScorer, so the
+		// preference order is unchanged whenever the flag is off or
+		// the judge call fails. Never calls any vendor decision API.
+		if e.cfg.ComboJevLLMJudge {
+			if ja, ok := e.jevJudgeAttempt(req, ordered); ok {
+				scorer = fallbackJevScorer{
+					primary:    &llmJevScorer{engine: e, judge: ja, base: req},
+					onFallback: func(error) {},
+				}
+			}
+		}
+		pres, err := RunJevPanel(ctx, prompt, ordered, e.comboPanelCaller(req, rec), scorer, PanelConfig{})
 		if err != nil {
 			// As in the fusion branch: RunJevPanel returns
 			// an empty result on error, so record from the
@@ -796,4 +815,173 @@ func (heuristicJevScorer) ScoreJev(ctx context.Context, prompt string, candidate
 		Probabilities: probs,
 		Confidence:    probs[candidates[best].Label()],
 	}, nil
+}
+
+// llmJevScorer is a JevScorer backed by one real engine attempt: it
+// sends the original prompt plus the numbered candidates to the
+// judge attempt's provider/model and parses a System One answer
+// (choice + confidence + per-candidate probabilities) from the
+// reply. It calls e.callChat directly — a leaf, never the combo
+// interception — so it cannot recurse. An unparseable reply, an
+// out-of-range winner, probabilities that do not sum sensibly, or a
+// failed judge call is an ERROR, never an invented judgement: the
+// caller (fallbackJevScorer) falls back to heuristicJevScorer on
+// exactly that signal. It is gated behind Config.ComboJevLLMJudge
+// (A2-4) and never calls any vendor decision API.
+type llmJevScorer struct {
+	engine *Engine
+	judge  Attempt
+	// base is the request the judge prompt is built from (model,
+	// temperature and friends carry over; messages are replaced by
+	// the judge prompt, and the compression stamp is cleared — it
+	// describes the original prompt, not the judge prompt).
+	base provider.ChatRequest
+}
+
+// ScoreJev implements JevScorer for llmJevScorer.
+func (s *llmJevScorer) ScoreJev(ctx context.Context, prompt string, candidates []PanelResult) (*JevChoiceAnswer, error) {
+	if s == nil || s.engine == nil {
+		return nil, errors.New("llm jev scorer: no engine")
+	}
+	if len(candidates) == 0 {
+		return nil, errors.New("llm jev scorer: no candidates to score")
+	}
+	var sb strings.Builder
+	sb.WriteString("Original request:\n")
+	sb.WriteString(prompt)
+	sb.WriteString("\n\nCandidates:\n")
+	for i, c := range candidates {
+		fmt.Fprintf(&sb, "\nCandidate %d (from %s):\n%s\n", i+1, c.Label(), c.Text)
+	}
+	sb.WriteString("\nReply with exactly one line: WINNER: <number> CONFIDENCE: <0-1> PROBS: <p1> <p2> ... <pN> naming the best candidate (1-based), your confidence in that choice, and a probability for every candidate (in 1-based order) summing to 1.")
+	req := s.base
+	req.Messages = []provider.Message{{Role: RoleUser, Content: sb.String()}}
+	req.Compressed = nil
+	res := s.engine.callChat(ctx, s.judge, req)
+	if res.err != nil {
+		return nil, fmt.Errorf("llm jev scorer: judge call failed: %w", res.err)
+	}
+	if res.resp == nil {
+		return nil, errors.New("llm jev scorer: judge call returned no response")
+	}
+	return parseJevJudge(res.resp.Content, candidates)
+}
+
+var (
+	jevWinnerRe     = regexp.MustCompile(`(?i)\bWINNER:\s*(\d+)`)
+	jevConfidenceRe = regexp.MustCompile(`(?i)\bCONFIDENCE:\s*([0-9]*\.?[0-9]+)`)
+	jevProbsRe      = regexp.MustCompile(`(?i)\bPROBS:\s*([0-9.,\s]+)`)
+)
+
+// parseJevJudge parses the System One answer from a judge reply: the
+// 1-based winner index, an overall confidence, and a probability for
+// every candidate in 1-based order (whitespace or comma separated,
+// summing to 1). Anything malformed is an error — a judgement is
+// never guessed from free text. The returned answer's Choice is the
+// winner's candidate Label and its Probabilities map label -> p.
+func parseJevJudge(reply string, candidates []PanelResult) (*JevChoiceAnswer, error) {
+	if len(candidates) == 0 {
+		return nil, errors.New("jev judge: no candidates to parse")
+	}
+	wm := jevWinnerRe.FindStringSubmatch(reply)
+	if wm == nil {
+		return nil, errors.New("jev judge reply named no winner (expected \"WINNER: <number>\")")
+	}
+	winner, err := strconv.Atoi(wm[1])
+	if err != nil || winner < 1 || winner > len(candidates) {
+		return nil, fmt.Errorf("jev judge returned out-of-range winner %q for %d candidates", wm[1], len(candidates))
+	}
+	cm := jevConfidenceRe.FindStringSubmatch(reply)
+	if cm == nil {
+		return nil, errors.New("jev judge reply named no confidence (expected \"CONFIDENCE: <0-1>\")")
+	}
+	conf, err := strconv.ParseFloat(cm[1], 64)
+	if err != nil || conf < 0 || conf > 1 {
+		return nil, fmt.Errorf("jev judge returned out-of-range confidence %q", cm[1])
+	}
+	pm := jevProbsRe.FindStringSubmatch(reply)
+	if pm == nil {
+		return nil, errors.New("jev judge reply named no probabilities (expected \"PROBS: <p1> <p2> ... <pN>\")")
+	}
+	parts := strings.FieldsFunc(pm[1], func(r rune) bool { return r == ',' || r == ' ' || r == '	' })
+	if len(parts) != len(candidates) {
+		return nil, fmt.Errorf("jev judge returned %d probabilities for %d candidates", len(parts), len(candidates))
+	}
+	probs := make([]float64, len(parts))
+	var total float64
+	for i, p := range parts {
+		v, err := strconv.ParseFloat(p, 64)
+		if err != nil || v < 0 || v > 1 {
+			return nil, fmt.Errorf("jev judge returned out-of-range probability %q", p)
+		}
+		probs[i] = v
+		total += v
+	}
+	if total <= 0 {
+		return nil, errors.New("jev judge probabilities sum to zero")
+	}
+	answer := &JevChoiceAnswer{
+		Choice:        candidates[winner-1].Label(),
+		Confidence:    conf,
+		Probabilities: make(map[string]float64, len(candidates)),
+	}
+	for i, c := range candidates {
+		answer.Probabilities[c.Label()] = probs[i]
+	}
+	return answer, nil
+}
+
+// fallbackJevScorer tries a primary JevScorer and falls back to
+// heuristicJevScorer when the primary fails. onFallback, when set, is
+// called with the primary's error so the caller can record the
+// fallback — the request never fails because the judge did, and the
+// fallback is never silent. When the flag is off, runComboStrategy
+// never constructs a fallbackJevScorer at all (it keeps the plain
+// heuristicJevScorer), so the preference order is unchanged.
+type fallbackJevScorer struct {
+	primary    JevScorer
+	onFallback func(err error)
+}
+
+// ScoreJev implements JevScorer for fallbackJevScorer.
+func (s fallbackJevScorer) ScoreJev(ctx context.Context, prompt string, candidates []PanelResult) (*JevChoiceAnswer, error) {
+	answer, err := s.primary.ScoreJev(ctx, prompt, candidates)
+	if err == nil {
+		return answer, nil
+	}
+	if s.onFallback != nil {
+		s.onFallback(err)
+	}
+	return heuristicJevScorer{}.ScoreJev(ctx, prompt, candidates)
+}
+
+// jevJudgeAttempt resolves the JEV judge's target (A2-4): the
+// attempt serving the configured JEV judge model (Config.
+// JevJudgeModel) when it is resolvable — an attempt already on the
+// panel, else the first attempt of that model's own chain. Unlike
+// comboJudgeAttempt (fusion), it reports false when NO judge model
+// is configured or the named model has no serving chain: with the
+// JEV LLM judge on but no resolvable model there is nothing to
+// judge with, so the caller keeps the heuristic scorer and never
+// dials a panel member as a judge.
+func (e *Engine) jevJudgeAttempt(req provider.ChatRequest, ordered []Attempt) (Attempt, bool) {
+	if len(ordered) == 0 {
+		return Attempt{}, false
+	}
+	if e.cfg.JevJudgeModel == nil {
+		return Attempt{}, false
+	}
+	jm := strings.TrimSpace(e.cfg.JevJudgeModel(req.Model))
+	if jm == "" {
+		return Attempt{}, false
+	}
+	for _, att := range ordered {
+		if att.Model == jm {
+			return att, true
+		}
+	}
+	if chain := e.chainFor(jm); len(chain) > 0 {
+		return chain[0], true
+	}
+	return Attempt{}, false
 }

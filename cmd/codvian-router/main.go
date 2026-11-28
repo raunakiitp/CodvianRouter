@@ -3874,6 +3874,19 @@ func openStack(opts options) (*stack, error) {
 		// engine's fill-first default; both values were
 		// validated at load (unknown names, including
 		// "expiry-first", fail there).
+		// JEV LLM judge (A2-4): routing.jev_judge_enabled gates
+		// whether the JEV strategy's System One scoring runs through
+		// a real LLM judge call; routing.jev_judge_model names the
+		// model that call is sent to (resolved through the engine's
+		// chain map, like a routing-group model). The flag is OFF by
+		// default; the model string is only wired when non-empty, so
+		// an unconfigured install keeps a nil JevJudgeModel (the JEV
+		// heuristic scorer, no judge call).
+		engCfg.ComboJevLLMJudge = routing.JevJudgeEnabled
+		if routing.JevJudgeModel != "" {
+			judgeModel := routing.JevJudgeModel
+			engCfg.JevJudgeModel = func(model string) string { return judgeModel }
+		}
 		engCfg.AccountFallbackStrategy = routing.AccountFallbackStrategy
 		engCfg.AccountFallbackStrategies = routing.AccountFallbackStrategies
 		// SLA objectives (M3 Area 1, PARITY row 394): the

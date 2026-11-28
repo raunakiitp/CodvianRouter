@@ -814,6 +814,30 @@ type Config struct {
 	ComboMinPanel           int
 	ComboPanelHardTimeoutMs int
 	ComboStragglerGraceMs   int
+	// ComboJevLLMJudge, when true, runs the JEV strategy's System
+	// One scoring through a real LLM judge call (llmJevScorer) —
+	// the same configured judge model the fusion LLM judge uses
+	// (Config.JudgeModel, A2-3) — instead of the deterministic
+	// heuristicJevScorer. It is OFF by default (A2-4): with the
+	// flag false the preference order is unchanged, the heuristic
+	// scorer, and every panel member is dialled exactly once with
+	// no extra judge call. When the flag is on, the judge call is
+	// made and must produce choice+probabilities; a judge failure
+	// (or no resolvable judge model) falls back to
+	// heuristicJevScorer, so the request never fails because the
+	// judge did. Never calls any vendor decision API.
+	ComboJevLLMJudge bool
+	// JevJudgeModel, when set, names the judge model for the JEV
+	// strategy's LLM judge (A2-4): the model the System One scoring
+	// request is sent to, resolved exactly like the fusion judge's
+	// model. It is read only when ComboJevLLMJudge is true; when it
+	// returns "" — or the named model has no serving chain — the
+	// judge call is skipped and the JEV path falls back to the
+	// heuristicJevScorer (no judge call at all, so ordered[0] is
+	// never dialled as a judge). When JevJudgeModel is nil the JEV
+	// judge is disabled regardless of ComboJevLLMJudge. Configured
+	// in production from routing.jev_judge_model.
+	JevJudgeModel func(model string) string
 	// QuotaShareFor, if set, reports the operator-configured
 	// quota-share weight for one (provider, model) pair (Phase D,
 	// D4): the member's share in a "quota-share" pool. It is
