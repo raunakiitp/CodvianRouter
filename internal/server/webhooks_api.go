@@ -70,6 +70,7 @@ import (
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/config"
+	"github.com/raunakiitp/codvian-router/internal/crypto"
 	"github.com/raunakiitp/codvian-router/internal/guardrails"
 	"github.com/raunakiitp/codvian-router/internal/ledger"
 	"github.com/raunakiitp/codvian-router/internal/webhooks"
@@ -98,6 +99,7 @@ type webhookView struct {
 	URL       string   `json:"url"`
 	Events    []string `json:"events"`
 	HasSecret bool     `json:"has_secret"`
+	Kind      string   `json:"kind,omitempty"`
 }
 
 // webhooksResponse is the GET /api/webhooks payload.
@@ -109,9 +111,11 @@ type webhooksResponse struct {
 // server-generated; a client-supplied id is rejected as an
 // unknown field.
 type webhookCreateRequest struct {
-	URL    string   `json:"url"`
-	Events []string `json:"events"`
-	Secret string   `json:"secret,omitempty"`
+	URL      string            `json:"url"`
+	Events   []string          `json:"events"`
+	Secret   string            `json:"secret,omitempty"`
+	Kind     string            `json:"kind,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // webhookViewOf maps a stored registration to its API view.
@@ -120,7 +124,7 @@ func webhookViewOf(w config.WebhookConfig) webhookView {
 	if events == nil {
 		events = []string{}
 	}
-	return webhookView{ID: w.ID, URL: w.URL, Events: events, HasSecret: w.Secret != ""}
+	return webhookView{ID: w.ID, URL: w.URL, Events: events, HasSecret: w.Secret != "", Kind: w.Kind}
 }
 
 // validateWebhookURL enforces the SSRF default for a new target:
@@ -244,11 +248,32 @@ func (s *Server) rebuildWebhookDispatcher() {
 	}
 	endpoints := make([]webhooks.Endpoint, 0, len(s.cfg.Webhooks))
 	for _, w := range s.cfg.Webhooks {
-		endpoints = append(endpoints, webhooks.Endpoint{ID: w.ID, URL: w.URL, Events: w.Events, Secret: w.Secret})
+		endpoints = append(endpoints, webhooks.Endpoint{ID: w.ID, URL: w.URL, Events: w.Events, Secret: w.Secret, Kind: w.Kind, Metadata: w.Metadata})
 	}
 	// nil client = the SSRF-safe egress client (production). Tests
 	// that deliver to a loopback httptest receiver set webhookClient.
 	s.webhooks = webhooks.New(endpoints, s.webhookClient, s.logger)
+	// Chat-kind endpoints may hold a sealed bot token in metadata;
+	// unseal it with the per-data-dir Vault (nil = read plaintext).
+	s.webhooks.SetTokenDecrypt(s.webhookTokenDecrypt())
+}
+
+// webhookTokenDecrypt returns the unseal function for a chat-kind token
+// held in endpoint metadata, derived from the per-data-dir Vault, or nil
+// when there is no data dir or the Vault cannot be opened (metadata
+// tokens are then read as plaintext).
+func (s *Server) webhookTokenDecrypt() func(string) (string, error) {
+	if s.cfg == nil || s.cfg.DataDir == "" {
+		return nil
+	}
+	v, err := crypto.New(s.cfg.DataDir)
+	if err != nil {
+		return nil
+	}
+	return func(x string) (string, error) {
+		b, err := v.Unseal(x)
+		return string(b), err
+	}
 }
 
 // persistWebhooks saves the config file after a mutation, or
@@ -324,7 +349,12 @@ func (s *Server) handleWebhookCreate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	next := config.WebhookConfig{ID: id, URL: req.URL, Events: dedupeWebhookEvents(req.Events), Secret: req.Secret}
+	wc := config.WebhookConfig{ID: id, URL: req.URL, Events: dedupeWebhookEvents(req.Events), Secret: req.Secret, Kind: req.Kind, Metadata: req.Metadata}
+	if err := config.ValidateWebhookKind(wc); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	next := wc
 	prev := append([]config.WebhookConfig(nil), s.cfg.Webhooks...)
 	s.cfg.Webhooks = append(s.cfg.Webhooks, next)
 	if err := s.persistWebhooks(); err != nil {
@@ -410,9 +440,11 @@ func (s *Server) handleWebhookByID(w http.ResponseWriter, r *http.Request) {
 // of those fields, so they are not accepted here — adding them
 // needs a config-model extension, not a handler change.
 type webhookUpdateRequest struct {
-	URL    *string  `json:"url,omitempty"`
-	Events []string `json:"events,omitempty"`
-	Secret *string  `json:"secret,omitempty"`
+	URL      *string           `json:"url,omitempty"`
+	Events   []string          `json:"events,omitempty"`
+	Secret   *string           `json:"secret,omitempty"`
+	Kind     *string           `json:"kind,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // handleWebhookUpdate serves PUT /api/webhooks/{id}: apply the
@@ -452,6 +484,16 @@ func (s *Server) handleWebhookUpdate(w http.ResponseWriter, r *http.Request, sto
 	}
 	if req.Secret != nil {
 		next.Secret = *req.Secret
+	}
+	if req.Kind != nil {
+		next.Kind = *req.Kind
+	}
+	if req.Metadata != nil {
+		next.Metadata = req.Metadata
+	}
+	if err := config.ValidateWebhookKind(next); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	prev := append([]config.WebhookConfig(nil), s.cfg.Webhooks...)
 	for i := range s.cfg.Webhooks {
