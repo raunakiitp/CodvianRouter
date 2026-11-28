@@ -1586,8 +1586,14 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 	// /v1/messages traffic never landed in the ledger and per-key budgets
 	// could not see it.
 	sniff := relay.NewUsageSniffer(w)
+	// A13-H2: assemble the streamed message as it passes, so a completed
+	// stream is stored under the same cache keys the non-streaming branch
+	// uses. The assembler is passive — it observes the bytes the sniffer
+	// forwards and never delays or buffers the client's response.
+	asm := newStreamAssembler()
 	defer func() {
 		s.recordRelaySpend(ctx, keyID, target, head.Model, sniff.Usage(), resp.StatusCode, start, relayEstimate{promptText: string(raw), completionBytes: sniff.EmittedBytes()})
+		s.storeAssembledStreamCache(ctx, req, asm, cacheable, resp.StatusCode)
 	}()
 	if flusher, ok := w.(http.Flusher); ok {
 		// Copy in chunks and flush after each, so a streaming SSE
@@ -1611,6 +1617,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 					break
 				}
 				if safe != "" {
+					asm.Write([]byte(safe))
 					if _, werr := sniff.Write([]byte(safe)); werr != nil {
 						return
 					}
@@ -1653,6 +1660,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 		}
 		tail += vaultRestorer.Flush()
 		if tail != "" {
+			asm.Write([]byte(tail))
 			_, _ = sniff.Write([]byte(tail))
 			flusher.Flush()
 		}
@@ -1697,6 +1705,7 @@ func (s *Server) forwardVerbatim(w http.ResponseWriter, ctx context.Context, raw
 				break
 			}
 			if safe != "" {
+				asm.Write([]byte(safe))
 				if _, werr := sniff.Write([]byte(safe)); werr != nil {
 					return
 				}
