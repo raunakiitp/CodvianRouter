@@ -83,7 +83,7 @@ type PanelConfig struct {
 	// MinPanel is the smallest panel that still runs a judge: when the
 	// fan-out has fewer than MinPanel targets, the first successful
 	// member is served directly (no judge). <= 0 means DefaultMinPanel
-	// (2) — the reference router's fusion default (fusion.ts). A value
+	// (2) — the documented fusion default (fusion.ts). A value
 	// of 1 also serves a lone member directly, exactly like the
 	// single-target rule.
 	MinPanel int
