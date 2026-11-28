@@ -45,6 +45,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/provider"
 	"github.com/raunakiitp/codvian-router/internal/routetrace"
@@ -225,9 +226,36 @@ func (e *Engine) runComboStrategy(ctx context.Context, ordered []Attempt, req pr
 	switch strategy {
 	case "fusion", "chaos-mode":
 		// chaos-mode IS fusion over the panel chain: parallel
-		// fan-out + heuristic judge. No fault injection (see
-		// the file header).
-		res, err := RunFusion(ctx, prompt, ordered, e.comboPanelCaller(req, rec), FusionConfig{Judge: HeuristicJudge{}})
+		// fan-out + judge. No fault injection (see the file
+		// header).
+		//
+		// Judge policy (A2-3): when a judge model is configured
+		// (Config.JudgeModel), fusion runs the real LLM judge
+		// (llmJudge) — the configured model, or the first panel
+		// member when that model has no serving chain — and, once
+		// the judge picked a winner over MORE THAN ONE successful
+		// panel answer, synthesises ONE grounded answer from the
+		// panel (see synthesizeFusion). A judge failure falls back
+		// to the deterministic HeuristicJudge, and then the judged
+		// winner is served VERBATIM (no synthesis). With no judge
+		// model configured, fusion keeps the HeuristicJudge +
+		// verbatim winner, so every panel member is dialled exactly
+		// once. A single survivor / single target is served directly
+		// (RunFusion's minPanel rule).
+		fusionCfg := FusionConfig{PanelConfig: e.comboPanelConfig(), Judge: HeuristicJudge{}}
+		usedLLM := false
+		var judgeAtt Attempt
+		if strategy == "fusion" && e.cfg.JudgeModel != nil {
+			if ja, ok := e.comboJudgeAttempt(req, ordered); ok {
+				judgeAtt = ja
+				usedLLM = true
+				fusionCfg.Judge = fallbackJudge{
+					primary:    &llmJudge{engine: e, judge: ja, base: req},
+					onFallback: func(error) { usedLLM = false },
+				}
+			}
+		}
+		res, err := RunFusion(ctx, prompt, ordered, e.comboPanelCaller(req, rec), fusionCfg)
 		if err != nil {
 			// RunFusion returns an empty FusionResult on
 			// error (no Candidates to walk), so record from
@@ -235,7 +263,27 @@ func (e *Engine) runComboStrategy(ctx context.Context, ordered []Attempt, req pr
 			e.recordOrderedAttempts(trace, ordered, rec, &consecutive429, mode, req.CallerID, req.Model)
 			return nil, err
 		}
-		return e.finishCombo(trace, res.Candidates, res.WinnerIndex, strategy, rec, &consecutive429, mode, req, contract, tree, treeRoot, treeOrdered)
+		successes := 0
+		for _, c := range res.Candidates {
+			if c.Err == nil {
+				successes++
+			}
+		}
+		resp, ferr := e.finishCombo(trace, res.Candidates, res.WinnerIndex, strategy, rec, &consecutive429, mode, req, contract, tree, treeRoot, treeOrdered)
+		if ferr != nil {
+			return nil, ferr
+		}
+		// Synthesise only when the LLM judge actually judged, there
+		// is more than one answer to fuse, and the winner is a plain
+		// text turn (a tool-calling winner is served verbatim — the
+		// synthesis is text-only and must not drop a tool call). A
+		// synthesis failure leaves the judged winner's verbatim text.
+		if usedLLM && successes > 1 && len(resp.ToolCalls) == 0 {
+			if synth, serr := e.synthesizeFusion(ctx, prompt, res.Candidates, judgeAtt, req); serr == nil && strings.TrimSpace(synth) != "" {
+				resp.Content = synth
+			}
+		}
+		return resp, nil
 	case "pipeline":
 		stages := make([]PipelineStage, len(ordered))
 		for i, att := range ordered {
@@ -605,6 +653,99 @@ func (j fallbackJudge) Score(ctx context.Context, prompt string, candidates []Pa
 		j.onFallback(err)
 	}
 	return HeuristicJudge{}.Score(ctx, prompt, candidates)
+}
+
+// comboPanelConfig builds the panel config for the combo strategies
+// (fusion / jev / chaos-mode) from the operator's Config knobs (A2-3):
+// maxPanel (default 40, fusion.ts FUSION_DEFAULTS), panelHardTimeoutMs
+// (default 90 s), minPanel (default 2) and stragglerGraceMs (default 0
+// = join all). Zero/negative values keep the documented defaults.
+func (e *Engine) comboPanelConfig() PanelConfig {
+	c := PanelConfig{MaxPanel: DefaultFusionMaxPanel}
+	if e.cfg.ComboMaxPanel > 0 {
+		c.MaxPanel = e.cfg.ComboMaxPanel
+	}
+	if e.cfg.ComboMinPanel > 0 {
+		c.MinPanel = e.cfg.ComboMinPanel
+	}
+	if e.cfg.ComboPanelHardTimeoutMs > 0 {
+		c.Timeout = time.Duration(e.cfg.ComboPanelHardTimeoutMs) * time.Millisecond
+	}
+	if e.cfg.ComboStragglerGraceMs > 0 {
+		c.StragglerGrace = time.Duration(e.cfg.ComboStragglerGraceMs) * time.Millisecond
+	}
+	return c
+}
+
+// comboJudgeAttempt resolves the LLM judge's target for a fusion panel
+// (A2-3): the attempt serving the configured judge model
+// (Config.JudgeModel) when it is resolvable — an attempt already on the
+// panel, else the first attempt of that model's own chain — otherwise
+// the first panel member (ordered[0]), the fusion default. It reports
+// false only when there is no panel at all.
+func (e *Engine) comboJudgeAttempt(req provider.ChatRequest, ordered []Attempt) (Attempt, bool) {
+	if len(ordered) == 0 {
+		return Attempt{}, false
+	}
+	if e.cfg.JudgeModel != nil {
+		if jm := strings.TrimSpace(e.cfg.JudgeModel(req.Model)); jm != "" {
+			for _, att := range ordered {
+				if att.Model == jm {
+					return att, true
+				}
+			}
+			if chain := e.chainFor(jm); len(chain) > 0 {
+				return chain[0], true
+			}
+		}
+	}
+	return ordered[0], true
+}
+
+// synthesizeFusion asks the judge model for ONE grounded answer built
+// from the panel's successful answers (A2-3): the consensus, the
+// contradictions, partial coverage, unique insights and blind spots,
+// with the panel members anonymised as "Source N" (never their
+// provider/model, and never the winner's own label). It makes exactly
+// one callChat — never a fan-out — and returns the judge's reply or an
+// error; the caller falls back to the judged winner's verbatim text on
+// error (a failed synthesis never fails the request).
+func (e *Engine) synthesizeFusion(ctx context.Context, prompt string, candidates []PanelResult, judge Attempt, base provider.ChatRequest) (string, error) {
+	var sb strings.Builder
+	sb.WriteString("You are the synthesis judge for a panel of independent answers to the same user request. ")
+	sb.WriteString("Write ONE grounded final answer for the user.\n\nRules:\n")
+	sb.WriteString("- Use only the panel's content; never invent facts, sources or citations.\n")
+	sb.WriteString("- Lead with what the sources agree on (consensus).\n")
+	sb.WriteString("- Where sources contradict each other, prefer the better-supported statement and say so briefly.\n")
+	sb.WriteString("- Keep points only some sources raised (partial coverage) and any unique insight worth keeping.\n")
+	sb.WriteString("- Note blind spots: what none of the sources addressed.\n")
+	sb.WriteString("- Do not name the sources in the final answer; write it as one answer.\n\n")
+	sb.WriteString("Original request:\n")
+	sb.WriteString(prompt)
+	sb.WriteString("\n\nPanel answers (anonymised):\n")
+	n := 0
+	for _, c := range candidates {
+		if c.Err != nil || strings.TrimSpace(c.Text) == "" {
+			continue
+		}
+		n++
+		fmt.Fprintf(&sb, "\nSource %d:\n%s\n", n, c.Text)
+	}
+	if n == 0 {
+		return "", errors.New("fusion synthesis: no successful panel answers to synthesise")
+	}
+	sb.WriteString("\nWrite the final answer now, and nothing else.")
+	req := base
+	req.Messages = []provider.Message{{Role: RoleUser, Content: sb.String()}}
+	req.Compressed = nil
+	res := e.callChat(ctx, judge, req)
+	if res.err != nil {
+		return "", fmt.Errorf("fusion synthesis: judge call failed: %w", res.err)
+	}
+	if res.resp == nil || strings.TrimSpace(res.resp.Content) == "" {
+		return "", errors.New("fusion synthesis: judge returned no answer")
+	}
+	return res.resp.Content, nil
 }
 
 // heuristicJevScorer is the JevScorer for the engine JEV path. It

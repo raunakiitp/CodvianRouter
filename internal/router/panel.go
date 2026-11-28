@@ -80,10 +80,31 @@ type PanelConfig struct {
 	// the caller. 0 means no extra deadline beyond the caller's ctx.
 	// the reference router's panel hard timeout is 90 s (fusion.ts).
 	Timeout time.Duration
+	// MinPanel is the smallest panel that still runs a judge: when the
+	// fan-out has fewer than MinPanel targets, the first successful
+	// member is served directly (no judge). <= 0 means DefaultMinPanel
+	// (2) — the reference router's fusion default (fusion.ts). A value
+	// of 1 also serves a lone member directly, exactly like the
+	// single-target rule.
+	MinPanel int
+	// StragglerGrace, when > 0, bounds how long the fan-out waits for
+	// slow members AFTER the first successful result: once at least
+	// MinPanel successes are in and the grace has elapsed since the
+	// first result, the remaining members are abandoned (their ctx is
+	// cancelled and they are recorded as errors). 0 means join ALL
+	// members (this primitive's default — see the file header).
+	StragglerGrace time.Duration
 }
 
 // DefaultPanelMax is the default fan-out cap (see PanelConfig).
 const DefaultPanelMax = 5
+
+// DefaultFusionMaxPanel is the fusion strategy's panel cap (fusion.ts
+// FUSION_DEFAULTS maxPanel, the A2-3 configured default).
+const DefaultFusionMaxPanel = 40
+
+// DefaultMinPanel is the default smallest judged panel (fusion.ts).
+const DefaultMinPanel = 2
 
 // DefaultPanelTimeout is the default per-call deadline for a fan-out
 // member, matching the reference router's 90 s panel hard timeout (fusion.ts).
@@ -94,6 +115,20 @@ func (c PanelConfig) maxPanel() int {
 		return DefaultPanelMax
 	}
 	return c.MaxPanel
+}
+
+func (c PanelConfig) minPanel() int {
+	if c.MinPanel <= 0 {
+		return DefaultMinPanel
+	}
+	return c.MinPanel
+}
+
+func (c PanelConfig) stragglerGrace() time.Duration {
+	if c.StragglerGrace <= 0 {
+		return 0
+	}
+	return c.StragglerGrace
 }
 
 func (c PanelConfig) timeout() time.Duration {
@@ -144,6 +179,107 @@ func fanOutFailures(results []PanelResult) string {
 		}
 	}
 	return strings.Join(parts, "; ")
+}
+
+// errStragglerAbandoned marks a panel member the straggler-grace window
+// left behind: it was still running when the quorum + grace elapsed, so
+// its ctx was cancelled and it never reached the judge. Recorded as an
+// error (never a faked success).
+var errStragglerAbandoned = errors.New("straggler grace elapsed before this panel member answered")
+
+// fanOutWithGrace is fanOut with a straggler-grace window: it returns as
+// soon as at least minSuccess results have arrived AND the grace window
+// has elapsed since the FIRST result, cancelling the members still
+// running (recorded with errStragglerAbandoned). It never returns before
+// the first result (or the panel hard timeout / ctx). A grace <= 0 means
+// join all, exactly like fanOut. Results are index-aligned with targets.
+func fanOutWithGrace(ctx context.Context, targets []Attempt, call PanelCaller, cfg PanelConfig, minSuccess int) []PanelResult {
+	timeout := cfg.timeout()
+	callCtx := ctx
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		callCtx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		callCtx, cancel = context.WithCancel(ctx)
+	}
+	defer cancel()
+	results := make([]PanelResult, len(targets))
+	got := make([]bool, len(targets))
+	var mu sync.Mutex
+	done := make(chan int, len(targets))
+	for i, att := range targets {
+		go func(i int, att Attempt) {
+			text, err := call(callCtx, att)
+			if err == nil && strings.TrimSpace(text) == "" {
+				err = errors.New("empty response")
+			}
+			mu.Lock()
+			results[i] = PanelResult{Attempt: att, Text: text, Err: err}
+			got[i] = true
+			mu.Unlock()
+			done <- i
+		}(i, att)
+	}
+	grace := cfg.stragglerGrace()
+	if grace <= 0 {
+		// Join all: drain every member.
+		for received := 0; received < len(targets); received++ {
+			<-done
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		return results
+	}
+	received, successes := 0, 0
+	var graceC <-chan time.Time
+	var timer *time.Timer
+collect:
+	for received < len(targets) {
+		select {
+		case i := <-done:
+			received++
+			mu.Lock()
+			ok := results[i].Err == nil
+			mu.Unlock()
+			if ok {
+				successes++
+			}
+			if graceC == nil && successes >= 1 {
+				timer = time.NewTimer(grace)
+				graceC = timer.C
+			}
+			if successes >= minSuccess {
+				select {
+				case <-graceC:
+					break collect
+				case <-callCtx.Done():
+					break collect
+				case j := <-done:
+					received++
+					mu.Lock()
+					ok := results[j].Err == nil
+					mu.Unlock()
+					if ok {
+						successes++
+					}
+				}
+			}
+		case <-callCtx.Done():
+			break collect
+		}
+	}
+	if timer != nil {
+		timer.Stop()
+	}
+	cancel()
+	mu.Lock()
+	defer mu.Unlock()
+	for i := range results {
+		if !got[i] {
+			results[i] = PanelResult{Attempt: targets[i], Err: errStragglerAbandoned}
+		}
+	}
+	return results
 }
 
 // ---------------------------------------------------------------------------
@@ -308,14 +444,30 @@ func RunFusion(ctx context.Context, prompt string, targets []Attempt, call Panel
 		return FusionResult{}, err
 	}
 
-	results := fanOut(ctx, targets, call, cfg.PanelConfig)
+	var results []PanelResult
+	if cfg.stragglerGrace() > 0 {
+		results = fanOutWithGrace(ctx, targets, call, cfg.PanelConfig, cfg.minPanel())
+	} else {
+		results = fanOut(ctx, targets, call, cfg.PanelConfig)
+	}
 
-	// Single-target panel: direct answer, no judge (fusion.ts).
-	if len(targets) == 1 {
-		if results[0].Err != nil {
-			return FusionResult{}, fmt.Errorf("fusion: single target %s failed: %w", results[0].Label(), results[0].Err)
+	// A panel smaller than minPanel (including a single target) has
+	// nothing to judge: serve the FIRST successful member directly
+	// (fusion.ts: "a single-model fusion has nothing to fuse"). A lone
+	// SURVIVOR after a larger fan-out is also served directly — the
+	// caller (the engine) checks that before synthesising.
+	if len(targets) < cfg.minPanel() {
+		first := -1
+		for i, r := range results {
+			if r.Err == nil {
+				first = i
+				break
+			}
 		}
-		return FusionResult{Winner: results[0], WinnerIndex: 0, Candidates: results, JudgeName: "direct"}, nil
+		if first < 0 {
+			return FusionResult{}, fmt.Errorf("fusion: all %d panel targets failed: %s", len(targets), fanOutFailures(results))
+		}
+		return FusionResult{Winner: results[first], WinnerIndex: first, Candidates: results, JudgeName: "direct"}, nil
 	}
 
 	var successes []PanelResult
@@ -328,6 +480,11 @@ func RunFusion(ctx context.Context, prompt string, targets []Attempt, call Panel
 	}
 	if len(successes) == 0 {
 		return FusionResult{}, fmt.Errorf("fusion: all %d panel targets failed: %s", len(targets), fanOutFailures(results))
+	}
+	// A lone survivor has nothing to judge: serve it directly, no
+	// judge call (fusion.ts single-model rule, at panel scale).
+	if len(successes) == 1 {
+		return FusionResult{Winner: successes[0], WinnerIndex: successIdx[0], Candidates: results, JudgeName: "direct"}, nil
 	}
 
 	judge := cfg.Judge

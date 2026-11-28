@@ -794,6 +794,26 @@ type Config struct {
 	// status and body. It is the test seam: production uses
 	// the default net/http transport. Nil means the default.
 	NadirTransport NadirTransport
+	// JudgeModel, when set, names the judge model for the fusion
+	// strategy's LLM judge (A2-3): the model the judge request
+	// (winner pick + synthesis) is sent to. When it returns "" — or
+	// the named model has no serving chain — the judge falls back to
+	// the first panel member (ordered[0]), the fusion default. When
+	// JudgeModel is nil, fusion uses the deterministic HeuristicJudge
+	// and serves the judged winner VERBATIM: no LLM judge call and no
+	// synthesis, so every panel member is dialled exactly once.
+	// Configure a dedicated judge model (not a panel member) to get
+	// judged synthesis without doubling panel[0]'s upstream load.
+	JudgeModel func(model string) string
+	// Combo panel knobs (A2-3), shared by the fusion / jev /
+	// chaos-mode fan-out. Each <= 0 keeps the documented default:
+	// ComboMaxPanel 40 (fusion.ts FUSION_DEFAULTS), ComboMinPanel 2,
+	// ComboPanelHardTimeoutMs 90000 (the 90 s panel hard timeout),
+	// ComboStragglerGraceMs 0 (join all panel members).
+	ComboMaxPanel           int
+	ComboMinPanel           int
+	ComboPanelHardTimeoutMs int
+	ComboStragglerGraceMs   int
 	// QuotaShareFor, if set, reports the operator-configured
 	// quota-share weight for one (provider, model) pair (Phase D,
 	// D4): the member's share in a "quota-share" pool. It is
