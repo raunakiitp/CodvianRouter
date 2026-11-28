@@ -77,3 +77,25 @@ cools the endpoint down for 30 s so an unreachable endpoint costs one timeout,
 not one per request. The selected model must be in the pool.
 
 **Recorded in code.** `internal/router/nadir.go` (file header and `nadirSelect`).
+
+## D-A2-8 — Mid-stream resume after the first byte is committed: refused
+
+**Context (A2 item 8).** A streamed chat response that breaks after the first
+byte has been sent to the caller cannot be transparently resumed on a new
+target: the caller has already received a non-empty response and a different
+upstream would produce a different continuation. The gateway has `ChatStreamFrom`
+for an internal restart path, but no automatic post-commit resume exists.
+
+**Decision.** Automatic mid-stream resume after commit is **refused**. When a
+stream breaks mid-flight, the gateway ends it with an honest SSE error frame
+(followed by `data: [DONE]`) so the caller can retry at the application layer.
+No bytes are replayed, nothing is silently spliced from a second upstream onto a
+partially-delivered response, and tool-call dedup on a resumed stream is not
+attempted (it cannot be correct in general once the caller owns the first segment).
+
+**Recorded in code.** `internal/server/server.go` (the streaming mid-failure
+error path) and pinned by `TestChatCompletionsStreamingMidFailureErrorFrame`
+(internal/server), which asserts the honest error frame + `[DONE]` and fails if
+the stream were silently truncated or spliced. This is the §9(g) accepted
+alternative to implementing resume: the refusal is explicit and the SSE-error
+behaviour is tested.
