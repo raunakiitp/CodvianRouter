@@ -100,8 +100,79 @@ func TestBreakerWebhookEventsDeliverToLocalReceiver(t *testing.T) {
 
 func TestBreakerWebhookEventsNilDispatcherIsNoop(t *testing.T) {
 	// A server created without webhooks returns a nil-dispatcher
-	// adapter; both calls must not panic and must deliver nothing.
+	// adapter; all three calls must not panic and must deliver nothing.
 	a := (&breakerWebhookEvents{w: nil})
 	a.ProviderDegraded("p", 1, 1, time.Second)
 	a.ProviderRecovered("p")
+	a.ProviderResetRedeemed("p", time.Now())
+}
+
+// A4-7: the reset_redeemed webhook event reaches a real local receiver
+// through the same adapter main.go wires (BreakerEventsWire). The payload
+// carries only provider + banked_at, the signing secret never leaks, and an
+// endpoint that does not subscribe receives nothing.
+func TestProviderResetRedeemedEventDeliversToLocalReceiver(t *testing.T) {
+	const secret = "top-s3cr3t"
+	var mu sync.Mutex
+	var bodies [][]byte
+	var events []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		defer mu.Unlock()
+		events = append(events, r.Header.Get("X-Codvian-Event"))
+		bodies = append(bodies, body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	d := webhooks.New([]webhooks.Endpoint{
+		{ID: "ops", URL: srv.URL, Events: []string{webhooks.ProviderResetRedeemedEvent}, Secret: secret},
+		{ID: "other", URL: srv.URL, Events: []string{webhooks.QuotaExceededEvent}},
+	}, srv.Client(), nil)
+	adapter := &breakerWebhookEvents{w: d}
+
+	banked := time.Now().Add(-2 * time.Hour)
+	adapter.ProviderResetRedeemed("anthropic", banked)
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		mu.Lock()
+		done := len(events) >= 1
+		mu.Unlock()
+		if done || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(100 * time.Millisecond) // let any wrongly-subscribed endpoint fire too
+	mu.Lock()
+	defer mu.Unlock()
+	if len(events) != 1 {
+		t.Fatalf("events = %v, want exactly the 1 subscribed reset_redeemed event (unsubscribed quota endpoint silent)", events)
+	}
+	if events[0] != webhooks.ProviderResetRedeemedEvent {
+		t.Fatalf("delivered event = %q, want %q", events[0], webhooks.ProviderResetRedeemedEvent)
+	}
+	if strings.Contains(string(bodies[0]), secret) {
+		t.Fatalf("webhook signing secret leaked into payload: %s", bodies[0])
+	}
+	var env map[string]any
+	if err := json.Unmarshal(bodies[0], &env); err != nil {
+		t.Fatalf("body not JSON: %v", err)
+	}
+	data := env["data"].(map[string]any)
+	if data["provider"] != "anthropic" {
+		t.Errorf("data.provider = %v, want anthropic", data["provider"])
+	}
+	if _, ok := data["banked_at"].(string); !ok {
+		t.Errorf("data.banked_at = %v, want an RFC3339 timestamp", data["banked_at"])
+	}
+	for k := range data {
+		switch k {
+		case "provider", "banked_at":
+		default:
+			t.Errorf("payload carries unexpected field %q", k)
+		}
+	}
 }
