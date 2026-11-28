@@ -38,9 +38,9 @@
 //   - Mode packs run the real 16-factor scorer on the live signals.
 //     Factors with no hook input (taskFit, specificity, session,
 //     tier) sit at their documented neutral values. LatencyP95Ms
-//     is fed the p50 signal: the factor is pool-relative, so the
-//     ranking reflects measured latency; true p95 arrives with
-//     the latency-histogram plumbing (Phase D). ResetInSeconds is
+//     is the TRUE p95 from the engine's latency histogram when it
+//     has >= 20 samples, else the p50 EWMA proxy (bounded fallback:
+//     the histogram p95 is unavailable below 20 samples). ResetInSeconds is
 //     now real (ledger roll-off), so the reset factor is no longer
 //     neutral. Quota is the measured remaining fraction when the
 //     signal carries one (G19), else the booleanised hint.
@@ -325,9 +325,10 @@ func chainModel(chain []router.Attempt) string {
 //     contradictory input and reads as unknown, never as
 //     exhausted: the scalar hint is the older, authoritative
 //     source and it says headroom remains.
-//   - Latency: the measured p50 EWMA, fed as the latency value
-//     (pool-relative, so the ranking reflects measured latency;
-//     true p95 arrives with the latency-histogram plumbing).
+//   - Latency: the TRUE p95 from the engine's latency histogram when
+//     it has >= 20 samples, else the p50 EWMA proxy (the bounded
+//     fallback: p95LatencyMs returns -1 below 20 samples). Pool-relative,
+//     so the ranking reflects measured latency either way.
 //   - Cost / success / quality: straight from the signals.
 //   - Health: OPEN when positively open, CLOSED when positively
 //     closed (BreakerClosedForProvider), unknown otherwise —
@@ -347,7 +348,7 @@ func chainModel(chain []router.Attempt) string {
 func SixteenInputsFromSignals(s scoring.Signals) scoring.SixteenInputs {
 	in := scoring.SixteenInputs{
 		QuotaRemainingPct:    -1, // unknown fraction -> neutral 0.5
-		LatencyP95Ms:         -1, // p50 signal fed below; -1 when none
+		LatencyP95Ms:         -1, // true p95 when available, else p50; -1 when none
 		MaxLatencyMs:         -1,
 		CostPer1M:            -1, // unknown price -> neutral 0.5
 		MaxCostPer1M:         -1,
@@ -371,9 +372,9 @@ func SixteenInputsFromSignals(s scoring.Signals) scoring.SixteenInputs {
 	} else if s.QuotaHint <= 0 {
 		in.QuotaRemainingPct = 0 // no headroom: exhausted, factor 0
 	}
-	if s.LatencyMs > 0 {
-		// Pool-relative latency factor: the p50 signal is fed as
-		// the latency value (see file header); true p95 is Phase C.
+	if s.LatencyP95Ms > 0 {
+		in.LatencyP95Ms = s.LatencyP95Ms
+	} else if s.LatencyMs > 0 {
 		in.LatencyP95Ms = s.LatencyMs
 	}
 	if s.CostUSDPer1M >= 0 {
@@ -830,14 +831,15 @@ func wiringHook(st Strategy, signals scoring.SignalsFunc, custom scoring.Weights
 	case StrategyCostOptimized:
 		return costOptimizedHook(signals)
 	case StrategySLAAware:
-		// SLA-aware (M3 Area 1, PARITY row 394): rank by SLA
-		// compliance over the live signals — p95 latency (the
-		// hook's latency signal is the measured p50 EWMA, fed
-		// as the latency value; true p95 arrives with the
-		// latency-histogram plumbing, same caveat as
-		// sixteenInputs), error rate (1 - success rate, only
-		// when attempts were measured), cost, and observed
-		// serving health. Unknown signals score neutral and
+		// SLA-aware (M3 Area 1, PARITY row 394; A2-6): rank by
+		// SLA compliance over the live signals. The latency
+		// signal is the TRUE p95 from the engine's latency
+		// histogram when it has >= 20 samples (s.LatencyP95Ms),
+		// else the p50 EWMA proxy (s.LatencyMs) — the p95 branch
+		// is taken whenever the histogram has enough samples.
+		// Error rate (1 - success rate, only when attempts were
+		// measured), cost, and observed serving health complete
+		// the candidate. Unknown signals score neutral and
 		// add no violation (see internal/sla). The policy comes
 		// from the per-request hook context (engine Config SLA
 		// fields); a zero context means the defaults, except

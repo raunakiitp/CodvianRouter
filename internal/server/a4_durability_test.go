@@ -13,6 +13,7 @@ import (
 func TestServerWebhookDispatcherQueueWired(t *testing.T) {
 	s := newKeyBudgetSetup(t)
 	srv := s.server(t)
+	s.cfg.WebhooksDurableQueue = true // durability is opt-in (webhooks_durable_queue)
 	s.cfg.Webhooks = []config.WebhookConfig{{
 		ID: "ep", URL: "https://93.184.215.10/hook", Events: []string{webhooks.QuotaExceededEvent},
 	}}

@@ -42,6 +42,7 @@ import (
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/egress"
+	"github.com/raunakiitp/codvian-router/internal/webhooks/integrations"
 )
 
 // QuotaExceededEvent is the event name for a quota threshold
@@ -78,12 +79,62 @@ const (
 	ProviderRecoveredEvent = "provider.recovered"
 )
 
-// Endpoint is one subscribed webhook endpoint.
+// BudgetWarningEvent fires when an internal budget crosses its
+// warning threshold (the server's budget machinery edge-triggers it
+// via notifyBudgetWarning).
+const BudgetWarningEvent = "budget.warning"
+
+// Evaluation events, emitted by the eval scheduler when a scheduled
+// evaluation completes, fails, or regresses against its baseline.
+// They carry schedule_id + run_id and nothing else (no provider
+// credential, no prompt).
+const (
+	EvalCompletedEvent  = "eval.completed"
+	EvalRunFailedEvent  = "eval.run.failed"
+	EvalRegressionEvent = "eval.regression"
+)
+
+// KnownEvents returns the canonical set of webhook event names a
+// subscription may name. It is the SINGLE source of truth shared by
+// the config-file validator (internal/config) and the registration
+// API (internal/server), so the two sets can never drift: an event
+// that one accepts is accepted by the other, and the same unknown
+// name is rejected by both. The returned slice is a fresh copy, so a
+// caller cannot mutate the set for everyone else.
+//
+// Every name here has a real emit site in the gateway; do not add a
+// name without one (a subscribable-but-never-emitted event is a fake
+// capability).
+func KnownEvents() []string {
+	return []string{
+		QuotaExceededEvent,
+		BudgetWarningEvent,
+		ProviderDegradedEvent,
+		ProviderRecoveredEvent,
+		RequestCompletedEvent,
+		RequestFailedEvent,
+		ProviderExhaustedEvent,
+		EvalCompletedEvent,
+		EvalRunFailedEvent,
+		EvalRegressionEvent,
+		TestPingEvent,
+	}
+}
+
+// Endpoint is one subscribed webhook endpoint. Kind selects the
+// delivery payload shape: "" (or an unknown value, rejected at config
+// validation) is the generic signed JSON envelope; "slack" / "discord"
+// / "telegram" are chat integrations (see internal/webhooks/integrations)
+// whose bodies are the platform format and are NOT HMAC-signed.
+// Metadata carries optional per-endpoint secrets for chat kinds (e.g. a
+// sealed telegram bot token, unsealed via SetTokenDecrypt).
 type Endpoint struct {
-	ID     string
-	URL    string
-	Events []string
-	Secret string
+	ID       string
+	URL      string
+	Events   []string
+	Secret   string
+	Kind     string
+	Metadata map[string]string
 }
 
 // Dispatcher delivers events to the configured endpoints.
@@ -100,6 +151,20 @@ type Dispatcher struct {
 	failMu               sync.Mutex
 	failures             map[string]int
 	disabled             map[string]bool
+	// tokenDecrypt, when set, unseals a chat-kind token held in an
+	// endpoint's Metadata (a sealed value produced by the config Vault).
+	// nil = identity (a plaintext metadata token, or none).
+	tokenDecrypt func(string) (string, error)
+}
+
+// SetTokenDecrypt installs the unseal function used for a chat-kind
+// token stored in endpoint Metadata (the config Vault's Unseal is the
+// production value). nil disables decryption (metadata tokens are then
+// read as plaintext).
+func (d *Dispatcher) SetTokenDecrypt(fn func(string) (string, error)) {
+	if d != nil {
+		d.tokenDecrypt = fn
+	}
 }
 
 // WebhookAutoDisableThreshold is the default number of consecutive
@@ -215,9 +280,10 @@ func (d *Dispatcher) Notify(event string, payload map[string]any) {
 	if d == nil {
 		return
 	}
+	ts := time.Now()
 	body, err := json.Marshal(map[string]any{
 		"event":     event,
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"timestamp": ts.UTC().Format(time.RFC3339),
 		"data":      payload,
 	})
 	if err != nil {
@@ -233,6 +299,36 @@ func (d *Dispatcher) Notify(event string, payload map[string]any) {
 		ep := ep
 		go d.safeDeliver(ep, event, body)
 	}
+}
+
+// NotifyEndpoint delivers event+payload to the single endpoint with
+// the given id, asynchronously, REGARDLESS of that endpoint's
+// subscription set. It is the test-send path: an operator asking for
+// a test delivery to an endpoint must get one even when the endpoint
+// does not (yet) subscribe to the event, otherwise the only way to
+// test connectivity would be to first subscribe — which is what the
+// test exists to validate. Returns false when the dispatcher is nil
+// or no endpoint with that id exists (nothing is delivered).
+func (d *Dispatcher) NotifyEndpoint(id, event string, payload map[string]any) bool {
+	if d == nil {
+		return false
+	}
+	body, err := json.Marshal(map[string]any{
+		"event":     event,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"data":      payload,
+	})
+	if err != nil {
+		return false
+	}
+	for _, ep := range d.endpoints {
+		if ep.ID == id {
+			ep := ep
+			go d.safeDeliver(ep, event, body)
+			return true
+		}
+	}
+	return false
 }
 
 // safeDeliver runs one endpoint delivery in its own goroutine and
@@ -289,17 +385,81 @@ func (d *Dispatcher) deliver(ep Endpoint, event string, body []byte) {
 // the last HTTP status, the last attempt latency, whether the failure is
 // retryable (a later redelivery could succeed), and the final error.
 func (d *Dispatcher) deliverOnce(ep Endpoint, event string, body []byte) (status int, latency time.Duration, retryable bool, err error) {
+	kind, isChat := integrations.ParseKind(ep.Kind)
 	sig := ""
-	if ep.Secret != "" {
+	targetURL := ep.URL
+	if isChat {
+		var env struct {
+			Timestamp string         `json:"timestamp"`
+			Data      map[string]any `json:"data"`
+		}
+		if uerr := json.Unmarshal(body, &env); uerr != nil {
+			d.logf("webhook %s: decode envelope for %s: %v", ep.ID, kind, uerr)
+			return
+		}
+		ts, perr := time.Parse(time.RFC3339, env.Timestamp)
+		if perr != nil {
+			ts = time.Now()
+		}
+		chatID := ""
+		if kind == integrations.KindTelegram {
+			if sealed := ep.Metadata["bot_token"]; sealed != "" {
+				// The token is held in (sealed) metadata; the chat_id —
+				// the destination — still lives in the endpoint URL.
+				plain := sealed
+				if d.tokenDecrypt != nil {
+					var derr error
+					if plain, derr = d.tokenDecrypt(sealed); derr != nil {
+						d.logf("webhook %s: decrypt telegram bot token: %v", ep.ID, derr)
+						return
+					}
+				}
+				cid, cerr := integrations.ChatIDFromURL(ep.URL)
+				if cerr != nil {
+					d.logf("webhook %s: %v", ep.ID, cerr)
+					return
+				}
+				built, berr := integrations.BuildTelegramURL(plain, cid)
+				if berr != nil {
+					d.logf("webhook %s: build telegram url: %v", ep.ID, berr)
+					return
+				}
+				targetURL, chatID = built, cid
+			} else {
+				cid, perr := integrations.ChatIDFromURL(ep.URL)
+				if perr != nil {
+					d.logf("webhook %s: %v", ep.ID, perr)
+					return
+				}
+				chatID = cid
+			}
+		}
+		out, terr := integrations.Transform(kind, event, env.Data, chatID, ts)
+		if terr != nil {
+			d.logf("webhook %s: transform %s payload: %v", ep.ID, kind, terr)
+			return
+		}
+		body = out
+	} else if ep.Secret != "" {
+		// The HMAC is over the body, which never changes across
+		// attempts, so the signature is computed once and sent
+		// on every attempt.
 		mac := hmac.New(sha256.New, []byte(ep.Secret))
 		mac.Write(body)
 		sig = "sha256=" + hex.EncodeToString(mac.Sum(nil))
 	}
+	// Mirror the (already signed) envelope timestamp into a header so a
+	// receiver can reject a replay before parsing the body. The body
+	// carries the same timestamp and is covered by the HMAC above.
+	var stamp struct {
+		Timestamp string `json:"timestamp"`
+	}
+	_ = json.Unmarshal(body, &stamp)
 	for attempt := 0; attempt <= webhookMaxRetries; attempt++ {
 		// One fresh context per attempt: a slow attempt
 		// consumes its own 10s, never the next attempt's.
 		ctx, cancel := context.WithTimeout(context.Background(), webhookAttemptTimeout)
-		req, rerr := http.NewRequestWithContext(ctx, http.MethodPost, ep.URL, bytes.NewReader(body))
+		req, rerr := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
 		if rerr != nil {
 			cancel()
 			d.logf("webhook %s: build request: %v", ep.ID, rerr)
@@ -308,6 +468,9 @@ func (d *Dispatcher) deliverOnce(ep Endpoint, event string, body []byte) (status
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("User-Agent", "codvian-router-webhook/1")
 		req.Header.Set("X-Codvian-Event", event)
+		if stamp.Timestamp != "" {
+			req.Header.Set(TimestampHeader, stamp.Timestamp)
+		}
 		if sig != "" {
 			req.Header.Set("X-Codvian-Signature-256", sig)
 		}
