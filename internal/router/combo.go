@@ -229,23 +229,22 @@ func (e *Engine) runComboStrategy(ctx context.Context, ordered []Attempt, req pr
 		// fan-out + judge. No fault injection (see the file
 		// header).
 		//
-		// Judge policy (A2-3): when a judge model is configured
-		// (Config.JudgeModel), fusion runs the real LLM judge
-		// (llmJudge) — the configured model, or the first panel
-		// member when that model has no serving chain — and, once
+		// Judge policy (A2-3, A2-3b): fusion ALWAYS runs the real
+		// LLM judge (llmJudge) — the operator-configured judge
+		// model (Config.JudgeModel) when set, else the FIRST PANEL
+		// MEMBER (the fusion default: no configuration needed). Once
 		// the judge picked a winner over MORE THAN ONE successful
-		// panel answer, synthesises ONE grounded answer from the
-		// panel (see synthesizeFusion). A judge failure falls back
-		// to the deterministic HeuristicJudge, and then the judged
-		// winner is served VERBATIM (no synthesis). With no judge
-		// model configured, fusion keeps the HeuristicJudge +
-		// verbatim winner, so every panel member is dialled exactly
-		// once. A single survivor / single target is served directly
-		// (RunFusion's minPanel rule).
+		// panel answer, fusion synthesises ONE grounded answer from
+		// the panel (see synthesizeFusion). A judge failure falls
+		// back to the deterministic HeuristicJudge, and then the
+		// judged winner is served VERBATIM (no synthesis). A single
+		// survivor / single target is served directly (RunFusion's
+		// minPanel rule), so a one-member panel never pays for a
+		// judge call.
 		fusionCfg := FusionConfig{PanelConfig: e.comboPanelConfig(), Judge: HeuristicJudge{}}
 		usedLLM := false
 		var judgeAtt Attempt
-		if strategy == "fusion" && e.cfg.JudgeModel != nil {
+		if strategy == "fusion" {
 			if ja, ok := e.comboJudgeAttempt(req, ordered); ok {
 				judgeAtt = ja
 				usedLLM = true

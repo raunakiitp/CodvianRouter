@@ -164,8 +164,12 @@ func TestRequestBodyStrategyFusionFansOutRealPanel(t *testing.T) {
 	}
 	c1, _ := p1.calls()
 	c2, _ := p2.calls()
-	if c1 != 1 || c2 != 1 {
-		t.Fatalf("fusion panel calls p1=%d p2=%d, want 1 each (multi-target panel with a judge)", c1, c2)
+	// Both providers are dialled (a REAL multi-target panel). The
+	// first panel member is also the default fusion judge model
+	// (A2-3b), so it is dialled once for the panel and once more for
+	// the judge's winner pick.
+	if c1 != 2 || c2 != 1 {
+		t.Fatalf("fusion panel calls p1=%d p2=%d, want p1=2 (panel member + judge pick) and p2=1 (panel member)", c1, c2)
 	}
 	if resp.Content != p2.content {
 		t.Fatalf("fusion winner = %q, want the judge's pick (p2's longer answer) %q", resp.Content, p2.content)
@@ -185,8 +189,12 @@ func TestRequestBodyStrategyFusionFansOutRealPanel(t *testing.T) {
 	}
 	sc1, _ := s1.calls()
 	sc2, _ := s2.calls()
-	if sc1 != 1 || sc2 != 1 {
-		t.Fatalf("fusion stream panel calls p1=%d p2=%d, want 1 each", sc1, sc2)
+	// Both providers are dialled on the STREAM path too (a REAL
+	// multi-target panel); the first panel member is also the default
+	// fusion judge model (A2-3b), so it is dialled once for the panel
+	// and once more for the judge's winner pick.
+	if sc1 != 2 || sc2 != 1 {
+		t.Fatalf("fusion stream panel calls p1=%d p2=%d, want p1=2 (panel member + judge pick) and p2=1 (panel member)", sc1, sc2)
 	}
 	if sb.String() != s2.content || sResp == nil || sResp.Content != s2.content {
 		t.Fatalf("fusion stream = %q (resp %+v), want judge winner %q", sb.String(), sResp, s2.content)
@@ -210,8 +218,12 @@ func TestRequestBodyStrategyBeatsAutoAxisAlias(t *testing.T) {
 	}
 	c1, _ := p1.calls()
 	c2, _ := p2.calls()
-	if c1 != 1 || c2 != 1 {
-		t.Fatalf("panel calls p1=%d p2=%d, want 1 each (body strategy=fusion beat the auto:cheapest alias)", c1, c2)
+	// Both providers are dialled (a REAL multi-target panel); the
+	// first panel member is also the default fusion judge model
+	// (A2-3b), so it is dialled once for the panel and once more for
+	// the judge's winner pick.
+	if c1 != 2 || c2 != 1 {
+		t.Fatalf("panel calls p1=%d p2=%d, want p1=2 (panel member + judge pick) and p2=1 (panel member) (body strategy=fusion beat the auto:cheapest alias)", c1, c2)
 	}
 	if resp.Content != p2.content {
 		t.Fatalf("winner = %q, want the fusion judge's pick %q", resp.Content, p2.content)

@@ -179,10 +179,15 @@ func TestFusionSingleSurvivorServedDirectly(t *testing.T) {
 	}
 }
 
-// TestFusionNoJudgeModelKeepsHeuristicVerbatim: with no judge model configured,
-// fusion keeps the deterministic HeuristicJudge and the verbatim winner, and
-// every panel member is dialled exactly once (no extra judge call to panel[0]).
-func TestFusionNoJudgeModelKeepsHeuristicVerbatim(t *testing.T) {
+// TestFusionNoJudgeModelUsesPanelFirstMemberAsJudge: with no judge model
+// configured the judge IS the first panel member (the fusion default,
+// A2-3b) - so the panel member is dialled once for the panel and once more
+// for the winner pick. This client never answers the pick prompt, so the
+// LLM judge fails and fusion falls back to the deterministic HeuristicJudge
+// and serves the judged winner VERBATIM (no synthesis). The default judge
+// path with a working judge is covered by
+// TestFusionDefaultsToFirstPanelMemberAsJudge (a2_fusion_default_judge_test.go).
+func TestFusionNoJudgeModelUsesPanelFirstMemberAsJudge(t *testing.T) {
 	a := okClient("short")
 	b := okClient("a much longer answer that the heuristic judge must pick")
 	eng := NewEngine(map[string]provider.Client{"a": a, "b": b}, nil, testConfig())
@@ -193,8 +198,8 @@ func TestFusionNoJudgeModelKeepsHeuristicVerbatim(t *testing.T) {
 	if resp.Content != "a much longer answer that the heuristic judge must pick" {
 		t.Fatalf("answer = %q, want the heuristic winner verbatim", resp.Content)
 	}
-	if a.chatCalls() != 1 || b.chatCalls() != 1 {
-		t.Fatalf("panel calls a=%d b=%d, want 1 each (no judge model => no extra call)", a.chatCalls(), b.chatCalls())
+	if a.chatCalls() != 2 || b.chatCalls() != 1 {
+		t.Fatalf("panel calls a=%d b=%d, want a=2 (panel + failed winner pick as the default judge) and b=1 (panel only)", a.chatCalls(), b.chatCalls())
 	}
 }
 
