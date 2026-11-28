@@ -73,8 +73,14 @@ func TestComboFusionPicksJudgeWinner(t *testing.T) {
 	if outcomes["a"] != "hedged_cancelled" {
 		t.Fatalf("trace outcomes = %v, want a=hedged_cancelled (fan-out loser)", outcomes)
 	}
-	if a.chatCalls() != 1 || b.chatCalls() != 1 {
-		t.Fatalf("chat calls a=%d b=%d, want 1 each (both panel members dialled)", a.chatCalls(), b.chatCalls())
+	// The fusion judge is the LLM judge and its default model is the
+	// FIRST panel member (A2-3b), so the first member is dialled once
+	// for the panel and once more for the winner pick; the other
+	// member is dialled once. (Before the LLM judge became the
+	// default, the deterministic heuristic judge needed no call at
+	// all.)
+	if a.chatCalls() != 2 || b.chatCalls() != 1 {
+		t.Fatalf("chat calls a=%d b=%d, want a=2 (panel member + judge pick) and b=1 (panel member)", a.chatCalls(), b.chatCalls())
 	}
 }
 
@@ -606,8 +612,16 @@ func TestComboFusionBudgetFitsPanelProceeds(t *testing.T) {
 		t.Fatalf("resp = %+v, want a served winner", resp)
 	}
 	for i, f := range fakes {
-		if f.chatCalls() != 1 {
-			t.Errorf("provider p%d calls = %d, want 1 (panel member dialled once)", i, f.chatCalls())
+		// p0 is the first panel member, which is also the default
+		// fusion judge model (A2-3b): it is dialled once for the
+		// panel and once more for the judge's winner pick. Every
+		// other panel member is dialled exactly once.
+		want := 1
+		if i == 0 {
+			want = 2
+		}
+		if f.chatCalls() != want {
+			t.Errorf("provider p%d calls = %d, want %d (panel member, plus the judge pick for p0)", i, f.chatCalls(), want)
 		}
 	}
 }
@@ -629,8 +643,16 @@ func TestComboFusionNonStrictBudgetProceeds(t *testing.T) {
 		t.Fatalf("resp = %+v, want a served winner", resp)
 	}
 	for i, f := range fakes {
-		if f.chatCalls() != 1 {
-			t.Errorf("provider p%d calls = %d, want 1 (panel member dialled once)", i, f.chatCalls())
+		// p0 is the first panel member, which is also the default
+		// fusion judge model (A2-3b): it is dialled once for the
+		// panel and once more for the judge's winner pick. Every
+		// other panel member is dialled exactly once.
+		want := 1
+		if i == 0 {
+			want = 2
+		}
+		if f.chatCalls() != want {
+			t.Errorf("provider p%d calls = %d, want %d (panel member, plus the judge pick for p0)", i, f.chatCalls(), want)
 		}
 	}
 }

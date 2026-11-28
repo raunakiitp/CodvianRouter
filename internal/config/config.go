@@ -1474,6 +1474,29 @@ type RoutingConfig struct {
 	// HANDOFF_WARNING_THRESHOLD): 0 means the engine
 	// default (0.85).
 	RelayHandoffThreshold float64 `json:"relay_handoff_threshold,omitempty"`
+	// FusionJudgeModel names the model the fusion strategy
+	// uses as its LLM judge (A2-3b). Empty = the judge is the
+	// FIRST PANEL MEMBER (the fusion default: no operator
+	// configuration is needed - the panel's own first target
+	// judges). When set, the model must be servable; an
+	// unresolvable judge model falls back to the first panel
+	// member too, never to a guess.
+	FusionJudgeModel string `json:"fusion_judge_model,omitempty"`
+	// FusionMinPanel is the minimum number of successful panel
+	// answers before the judge synthesizes (A2-3b). 0 means the
+	// engine default (2). A panel below it is served directly
+	// (the best survivor's verbatim answer, no judge call).
+	FusionMinPanel int `json:"fusion_min_panel,omitempty"`
+	// FusionMaxPanel caps the panel size (A2-3b). 0 means the
+	// engine default (40).
+	FusionMaxPanel int `json:"fusion_max_panel,omitempty"`
+	// FusionStragglerGraceMs is how long a slow panel member may
+	// keep the panel open after the others answered (A2-3b).
+	// 0 means the engine default (8000).
+	FusionStragglerGraceMs int64 `json:"fusion_straggler_grace_ms,omitempty"`
+	// FusionPanelHardTimeoutMs is the hard wall-clock cap on the
+	// whole panel (A2-3b). 0 means the engine default (90000).
+	FusionPanelHardTimeoutMs int64 `json:"fusion_panel_hard_timeout_ms,omitempty"`
 	// RelayExhaustionThreshold is the quota-use fraction
 	// at or above which relaying is pointless (B2-01,
 	// the reference router HANDOFF_EXHAUSTION_THRESHOLD): 0 means
@@ -1887,6 +1910,24 @@ func (c *Config) Validate() error {
 		// rejected, as are negative / non-finite values and
 		// an error rate outside [0, 1]. A 0 cost cap means
 		// "no cap" (the scorer's convention), so it is valid.
+		// Fusion knobs (A2-3b): negative values are a config
+		// error, never a silent "use the default"; the panel
+		// size must also be coherent (min <= max).
+		if rc.FusionMinPanel < 0 {
+			return fmt.Errorf("config: routing.fusion_min_panel must not be negative (got %d)", rc.FusionMinPanel)
+		}
+		if rc.FusionMaxPanel < 0 {
+			return fmt.Errorf("config: routing.fusion_max_panel must not be negative (got %d)", rc.FusionMaxPanel)
+		}
+		if rc.FusionMinPanel > 0 && rc.FusionMaxPanel > 0 && rc.FusionMinPanel > rc.FusionMaxPanel {
+			return fmt.Errorf("config: routing.fusion_min_panel (%d) must not exceed routing.fusion_max_panel (%d)", rc.FusionMinPanel, rc.FusionMaxPanel)
+		}
+		if rc.FusionStragglerGraceMs < 0 {
+			return fmt.Errorf("config: routing.fusion_straggler_grace_ms must not be negative (got %d)", rc.FusionStragglerGraceMs)
+		}
+		if rc.FusionPanelHardTimeoutMs < 0 {
+			return fmt.Errorf("config: routing.fusion_panel_hard_timeout_ms must not be negative (got %d)", rc.FusionPanelHardTimeoutMs)
+		}
 		if sla := rc.SLA; sla != nil {
 			if v := sla.TargetP95Ms; v != nil {
 				if math.IsNaN(*v) || math.IsInf(*v, 0) || *v <= 0 {
