@@ -6,8 +6,13 @@
 # whole-tree: the repository must be free of these strings everywhere --
 # code, comments, docs, README, workflows.
 #
-# Prohibited names are assembled from per-character fragments so the literal
-# name never appears in this script (a self-flagging gate is useless).
+# Prohibited names are assembled from per-character fragments, so the patterns
+# exist only as regex classes here and the gate does not match its own source.
+# This file and the Go mirror (internal/catalog/repo_brand_gate_test.go) are the
+# only files the scan excludes -- a structural exclusion: they must carry the
+# pattern tables. Everything else in the tree is scanned. See
+# docs/naming-gate.md for the canonical enforcement and the sanctioned
+# lowercase retired-path exception.
 #
 # Covered:
 #   - reference router / reference-router / reference_router (prose + path)
