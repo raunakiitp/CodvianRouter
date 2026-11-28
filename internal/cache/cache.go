@@ -64,6 +64,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 )
@@ -566,6 +567,16 @@ func normalizeProvider(p string) string {
 type SemanticEntry struct {
 	Response   CachedResponse
 	Similarity float32
+	// VectorSource names the vector space the hit was matched in:
+	// VectorSourceNeural ("neural") when the query was embedded by the
+	// configured neural embedding provider, VectorSourceBagOfWords
+	// ("bag-of-words") when it fell back to the hashed token-overlap
+	// vector, and "" when the entry was stored through the raw vector
+	// API (Set/SetForModel) and the caller never said. It is stamped by
+	// the text lookups (GetText*) and is what the serving path reports
+	// as the X-Codvian-Cache-Embedding header value, so an operator can
+	// see which space produced a served hit.
+	VectorSource string `json:"vector_source,omitempty"`
 }
 
 // SemanticCache finds cached responses by vector similarity. Callers
@@ -602,8 +613,21 @@ func (NoopSemanticCache) Set(ctx context.Context, embedding []float32, entry Sem
 // ---------------------------------------------------------------------------
 
 // DefaultSemanticThreshold is the cosine similarity a stored entry
-// must reach to count as a hit (0.85).
+// must reach to count as a hit (0.85). The floor is justified by a
+// measured recall/precision probe over a labelled paraphrase set —
+// see semantic_floor_probe_test.go: at 0.85 the probe keeps its recall
+// contract while every lower floor admits more same-words-different-
+// meaning impostors, and every higher floor loses true paraphrases.
 const DefaultSemanticThreshold = 0.85
+
+// VectorSourceNeural and VectorSourceBagOfWords are the two vector
+// spaces the semantic text APIs can embed a query in. They are the
+// values SemanticEntry.VectorSource carries on a hit and the label
+// values of the semantic-hit-by-vector-source counter.
+const (
+	VectorSourceNeural     = "neural"
+	VectorSourceBagOfWords = "bag-of-words"
+)
 
 // DefaultSemanticMaxEntries bounds a LocalSemanticCache when the
 // caller passes <= 0.
@@ -870,6 +894,15 @@ type LocalSemanticCache struct {
 	// acc is scratch for Get's dot accumulation, indexed by slot
 	// (len maxEntries, reused under mu, never retained).
 	acc []float64
+	// Embedding counters (Stream D observability): which vector space
+	// the text APIs actually embedded with. embedTextCtx runs outside
+	// mu, so these are atomics. neuralCalls counts successful neural
+	// embeds, bowCalls counts hashed bag-of-words embeds (no embedder
+	// configured, or the neural call failed/timed out/was malformed),
+	// neuralFallbacks counts those fail-open fallbacks explicitly.
+	neuralCalls     atomic.Uint64
+	bowCalls        atomic.Uint64
+	neuralFallbacks atomic.Uint64
 }
 
 // NewLocalSemanticCache returns a LocalSemanticCache with the
@@ -1092,8 +1125,19 @@ func (c *LocalSemanticCache) EmbedText(text string) []float32 {
 // embedding outage can only be served to a fallback query, never
 // to a neural one — and it expires within the entry TTL.
 func (c *LocalSemanticCache) embedTextCtx(ctx context.Context, text string) []float32 {
+	vec, _ := c.embedTextSource(ctx, text)
+	return vec
+}
+
+// embedTextSource is embedTextCtx plus the vector space it embedded
+// in: VectorSourceNeural when the configured neural embedder produced
+// the vector, VectorSourceBagOfWords when the call was skipped or
+// failed open. The source is what a hit reports as its
+// VectorSource, so neural-vs-bag-of-words serving is observable.
+func (c *LocalSemanticCache) embedTextSource(ctx context.Context, text string) ([]float32, string) {
 	if c.neuralEmbedder == nil {
-		return embedText(text)
+		c.bowCalls.Add(1)
+		return embedText(text), VectorSourceBagOfWords
 	}
 	timeout := c.neuralTimeout
 	if timeout <= 0 {
@@ -1103,14 +1147,19 @@ func (c *LocalSemanticCache) embedTextCtx(ctx context.Context, text string) []fl
 	defer cancel()
 	vec, err := c.neuralEmbedder(ectx, text)
 	if err != nil || len(vec) == 0 {
-		return embedText(text)
+		c.neuralFallbacks.Add(1)
+		c.bowCalls.Add(1)
+		return embedText(text), VectorSourceBagOfWords
 	}
 	for _, v := range vec {
 		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
-			return embedText(text)
+			c.neuralFallbacks.Add(1)
+			c.bowCalls.Add(1)
+			return embedText(text), VectorSourceBagOfWords
 		}
 	}
-	return vec
+	c.neuralCalls.Add(1)
+	return vec, VectorSourceNeural
 }
 
 // sparseIndex lists v's non-zero indices and returns its L2 norm.
@@ -1790,7 +1839,12 @@ func (c *LocalSemanticCache) setScoped(embedding []float32, model string, scope 
 // GetTextForModelScopedWithThreshold instead (CHECKLIST 187,
 // M6.11).
 func (c *LocalSemanticCache) GetText(ctx context.Context, text string) (SemanticEntry, bool) {
-	return c.Get(ctx, c.embedTextCtx(ctx, text))
+	vec, source := c.embedTextSource(ctx, text)
+	hit, ok := c.Get(ctx, vec)
+	if ok {
+		hit.VectorSource = source
+	}
+	return hit, ok
 }
 
 // GetTextForModel is GetText scoped by model (CHECKLIST 187): the
@@ -1804,7 +1858,12 @@ func (c *LocalSemanticCache) GetText(ctx context.Context, text string) (Semantic
 // method is the raw/diagnostic path (pinned by
 // TestM611SemanticLayerIsTenantBlind).
 func (c *LocalSemanticCache) GetTextForModel(ctx context.Context, model, text string) (SemanticEntry, bool) {
-	return c.GetForModel(ctx, model, c.embedTextCtx(ctx, text))
+	vec, source := c.embedTextSource(ctx, text)
+	hit, ok := c.GetForModel(ctx, model, vec)
+	if ok {
+		hit.VectorSource = source
+	}
+	return hit, ok
 }
 
 // GetTextForModelWithThreshold is GetTextForModel with a per-call
@@ -1820,7 +1879,12 @@ func (c *LocalSemanticCache) GetTextForModel(ctx context.Context, model, text st
 // GetTextForModel. Serving code must use
 // GetTextForModelScopedWithThreshold instead.
 func (c *LocalSemanticCache) GetTextForModelWithThreshold(ctx context.Context, model, text string, threshold float32) (SemanticEntry, bool) {
-	return c.GetForModelWithThreshold(ctx, model, c.embedTextCtx(ctx, text), threshold)
+	vec, source := c.embedTextSource(ctx, text)
+	hit, ok := c.GetForModelWithThreshold(ctx, model, vec, threshold)
+	if ok {
+		hit.VectorSource = source
+	}
+	return hit, ok
 }
 
 // GetTextForModelScopedWithThreshold is GetTextForModelWithThreshold
@@ -1835,7 +1899,12 @@ func (c *LocalSemanticCache) GetTextForModelWithThreshold(ctx context.Context, m
 // A threshold <= 0 means "no override". Serving code (degrade,
 // relay) must use this, never GetTextForModel.
 func (c *LocalSemanticCache) GetTextForModelScopedWithThreshold(ctx context.Context, model, text, tenant string, temperature float64, threshold float32) (SemanticEntry, bool) {
-	return c.GetForModelScopedWithThreshold(ctx, model, c.embedTextCtx(ctx, text), tenant, temperature, threshold)
+	vec, source := c.embedTextSource(ctx, text)
+	hit, ok := c.GetForModelScopedWithThreshold(ctx, model, vec, tenant, temperature, threshold)
+	if ok {
+		hit.VectorSource = source
+	}
+	return hit, ok
 }
 
 // SetText stores entry for text for ttl, keyed by the hashed
@@ -1889,4 +1958,47 @@ func (c *LocalSemanticCache) Stats() (entries, bytes int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.size, c.totalBytes
+}
+
+// EmbeddingStats is the live counters of which vector space the
+// semantic text APIs embedded with (Stream D observability). Read via
+// EmbeddingStatsReporter by the stats/metrics surfaces; the counts are
+// since the cache was built, like every other counter here.
+type EmbeddingStats struct {
+	// NeuralConfigured is true when a NeuralEmbedder is wired, i.e. the
+	// cache is CAPABLE of neural vectors (it may still fall back per
+	// call — see Fallbacks).
+	NeuralConfigured bool `json:"neural_configured"`
+	// NeuralModel is the configured embedding model (informational).
+	NeuralModel string `json:"neural_model,omitempty"`
+	// Neural counts text embeddings produced by the neural provider.
+	Neural uint64 `json:"neural_embeds"`
+	// BagOfWords counts text embeddings produced by the hashed
+	// token-overlap vector (no embedder configured, or a fail-open
+	// fallback — see Fallbacks).
+	BagOfWords uint64 `json:"bag_of_words_embeds"`
+	// Fallbacks counts neural calls that failed open to the hashed
+	// vector (error, timeout, empty or NaN/Inf vector).
+	Fallbacks uint64 `json:"neural_fallbacks"`
+}
+
+// EmbeddingStatsReporter is optionally implemented by the semantic
+// stores (LocalSemanticCache and the persistent/Redis wrappers and
+// their SemanticStore adapters): the server's stats and metrics
+// surfaces read it structurally, so this package does not need to know
+// who serves.
+type EmbeddingStatsReporter interface {
+	EmbeddingStats() EmbeddingStats
+}
+
+// EmbeddingStats returns the live embedding counters (see
+// EmbeddingStats). It satisfies EmbeddingStatsReporter.
+func (c *LocalSemanticCache) EmbeddingStats() EmbeddingStats {
+	return EmbeddingStats{
+		NeuralConfigured: c.neuralEmbedder != nil,
+		NeuralModel:      c.neuralModel,
+		Neural:           c.neuralCalls.Load(),
+		BagOfWords:       c.bowCalls.Load(),
+		Fallbacks:        c.neuralFallbacks.Load(),
+	}
 }

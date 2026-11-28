@@ -36,6 +36,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/raunakiitp/codvian-router/internal/adaptive"
@@ -610,4 +611,38 @@ func (e *Engine) Rerank(ctx context.Context, req provider.RerankRequest) (*provi
 		return nil, err
 	}
 	return rer, nil
+}
+
+// EmbeddingCapability reports, without dialling any provider, whether
+// the engine can serve an embeddings call for model: providers is the
+// sorted list of provider IDs with at least one registered
+// embedding-capable client, and chainCapable says whether at least one
+// attempt in the model's resolved chain is embedding-capable (a chain
+// that excludes every capable provider cannot serve the call, so the
+// caller would only ever get the fail-open fallback). Serve mode uses
+// this for its single semantic-cache startup line, so the log can say
+// honestly whether neural embeddings are wired or not.
+func (e *Engine) EmbeddingCapability(model string) (providers []string, chainCapable bool) {
+	e.clientsMu.RLock()
+	seen := make(map[string]bool, len(e.clients))
+	for key, c := range e.clients {
+		if c == nil || !supportsEmbeddings(c) {
+			continue
+		}
+		id, _ := SplitClientKey(key)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		providers = append(providers, id)
+	}
+	e.clientsMu.RUnlock()
+	sort.Strings(providers)
+	for _, att := range e.chainFor(model) {
+		if client, ok := e.clientForAttempt(att); ok && supportsEmbeddings(client) {
+			chainCapable = true
+			break
+		}
+	}
+	return providers, chainCapable
 }

@@ -379,12 +379,22 @@ func (s persistentSemanticStore) SetTextForModelScoped(ctx context.Context, mode
 
 func (s persistentSemanticStore) Stats() (entries, bytes int) { return s.p.Stats() }
 
+// EmbeddingStats forwards the inner cache's live embedding counters, so
+// the stats/metrics surfaces can read them through the SemanticStore
+// adapter serve mode actually holds (Stream D observability).
+func (s persistentSemanticStore) EmbeddingStats() EmbeddingStats { return s.p.EmbeddingStats() }
+
 // AsStore returns p as a SemanticStore, for serve mode: the
 // degrade wrapper and the relay store through the returned
 // value and every write reaches disk synchronously.
 func (p *PersistentSemanticCache) AsStore() SemanticStore {
 	return persistentSemanticStore{p: p}
 }
+
+// EmbeddingStats returns the live embedding counters of the inner
+// in-memory cache (Stream D observability); it satisfies
+// EmbeddingStatsReporter.
+func (p *PersistentSemanticCache) EmbeddingStats() EmbeddingStats { return p.inner.EmbeddingStats() }
 
 // Stats returns the live in-memory entries + bytes, exactly like
 // LocalSemanticCache.Stats (the server's cache-stats endpoint

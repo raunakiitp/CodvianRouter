@@ -83,6 +83,12 @@ type cacheStatsResponse struct {
 	Savings     *cacheSavingsStats `json:"savings,omitempty"`
 	SavingsNote string             `json:"savings_note,omitempty"`
 	Coalescing  *coalescing.Stats  `json:"coalescing,omitempty"`
+	// SemanticEmbeddings is the live vector-space counters of the
+	// semantic cache (Stream D observability): whether a neural
+	// embedding provider is wired, and how many text embeddings each
+	// space produced (plus the neural fail-open fallbacks). Present
+	// only when the wired semantic store reports them.
+	SemanticEmbeddings *cache.EmbeddingStats `json:"semantic_embeddings,omitempty"`
 }
 
 // cacheSavingsReporter is optionally implemented by engines that can
@@ -134,6 +140,13 @@ func (s *Server) handleCacheStats(w http.ResponseWriter, r *http.Request) {
 	if s.semanticCache != nil {
 		entries, bytes := s.semanticCache.Stats()
 		out.Semantic = s.cacheLayerStats(entries, bytes, snapHits["semantic"], snapMisses["semantic"])
+		// Stream D: the semantic layer's embedding counters, when the
+		// store reports them (LocalSemanticCache and both persistent
+		// wrappers do). Absent otherwise - never a zero-filled fake.
+		if es, ok := s.semanticCache.(cache.EmbeddingStatsReporter); ok {
+			st := es.EmbeddingStats()
+			out.SemanticEmbeddings = &st
+		}
 	}
 	if out.Exact != nil || out.Semantic != nil {
 		tot := &cacheLayerStats{}

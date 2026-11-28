@@ -534,8 +534,8 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	cacheable := relay.Cacheable(parsed.Request)
 	if !features.GuardrailsBlocking && s.cacheServing && !head.Stream && cacheable && !contractPresent {
-		if hit, layer, found := s.lookupMessagesCache(ctx, req); found {
-			s.serveMessagesCache(ctx, w, req, hit, layer, start)
+		if hit, layer, vecSource, found := s.lookupMessagesCacheWithSource(ctx, req); found {
+			s.serveMessagesCache(ctx, w, req, hit, layer, vecSource, start)
 			return
 		}
 	}
@@ -610,19 +610,28 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 // (semanticLookupBlocked) is kept as defence in depth for
 // stores without the scoped methods.
 func (s *Server) lookupMessagesCache(ctx context.Context, req provider.ChatRequest) (cache.CachedResponse, string, bool) {
+	hit, layer, _, found := s.lookupMessagesCacheWithSource(ctx, req)
+	return hit, layer, found
+}
+
+// lookupMessagesCacheWithSource is lookupMessagesCache plus the vector
+// space a semantic hit was matched in ("neural" / "bag-of-words", "" on
+// an exact hit or a miss), so the relay can mark the response with
+// X-Codvian-Cache-Embedding exactly like the chat path.
+func (s *Server) lookupMessagesCacheWithSource(ctx context.Context, req provider.ChatRequest) (cache.CachedResponse, string, string, bool) {
 	// PER-REQUEST CACHE CONTROLS (M6.4): a bypass request never
 	// consults the relay cache either — same rule as the
 	// engine's lookup on the chat path.
 	if req.CacheControls.BypassCache() {
-		return cache.CachedResponse{}, "", false
+		return cache.CachedResponse{}, "", "", false
 	}
 	if !cache.CacheableTemperature(req.Temperature, false) {
-		return cache.CachedResponse{}, "", false
+		return cache.CachedResponse{}, "", "", false
 	}
 	if s.exactCache != nil && req.CacheControls.UseExact() {
 		if key, err := scopedMessagesKey(req); err == nil {
 			if hit, found := s.exactCache.Get(ctx, key); found {
-				return hit, "exact", true
+				return hit, "exact", "", true
 			}
 			if s.recorder != nil {
 				s.recorder.IncCacheMiss("exact")
@@ -641,13 +650,16 @@ func (s *Server) lookupMessagesCache(ctx context.Context, req provider.ChatReque
 					s.recorder.IncCacheMiss("semantic")
 				}
 			} else if entry, found := s.semanticLookupMessages(ctx, req, text); found {
-				return entry.Response, "semantic", true
+				if s.recorder != nil {
+					s.recorder.IncSemanticVectorSource(entry.VectorSource)
+				}
+				return entry.Response, "semantic", entry.VectorSource, true
 			} else if s.recorder != nil {
 				s.recorder.IncCacheMiss("semantic")
 			}
 		}
 	}
-	return cache.CachedResponse{}, "", false
+	return cache.CachedResponse{}, "", "", false
 }
 
 // scopedMessagesKey derives the M1.4 cache key for a messages-path
@@ -850,7 +862,7 @@ func relaySemanticText(req provider.ChatRequest) string {
 // (X-Codvian-Cache names the layer, X-Codvian-Relay names the hit).
 // No provider is called and no ledger row is written — a cache hit
 // bills nobody, exactly as on the chat-completions path.
-func (s *Server) serveMessagesCache(ctx context.Context, w http.ResponseWriter, req provider.ChatRequest, hit cache.CachedResponse, layer string, start time.Time) {
+func (s *Server) serveMessagesCache(ctx context.Context, w http.ResponseWriter, req provider.ChatRequest, hit cache.CachedResponse, layer, vectorSource string, start time.Time) {
 	resp := &provider.ChatResponse{
 		Content: hit.Content, Model: hit.Model, FinishReason: "stop",
 		Usage: provider.Usage{PromptTokens: hit.Usage.PromptTokens, CompletionTokens: hit.Usage.CompletionTokens, TotalTokens: hit.Usage.TotalTokens},
@@ -868,6 +880,12 @@ func (s *Server) serveMessagesCache(ctx context.Context, w http.ResponseWriter, 
 		return
 	}
 	w.Header().Set("X-Codvian-Cache", layer)
+	if layer == "semantic" && vectorSource != "" {
+		// Stream D: which vector space the semantic hit was matched
+		// in, so neural-embedding hits are distinguishable from
+		// bag-of-words token-overlap hits on the wire.
+		w.Header().Set(headerCodvianCacheEmbedding, vectorSource)
+	}
 	w.Header().Set("X-Codvian-Relay", "cache-hit;layer="+layer)
 	// Telemetry headers (M2.1, choke point): this request cost the
 	// known $0 (no provider was called) and saved the cached
@@ -938,18 +956,25 @@ func (s *Server) storeMessagesCache(ctx context.Context, req provider.ChatReques
 	if t := req.CacheControls.EffectiveTTL(); t > 0 {
 		ttl = t
 	}
-	// STORE GATES (M1.4): the entry is stored only when the
-	// response is complete (finish_reason "length" is truncated),
-	// the temperature is cacheable, and it carries no tool calls —
-	// the same cache.ShouldStore gate the engine's store applies,
-	// so neither dialect can smuggle a truncated, hot or
+	// STORE GATES (M1.4 + Stream D poison guard): the entry is stored
+	// only when the response is safe to cache — the same
+	// cache.StoreGuard gate the engine's store applies, so neither
+	// dialect can smuggle a refused, truncated, empty, hot or
 	// tool-carrying answer into the shared cache. The exact key
 	// is the scoped key (tenant + model + params), and the store
 	// is recorded with the engine's provenance index when it
 	// offers one, so per-tenant flush and the semantic gate cover
 	// relay-stored entries too.
-	storable := cache.ShouldStore(conv.Choices[0].FinishReason, req.Temperature, false, len(conv.Choices[0].Message.ToolCalls) > 0)
-	if !storable {
+	guard := cache.StoreGuard{
+		FinishReason: conv.Choices[0].FinishReason,
+		Content:      content,
+		Temperature:  req.Temperature,
+		HasToolCalls: len(conv.Choices[0].Message.ToolCalls) > 0,
+	}
+	if poison := guard.Poison(); poison != cache.StorePoisonNone {
+		if s.recorder != nil {
+			s.recorder.IncCacheStoreRefused(poison.String())
+		}
 		return
 	}
 	if s.exactCache != nil && req.CacheControls.UseExact() {

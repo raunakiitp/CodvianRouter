@@ -147,6 +147,21 @@ type CacheMetrics interface {
 	IncCacheMiss(layer string)
 }
 
+// storeRefusalMetrics is optionally implemented by a CacheMetrics sink
+// (metrics.Recorder does): one call per response the store poison guard
+// refused to cache, labelled with the reason. Structural, so this
+// package still does not import internal/metrics.
+type storeRefusalMetrics interface {
+	IncCacheStoreRefused(reason string)
+}
+
+// vectorSourceMetrics is optionally implemented by a CacheMetrics sink
+// (metrics.Recorder does): one call per served semantic hit, labelled
+// with the vector space the hit was matched in.
+type vectorSourceMetrics interface {
+	IncSemanticVectorSource(source string)
+}
+
 type StaleEngine struct {
 	engine   server.Engine
 	exact    cache.ExactStore
@@ -179,6 +194,11 @@ type StaleEngine struct {
 	// sets lastStale and clears these fields.
 	lastCacheKind       string
 	lastCacheSimilarity float32
+	// lastCacheVectorSource is the vector space the most recent
+	// semantic hit was matched in ("neural" / "bag-of-words"), "" for
+	// exact hits and non-hits. Read by LastCacheVectorSource so the
+	// server can mark the response with X-Codvian-Cache-Embedding.
+	lastCacheVectorSource string
 	// lastStaleAge is the age of the entry served by the most recent
 	// call, when that call served stale content; 0 otherwise. When
 	// the entry's store time is unknown (it was cached by someone
@@ -726,12 +746,34 @@ func (e *StaleEngine) LastCacheHit() (kind string, similarity float32, ok bool) 
 // e.mu (it takes it). It also clears the stale flag: a cache hit is
 // fresh, not stale.
 func (e *StaleEngine) setCacheOutcome(kind string, similarity float32) {
+	e.setCacheOutcomeSource(kind, similarity, "")
+}
+
+// setCacheOutcomeSource is setCacheOutcome plus the vector space a
+// semantic hit was matched in (Stream D observability).
+func (e *StaleEngine) setCacheOutcomeSource(kind string, similarity float32, vectorSource string) {
 	e.mu.Lock()
 	e.lastCacheKind = kind
 	e.lastCacheSimilarity = similarity
+	e.lastCacheVectorSource = vectorSource
 	e.lastStale = false
 	e.lastStaleAge = 0
 	e.mu.Unlock()
+}
+
+// LastCacheVectorSource reports the vector space the most recent
+// semantic cache hit was matched in: cache.VectorSourceNeural
+// ("neural") or cache.VectorSourceBagOfWords ("bag-of-words"), and ""
+// when the last call was not a semantic hit. The server turns this
+// into the X-Codvian-Cache-Embedding response header, so a client or
+// operator can tell neural-embedding hits from token-overlap hits.
+func (e *StaleEngine) LastCacheVectorSource() string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.lastCacheKind != "semantic" {
+		return ""
+	}
+	return e.lastCacheVectorSource
 }
 
 // RefusalChainStats forwards the wrapped engine's live refusal-chain
@@ -839,6 +881,7 @@ func (e *StaleEngine) setOutcome(stale bool, age time.Duration) {
 	e.lastStaleAge = age
 	e.lastCacheKind = ""
 	e.lastCacheSimilarity = 0
+	e.lastCacheVectorSource = ""
 	e.mu.Unlock()
 }
 
@@ -1061,6 +1104,29 @@ func (e *StaleEngine) reportMiss(layer string) {
 	}
 }
 
+// reportStoreRefused records one response the store poison guard
+// refused to cache, with the poison reason as the label, when the sink
+// supports it (metrics.Recorder does).
+func (e *StaleEngine) reportStoreRefused(reason cache.StorePoison) {
+	e.mu.Lock()
+	m := e.cacheMetrics
+	e.mu.Unlock()
+	if sr, ok := m.(storeRefusalMetrics); ok && reason != cache.StorePoisonNone {
+		sr.IncCacheStoreRefused(reason.String())
+	}
+}
+
+// reportVectorSource records one served semantic hit's vector space
+// when the sink supports it (metrics.Recorder does).
+func (e *StaleEngine) reportVectorSource(source string) {
+	e.mu.Lock()
+	m := e.cacheMetrics
+	e.mu.Unlock()
+	if vs, ok := m.(vectorSourceMetrics); ok && source != "" {
+		vs.IncSemanticVectorSource(source)
+	}
+}
+
 // lossyCompressed reports whether req's response was (or may have
 // been) produced from a LOSSY-trimmed context (CHECKLIST 193-194).
 // The semantic cache is keyed on the last 3 turns' text, so
@@ -1279,21 +1345,21 @@ func (e *StaleEngine) scopedKey(req provider.ChatRequest) (string, error) {
 // cache's own 0.85 cannot widen hits either way: the cache
 // already rejected those, and the effective floor never drops
 // below 0.85.
-func (e *StaleEngine) lookup(ctx context.Context, req provider.ChatRequest) (cache.CachedResponse, string, float32, string, bool) {
+func (e *StaleEngine) lookup(ctx context.Context, req provider.ChatRequest) (cache.CachedResponse, string, float32, string, string, bool) {
 	if !e.policy.ServeCache || !cacheable(req) {
-		return cache.CachedResponse{}, "", 0, "", false
+		return cache.CachedResponse{}, "", 0, "", "", false
 	}
 	if req.CacheControls.BypassCache() {
-		return cache.CachedResponse{}, "", 0, "", false
+		return cache.CachedResponse{}, "", 0, "", "", false
 	}
 	if hasRoutingContract(req) {
-		return cache.CachedResponse{}, "", 0, "", false
+		return cache.CachedResponse{}, "", 0, "", "", false
 	}
 	if !cache.CacheableTemperature(req.Temperature, e.policy.AllowNonZeroTemp) {
-		return cache.CachedResponse{}, "", 0, "", false
+		return cache.CachedResponse{}, "", 0, "", "", false
 	}
 	if hit, key, ok := e.exactLookup(ctx, req); ok {
-		return hit, "exact", 0, key, true
+		return hit, "exact", 0, key, "", true
 	}
 	// 50-TURN BYPASS (M6.7c): a conversation longer than
 	// provider.SemanticMaxTurns (50) never consults the semantic
@@ -1310,14 +1376,15 @@ func (e *StaleEngine) lookup(ctx context.Context, req provider.ChatRequest) (cac
 				e.reportMiss("semantic")
 			} else if hit, found := e.semanticLookup(ctx, req, text, e.effectiveSemanticThreshold(req)); found {
 				e.reportHit("semantic")
+				e.reportVectorSource(hit.VectorSource)
 				e.recordCacheHit(ctx, req.CallerID, "", hit.Response)
-				return hit.Response, "semantic", hit.Similarity, "", true
+				return hit.Response, "semantic", hit.Similarity, "", hit.VectorSource, true
 			} else {
 				e.reportMiss("semantic")
 			}
 		}
 	}
-	return cache.CachedResponse{}, "", 0, "", false
+	return cache.CachedResponse{}, "", 0, "", "", false
 }
 
 // exactLookup serves the exact layer only: the scoped key for this
@@ -1726,7 +1793,25 @@ func (e *StaleEngine) store(ctx context.Context, req provider.ChatRequest, resp 
 	if hasRoutingContract(req) {
 		return
 	}
-	if !cache.ShouldStore(resp.FinishReason, req.Temperature, e.policy.AllowNonZeroTemp, len(resp.ToolCalls) > 0) {
+	// POISON GUARD (Stream D): the store-site gate is stricter than
+	// cache.ShouldStore - it also refuses content-policy refusals (any
+	// refusal finish reason), every truncation spelling a passthrough
+	// wire may pass through un-normalised (not just "length"), and
+	// empty-content responses. A refused/truncated/blank answer is not
+	// an answer: caching it would replay it to every later request
+	// that keys or embeds close to this one until the TTL. The guard
+	// runs here, at the single store site, so every entry point
+	// (Chat, ChatStream, ChatStreamFrom, chunk variants) honours it,
+	// and the refusal is counted when the sink supports it.
+	guard := cache.StoreGuard{
+		FinishReason:     resp.FinishReason,
+		Content:          resp.Content,
+		Temperature:      req.Temperature,
+		AllowNonZeroTemp: e.policy.AllowNonZeroTemp,
+		HasToolCalls:     len(resp.ToolCalls) > 0,
+	}
+	if poison := guard.Poison(); poison != cache.StorePoisonNone {
+		e.reportStoreRefused(poison)
 		return
 	}
 	entry := cache.CachedResponse{
@@ -1927,10 +2012,10 @@ func (e *StaleEngine) Chat(ctx context.Context, req provider.ChatRequest) (*prov
 	// paraphrase that hit semantically becomes an exact hit next
 	// time.
 	start := time.Now()
-	if cached, kind, sim, _, ok := e.lookup(ctx, req); ok {
+	if cached, kind, sim, _, vecSource, ok := e.lookup(ctx, req); ok {
 		resp := toChatResponse(req, cached)
 		e.store(ctx, req, resp)
-		e.setCacheOutcome(kind, sim)
+		e.setCacheOutcomeSource(kind, sim, vecSource)
 		e.recordCacheHitLedger(req, cached, kind, time.Since(start).Milliseconds())
 		return resp, nil
 	}
@@ -2047,7 +2132,7 @@ func (e *StaleEngine) ChatStream(ctx context.Context, req provider.ChatRequest, 
 	// called. A stream that already delivered content never reaches
 	// this path (lookup happens before any delta), so nothing can
 	// be duplicated.
-	if cached, kind, sim, _, ok := e.lookup(ctx, req); ok {
+	if cached, kind, sim, _, vecSource, ok := e.lookup(ctx, req); ok {
 		resp := toChatResponse(req, cached)
 		// Publish the outcome BEFORE delivering the replayed
 		// chunk (CHECKLIST 199): a caller that reads
@@ -2056,7 +2141,7 @@ func (e *StaleEngine) ChatStream(ctx context.Context, req provider.ChatRequest, 
 		// THIS request's cache hit, not the previous request's
 		// outcome. A delivery error still resets it below via
 		// setOutcome(false, 0).
-		e.setCacheOutcome(kind, sim)
+		e.setCacheOutcomeSource(kind, sim, vecSource)
 		if cached.Content != "" {
 			if err := onDelta(cached.Content); err != nil {
 				e.setOutcome(false, 0)
@@ -2272,9 +2357,9 @@ func (e *StaleEngine) ChatStreamChunks(ctx context.Context, req provider.ChatReq
 	// must see this request's cache hit, not the previous
 	// request's outcome. A delivery error still resets it below
 	// via setOutcome(false, 0).
-	if cached, kind, sim, _, ok := e.lookup(ctx, req); ok {
+	if cached, kind, sim, _, vecSource, ok := e.lookup(ctx, req); ok {
 		resp := toChatResponse(req, cached)
-		e.setCacheOutcome(kind, sim)
+		e.setCacheOutcomeSource(kind, sim, vecSource)
 		if cached.Content != "" {
 			if err := onChunk(provider.StreamChunk{Content: cached.Content}); err != nil {
 				e.setOutcome(false, 0)

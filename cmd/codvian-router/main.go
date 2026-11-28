@@ -4892,6 +4892,19 @@ func newMCPRegistry(mc *config.MCPConfig, toolServers []mcptools.ToolServer) *mc
 	return mcptools.New(toolServers, mc.EffectiveMode(), mc.EffectiveMaxIterations())
 }
 
+// semanticCacheStartupLine renders the single startup log line for the
+// semantic cache layer, naming the vector space it serves from: neural
+// embeddings when embedding-capable providers are configured and the
+// embedding model's chain contains one, bag-of-words token overlap
+// otherwise (and on every per-call fallback). Pure, so the wording is
+// unit-tested (TestSemanticCacheStartupLine).
+func semanticCacheStartupLine(threshold float64, embeddingProviders int, chainCapable bool) string {
+	if embeddingProviders > 0 && chainCapable {
+		return fmt.Sprintf("semantic cache: ON (similarity floor %.2f, 500 entries, 1h TTL; vectors: neural embeddings via %d embedding-capable provider(s) when the embedding call succeeds, bag-of-words token overlap on any failure; hits marked X-Codvian-Cache + X-Codvian-Cache-Embedding)", threshold, embeddingProviders)
+	}
+	return fmt.Sprintf("semantic cache: ON (similarity floor %.2f, 500 entries, 1h TTL; vectors: bag-of-words token overlap only - no embedding provider is configured for %s, so similarity is word overlap, not meaning; hits marked X-Codvian-Cache + X-Codvian-Cache-Embedding: bag-of-words)", threshold, cache.DefaultNeuralEmbeddingModel)
+}
+
 func runServe(opts options) int {
 	// Headless gate (CHECKLIST 197-198): serve --headless refuses
 	// to start without a gateway key configured — checked BEFORE
@@ -5457,7 +5470,15 @@ func runServe(opts options) int {
 	} else {
 		fmt.Println("responses session token cap: unset (counting only — sessions are counted, never refused)")
 	}
-	fmt.Printf("semantic cache: ON (token-overlap similarity, threshold %.2f, 500 entries, 1h TTL — not neural embeddings; hits marked X-Codvian-Cache)\n", st.cfg.Cache.EffectiveSemanticThreshold())
+	// One startup line for the semantic cache, and it says which vector
+	// space the layer will actually serve from: neural embeddings when
+	// at least one configured provider can serve the embedding model
+	// (chain-capable), bag-of-words token overlap otherwise — and on
+	// every per-call neural failure. The old line claimed "not neural
+	// embeddings" unconditionally, which stopped being true when the
+	// neural embedder was wired into LocalSemanticCacheConfig.
+	embedProviders, embedChainCapable := st.engine.EmbeddingCapability(cache.DefaultNeuralEmbeddingModel)
+	fmt.Println(semanticCacheStartupLine(st.cfg.Cache.EffectiveSemanticThreshold(), len(embedProviders), embedChainCapable))
 	fmt.Println("single-flight coalescing: ON (identical non-streaming requests share one upstream call; streaming and tool-call turns never coalesce)")
 	tfo := provider.TFOStatus()
 	if tfo.Active {
