@@ -1065,6 +1065,13 @@ func (c Config) withDefaults() Config {
 	if c.DeadlineFailureMax == 0 {
 		c.DeadlineFailureMax = DefaultDeadlineFailureMax
 	}
+	// Hedge default (A2-9a): 150 ms stays ON for engine-computed
+	// chains — a bounded latency-insurance trade that doubles in-flight
+	// load only when the first pick is slow. Explicit-order chains
+	// (contract order / group / strategy tree) disable it in
+	// ChatWithChainStrategy (hedgeOff); a negative HedgeDelay disables
+	// it outright. Durable decision record + rejected alternatives:
+	// docs/routing-decisions.md (D-A2-9a). Not changed silently.
 	if c.HedgeDelay == 0 {
 		c.HedgeDelay = 150 * time.Millisecond
 	}
