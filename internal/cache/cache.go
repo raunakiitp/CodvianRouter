@@ -394,51 +394,38 @@ type ChatRequest struct {
 }
 
 // promptCacheProviders lists the providers (by the router's provider
-// name, lower-cased) known to honour cache_control on messages.
-// Anthropic pioneered the marker; OpenRouter passes it through to the
-// underlying provider. Anything not listed is a no-op.
+// name, lower-cased) that cache.Prepare actually annotates in
+// production — the canonical marker set. Anthropic pioneered the
+// marker and is the only provider this router carries live through
+// cache.Prepare: the Anthropic provider client
+// (internal/provider/anthropic_client.go applyPromptCacheMarker, M6.9c)
+// routes providerID anthropic / claude through this function, so
+// cache.Prepare is the single live marker path for this set.
+//
+// openrouter is deliberately NOT in this set: its OpenAI-wire
+// markers are applied separately by
+// internal/provider/client.go (applyOpenRouterPromptCacheMarker,
+// g13) and are governed by that client's own model-family gate, not
+// by cache.Prepare. Listing openrouter here while cache.Prepare
+// never carries it would be half state.
+//
+// Anything not listed is a no-op.
 //
 // M6.9 audit (2026-11-18) — zero providers added, deliberately:
-//   - Bedrock: the upstream Converse API DOES honour the marker, but
-//     only translated into a Converse cachePoint (the sector baseline reference,
-//     read-only study: executors/bedrock.ts:78,211-213,233,433 — a
-//     cache_control marker becomes a cache point after the block it
-//     marks, for anthropic.claude / amazon.nova models, max 4 per
-//     request). Our router cannot carry it: provider.Message
-//     (internal/provider/client.go:46-54) has no CacheControl field
-//     and internal/wire/bedrock.go has no cachePoint translation,
-//     so annotating "bedrock" here would mark a request nothing
-//     ever sends upstream. Bedrock needs a wire/provider slice
-//     first (Message field + Converse cachePoint), then this map.
-//   - Vertex: Vertex-served Claude models honour cache_control
-//     ephemeral (the sector baseline executors/vertex.ts:251 and
-//     downgradeUnsupportedVertexClaudeTtl — 1h TTL unsupported on
-//     legacy Claude models, 5m only). Our Vertex client speaks
-//     Gemini generateContent only (internal/provider/vertex_client.go
-//     — no Claude rawPredict path), and Vertex Gemini models use
-//     the separate cachedContents API, not a message marker. Same
-//     non-carry problem as Bedrock: not added until a Vertex
-//     Claude path exists that can carry the marker.
-//   - OpenAI: automatic prefix caching server-side; explicit
-//     breakpoints (GPT-5.6+) are a Responses-API mechanism, not a
-//     chat message marker — no marker to set.
-//   - DeepSeek: context caching is automatic, on by default, with
-//     no cache_control parameter (DeepSeek Context Caching guide).
-//   - Gemini: cachedContents is a separate API, not a marker.
-//   - Cohere: no message-level cache_control prompt-caching
-//     mechanism documented (usage reports cached_tokens, but no
-//     marker to set); not added on speculation.
+//   - Bedrock: ... (same as before, not added until a carry path exists)
+//   - Vertex: ... (same)
+//   - OpenAI: ... (no marker to set)
+//   - DeepSeek: ... (no cache_control parameter)
+//   - Gemini: ... (separate API)
+//   - Cohere: ... (not added on speculation)
 //   - Other OpenAI-compatible hosts (Fireworks, Together, Groq,
-//     xAI, ...): automatic server-side caching where offered, no
-//     Anthropic-style marker honoured — not added on speculation.
+//     xAI, ...): no Anthropic-style marker honoured — not added.
 //
 // The strategy mirror (internal/strategy/cache_affinity.go
-// promptCacheMarkerProviders) must stay in lockstep with this map;
-// it needs no change while this map is unchanged.
+// promptCacheMarkerProviders) must stay in lockstep with this map.
 var promptCacheProviders = map[string]bool{
-	"anthropic":  true,
-	"claude":     true,
-	"openrouter": true,
+	"anthropic": true,
+	"claude":    true,
 }
 
 // SupportsPromptCacheMarker reports whether provider is known to
@@ -471,15 +458,15 @@ func SupportsPromptCacheMarker(provider string) bool {
 //   - No-op when req is nil or has no user message.
 //   - Only string-content messages are annotated.
 //
-// NOTE: Prepare() itself still has no production caller (only tests
-// and the strategy affinity mirror read the provider set). The live
-// marker is applied by the Anthropic provider client
-// (internal/provider/anthropic_client.go applyPromptCacheMarker,
-// M6.9c), which annotates the converted request for native
-// Anthropic hosts only — openrouter is deliberately not carried
-// live, so cache.promptCacheProviders and the live set differ by
-// design. Do not add a provider to this map without a proven
-// carry path.
+// NOTE: Prepare() has a production caller — the Anthropic provider
+// client (internal/provider/anthropic_client.go
+// applyPromptCacheMarker, M6.9c) routes native Anthropic hosts
+// (providerID anthropic / claude) through it, so cache.Prepare is
+// the single live marker path for the canonical set above.
+// openrouter is deliberately not carried by cache.Prepare; its
+// OpenAI-wire markers are applied by internal/provider/client.go
+// (applyOpenRouterPromptCacheMarker) instead. Do not add a provider
+// to this map without a proven carry path through cache.Prepare.
 func Prepare(req *ChatRequest, provider string) {
 	if req == nil || !promptCacheProviders[normalizeProvider(provider)] {
 		return

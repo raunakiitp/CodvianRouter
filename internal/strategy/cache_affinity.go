@@ -102,17 +102,17 @@ const MinCacheablePromptTokens = 1024
 
 // promptCacheMarkerProviders mirrors internal/cache/cache.go
 // promptCacheProviders: the providers (router provider name,
-// lower-cased, whitespace stripped) KNOWN TO HONOUR a prompt-cache
-// marker. That is not the same as the LIVE-carried set: the marker
-// is only actually sent by the Anthropic provider client (M6.9c),
-// for native Anthropic hosts {anthropic, claude} — openrouter is
-// in this map but deliberately not carried live (its OpenAI wire
-// has no cache_control path). Keep in lockstep with the cache map,
-// and do not read this map as "the marker will be sent".
+// lower-cased, whitespace stripped) that cache.Prepare actually
+// annotates in production — the canonical marker set. Keep this
+// map in lockstep with the cache map: every provider cache.Prepare
+// annotates must win the marker tiebreak here, and nothing else.
+// Do not read this map as "the marker will be sent" — that is the
+// live-carried set (native Anthropic hosts via the Anthropic
+// client, M6.9c); openrouter's OpenAI-wire markers are applied by
+// internal/provider/client.go and are not part of this set.
 var promptCacheMarkerProviders = map[string]bool{
-	"anthropic":  true,
-	"claude":     true,
-	"openrouter": true,
+	"anthropic": true,
+	"claude":    true,
 }
 
 // normalizeCacheProvider lower-cases a provider name and strips
@@ -133,15 +133,17 @@ func normalizeCacheProvider(p string) string {
 	return b.String()
 }
 
-// SupportsPromptCacheMarker reports whether the provider is KNOWN
-// TO HONOUR a prompt-cache marker — i.e. whether the provider is
-// in promptCacheMarkerProviders. It does NOT mean the marker will
-// actually be sent: the live-carried set is narrower (native
-// Anthropic hosts only, M6.9c — see the map comment). Matching is
+// SupportsPromptCacheMarker reports whether cache.Prepare will
+// actually annotate this request for the provider — i.e. whether
+// the provider is in promptCacheMarkerProviders, kept in lockstep
+// with internal/cache/cache.go's promptCacheProviders. It does NOT
+// mean the marker will actually be sent: the live-carried set is
+// narrower (native Anthropic hosts only, M6.9c). Matching is
 // case-insensitive and ignores surrounding/embedded ASCII
-// whitespace, mirroring cache.Prepare's lookup (plus '\r', which
-// cache.normalizeProvider does not strip — a provider name
-// containing '\r' is pathological either way).
+// whitespace (plus '\r', which cache.normalizeProvider does not
+// strip — a provider name containing '\r' is pathological either
+// way).
+
 func SupportsPromptCacheMarker(provider string) bool {
 	return promptCacheMarkerProviders[normalizeCacheProvider(provider)]
 }
