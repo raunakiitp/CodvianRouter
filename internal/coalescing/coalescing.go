@@ -362,13 +362,19 @@ func (g *Group) Stats() Stats {
 // differently, including message order, whitespace, and part
 // structure.
 type requestKeyPayload struct {
-	Model       string                   `json:"model"`
-	Messages    []provider.Message       `json:"messages"`
-	MaxTokens   int                      `json:"max_tokens,omitempty"`
-	Temperature float64                  `json:"temperature,omitempty"`
-	TopP        float64                  `json:"top_p,omitempty"`
-	Stop        []string                 `json:"stop,omitempty"`
-	Routing     *provider.RequestRouting `json:"routing,omitempty"`
+	Model       string             `json:"model"`
+	Messages    []provider.Message `json:"messages"`
+	MaxTokens   int                `json:"max_tokens,omitempty"`
+	Temperature float64            `json:"temperature,omitempty"`
+	TopP        float64            `json:"top_p,omitempty"`
+	Stop        []string           `json:"stop,omitempty"`
+	// Strategy is the per-request "strategy" body field (A2-1).
+	// It is part of the key for the same reason Routing is: two
+	// requests that differ only in their strategy execute
+	// differently (a different chain order, or a combo fan-out vs.
+	// a sequential walk), so they must never share one flight.
+	Strategy string                   `json:"strategy,omitempty"`
+	Routing  *provider.RequestRouting `json:"routing,omitempty"`
 }
 
 // RequestKey derives the canonical flight key for req: SHA-256 of
