@@ -368,6 +368,12 @@ supports `claude` and `continue`).
 ## Cache and performance
 
 - **Exact-match cache** and **semantic cache** with tenant-scoped keys.
+  Both layers are consulted **inside the routing engine itself** (not only
+  by the serve-mode assembly), so any caller that builds an engine gets
+  caching: a hit is served without dialling a provider, and both chat and
+  streaming responses are stored under the same gates.
+- Streamed relay responses are assembled as they pass through and stored
+  like buffered ones, so streamed traffic teaches the cache too.
 - Request deduplication for identical concurrent work.
 - Connection pooling and bounded concurrency, with backpressure rather
   than unbounded queues.
