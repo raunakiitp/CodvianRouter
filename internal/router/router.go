@@ -2488,7 +2488,21 @@ func lastUserPrompt(req provider.ChatRequest) string {
 // it onto the chain with withResolvedEffort, so the attempt
 // carries the tier's effort to the wire and the trace.
 func (e *Engine) resolveAutoRequest(ctx context.Context, req provider.ChatRequest) (string, provider.ChatRequest, string, autoDispatch) {
-	strategy, req := e.resolveAutoAlias(req)
+	// Per-request "strategy" body field (A2-1): the highest
+	// per-request strategy control. It is read before the alias and
+	// wins over it — a client that names a strategy explicitly gets
+	// that strategy even when the model also carries an
+	// "auto:<axis>" alias (the alias still rewrites the model, so
+	// the auto-router resolves a concrete model underneath). Like
+	// the alias, the contract's routing.sort still overrides it for
+	// the request (see chatWithChainStrategy). Empty keeps the
+	// alias/chain/global precedence exactly as before.
+	bodyStrategy := strings.TrimSpace(req.Strategy)
+	aliasStrategy, req := e.resolveAutoAlias(req)
+	strategy := aliasStrategy
+	if bodyStrategy != "" {
+		strategy = bodyStrategy
+	}
 	if strategy == "" && req.Model == autorouter.CodeVirtualModel {
 		strategy = "code"
 	}
