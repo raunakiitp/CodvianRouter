@@ -758,6 +758,27 @@ type ChatRequest struct {
 	Stop         []string         `json:"stop,omitempty"`
 	Tools        []ToolDefinition `json:"tools,omitempty"`
 	ToolChoice   json.RawMessage  `json:"tool_choice,omitempty"`
+	// Strategy is the per-request routing strategy (A2-1): the
+	// batch-2 "strategy" request-body field on
+	// POST /v1/chat/completions. It names one strategy from
+	// internal/strategy (canonical name or alias, case-insensitive)
+	// and is validated at request decode by the server (an unknown
+	// name is a 400, never a silent fallback). It is the
+	// per-request strategy control, sitting at the same precedence
+	// level as the "auto:<axis>" model alias (see
+	// Engine.effectiveStrategy): the contract's routing.sort still
+	// wins over it for the request, and it beats the runtime chain
+	// override, the configured ChainStrategy, the runtime global and
+	// the configured global. Every strategy resolves through it,
+	// including the combo strategies fusion / pipeline / jev (which
+	// the engine executes as multi-target panels; see
+	// internal/router/combo.go). Empty means "no per-request
+	// strategy": the alias, chain, or global strategy decides
+	// exactly as before. It is router-internal after decode — the
+	// wire clients build their own upstream payload from Model /
+	// Messages and never forward it, so a provider never sees it —
+	// but it IS visible on the request the client sent.
+	Strategy string `json:"strategy,omitempty"`
 	// Routing is the per-request routing contract (see
 	// RequestRouting). It is router-internal after decode: the
 	// wire clients build their own upstream payload from the
